@@ -22,12 +22,12 @@ typedef struct System_Info {
     u64 granularity;
 } System_Info;
 
-inline System_Info sys_get_info();
+inline System_Info sys_get_info(void);
 
 typedef void* File_Handle;
 
-File_Handle sys_get_stdout();
-File_Handle sys_get_stderr();
+File_Handle sys_get_stdout(void);
+File_Handle sys_get_stderr(void);
 
 u32 sys_write(File_Handle f, void *data, u64 size);
 u32 sys_write_string(File_Handle f, string s);
@@ -150,7 +150,7 @@ u64 sys_query_mapped_pointers(void *start, void *end, Mapped_Memory_Info *result
     return counter;
 }
 
-inline System_Info sys_get_info() {
+inline System_Info sys_get_info(void) {
     local_persist System_Info info;
     local_persist bool has_retrieved_info = false;
     
@@ -167,10 +167,10 @@ inline System_Info sys_get_info() {
     return info;
 }
 
-File_Handle sys_get_stdout() {
+File_Handle sys_get_stdout(void) {
     return (File_Handle)GetStdHandle((u32)-11);
 }
-File_Handle sys_get_stderr() {
+File_Handle sys_get_stderr(void) {
     return (File_Handle)GetStdHandle((u32)-12);
 }
 

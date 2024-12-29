@@ -124,15 +124,20 @@ void *memcpy(void *dst, const void * src, u64 n);
 
 // todo(charlie) inline asm / dynamically load crt's if msvc
 void *memset(void *dst, s32 c, u64 n) {
-    u64 i; for (i = 0; i+4 < n; i += 4)  *((s32*)dst + (i/4)) = c;
+    u64 i;
+    for (i = 0; i+4 < n; i += 4)  *((s32*)dst + (i/4)) = c;
     if (i < n) memcpy(dst, &c, n-i);
     return dst;
 }
 void *memcpy(void *dst, const void * src, u64 n) {
-    u64 i; for (i = 0; i < n; i += 1)  *((u8*)dst + i) = *((u8*)src + i);
+    for (u64 i = 0; i < n; i += 1)  *((u8*)dst + i) = *((u8*)src + i);
     return dst;
 }
 void *memmove(void *dst, const void *src, u64 n) {
-    u64 i; for (i = 0; i < n; i += 1)  *((u8*)dst + i) = *((u8*)src + i);
+    if (!n) return dst;
+    if ((u64)dst > (u64)src)
+        for (s64 i = n-1; i >= 0; i -= 1)  *((u8*)dst + i) = *((u8*)src + i);
+    else
+        for (u64 i = 0; i < n; i += 1)  *((u8*)dst + i) = *((u8*)src + i);
     return dst;
 }

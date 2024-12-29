@@ -8,3 +8,5 @@
 
 #include "memory.h"
 
+#include "var_args.h"
+#include "print.h"

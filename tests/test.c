@@ -4,17 +4,32 @@
 #define OSTD_IMPL
 #include "../ostd.h"
 
-void test_sys();
-void test_memory();
+void test_sys(void);
+void test_memory(void);
 
 int main(int argc, char **argv) {
+    (void)argc; (void)argv;
+    sys_write_string(sys_get_stdout(), STR("Hello, ostd!\n"));
+    
     test_sys();
     test_memory();
+
+    string s = STR("TEST");
+    float32 a = -123.456;
+    s16 b = -255;
+    bool c = false;
     
-    sys_write_string(sys_get_stdout(), STR("Hello, ostd!\n"));
+    u64 buffer_size = format_string(0, 0, STR("%s, %f, %i, %b %a\n"), s, a, b, c, s);
+    
+    string output;
+    output.data = (u8*)sys_map_pages(SYS_MEMORY_RESERVE | SYS_MEMORY_ALLOCATE, 0, buffer_size/sys_get_info().page_size + 1);
+    
+    output.count = format_string(output.data, buffer_size, STR("%s, %f, %i, %b %a\n"), s, a, b, c, s);
+    
+    sys_write_string(sys_get_stdout(), output);
 }
 
-void test_sys() {
+void test_sys(void) {
     System_Info info = sys_get_info();
     {
         void *addr = (void*)((0x0000690000000000ULL + info.granularity-1) & ~(info.granularity-1));
@@ -58,7 +73,7 @@ void test_sys() {
     }
 }
 
-void test_memory() {
+void test_memory(void) {
     System_Info info = sys_get_info();
 
     {
