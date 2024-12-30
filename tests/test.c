@@ -6,6 +6,7 @@
 
 void test_sys(void);
 void test_memory(void);
+void test_print(void);
 
 int main(int argc, char **argv) {
     (void)argc; (void)argv;
@@ -13,20 +14,7 @@ int main(int argc, char **argv) {
     
     test_sys();
     test_memory();
-
-    string s = STR("TEST");
-    float32 a = -123.456;
-    s16 b = -255;
-    bool c = false;
-    
-    u64 buffer_size = format_string(0, 0, STR("%s, %f, %i, %b %a\n"), s, a, b, c, s);
-    
-    string output;
-    output.data = (u8*)sys_map_pages(SYS_MEMORY_RESERVE | SYS_MEMORY_ALLOCATE, 0, buffer_size/sys_get_info().page_size + 1);
-    
-    output.count = format_string(output.data, buffer_size, STR("%s, %f, %i, %b %a\n"), s, a, b, c, s);
-    
-    sys_write_string(sys_get_stdout(), output);
+    test_print();
 }
 
 void test_sys(void) {
@@ -92,4 +80,68 @@ void test_memory(void) {
         
         free_arena(arena);
     }
+    
+    {
+        reset_temporary_storage();
+        
+        void *mem0 = talloc(69);
+        memset(mem0, 0, 69);
+        
+        reset_temporary_storage();
+        
+        void *mem1 = talloc(69);
+        assert(mem0 == mem1);
+        memset(mem1, 0, 69);
+        
+        void *mem2 = talloc(69);
+        assert((u64)mem2 > (u64)mem1 + 69);
+    }
+}
+
+void test_print(void) {
+    char buffer[256];
+    
+    string s;
+    s.data = (u8*)buffer;
+    s.count = 0;
+
+    s.count = format_unsigned_int(12345, 10, s.data, sizeof(buffer));
+    assert(strings_match(s, STR("12345")));
+
+    s.count = format_signed_int(-6789, 10, s.data, sizeof(buffer));
+    assert(strings_match(s, STR("-6789")));
+
+    s.count = format_signed_int(6789, 10, s.data, sizeof(buffer));
+    assert(strings_match(s, STR("6789")));
+
+    s.count = format_float(123.456, 2, s.data, sizeof(buffer));
+    assert(strings_match(s, STR("123.45")));
+
+    s.count = format_float(-123.456, 2, s.data, sizeof(buffer));
+    assert(strings_match(s, STR("-123.45")));
+
+    s.count = format_unsigned_int(123456789, 10, buffer, 5);
+    assert(strings_match(s, STR("12345"))); // Truncated to buffer size
+
+    string result = sprint(get_temp(), STR("Hello, %s!"), STR("World"));
+    assert(result.count == 13);
+    assert(strings_match(result, STR("Hello, World!")));
+
+    s16 val1 = 42;
+    s32 val2 = -812736812;
+    result = tprint(STR("Value1: %i, Value2: %i"), val1, val2);
+    assert(strings_match(result, STR("Value1: 42, Value2: -812736812")));
+
+    float32 flt = 3.14159;
+    print(STR("Testing print: %f\n"), flt);
+    
+    s = STR("TEST");
+    float32 a = -123.456;
+    s16 b = -255;
+    bool c = false;
+    result = tprint(STR("%s, %f, %i, %b %a"), s, a, b, c, s);
+    
+    assert(strings_match(result, STR("TEST, -123.45600, -255, false <Unknown format specifier '%a'>")));
+    
+    print(STR("Print tests passed\n"));
 }

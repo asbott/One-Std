@@ -141,3 +141,15 @@ void *memmove(void *dst, const void *src, u64 n) {
         for (u64 i = 0; i < n; i += 1)  *((u8*)dst + i) = *((u8*)src + i);
     return dst;
 }
+
+int memcmp(void *a, void *b, u64 n) {
+    u8 *p1 = (u8 *)a;
+    u8 *p2 = (u8 *)b;
+
+    for (u64 i = 0; i < n; i++) {
+        if (p1[i] != p2[i]) {
+            return p1[i] - p2[i];
+        }
+    }
+    return 0;
+}
