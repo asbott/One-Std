@@ -15,6 +15,32 @@
     }
 */
 
+#ifndef va_start
+    #if (COMPILER_FLAGS & COMPILER_FLAG_MSC)
+        #define va_list  char*
+        
+        #define __crt_va_start(ap, x)  ((void)(__va_start(&ap, x)))
+        #define __crt_va_arg(ap, t)                                               \
+        ((sizeof(t) > sizeof(s64) || (sizeof(t) & (sizeof(t) - 1)) != 0) \
+            ? **(t**)((ap += sizeof(s64)) - sizeof(s64))             \
+            :  *(t* )((ap += sizeof(s64)) - sizeof(s64)))
+        #define __crt_va_end(ap)        ((void)(ap = (va_list)0))
+        
+        #define va_start __crt_va_start
+        #define va_arg   __crt_va_arg
+        #define va_end   __crt_va_end
+        #define va_copy(destination, source) ((destination) = (source))
+    #elif COMPILER_FLAGS & COMPILER_FLAG_CLANG_GNU
+        #define va_start __builtin_va_start
+        #define va_list  __builtin_va_list
+        #define va_arg   __builtin_va_arg
+        #define va_end   __builtin_va_end
+        #define va_copy(destination, source) __builtin_va_copy((destination), (source))
+    #else
+        #include <stdarg.h>
+    #endif
+#endif // va_start
+
 #define get_var_args(count, pargs) {\
     va_list va_args;\
     va_start(va_args, count);\
@@ -33,8 +59,6 @@ typedef struct Var_Arg {
     u64 size;
 } Var_Arg;
 
-// todo(charlie) this is a crazy amount of branching being concealed by a macro. Should 
-// probably revisit this.
 #define _WRAP_VAR(x) (Var_Arg) {sizeof(x) >= 8 ? *(u64*)&x : sizeof(x) >= 4 ? *(u32*)&x : sizeof(x) >= 2 ? *(u16*)&x : *(u8*)&x, sizeof(x) >= 8 ? *(float64*)&x : sizeof(x) >= 4 ? *(float32*)&x : 0, sizeof(x) >= sizeof(string) ? *(string*)&(x) : (string){0}, sizeof(x)}
 
 #include "var_args_macros.h"

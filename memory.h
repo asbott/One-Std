@@ -170,7 +170,7 @@ void *arena_push(Arena *arena, u64 size) {
         u64 pages_to_allocate = amount_to_allocate / info.page_size;
         
         void *allocate_result = sys_map_pages(SYS_MEMORY_ALLOCATE, allocated_tail, pages_to_allocate);
-        assert(allocate_result == allocated_tail, "Failed allocating pages in arena");
+        assertmsg(allocate_result == allocated_tail, STR("Failed allocating pages in arena"));
         
         arena->allocated_size += amount_to_allocate;
     }

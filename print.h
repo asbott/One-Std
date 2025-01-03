@@ -1,5 +1,4 @@
 
-#include <stdarg.h>
 
 /*
 
@@ -103,7 +102,7 @@ u64 format_string_impl(_Format_String_Desc desc, u64 arg_count, ...) {
 
 u64 format_string_args(void *buffer, u64 buffer_size, string fmt, u64 arg_count, Var_Arg *args) {
     
-    if (!buffer) buffer_size = UINT64_MAX;
+    if (!buffer) buffer_size = U64_MAX;
     
     u64 next_arg_index = 0;
     
@@ -226,7 +225,7 @@ void print_args(string fmt, u64 arg_count, Var_Arg *args) {
 u64 format_int(void *px, int base, bool _signed, void *buffer, u64 buffer_size) {
     assert(base >= 2 && base <= 36); // 0-z
     
-    if (!buffer) buffer_size = UINT64_MAX;
+    if (!buffer) buffer_size = U64_MAX;
     
     u8 digits[36];
     memcpy(digits, "0123456789abcdefghijklmnopqrstuvxyz", 36);
@@ -248,9 +247,12 @@ u64 format_int(void *px, int base, bool _signed, void *buffer, u64 buffer_size) 
         abs_val = *(u64*)px;
     }
     
-    u64 digit_count = (u64)neg;
-    if (abs_val != 0)
-        digit_count = (u64)(ln64((float64)abs_val)/ln64((float64)base));
+    if (abs_val == 0 && written < buffer_size) {
+        if (buffer) *(u8*)buffer = '0';
+        return 1;
+    }
+    
+    u64 digit_count = (u64)(ln64((float64)abs_val)/ln64((float64)base));
     
     u64 skip = 0;
     if (digit_count > buffer_size) {
@@ -292,7 +294,7 @@ u64 format_unsigned_int(u64 x, int base, void *buffer, u64 buffer_size) {
 u64 format_float(float64 x, int decimal_places, void *buffer, u64 buffer_size) {
     assert(decimal_places >= 0);
 
-    if (!buffer) buffer_size = UINT64_MAX;
+    if (!buffer) buffer_size = U64_MAX;
 
     u64 written = 0;
     

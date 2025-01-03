@@ -8,6 +8,7 @@
 #endif
 
 #include "base.h"
+
 #include "math.h"
 
 #include "utility.h"
@@ -16,11 +17,13 @@
 
 #include "system.h"
 
+#include "unicode.h"
+
 #include "memory.h"
 
 #include "var_args.h"
 #include "print.h"
 
-#ifdef __clang__
+#ifdef OSTD_NO_IGNORE_WARNINGS
 #pragma clang diagnostic pop
-#endif
+#endif // OSTD_NO_IGNORE_WARNINGS

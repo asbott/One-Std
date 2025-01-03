@@ -1,4 +1,9 @@
 
+// Natural logarithm
+float32 ln32(float32 x);
+float64 ln64(float64 x);
+
+#ifdef OSTD_IMPL
 
 float32 ln32(float32 x) {
     u32 bx = * (u32 *) (&x);
@@ -17,3 +22,5 @@ float64 ln64(float64 x) {
     x = *(float64 *)(&bx);
     return -1.49278 + (2.11263 + (-0.729104 + 0.10969 * x) * x) * x + 0.6931471806 * t;
 }
+
+#endif // OSTD_IMPL

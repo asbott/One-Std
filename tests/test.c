@@ -1,10 +1,15 @@
 
 //#include <windows.h>
 
+#ifndef TEST_NO_IMPL
 #define OSTD_IMPL
+#endif // TEST_NO_IMPL
 #include "../ostd.h"
+//#include "../ostd_single_header.h"
 
-void test_sys(void);
+void test_base(void);
+void test_sys1(void);
+void test_sys2(void);
 void test_memory(void);
 void test_print(void);
 
@@ -12,12 +17,30 @@ int main(int argc, char **argv) {
     (void)argc; (void)argv;
     sys_write_string(sys_get_stdout(), STR("Hello, ostd!\n"));
     
-    test_sys();
+    test_base();
+    test_sys1();
     test_memory();
     test_print();
+    test_sys2();
 }
 
-void test_sys(void) {
+void test_base(void) {
+    assert(sizeof(u8) == 1 && (u8)-1 == (u8)0xffu);
+    assert(sizeof(s8) == 1 && (s8)-1 == (s8)-0x01);
+    assert(sizeof(u16) == 2 && (u16)-1 == (u16)0xffffu);
+    assert(sizeof(s16) == 2 && (s16)-1 == (s16)-0x0001);
+    assert(sizeof(u32) == 4 && (u32)-1 == (u32)0xffffffffu);
+    assert(sizeof(s32) == 4 && (s32)-1 == (s32)-0x00000001);
+    assert(sizeof(u64) == 8 && (u64)-1 == (u64)0xffffffffffffffffu);
+    assert(sizeof(s64) == 8 && (s64)-1 == (s64)-0x0000000000000001);
+    
+    assert(sizeof(float32) == 4);
+    assert(sizeof(float64) == 8);
+#if HAS_FLOAT128
+    assert(sizeof(float128) == 16);
+#endif
+}
+void test_sys1(void) {
     System_Info info = sys_get_info();
     {
         void *addr = (void*)((0x0000690000000000ULL + info.granularity-1) & ~(info.granularity-1));
@@ -25,7 +48,6 @@ void test_sys(void) {
         void *mem = sys_map_pages(SYS_MEMORY_RESERVE | SYS_MEMORY_ALLOCATE, addr, 4);
         
         assert(mem == addr);
-        
         memset(mem, 0xDEADBEEF, info.page_size*4);
         
         sys_unmap_pages(mem);
@@ -58,6 +80,23 @@ void test_sys(void) {
         assert(pointers[0].page_count == 4);
         assert(pointers[1].page_count == 4);
         assert(pointers[2].page_count == 4);
+    }
+    
+}
+void test_sys2(void) {
+    {
+        Physical_Monitor monitors[128];
+        u64 num_monitors = sys_query_monitors(0, 0);
+        assert(num_monitors != 0);
+        sys_query_monitors(monitors, num_monitors);
+        
+        for (u64 i = 0; i < num_monitors; i += 1) {
+            Physical_Monitor m = monitors[i];
+            string name = (string) {m.name_count, m.name};
+            i += 1;
+            print(STR("Monitor %i:\n\t%s\n\thz: %i\n\t%ix%i\n\tscale: %f\n\tX: %i, Y: %i"),
+                (i), name, m.refresh_rate, m.resolution_x, m.resolution_y, m.scale, m.pos_x, m.pos_y);
+        }
     }
 }
 
