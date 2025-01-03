@@ -1,0 +1,271 @@
+diff --git a/GameApplication/GameApplication.vcxproj b/GameApplication/GameApplication.vcxproj
+index 6a893ae9..f477aa22 100644
+--- a/GameApplication/GameApplication.vcxproj
++++ b/GameApplication/GameApplication.vcxproj
+@@ -102,7 +102,7 @@
+     <PlatformToolset>v141</PlatformToolset>
+     <CharacterSet>Unicode</CharacterSet>
+     <LinkTimeOptimization>LinkTimeOptimization</LinkTimeOptimization>
+-    <NativeBuildBackend>Ninja</NativeBuildBackend>
++    <NativeBuildBackend>MultiToolTaskMSBuild</NativeBuildBackend>
+   </PropertyGroup>
+   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Android-arm64-v8a'" Label="Configuration">
+     <ConfigurationType>Application</ConfigurationType>
+@@ -110,7 +110,7 @@
+     <PlatformToolset>v141</PlatformToolset>
+     <CharacterSet>Unicode</CharacterSet>
+     <LinkTimeOptimization>LinkTimeOptimization</LinkTimeOptimization>
+-    <NativeBuildBackend>Ninja</NativeBuildBackend>
++    <NativeBuildBackend>MultiToolTaskMSBuild</NativeBuildBackend>
+   </PropertyGroup>
+   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Asan|Win32'" Label="Configuration">
+     <ConfigurationType>Application</ConfigurationType>
+@@ -132,7 +132,7 @@
+     <LinkTimeOptimization>LinkTimeOptimization</LinkTimeOptimization>
+     <AddressSanitizer>asan</AddressSanitizer>
+     <UseOfStl>cpp_shared</UseOfStl>
+-    <NativeBuildBackend>Ninja</NativeBuildBackend>
++    <NativeBuildBackend>MultiToolTaskMSBuild</NativeBuildBackend>
+   </PropertyGroup>
+   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='HWAsan|Android-x86_64'" Label="Configuration">
+     <ConfigurationType>Application</ConfigurationType>
+@@ -142,7 +142,7 @@
+     <LinkTimeOptimization>LinkTimeOptimization</LinkTimeOptimization>
+     <AddressSanitizer>hwasan</AddressSanitizer>
+     <UseOfStl>cpp_shared</UseOfStl>
+-    <NativeBuildBackend>Ninja</NativeBuildBackend>
++    <NativeBuildBackend>MultiToolTaskMSBuild</NativeBuildBackend>
+     <AndroidMinSdkVersion>34</AndroidMinSdkVersion>
+     <AndroidNdkVersion>26.3.11579264</AndroidNdkVersion>
+   </PropertyGroup>
+@@ -153,7 +153,7 @@
+     <CharacterSet>Unicode</CharacterSet>
+     <LinkTimeOptimization>LinkTimeOptimization</LinkTimeOptimization>
+     <AddressSanitizer>asan</AddressSanitizer>
+-    <NativeBuildBackend>Ninja</NativeBuildBackend>
++    <NativeBuildBackend>MultiToolTaskMSBuild</NativeBuildBackend>
+   </PropertyGroup>
+   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='HWAsan|Android-arm64-v8a'" Label="Configuration">
+     <ConfigurationType>Application</ConfigurationType>
+@@ -162,7 +162,7 @@
+     <CharacterSet>Unicode</CharacterSet>
+     <LinkTimeOptimization>LinkTimeOptimization</LinkTimeOptimization>
+     <AddressSanitizer>hwasan</AddressSanitizer>
+-    <NativeBuildBackend>Ninja</NativeBuildBackend>
++    <NativeBuildBackend>MultiToolTaskMSBuild</NativeBuildBackend>
+     <AndroidMinSdkVersion>34</AndroidMinSdkVersion>
+     <AndroidNdkVersion>26.3.11579264</AndroidNdkVersion>
+   </PropertyGroup>
+@@ -180,7 +180,7 @@
+     <WholeProgramOptimization>true</WholeProgramOptimization>
+     <CharacterSet>Unicode</CharacterSet>
+     <LinkTimeOptimization>LinkTimeOptimization</LinkTimeOptimization>
+-    <NativeBuildBackend>Ninja</NativeBuildBackend>
++    <NativeBuildBackend>MultiToolTaskMSBuild</NativeBuildBackend>
+   </PropertyGroup>
+   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Android-arm64-v8a'" Label="Configuration">
+     <ConfigurationType>Application</ConfigurationType>
+@@ -189,7 +189,7 @@
+     <WholeProgramOptimization>true</WholeProgramOptimization>
+     <CharacterSet>Unicode</CharacterSet>
+     <LinkTimeOptimization>LinkTimeOptimization</LinkTimeOptimization>
+-    <NativeBuildBackend>Ninja</NativeBuildBackend>
++    <NativeBuildBackend>MultiToolTaskMSBuild</NativeBuildBackend>
+   </PropertyGroup>
+   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'" Label="Configuration">
+     <ConfigurationType>Application</ConfigurationType>
+@@ -289,7 +289,7 @@
+     <AndroidApplicationModule>$(RootNamespace)</AndroidApplicationModule>
+     <AndroidGradleBuildType>$(Configuration)</AndroidGradleBuildType>
+     <AndroidDebugComponent>com.example.gameapplication/.MainActivity</AndroidDebugComponent>
+-    <NativeBuildBackend>Ninja</NativeBuildBackend>
++    <NativeBuildBackend>MultiToolTaskMSBuild</NativeBuildBackend>
+     <AndroidExtraGradleArgs />
+     <AndroidMissingApplyFromAgdeGradleHandling>Ignore</AndroidMissingApplyFromAgdeGradleHandling>
+     <AndroidGradlePackageOutputName>$(RootNamespace)-$(Configuration).apk</AndroidGradlePackageOutputName>
+@@ -301,7 +301,7 @@
+     <AndroidApplicationModule>$(RootNamespace)</AndroidApplicationModule>
+     <AndroidGradleBuildType>$(Configuration)</AndroidGradleBuildType>
+     <AndroidDebugComponent>com.example.gameapplication/.MainActivity</AndroidDebugComponent>
+-    <NativeBuildBackend>Ninja</NativeBuildBackend>
++    <NativeBuildBackend>MultiToolTaskMSBuild</NativeBuildBackend>
+     <AndroidExtraGradleArgs />
+     <AndroidMissingApplyFromAgdeGradleHandling>Ignore</AndroidMissingApplyFromAgdeGradleHandling>
+     <AndroidGradlePackageOutputName>$(RootNamespace)-$(Configuration).apk</AndroidGradlePackageOutputName>
+@@ -313,7 +313,7 @@
+     <AndroidApplicationModule>$(RootNamespace)</AndroidApplicationModule>
+     <AndroidGradleBuildType>$(Configuration)</AndroidGradleBuildType>
+     <AndroidDebugComponent>com.example.gameapplication/.MainActivity</AndroidDebugComponent>
+-    <NativeBuildBackend>Ninja</NativeBuildBackend>
++    <NativeBuildBackend>MultiToolTaskMSBuild</NativeBuildBackend>
+     <AndroidExtraGradleArgs />
+     <AndroidMissingApplyFromAgdeGradleHandling>Ignore</AndroidMissingApplyFromAgdeGradleHandling>
+     <AndroidGradlePackageOutputName>$(RootNamespace)-$(Configuration).apk</AndroidGradlePackageOutputName>
+@@ -325,7 +325,7 @@
+     <AndroidApplicationModule>$(RootNamespace)</AndroidApplicationModule>
+     <AndroidGradleBuildType>$(Configuration)</AndroidGradleBuildType>
+     <AndroidDebugComponent>com.example.gameapplication/.MainActivity</AndroidDebugComponent>
+-    <NativeBuildBackend>Ninja</NativeBuildBackend>
++    <NativeBuildBackend>MultiToolTaskMSBuild</NativeBuildBackend>
+     <AndroidExtraGradleArgs>
+     </AndroidExtraGradleArgs>
+     <AndroidMissingApplyFromAgdeGradleHandling>Ignore</AndroidMissingApplyFromAgdeGradleHandling>
+@@ -338,7 +338,7 @@
+     <AndroidApplicationModule>$(RootNamespace)</AndroidApplicationModule>
+     <AndroidGradleBuildType>$(Configuration)</AndroidGradleBuildType>
+     <AndroidDebugComponent>com.example.gameapplication/.MainActivity</AndroidDebugComponent>
+-    <NativeBuildBackend>Ninja</NativeBuildBackend>
++    <NativeBuildBackend>MultiToolTaskMSBuild</NativeBuildBackend>
+     <AndroidExtraGradleArgs />
+     <AndroidMissingApplyFromAgdeGradleHandling>Ignore</AndroidMissingApplyFromAgdeGradleHandling>
+     <AndroidGradlePackageOutputName>$(RootNamespace)-$(Configuration).apk</AndroidGradlePackageOutputName>
+@@ -351,7 +351,7 @@
+     <AndroidApplicationModule>$(RootNamespace)</AndroidApplicationModule>
+     <AndroidGradleBuildType>$(Configuration)</AndroidGradleBuildType>
+     <AndroidDebugComponent>com.example.gameapplication/.MainActivity</AndroidDebugComponent>
+-    <NativeBuildBackend>Ninja</NativeBuildBackend>
++    <NativeBuildBackend>MultiToolTaskMSBuild</NativeBuildBackend>
+     <AndroidExtraGradleArgs />
+     <AndroidMissingApplyFromAgdeGradleHandling>Ignore</AndroidMissingApplyFromAgdeGradleHandling>
+     <AndroidGradlePackageOutputName>$(RootNamespace)-$(Configuration).apk</AndroidGradlePackageOutputName>
+@@ -380,7 +380,7 @@
+     <AndroidApplicationModule>$(RootNamespace)</AndroidApplicationModule>
+     <AndroidGradleBuildType>$(Configuration)</AndroidGradleBuildType>
+     <AndroidDebugComponent>com.example.gameapplication/.MainActivity</AndroidDebugComponent>
+-    <NativeBuildBackend>Ninja</NativeBuildBackend>
++    <NativeBuildBackend>MultiToolTaskMSBuild</NativeBuildBackend>
+     <AndroidExtraGradleArgs>
+     </AndroidExtraGradleArgs>
+     <AndroidMissingApplyFromAgdeGradleHandling>Ignore</AndroidMissingApplyFromAgdeGradleHandling>
+@@ -393,7 +393,7 @@
+     <AndroidApplicationModule>$(RootNamespace)</AndroidApplicationModule>
+     <AndroidGradleBuildType>$(Configuration)</AndroidGradleBuildType>
+     <AndroidDebugComponent>com.example.gameapplication/.MainActivity</AndroidDebugComponent>
+-    <NativeBuildBackend>Ninja</NativeBuildBackend>
++    <NativeBuildBackend>MultiToolTaskMSBuild</NativeBuildBackend>
+     <AndroidExtraGradleArgs>
+     </AndroidExtraGradleArgs>
+     <AndroidMissingApplyFromAgdeGradleHandling>Ignore</AndroidMissingApplyFromAgdeGradleHandling>
+diff --git a/GameApplication/build.gradle b/GameApplication/build.gradle
+index 66f568b1..c4e77344 100644
+--- a/GameApplication/build.gradle
++++ b/GameApplication/build.gradle
+@@ -30,22 +30,9 @@ android {
+ 
+         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
+         externalNativeBuild {
+-            experimentalProperties["ninja.abiFilters"] = ["x86_64", "arm64-v8a" ]
+-            experimentalProperties["ninja.path"] = "../Teapot.sln"
+-            experimentalProperties["ninja.configure"] = "run-msbuild"
+-            experimentalProperties["ninja.arguments"] = [
+-                    "\${ndk.moduleMakeFile}",
+-                    "-nologo",
+-                    "-verbosity:normal",
+-                    "-binaryLogger:LogFile=\${ndk.variantName}/Android-\${ndk.abi}/msbuild-GenerateBuildNinja.binlog",
+-                    "-p:Configuration=\${ndk.variantName}",
+-                    "-p:Platform=Android-\${ndk.abi}",
+-                    "-p:NinjaBuildLocation=\${ndk.buildRoot}",
+-                    "-p:RequireAndroidNdkVersion=\${ndk.moduleNdkVersion}",
+-                    "-p:RequireMinSdkVersion=\${ndk.minPlatform}",
+-                    "-p:NinjaBuildEnableBinlog=true",
+-                    "-t:GenerateBuildNinja"
+-             ]
++            cmake {
++                cppFlags ""
++            }
+         }
+     }
+     signingConfigs {
+@@ -73,6 +60,16 @@ android {
+         sourceCompatibility JavaVersion.VERSION_1_8
+         targetCompatibility JavaVersion.VERSION_1_8
+     }
++    sourceSets {
++        main {
++            jniLibs.srcDirs = [MSBUILD_JNI_LIBS_SRC_DIR]
++        }
++    }
++    applicationVariants.all { variant ->
++        variant.outputs.all {
++            outputFileName = MSBUILD_ANDROID_OUTPUT_APK_NAME
++        }
++    }
+ }
+ 
+ dependencies {
+diff --git a/GameEngine/GameEngine.vcxproj b/GameEngine/GameEngine.vcxproj
+index 446c3445..ce452cbf 100644
+--- a/GameEngine/GameEngine.vcxproj
++++ b/GameEngine/GameEngine.vcxproj
+@@ -113,7 +113,7 @@
+     <PlatformToolset>v141</PlatformToolset>
+     <CharacterSet>Unicode</CharacterSet>
+     <LinkTimeOptimization>LinkTimeOptimization</LinkTimeOptimization>
+-    <NativeBuildBackend>Ninja</NativeBuildBackend>
++    <NativeBuildBackend>MultiToolTaskMSBuild</NativeBuildBackend>
+   </PropertyGroup>
+   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Asan|Android-x86_64'" Label="Configuration">
+     <ConfigurationType>StaticLibrary</ConfigurationType>
+@@ -122,7 +122,7 @@
+     <CharacterSet>Unicode</CharacterSet>
+     <LinkTimeOptimization>LinkTimeOptimization</LinkTimeOptimization>
+     <AddressSanitizer>asan</AddressSanitizer>
+-    <NativeBuildBackend>Ninja</NativeBuildBackend>
++    <NativeBuildBackend>MultiToolTaskMSBuild</NativeBuildBackend>
+   </PropertyGroup>
+   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='HWAsan|Android-x86_64'" Label="Configuration">
+     <ConfigurationType>StaticLibrary</ConfigurationType>
+@@ -131,7 +131,7 @@
+     <CharacterSet>Unicode</CharacterSet>
+     <LinkTimeOptimization>LinkTimeOptimization</LinkTimeOptimization>
+     <AddressSanitizer>hwasan</AddressSanitizer>
+-    <NativeBuildBackend>Ninja</NativeBuildBackend>
++    <NativeBuildBackend>MultiToolTaskMSBuild</NativeBuildBackend>
+     <AndroidMinSdkVersion>34</AndroidMinSdkVersion>
+     <AndroidNdkVersion>26.3.11579264</AndroidNdkVersion>
+   </PropertyGroup>
+@@ -143,7 +143,7 @@
+     <UseOfStl>cpp_shared</UseOfStl>
+     <LinkTimeOptimization>LinkTimeOptimization</LinkTimeOptimization>
+     <AddressSanitizer>None</AddressSanitizer>
+-    <NativeBuildBackend>Ninja</NativeBuildBackend>
++    <NativeBuildBackend>MultiToolTaskMSBuild</NativeBuildBackend>
+   </PropertyGroup>
+   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Asan|Android-arm64-v8a'" Label="Configuration">
+     <ConfigurationType>StaticLibrary</ConfigurationType>
+@@ -153,7 +153,7 @@
+     <UseOfStl>cpp_shared</UseOfStl>
+     <LinkTimeOptimization>LinkTimeOptimization</LinkTimeOptimization>
+     <AddressSanitizer>asan</AddressSanitizer>
+-    <NativeBuildBackend>Ninja</NativeBuildBackend>
++    <NativeBuildBackend>MultiToolTaskMSBuild</NativeBuildBackend>
+   </PropertyGroup>
+   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='HWAsan|Android-arm64-v8a'" Label="Configuration">
+     <ConfigurationType>StaticLibrary</ConfigurationType>
+@@ -163,7 +163,7 @@
+     <UseOfStl>cpp_shared</UseOfStl>
+     <LinkTimeOptimization>LinkTimeOptimization</LinkTimeOptimization>
+     <AddressSanitizer>hwasan</AddressSanitizer>
+-    <NativeBuildBackend>Ninja</NativeBuildBackend>
++    <NativeBuildBackend>MultiToolTaskMSBuild</NativeBuildBackend>
+     <AndroidMinSdkVersion>34</AndroidMinSdkVersion>
+     <AndroidNdkVersion>26.3.11579264</AndroidNdkVersion>
+   </PropertyGroup>
+@@ -181,7 +181,7 @@
+     <WholeProgramOptimization>true</WholeProgramOptimization>
+     <CharacterSet>Unicode</CharacterSet>
+     <LinkTimeOptimization>LinkTimeOptimization</LinkTimeOptimization>
+-    <NativeBuildBackend>Ninja</NativeBuildBackend>
++    <NativeBuildBackend>MultiToolTaskMSBuild</NativeBuildBackend>
+   </PropertyGroup>
+   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Android-arm64-v8a'" Label="Configuration">
+     <ConfigurationType>StaticLibrary</ConfigurationType>
+@@ -190,7 +190,7 @@
+     <WholeProgramOptimization>true</WholeProgramOptimization>
+     <CharacterSet>Unicode</CharacterSet>
+     <LinkTimeOptimization>LinkTimeOptimization</LinkTimeOptimization>
+-    <NativeBuildBackend>Ninja</NativeBuildBackend>
++    <NativeBuildBackend>MultiToolTaskMSBuild</NativeBuildBackend>
+   </PropertyGroup>
+   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'" Label="Configuration">
+     <ConfigurationType>StaticLibrary</ConfigurationType>

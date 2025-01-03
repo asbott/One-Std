@@ -5,6 +5,13 @@
 #pragma clang diagnostic ignored "-Wgnu-zero-variadic-macro-arguments"
 #pragma clang diagnostic ignored "-Wnewline-eof"
 #pragma clang diagnostic ignored "-Wkeyword-macro"
+#pragma clang diagnostic ignored "-Wreserved-identifier"
+#pragma clang diagnostic ignored "-Wdeclaration-after-statement"
+#pragma clang diagnostic ignored "-Wcovered-switch-default"
+#pragma clang diagnostic ignored "-Wcast-align"
+#ifdef _MSC_VER
+#pragma clang diagnostic ignored "-Wunsafe-buffer-usage"
+#endif
 #endif
 
 #include "base.h"

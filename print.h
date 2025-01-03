@@ -30,7 +30,8 @@
 // Formatting
 //////
 
-#define format_string(buffer, buffer_size, fmt, ...)  _format_string_ugly(buffer, buffer_size, fmt, __VA_ARGS__)
+// note(charlie) comma-swallowing is a hit on #Portability
+#define format_string(buffer, buffer_size, fmt, ...)  _format_string_ugly(buffer, buffer_size, fmt, ##__VA_ARGS__)
 
 u64 format_string_args(void *buffer, u64 buffer_size, string fmt, u64 arg_count, Var_Arg *args);
 
@@ -42,9 +43,10 @@ u64 format_float(float64 x, int decimal_places, void *buffer, u64 buffer_size);
 // Printing
 //////
 
-#define sprint(allocator, fmt, ...)  _sprint_ugly(allocator,  fmt, __VA_ARGS__)
-#define tprint(fmt, ...)             _tprint_ugly(fmt, __VA_ARGS__)
-#define print(fmt, ...)              _print_ugly(fmt, __VA_ARGS__)
+// note(charlie) comma-swallowing is a hit on #Portability
+#define sprint(allocator, fmt, ...)  _sprint_ugly(allocator,  fmt, ##__VA_ARGS__)
+#define tprint(fmt, ...)             _tprint_ugly(fmt, ##__VA_ARGS__)
+#define print(fmt, ...)              _print_ugly(fmt, ##__VA_ARGS__)
 
 string sprint_args(Allocator a, string fmt, u64 arg_count, Var_Arg *args);
 string tprint_args(string fmt, u64 arg_count, Var_Arg *args);
@@ -58,13 +60,13 @@ void   print_args(string fmt, u64 arg_count, Var_Arg *args);
 // so I made a prettier indirection for the readable part of the file.
 
 #define _format_string_ugly(buffer, buffer_size, fmt, ...)\
-    MAKE_WRAPPED_CALL(format_string_impl, _make_format_string_desc(buffer, buffer_size, fmt), __VA_ARGS__)
+    MAKE_WRAPPED_CALL(format_string_impl, _make_format_string_desc(buffer, buffer_size, fmt), ##__VA_ARGS__)
 #define _sprint_ugly(allocator, fmt, ...)\
-    MAKE_WRAPPED_CALL(sprint_impl, _make_print_desc(allocator, fmt), __VA_ARGS__)
+    MAKE_WRAPPED_CALL(sprint_impl, _make_print_desc(allocator, fmt), ##__VA_ARGS__)
 #define _tprint_ugly(fmt, ...)\
-    MAKE_WRAPPED_CALL(tprint_impl, _make_print_desc((Allocator){0}, fmt), __VA_ARGS__)
+    MAKE_WRAPPED_CALL(tprint_impl, _make_print_desc((Allocator){0}, fmt), ##__VA_ARGS__)
 #define _print_ugly(fmt, ...)\
-    MAKE_WRAPPED_CALL(print_impl, _make_print_desc((Allocator){0}, fmt), __VA_ARGS__)
+    MAKE_WRAPPED_CALL(print_impl, _make_print_desc((Allocator){0}, fmt), ##__VA_ARGS__)
     
 
 
@@ -222,7 +224,7 @@ void print_args(string fmt, u64 arg_count, Var_Arg *args) {
 }
 
 // todo(charlie) make a less naive and slow version of this !
-u64 format_int(void *px, int base, bool _signed, void *buffer, u64 buffer_size) {
+unit_local u64 _format_int(void *px, int base, bool _signed, void *buffer, u64 buffer_size) {
     assert(base >= 2 && base <= 36); // 0-z
     
     if (!buffer) buffer_size = U64_MAX;
@@ -241,7 +243,7 @@ u64 format_int(void *px, int base, bool _signed, void *buffer, u64 buffer_size) 
         s64 signed_val = *(s64*)px;
         neg = signed_val < 0;
         // todo(charlie), this shouldnt actually generate a mul but we may want to check
-        abs_val = neg ? (signed_val*-1) : signed_val;
+        abs_val = (u64)(neg ? (signed_val*-1) : signed_val);
     }
     else {
         abs_val = *(u64*)px;
@@ -260,14 +262,14 @@ u64 format_int(void *px, int base, bool _signed, void *buffer, u64 buffer_size) 
     }
     
     while (abs_val != 0) {
-        u8 digit = digits[abs_val%base];
+        u8 digit = digits[abs_val%(u64)base];
         
         if (skip == 0 && written < buffer_size) {
             if (buffer) *((u8*)tail - written) = digit;
             written += 1;
         }
         
-        abs_val /= base;
+        abs_val /= (u64)base;
         if (skip > 0) skip -= 1;
     }
     
@@ -285,10 +287,10 @@ u64 format_int(void *px, int base, bool _signed, void *buffer, u64 buffer_size) 
     return written;
 }
 u64 format_signed_int(s64 x, int base, void *buffer, u64 buffer_size) {
-    return format_int(&x, base, true, buffer, buffer_size);
+    return _format_int(&x, base, true, buffer, buffer_size);
 }
 u64 format_unsigned_int(u64 x, int base, void *buffer, u64 buffer_size) {
-    return format_int(&x, base, false, buffer, buffer_size);
+    return _format_int(&x, base, false, buffer, buffer_size);
 }
 
 u64 format_float(float64 x, int decimal_places, void *buffer, u64 buffer_size) {
@@ -302,7 +304,7 @@ u64 format_float(float64 x, int decimal_places, void *buffer, u64 buffer_size) {
     if (neg) x = -x;
 
     s64 integral_part = (s64)x;
-    float64 fractional_part = x - integral_part;
+    float64 fractional_part = x - (float64)integral_part;
 
     written += format_signed_int(integral_part, 10, buffer, buffer_size);
 

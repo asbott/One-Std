@@ -5,3 +5,10 @@
 *.rdi
 *.pp
 *.o
+Debug/
+build/
+.cxx/
+
+.vs/
+
+*.user

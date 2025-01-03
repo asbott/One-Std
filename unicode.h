@@ -30,7 +30,7 @@ Utf8_To_Utf16_Result one_utf8_to_utf16(u8 *s, s64 source_length, bool strict);
 
 #ifdef OSTD_IMPL
 
-const u8 trailing_bytes_for_utf8[] = {
+unit_local const u8 trailing_bytes_for_utf8[] = {
 	0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0, 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
 	0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0, 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
 	0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0, 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
@@ -40,7 +40,7 @@ const u8 trailing_bytes_for_utf8[] = {
 	1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1, 1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,
 	2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2, 3,3,3,3,3,3,3,3,4,4,4,4,5,5,5,5
 };
-const u8 utf8_inital_byte_mask[] = { 0x7F, 0x1F, 0x0F, 0x07, 0x03, 0x01 };
+unit_local const u8 utf8_inital_byte_mask[] = { 0x7F, 0x1F, 0x0F, 0x07, 0x03, 0x01 };
 
 // Convert single utf8 character to a single utf32 codepoint
 Utf8_To_Utf32_Result one_utf8_to_utf32(u8 *s, s64 source_length, bool strict) {

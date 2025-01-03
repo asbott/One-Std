@@ -5,7 +5,6 @@
 #define OSTD_IMPL
 #endif // TEST_NO_IMPL
 #include "../ostd.h"
-//#include "../ostd_single_header.h"
 
 void test_base(void);
 void test_sys1(void);
@@ -13,8 +12,7 @@ void test_sys2(void);
 void test_memory(void);
 void test_print(void);
 
-int main(int argc, char **argv) {
-    (void)argc; (void)argv;
+int main(void) {
     sys_write_string(sys_get_stdout(), STR("Hello, ostd!\n"));
     
     test_base();
@@ -22,6 +20,19 @@ int main(int argc, char **argv) {
     test_memory();
     test_print();
     test_sys2();
+    
+#if OS_FLAGS & OS_FLAG_HAS_WINDOW_SYSTEM
+    Surface_Desc desc = DEFAULT(Surface_Desc);
+    Surface_Handle surface = sys_make_surface(desc);
+    assertmsg(surface, STR("Failed making surface"));
+#else
+    Surface_Handle surface = sys_get_surface();
+#endif
+    bool running = true;
+    
+    while (running) {
+        surface_poll_events(surface);
+    }
 }
 
 void test_base(void) {
@@ -43,19 +54,26 @@ void test_base(void) {
 void test_sys1(void) {
     System_Info info = sys_get_info();
     {
-        void *addr = (void*)((0x0000690000000000ULL + info.granularity-1) & ~(info.granularity-1));
+        void *mem = sys_map_pages(SYS_MEMORY_RESERVE | SYS_MEMORY_ALLOCATE, 0, 4);
+        
+        memset(mem, (int)0xDEADBEEF, info.page_size*4);
+        
+        sys_unmap_pages(mem);
+    }
+    {
+        // todo(charlie) portable safe virtual base address
+        void* addr = (void*)((0x0000007cccc00000ULL + info.granularity - 1) & ~(info.granularity - 1));
         
         void *mem = sys_map_pages(SYS_MEMORY_RESERVE | SYS_MEMORY_ALLOCATE, addr, 4);
-        
-        assert(mem == addr);
-        memset(mem, 0xDEADBEEF, info.page_size*4);
+        memset(mem, (int)0xDEADBEEF, info.page_size*4);
         
         sys_unmap_pages(mem);
     }
     {
         u64 page_count = info.granularity / info.page_size;
     
-        void *addr0 = (void*)((0x0000690000000000ULL + info.granularity-1) & ~(info.granularity-1));
+        // todo(charlie) portable safe virtual base address
+        void* addr0 = (void*)((0x0000007cccc00000ULL + info.granularity - 1) & ~(info.granularity - 1));
         void *addr1 = (u8*)addr0 + page_count*info.page_size;
         void *addr2 = (u8*)addr1 + page_count*info.page_size;
         void *end = (u8*)addr2 + page_count*info.page_size;
@@ -69,7 +87,7 @@ void test_sys1(void) {
         assert(mem2 == addr2);
         
         Mapped_Memory_Info pointers[3];
-        u64 pointer_count = sys_query_mapped_pointers(addr0, end, pointers, 3);
+        u64 pointer_count = sys_query_mapped_regions(addr0, end, pointers, 3);
         
         assert(pointer_count == 3);
         
@@ -171,11 +189,11 @@ void test_print(void) {
     result = tprint(STR("Value1: %i, Value2: %i"), val1, val2);
     assert(strings_match(result, STR("Value1: 42, Value2: -812736812")));
 
-    float32 flt = 3.14159;
+    float32 flt = 3.14159f;
     print(STR("Testing print: %f\n"), flt);
     
     s = STR("TEST");
-    float32 a = -123.456;
+    float32 a = -123.456f;
     s16 b = -255;
     bool c = false;
     result = tprint(STR("%s, %f, %i, %b %a"), s, a, b, c, s);

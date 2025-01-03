@@ -14,64 +14,64 @@
 #define COMPILER_FLAG_CLANG_GNU   (1 << 8)
 
 #ifdef __clang__
-    #define _CLANG 1
+    #define CLANG 1
     //#error hi1
 #else
-    #define _CLANG 0
+    #define CLANG 0
 #endif
 
 #if defined(__GNUC__) || defined(__GNUG__)
-    #define _GNU 1
+    #define GNU 1
 #else
-    #define _GNU 0
+    #define GNU 0
 #endif
 
 #ifdef _MSC_VER
-    #define _MSC 1
+    #define MSC 1
 #else
-    #define _MSC 0
+    #define MSC 0
 #endif
 
 #ifdef __INTEL_COMPILER
-    #define _INTEL 1
+    #define INTEL 1
 #else
-    #define _INTEL 0
+    #define INTEL 0
 #endif
 
 #ifdef __TINYC__
-    #define _TCC 1
+    #define TCC 1
 #else
-    #define _TCC 0
+    #define TCC 0
 #endif
 
 #ifdef __EMSCRIPTEN__
-    #define _EMSCRIPTEN 1
+    #define EMSCRIPTEN 1
 #else
-    #define _EMSCRIPTEN 0
+    #define EMSCRIPTEN 0
 #endif
 
 #ifdef __PGI
-    #define _PGI 1
+    #define PGI 1
 #else
-    #define _PGI 0
+    #define PGI 0
 #endif
 
 #ifdef __SUNPRO_C
-    #define _SUNPRO 1
+    #define SUNPRO 1
 #else
-    #define _SUNPRO 0
+    #define SUNPRO 0
 #endif
 
 #define COMPILER_FLAGS ( \
-    (_CLANG ? COMPILER_FLAG_CLANG : 0) | \
-    ((_GNU) ? COMPILER_FLAG_GNU : 0) | \
-    (_MSC ? COMPILER_FLAG_MSC : 0) | \
-    (_INTEL ? COMPILER_FLAG_INTEL : 0) | \
-    (_TCC ? COMPILER_FLAG_TCC : 0) | \
-    (_EMSCRIPTEN ? COMPILER_FLAG_EMSCRIPTEN : 0) | \
-    (_PGI ? COMPILER_FLAG_PGI : 0) | \
-    (_SUNPRO ? COMPILER_FLAG_SUNPRO : 0) | \
-    ((_CLANG && _GNU) ? COMPILER_FLAG_CLANG_GNU : 0) \
+    (CLANG ? COMPILER_FLAG_CLANG : 0) | \
+    (GNU ? COMPILER_FLAG_GNU : 0) | \
+    (MSC ? COMPILER_FLAG_MSC : 0) | \
+    (INTEL ? COMPILER_FLAG_INTEL : 0) | \
+    (TCC ? COMPILER_FLAG_TCC : 0) | \
+    (EMSCRIPTEN ? COMPILER_FLAG_EMSCRIPTEN : 0) | \
+    (PGI ? COMPILER_FLAG_PGI : 0) | \
+    (SUNPRO ? COMPILER_FLAG_SUNPRO : 0) | \
+    ((CLANG && GNU) ? COMPILER_FLAG_CLANG_GNU : 0) \
 )
 
 
@@ -79,12 +79,13 @@
 
 #define local_persist static
 #define forward_global extern
+#define unit_local static
 
 // make inline actually inline if supported by compiler
 
 #if COMPILER_FLAGS & COMPILER_FLAG_GNU
     #define inline __attribute__((always_inline))
-#elif COMPILER_MSVC
+#elif COMPILER_FLAGS & COMPILER_FLAG_MSC
     #define inline __forceinline
 #endif
 
@@ -92,16 +93,24 @@
 #ifdef __STDC_VERSION__
     #if __STDC_VERSION__ == 199901
         #define CSTD_C99 1
-    #endif
+    #else
+        #define CSTD_C99 0
+    #endif // CSTD_C99
     #if __STDC_VERSION__ == 201112
         #define CSTD_C11 1
-    #endif
+    #else
+        #define CSTD_C11 0
+    #endif // CSTD_C11
     #if __STDC_VERSION__ == 201710
         #define CSTD_C17 1
-    #endif
+    #else
+        #define CSTD_C17 0
+    #endif // CSTD_C17
     #if __STDC_VERSION__ == 202311
         #define CSTD_C23 1
-    #endif
+    #else
+        #define CSTD_C23 0
+    #endif // CSTD_C23
 #endif
 
 #if CSTD_C23
@@ -172,7 +181,9 @@
     typedef signed __int32    s32;
     typedef unsigned __int64  u64;
     typedef signed __int64    s64;
+    typedef unsigned __int64 uintptr;
     #pragma clang diagnostic pop
+    
     
 #elif COMPILER_FLAGS & COMPILER_FLAG_GNU
 
@@ -185,6 +196,8 @@
     typedef signed int        s32;
     typedef unsigned long     u64;
     typedef signed long       s64;
+    
+    typedef u64 uintptr;
     
 #else
 
@@ -209,6 +222,8 @@ typedef double float64;
 #elif defined(__SIZEOF_LONG_DOUBLE__) && __SIZEOF_LONG_DOUBLE__ == 16
     typedef long double float128;
     #define HAS_FLOAT128 1
+#else
+    #define HAS_FLOAT128 0
 #endif
 
 typedef u8 uint8;
@@ -243,9 +258,16 @@ typedef float128 f128;
 #define S64_MIN (-9223372036854775807LL - 1)
 #define S64_MAX 9223372036854775807LL
 
-typedef s8 bool;
-#define true 1
-#define false 0
+#if !CSTD_C23
+    #pragma clang diagnostic push
+#if COMPILER_FLAGS & COMPILER_FLAG_MSC
+    #pragma clang diagnostic ignored "-Wc23-compat"
+#endif
+    typedef s8 bool;
+    #define true 1
+    #define false 0
+    #pragma clang diagnostic pop
+#endif
 
 typedef union float32x2 {
     struct {float32 x, y;} DUMMYSTRUCT;
@@ -308,21 +330,21 @@ inline void *memset(void *dst, s32 c, u64 n) {
     return dst;
 }
 inline void *memcpy(void *dst, const void * src, u64 n) {
-    for (u64 i = 0; i < n; i += 1)  *((u8*)dst + i) = *((u8*)src + i);
+    for (u64 i = 0; i < n; i += 1)  *((u8*)dst + i) = *((const u8*)src + i);
     return dst;
 }
 inline void *memmove(void *dst, const void *src, u64 n) {
     if (!n) return dst;
     if ((u64)dst > (u64)src)
-        for (s64 i = n-1; i >= 0; i -= 1)  *((u8*)dst + i) = *((u8*)src + i);
+        for (s64 i = (s64)n-1; i >= 0; i -= 1)  *((u8*)dst + i) = *((const u8*)src + i);
     else
-        for (u64 i = 0; i < n; i += 1)  *((u8*)dst + i) = *((u8*)src + i);
+        for (u64 i = 0; i < n; i += 1)  *((u8*)dst + i) = *((const u8*)src + i);
     return dst;
 }
 
-inline int memcmp(const void* a, const void* b, size_t n) {
-    u8 *p1 = (u8 *)a;
-    u8 *p2 = (u8 *)b;
+inline int memcmp(const void* a, const void* b, u64 n) {
+    const u8 *p1 = (const u8 *)a;
+    const u8 *p2 = (const u8 *)b;
 
     for (u32 i = 0; i < n; i++) {
         if (p1[i] != p2[i]) {
@@ -332,10 +354,18 @@ inline int memcmp(const void* a, const void* b, size_t n) {
     return 0;
 }
 
-#define DEFAULT(T) T##_default
+#define DEFAULT(T) T##_default()
 
 
 // Forward decls
 u64 format_signed_int(s64 x, int base, void *buffer, u64 buffer_size);
 u64 format_unsigned_int(u64 x, int base, void *buffer, u64 buffer_size);
 u64 format_float(float64 x, int decimal_places, void *buffer, u64 buffer_size);
+
+
+
+#define PP_FIRST_ARG_HELPER(x, ...) x
+#define PP_FIRST_ARG(...) PP_FIRST_ARG_HELPER(__VA_ARGS__)
+
+#define PP_EXCLUDE_FIRST_ARG_HELPER(x, ...) __VA_ARGS__
+#define PP_EXCLUDE_FIRST_ARG(...) PP_EXCLUDE_FIRST_ARG_HELPER(__VA_ARGS__)

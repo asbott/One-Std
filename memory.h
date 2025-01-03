@@ -77,11 +77,11 @@ inline void string_free(Allocator a, string s) {
 
 #ifdef OSTD_IMPL
 
-Arena _temp_arena;
-Allocator _temp;
-bool _temp_initted = false;
+unit_local Arena _temp_arena;
+unit_local Allocator _temp;
+unit_local bool _temp_initted = false;
 
-inline void _lazy_init_temporary_storage(void) {
+unit_local inline void _lazy_init_temporary_storage(void) {
     if (_temp_initted) return;
     
     _temp_arena = make_arena(sys_get_info().page_size*4, 1024);
@@ -135,11 +135,11 @@ void free_arena(Arena arena) {
     void *start = arena.start;
     void *end = (u8*)arena.start + arena.reserved_size;
     
-    u64 pointer_count = sys_query_mapped_pointers(start, end, 0, 0);
+    u64 pointer_count = sys_query_mapped_regions(start, end, 0, 0);
     
     // todo(charlie)  use a temp scratch memory here
     Mapped_Memory_Info pointers[4096];
-    sys_query_mapped_pointers(start, end, pointers, pointer_count);
+    sys_query_mapped_regions(start, end, pointers, pointer_count);
     
     u32 i;
     for (i = 0; i < pointer_count; i += 1) {
@@ -152,7 +152,7 @@ void *arena_push(Arena *arena, u64 size) {
     System_Info info = sys_get_info();
 
     // Align to 8
-    size = (size + 7) & ~(7);
+    size = (size + 7u) & ~(7u);
 
     void *allocated_tail = (u8*)arena->start + arena->allocated_size;
     void *reserved_tail = (u8*)arena->start + arena->reserved_size;
@@ -190,19 +190,27 @@ void* arena_allocator_proc(Allocator_Message msg, void *data, void *old, u64 old
     Arena *a = (Arena*)data;
     switch (msg) {
         case ALLOCATOR_ALLOCATE:
+        {
             return arena_push(a, n);
+        }
         case ALLOCATOR_REALLOCATE:
-            void *p = arena_push(a, n);
+        {
+            void* p = arena_push(a, n);
             if (old && old_n) {
                 memcpy(p, old, min(old_n, n));
             }
             return p;
-            
+
+        }
         case ALLOCATOR_FREE:
+        {
             break;
+        }
             
         default:
+        {
             break;
+        }
     }
     
     return 0;
