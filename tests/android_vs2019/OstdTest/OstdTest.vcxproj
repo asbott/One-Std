@@ -766,10 +766,10 @@
     </PostBuildEvent>
   </ItemDefinitionGroup>
   <ItemGroup>
-    <ClCompile Include="android_main.c" />
+    <Xml Include="src\main\AndroidManifest.xml" />
   </ItemGroup>
   <ItemGroup>
-    <Xml Include="src\main\AndroidManifest.xml" />
+    <ClCompile Include="..\..\test.c" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

@@ -4,7 +4,7 @@
 #ifndef TEST_NO_IMPL
 #define OSTD_IMPL
 #endif // TEST_NO_IMPL
-#include "../ostd.h"
+#include "../src//ostd.h"
 
 void test_base(void);
 void test_sys1(void);
