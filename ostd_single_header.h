@@ -464,10 +464,8 @@ inline bool strings_match(string a, string b) {
 /* Begin include: system.h */
 
 
-
 #define SYS_MEMORY_RESERVE (1 << 0)
 #define SYS_MEMORY_ALLOCATE (1 << 1)
-
 
 void *sys_map_pages(u64 action, void *virtual_base, u64 amount_in_bytes);
 bool sys_unmap_pages(void *address);
@@ -578,6 +576,7 @@ inline Surface_Desc Surface_Desc_default(void) {
 Surface_Handle sys_make_surface(Surface_Desc desc);
 void surface_close(Surface_Handle s);
 
+
 #else // !(OS_FLAGS & OS_FLAG_HAS_WINDOW_SYSTEM)
 
 Surface_Handle sys_get_surface(void);
@@ -585,6 +584,7 @@ Surface_Handle sys_get_surface(void);
 #endif // !(OS_FLAGS & OS_FLAG_HAS_WINDOW_SYSTEM)
 
 void surface_poll_events(Surface_Handle surface);
+bool surface_should_close(Surface_Handle s);
 
 //////
 // Debug
@@ -592,17 +592,57 @@ void surface_poll_events(Surface_Handle surface);
 
 void sys_print_stack_trace(File_Handle handle);
 
+//////
+// System Constants
+/////
+
+#define MAX_SURFACES 64
+#define MAX_PATH_LENGTH 260
 
 
+//////
+// Implementations
+//////
 
 #ifdef OSTD_IMPL
+
+#if (OS_FLAGS & OS_FLAG_HAS_WINDOW_SYSTEM)
+
+typedef struct _Surface_State {
+    Surface_Handle *handle;
+    bool allocated;
+    bool should_close;
+} _Surface_State;
+unit_local _Surface_State _surface_states[MAX_SURFACES] = {0};
+
+unit_local _Surface_State *_alloc_surface_state(void) {
+    for (u64 i = 0; i < MAX_SURFACES; i += 1) {
+        if (!_surface_states[i].allocated) {
+            memset(&_surface_states[i], 0, sizeof(_Surface_State));
+            _surface_states[i].allocated = true;
+            return &_surface_states[i];
+        }
+    }
+    return 0;
+}
+
+unit_local _Surface_State *_get_surface_state(Surface_Handle h) {
+    for (u64 i = 0; i < MAX_SURFACES; i += 1) {
+        if (_surface_states[i].allocated && _surface_states[i].handle == h) {
+            return &_surface_states[i];
+        }
+    }
+    return 0;
+}
+
+#endif // (OS_FLAGS & OS_FLAG_HAS_WINDOW_SYSTEM)
 
 
 #if (OS_FLAGS & OS_FLAG_UNIX)
 
 /////////////////////////////////////////////////////
 //////
-// Unix
+// :Unix
 //////
 /////////////////////////////////////////////////////
 
@@ -614,6 +654,7 @@ void sys_print_stack_trace(File_Handle handle);
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <errno.h>
+#undef bool
 
 typedef struct _Mapped_Region_Desc {
     void *start;
@@ -818,7 +859,7 @@ u64 sys_query_mapped_regions(void *start, void *end, Mapped_Memory_Info *result,
 
 /////////////////////////////////////////////////////
 //////
-// Windows
+// :Windows
 //////
 /////////////////////////////////////////////////////
 
@@ -2477,6 +2518,7 @@ WINDOWS_IMPORT HRESULT WINAPI SetProcessDpiAwareness(PROCESS_DPI_AWARENESS value
 WINDOWS_IMPORT BOOL WINAPI SetProcessDpiAwarenessContext(DPI_AWARENESS_CONTEXT value);
 
 WINDOWS_IMPORT HMODULE WINAPI GetModuleHandleA(LPCSTR lpModuleName);
+WINDOWS_IMPORT HMODULE WINAPI GetModuleHandleW(LPCWSTR lpModuleName);
 
 WINDOWS_IMPORT ATOM WINAPI RegisterClassExW(const WNDCLASSEXW *unnamedParam1);
 
@@ -2515,6 +2557,8 @@ WINDOWS_IMPORT BOOL WINAPI DestroyWindow(HWND hWnd);
 /* End include: windows_loader.h */
 #endif // _WINDOWS_
 
+
+
 unit_local void _win_lazy_enable_dpi_awarness(void) {
     local_persist bool enabled = false;
     if (!enabled) {
@@ -2530,13 +2574,19 @@ unit_local u64 _win_utf8_to_wide(string utf8, u16 *result, u64 result_max) {
     return (u64)MultiByteToWideChar(CP_UTF8, 0, (LPCCH)utf8.data, (int)utf8.count, (LPWSTR)result, (int)result_max);
 }
 
-unit_local LRESULT window_proc ( HWND event_window,  u32 message,  WPARAM wparam,  LPARAM lparam) {
+unit_local LRESULT window_proc ( HWND hwnd,  u32 message,  WPARAM wparam,  LPARAM lparam) {
+
+    _Surface_State *state = _get_surface_state(hwnd);
+    if (!state) return DefWindowProcW(hwnd, message, wparam, lparam);
 
     switch (message) {
-        
+        case WM_QUIT:
+        case WM_CLOSE:
+            state->should_close = true;
+            break;
     
         default: {
-            return DefWindowProcW(event_window, message, wparam, lparam);
+            return DefWindowProcW(hwnd, message, wparam, lparam);
         }
     }
     
@@ -2747,8 +2797,13 @@ u32 sys_write_string(File_Handle f, string s) {
 }
 
 Surface_Handle sys_make_surface(Surface_Desc desc) {
+    _Surface_State *s = _alloc_surface_state();
+    if (!s) {
+        // todo(charlie) sys_error
+        return 0;
+    }
     
-    HINSTANCE instance = GetModuleHandleA(0);
+    HINSTANCE instance = GetModuleHandleW(0);
     
     WNDCLASSEXW wc = (WNDCLASSEXW){0};
     wc.cbSize = sizeof(WNDCLASSEXW);
@@ -2756,8 +2811,15 @@ Surface_Handle sys_make_surface(Surface_Desc desc) {
     wc.lpfnWndProc = window_proc;
     wc.hInstance = instance;
     wc.lpszClassName = L"abc123";
+    wc.cbClsExtra = 0;
+    wc.cbWndExtra = 0;
+    wc.hCursor = 0;
+    wc.hIcon = 0;
+    wc.lpszMenuName = 0;
+    wc.hbrBackground = 0;
 
-	RegisterClassExW(&wc);
+	ATOM res = RegisterClassExW(&wc);
+	assert(res);
 	
 	RECT rect = (RECT){0, 0, (LONG)desc.width, (LONG)desc.height};
 	
@@ -2782,16 +2844,23 @@ Surface_Handle sys_make_surface(Surface_Desc desc) {
     );
     
     if (!hwnd) return 0;
-    
     UpdateWindow(hwnd);
     
     ShowWindow(hwnd, SW_SHOW);
     
+    s->handle = hwnd;
+    
     return hwnd;
 }
 void surface_close(Surface_Handle s) {
+    _Surface_State *state = _get_surface_state(s);
+    if (!state) return; // todo(charlie) sys_error
+    
     DestroyWindow((HWND)s);
+    state->allocated = false;
+    state->handle = 0;
 }
+
 
 void surface_poll_events(Surface_Handle surface) {
     MSG msg;
@@ -2801,6 +2870,12 @@ void surface_poll_events(Surface_Handle surface) {
     	DispatchMessageW(&msg);
     	result = PeekMessageW(&msg, (HWND)surface, 0, 0, PM_REMOVE);
     }
+}
+
+bool surface_should_close(Surface_Handle s) {
+    _Surface_State *state = _get_surface_state(s);
+    if (!state) return true;
+    return state->should_close;
 }
 
 void sys_print_stack_trace(File_Handle handle) {
@@ -2873,7 +2948,7 @@ void sys_print_stack_trace(File_Handle handle) {
 
 /////////////////////////////////////////////////////
 //////
-// Android
+// :Android
 //////
 /////////////////////////////////////////////////////
 
@@ -2883,6 +2958,7 @@ void sys_print_stack_trace(File_Handle handle) {
 #include <android/native_window_jni.h>
 #include <android/native_activity.h>
 #include <android/choreographer.h>
+#undef bool
 
 pthread_t _android_stdout_thread;
 int _android_stdout_pipe[2];
@@ -3113,6 +3189,9 @@ Surface_Handle sys_get_surface() {
 
 void surface_poll_events(Surface_Handle surface) {
     (void)surface;
+}
+bool surface_should_close(Surface_Handle s) {
+    return false;
 }
 
 void sys_print_stack_trace(File_Handle handle) {

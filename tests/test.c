@@ -32,7 +32,16 @@ int main(void) {
     
     while (running) {
         surface_poll_events(surface);
+        
+        if (surface_should_close(surface)) {
+            running = false;
+            break;
+        }
     }
+
+#if OS_FLAGS & OS_FLAG_HAS_WINDOW_SYSTEM
+    surface_close(surface);
+#endif
 }
 
 void test_base(void) {
@@ -52,6 +61,8 @@ void test_base(void) {
 #endif
 }
 void test_sys1(void) {
+    assert(MAX_SURFACES > 0);
+
     System_Info info = sys_get_info();
     {
         void *mem = sys_map_pages(SYS_MEMORY_RESERVE | SYS_MEMORY_ALLOCATE, 0, 4);

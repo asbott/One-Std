@@ -12,3 +12,5 @@ build/
 .vs/
 
 *.user
+*.bin
+*.lock
