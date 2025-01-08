@@ -1,4 +1,6 @@
-
+#if 0
+#include "ostd.h" // For syntax highlighting.
+#endif
 
 #define SYS_MEMORY_RESERVE (1 << 0)
 #define SYS_MEMORY_ALLOCATE (1 << 1)
@@ -35,7 +37,7 @@ typedef struct Physical_Monitor {
 	float64 scale;
 	int64 pos_x;
 	int64 pos_y;
-	
+
 	void *handle;
 } Physical_Monitor;
 
@@ -50,9 +52,17 @@ typedef void* File_Handle;
 File_Handle sys_get_stdout(void);
 File_Handle sys_get_stderr(void);
 
-u32 sys_write(File_Handle f, void *data, u64 size);
-u32 sys_write_string(File_Handle f, string s);
+void sys_set_stdout(File_Handle h);
+void sys_set_stderr(File_Handle h);
 
+s64 sys_write(File_Handle h, void *data, u64 size);
+s64 sys_write_string(File_Handle h, string s);
+
+s64 sys_read(File_Handle h, void *buffer, u64 buffer_size);
+
+bool sys_make_pipe(File_Handle *read, File_Handle *write);
+
+void sys_close(File_Handle h);
 
 //////
 // Surfaces (Window)
@@ -63,7 +73,7 @@ typedef void* Surface_Handle;
 // note(charlie)
 // Some systems have window systems, like win32, where you can create/destroy/manage
 // multiple windows, while other platforms, like android, only has a single surface
-// for your program to draw to. 
+// for your program to draw to.
 // Making a thin abstraction layer that works with both types of system doesn't really
 // make sense, unless we only allow a single full-screen surface on all platforms.
 // However, since this library aims to be useful on all systems, we can't really do that.
@@ -77,7 +87,7 @@ typedef void* Surface_Handle;
 // systems.
 // Suggestions for "initialization" of a surface if your program needs to deploy on both
 // mobiles/consoles and desktops:
-// 
+//
 // // In init:
 // #if OS_FLAGS & OS_FLAG_HAS_WINDOW_SYSTEM
 //     Surface_Desc desc = ...;
@@ -85,9 +95,13 @@ typedef void* Surface_Handle;
 // #else
 //     my_surface = sys_get_surface();
 // #endif
-// 
+//
 // And after that, you can use surface functions in a completely portable way.
 
+// todo(charlie) more flags
+typedef u64 Surface_Flags;
+#define SURFACE_FLAG_HIDDEN (1 << 0)
+#define SURFACE_FLAG_TOPMOST (1 << 1)
 
 #if (OS_FLAGS & OS_FLAG_HAS_WINDOW_SYSTEM)
 
@@ -99,14 +113,16 @@ typedef struct Surface_Desc {
     u32 y_pos;
     string title;
     bool fullscreen;
+    Surface_Flags flags;
 } Surface_Desc;
-inline Surface_Desc Surface_Desc_default(void) {
+unit_local inline Surface_Desc Surface_Desc_default(void) {
     Surface_Desc desc = (Surface_Desc) {0};
     desc.width = 800;
     desc.height = 600;
     desc.x_pos = 0;
     desc.y_pos = 0;
-    desc.title = STR("ostd window");
+    desc.title = RSTR(ostd window);
+    desc.flags = 0;
     return desc;
 }
 Surface_Handle sys_make_surface(Surface_Desc desc);
@@ -121,6 +137,10 @@ Surface_Handle sys_get_surface(void);
 
 void surface_poll_events(Surface_Handle surface);
 bool surface_should_close(Surface_Handle s);
+
+// Will return false on systems where the flag isn't implemented
+bool surface_set_flags(Surface_Handle h, Surface_Flags flags);
+bool surface_unset_flags(Surface_Handle h, Surface_Flags flags);
 
 //////
 // Debug
@@ -145,7 +165,7 @@ void sys_print_stack_trace(File_Handle handle);
 #if (OS_FLAGS & OS_FLAG_HAS_WINDOW_SYSTEM)
 
 typedef struct _Surface_State {
-    Surface_Handle *handle;
+    Surface_Handle handle;
     bool allocated;
     bool should_close;
 } _Surface_State;
@@ -203,87 +223,87 @@ typedef struct _Mapped_Region_Desc_Buffer {
     u32 count;
 } _Mapped_Region_Desc_Buffer;
 
-// Buffers of mapped regions, each the size of a page 
+// Buffers of mapped regions, each the size of a page
 // (with a count of sizeof(_Mapped_Region_Desc) / page_size
-_Mapped_Region_Desc_Buffer *_unix_mapped_region_buffers = 0;
-u64 _unix_mapped_region_buffers_allocated_count = 0;
-u64 _unix_mapped_region_buffers_count = 0;
+unit_local _Mapped_Region_Desc_Buffer *_unix_mapped_region_buffers = 0;
+unit_local u64 _unix_mapped_region_buffers_allocated_count = 0;
+unit_local u64 _unix_mapped_region_buffers_count = 0;
 
 // todo(charlie): mutex
-void _unix_add_mapped_region(void *start, u64 page_count) {
+unit_local void _unix_add_mapped_region(void *start, u64 page_count) {
     System_Info info = sys_get_info();
     if (!_unix_mapped_region_buffers) {
-        _unix_mapped_region_buffers = (_Mapped_Region_Desc_Buffer *)mmap(0, info.page_size, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+        _unix_mapped_region_buffers = (_Mapped_Region_Desc_Buffer *)mmap(0, (sys_uint)info.page_size, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
         assert(_unix_mapped_region_buffers); // todo(charlie) revise
-        memset(_unix_mapped_region_buffers, 0, info.page_size);
+        memset(_unix_mapped_region_buffers, 0, (sys_uint)info.page_size);
         _unix_mapped_region_buffers_allocated_count = info.page_size/sizeof(_Mapped_Region_Desc_Buffer);
         _unix_mapped_region_buffers_count = 0;
     }
-    
+
     for (u64 i = 0; i < _unix_mapped_region_buffers_count; i += 1) {
         _Mapped_Region_Desc_Buffer buffer = _unix_mapped_region_buffers[i];
         assert(buffer.regions);
         assert(buffer.count);
-        
+
         for (u32 j = 0; j < buffer.count; j += 1) {
             _Mapped_Region_Desc *region = buffer.regions + j;
-            
+
             if (!region->taken) {
                 region->taken = true;
                 region->start = start;
-                region->page_count = page_count;
+                region->page_count = (sys_uint)page_count;
                 return;
             }
         }
     }
-    
+
     ///
     // We did not find free memory for a region descriptor,
     // so allocate a new one
-    
-    
+
+
     // Grow buffer of buffers one page at a time
     if (_unix_mapped_region_buffers_count == _unix_mapped_region_buffers_allocated_count) {
         u64 old_count = _unix_mapped_region_buffers_allocated_count/info.page_size;
         u64 new_count = old_count + 1;
-        
-        _Mapped_Region_Desc_Buffer *new_buffers = (_Mapped_Region_Desc_Buffer *)mmap(0, info.page_size*new_count, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+
+        _Mapped_Region_Desc_Buffer *new_buffers = (_Mapped_Region_Desc_Buffer *)mmap(0, (sys_uint)(info.page_size*new_count), PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
         assert(new_buffers); // todo(charlie) revise
-        
-        memcpy(new_buffers, _unix_mapped_region_buffers, old_count*info.page_size);
-        
-        munmap(_unix_mapped_region_buffers, info.page_size*old_count);
+
+        memcpy(new_buffers, _unix_mapped_region_buffers, (sys_uint)(old_count*info.page_size));
+
+        munmap(_unix_mapped_region_buffers, (sys_uint)(info.page_size*old_count));
         _unix_mapped_region_buffers = new_buffers;
-        
-        memset((u8*)_unix_mapped_region_buffers + info.page_size*old_count, 0, info.page_size);
-        
+
+        memset((u8*)_unix_mapped_region_buffers + info.page_size*old_count, 0, (sys_uint)info.page_size);
+
         _unix_mapped_region_buffers_allocated_count = new_count;
     }
-    
+
     assert(_unix_mapped_region_buffers_count < _unix_mapped_region_buffers_allocated_count);
-    
+
     // Grab & initialize next buffer
     _Mapped_Region_Desc_Buffer *buffer = &_unix_mapped_region_buffers[_unix_mapped_region_buffers_count++];
-    buffer->count = info.page_size/sizeof(_Mapped_Region_Desc);
-    buffer->regions = mmap(0, info.page_size, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
-    memset(buffer->regions, 0, info.page_size);
+    buffer->count = (sys_uint)(info.page_size/sizeof(_Mapped_Region_Desc));
+    buffer->regions = mmap(0, (sys_uint)info.page_size, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+    memset(buffer->regions, 0, (sys_uint)info.page_size);
     assert(buffer->regions); // todo(charlie) revise
-    
+
     buffer->regions[0].taken = true;
     buffer->regions[0].start = start;
-    buffer->regions[0].page_count = page_count;
+    buffer->regions[0].page_count = (u32)page_count;
 }
 
-_Mapped_Region_Desc *_unix_find_mapped_region(void *start) {
+unit_local _Mapped_Region_Desc *_unix_find_mapped_region(void *start) {
     for (u64 i = 0; i < _unix_mapped_region_buffers_count; i += 1) {
         _Mapped_Region_Desc_Buffer buffer = _unix_mapped_region_buffers[i];
         assert(buffer.regions);
         assert(buffer.count);
-        
+
         for (u32 j = 0; j < buffer.count; j += 1) {
             _Mapped_Region_Desc *region = buffer.regions + j;
             if (!region->taken) continue;
-            
+
             if (region->start == start) {
                 return region;
             }
@@ -325,16 +345,16 @@ void *sys_map_pages(u64 action, void *virtual_base, u64 number_of_pages) {
     if (action & SYS_MEMORY_ALLOCATE) {
         prot |= PROT_READ | PROT_WRITE;
     }
-    
+
     if (virtual_base) {
         flags |= MAP_FIXED;
     }
 
-    void *result = mmap(virtual_base, amount_in_bytes, prot, flags, -1, 0);
+    void *result = mmap(virtual_base, (sys_uint)amount_in_bytes, prot, flags, -1, 0);
     if (result == MAP_FAILED) {
-        return NULL;
+        return 0;
     }
-    
+
     _unix_add_mapped_region(result, number_of_pages);
 
     return result;
@@ -342,17 +362,18 @@ void *sys_map_pages(u64 action, void *virtual_base, u64 number_of_pages) {
 
 bool sys_unmap_pages(void *address) {
     System_Info info = sys_get_info();
-    
+
     _Mapped_Region_Desc *region = _unix_find_mapped_region(address);
     if (region) {
-        munmap(region->start, info.page_size * region->page_count);
+        munmap(region->start, (sys_uint)(info.page_size * region->page_count));
         region->taken = false;
     }
-    
+
     return region != 0;
 }
 
 bool sys_deallocate_pages(void *address, u64 number_of_pages) {
+#if !(COMPILER_FLAGS & COMPILER_FLAG_EMSCRIPTEN)
     System_Info info = sys_get_info();
     u64 amount_in_bytes = info.page_size * number_of_pages;
 
@@ -360,21 +381,25 @@ bool sys_deallocate_pages(void *address, u64 number_of_pages) {
         return false;
     }
     return true;
+#else
+    (void)address; (void)number_of_pages;
+    return true;
+#endif
 }
 
 u64 sys_query_mapped_regions(void *start, void *end, Mapped_Memory_Info *result, u64 result_count) {
     u64 counter = 0;
     if (!result) result_count = U64_MAX;
-    
+
     for (u64 i = 0; i < _unix_mapped_region_buffers_count; i += 1) {
         _Mapped_Region_Desc_Buffer buffer = _unix_mapped_region_buffers[i];
         assert(buffer.regions);
         assert(buffer.count);
-        
+
         for (u32 j = 0; j < buffer.count; j += 1) {
             _Mapped_Region_Desc *region = buffer.regions + j;
             if (!region->taken) continue;
-            
+
             if ((u64)region->start >= (u64)start && (u64)region->start < (u64)end) {
                 if (result && result_count > counter) {
                     Mapped_Memory_Info m = (Mapped_Memory_Info){ 0 };
@@ -386,9 +411,34 @@ u64 sys_query_mapped_regions(void *start, void *end, Mapped_Memory_Info *result,
             }
         }
     }
-    
+
     return counter;
 }
+
+s64 sys_write(File_Handle f, void *data, u64 size) {
+    return (s64)write((int)(u64)f, data, (sys_uint)size);
+}
+
+s64 sys_write_string(File_Handle f, string s) {
+    return sys_write(f, s.data, s.count);
+}
+
+s64 sys_read(File_Handle h, void *buffer, u64 buffer_size) {
+    return (s64)read((int)(u64)h, buffer, (sys_uint)buffer_size);
+}
+
+bool sys_make_pipe(File_Handle *read, File_Handle *write) {
+    int pipe_fds[2];
+    if (pipe(pipe_fds) == -1) return false;
+    *read = (File_Handle)(u64)pipe_fds[0];
+    *write = (File_Handle)(u64)pipe_fds[1];
+    return true;
+}
+
+void sys_close(File_Handle h) {
+    close((int)(u64)h);
+}
+
 #endif // OS_FLAGS & OS_FLAG_UNIX
 
 #if (OS_FLAGS & OS_FLAG_WINDOWS)
@@ -406,14 +456,15 @@ u64 sys_query_mapped_regions(void *start, void *end, Mapped_Memory_Info *result,
     #pragma comment(lib, "dbghelp")
 #endif // COMPILER_FLAGS & COMPILER_FLAG_MSC
 
-
+//#define WIN32_LEAN_AND_MEAN
+//#include <Windows.h>
 
 #if defined(_WINDOWS_) // User included windows.h
-    #ifndef  // WIN32_LEAN_AND_MEAN
+    #ifndef  WIN32_LEAN_AND_MEAN
         #error For ostd to work with windows.h included, you need to #define WIN32_LEAN_AND_MEAN
     #endif // WIN32_LEAN_AND_MEAN
     #ifndef _DBGHELP_
-        #include "dbghelp.h"
+        #include <DbgHelp.h>
     #endif // _DBGHELP_
 #endif // defined(_WINDOWS_)
 
@@ -421,8 +472,8 @@ u64 sys_query_mapped_regions(void *start, void *end, Mapped_Memory_Info *result,
 // then he can define OSTD_INCLUDE_WINDOWS
 #ifdef OSTD_INCLUDE_WINDOWS
     #define WIN32_LEAN_AND_MEAN
-    #include "windows.h"
-    #include "dbghelp.h"
+    #include <Windows.h>
+    #include <DbgHelp.h>
 #endif // OSTD_INCLUDE_WINDOWS
 
 // We manually declare windows functions so we don't need to bloat compilation and
@@ -431,6 +482,23 @@ u64 sys_query_mapped_regions(void *start, void *end, Mapped_Memory_Info *result,
 #include "windows_loader.h"
 #endif // _WINDOWS_
 
+typedef enum MONITOR_DPI_TYPE {
+  MDT_EFFECTIVE_DPI = 0,
+  MDT_ANGULAR_DPI = 1,
+  MDT_RAW_DPI = 2,
+  MDT_DEFAULT
+} MONITOR_DPI_TYPE;
+
+typedef enum PROCESS_DPI_AWARENESS {
+  PROCESS_DPI_UNAWARE = 0,
+  PROCESS_SYSTEM_DPI_AWARE = 1,
+  PROCESS_PER_MONITOR_DPI_AWARE = 2
+} PROCESS_DPI_AWARENESS;
+__declspec(dllimport) HRESULT __stdcall SetProcessDpiAwareness(PROCESS_DPI_AWARENESS value);
+
+__declspec(dllimport) BOOL __stdcall SetProcessDpiAwarenessContext(DPI_AWARENESS_CONTEXT value);
+
+__declspec(dllimport) HRESULT __stdcall GetDpiForMonitor( HMONITOR hmonitor, MONITOR_DPI_TYPE dpiType, UINT *dpiX, UINT *dpiY);
 
 
 unit_local void _win_lazy_enable_dpi_awarness(void) {
@@ -458,27 +526,27 @@ unit_local LRESULT window_proc ( HWND hwnd,  u32 message,  WPARAM wparam,  LPARA
         case WM_CLOSE:
             state->should_close = true;
             break;
-    
+
         default: {
             return DefWindowProcW(hwnd, message, wparam, lparam);
         }
     }
-    
+
     return 0;
 }
 
 
 void *sys_map_pages(u64 action, void *virtual_base, u64 number_of_pages) {
-    
+
     // todo(charlie) attempt multiple times in case of failure.
-    
+
     System_Info info = sys_get_info();
-    
+
     u64 amount_in_bytes = info.page_size * number_of_pages;
 
     u32 flags = 0;
     u32 protection = 0;
-    
+
     if (action & SYS_MEMORY_RESERVE)  {
         flags |= MEM_RESERVE;
         protection = PAGE_NOACCESS;
@@ -487,12 +555,12 @@ void *sys_map_pages(u64 action, void *virtual_base, u64 number_of_pages) {
         flags |= MEM_COMMIT;
         protection = PAGE_READWRITE;
     }
-    
+
     void *result = VirtualAlloc(virtual_base, amount_in_bytes, flags, protection);
-    
+
     // todo(charlie)
     // Some error reporting so user can see what went wrong if !result
-    
+
     return result;
 }
 
@@ -505,33 +573,33 @@ bool sys_unmap_pages(void *address) {
 
 bool sys_deallocate_pages(void *address, u64 number_of_pages) {
     System_Info info = sys_get_info();
-    
+
     u64 amount_in_bytes = info.page_size*number_of_pages;
-    
+
     return VirtualFree(address, amount_in_bytes, MEM_DECOMMIT) != 0;
 }
 
 u64 sys_query_mapped_regions(void *start, void *end, Mapped_Memory_Info *result, u64 result_count) {
     System_Info info = sys_get_info();
-    
+
     start = (void*)(((u64)start + info.page_size-1) & ~(info.page_size-1));
 
     void *p = start;
     u64 counter = 0;
-    
+
     void *current_base = 0;
-    
+
     MEMORY_BASIC_INFORMATION last_info;
     bool trailing_pointer = false;
     while ((u64)p < (u64)end) {
-        
+
         MEMORY_BASIC_INFORMATION mem_info = (MEMORY_BASIC_INFORMATION){0};
-        
+
         size_t r = VirtualQuery(p, &mem_info, sizeof(MEMORY_BASIC_INFORMATION));
         // todo(charlie)  VirtualQuery might fail for random reasons
         if (r != 0 && mem_info.AllocationBase) {
             if (current_base && (u64)current_base < (u64)mem_info.AllocationBase) {
-            
+
                 if (result && result_count > counter) {
                     Mapped_Memory_Info m = (Mapped_Memory_Info){0};
                     m.base = current_base;
@@ -539,13 +607,13 @@ u64 sys_query_mapped_regions(void *start, void *end, Mapped_Memory_Info *result,
                     result[counter] = m;
                     trailing_pointer = false;
                 }
-                
+
                 counter += 1;
-                
+
             }
             current_base = mem_info.AllocationBase;
         }
-        
+
         if (r != 0) {
             p = (u8*)p + mem_info.RegionSize;
             if (mem_info.AllocationBase) {
@@ -554,7 +622,7 @@ u64 sys_query_mapped_regions(void *start, void *end, Mapped_Memory_Info *result,
             }
         }
     }
-    
+
     if (trailing_pointer) {
         // todo(charlie) multiple attempts
         if (result_count > counter) {
@@ -565,24 +633,24 @@ u64 sys_query_mapped_regions(void *start, void *end, Mapped_Memory_Info *result,
         }
         counter += 1;
     }
-    
+
     return counter;
 }
 
 System_Info sys_get_info(void) {
     local_persist System_Info info;
     local_persist bool has_retrieved_info = false;
-    
+
     if (!has_retrieved_info) {
         has_retrieved_info = true;
-        
+
         SYSTEM_INFO win32_info;
         GetSystemInfo(&win32_info);
-        
+
         info.page_size = (u64)win32_info.dwPageSize;
         info.granularity = win32_info.dwAllocationGranularity;
     }
-    
+
     return info;
 }
 
@@ -660,14 +728,36 @@ File_Handle sys_get_stderr(void) {
     return (File_Handle)GetStdHandle((u32)-12);
 }
 
-u32 sys_write(File_Handle f, void *data, u64 size) {
-    u32 written;
-    WriteFile(f, data, (DWORD)size, (unsigned long*)&written, 0);
-    return written;
+bool sys_make_pipe(File_Handle *read, File_Handle *write) {
+    HANDLE read_handle, write_handle;
+    SECURITY_ATTRIBUTES sa = {sizeof(SECURITY_ATTRIBUTES), 0, true};
+    if (!CreatePipe(&read_handle, &write_handle, &sa, 0)) return false;
+    *read = (File_Handle)read_handle;
+    *write = (File_Handle)write_handle;
+    return true;
 }
 
-u32 sys_write_string(File_Handle f, string s) {
+s64 sys_write(File_Handle f, void *data, u64 size) {
+    u32 written;
+    WriteFile(f, data, (DWORD)size, (unsigned long*)&written, 0);
+    if (written == 0 && size != 0) return -1;
+    return (s64)written;
+}
+
+s64 sys_write_string(File_Handle f, string s) {
     return sys_write(f, s.data, s.count);
+}
+
+s64 sys_read(File_Handle h, void *buffer, u64 buffer_size) {
+    DWORD read = 0;
+    BOOL ok = ReadFile(h, (LPVOID)buffer, (DWORD)buffer_size, &read, 0);
+    if (!ok) return -1;
+
+    return (s64)read;
+}
+
+void sys_close(File_Handle h) {
+    CloseHandle((HANDLE)h);
 }
 
 Surface_Handle sys_make_surface(Surface_Desc desc) {
@@ -676,37 +766,41 @@ Surface_Handle sys_make_surface(Surface_Desc desc) {
         // todo(charlie) sys_error
         return 0;
     }
-    
-    HINSTANCE instance = GetModuleHandleW(0);
-    
-    WNDCLASSEXW wc = (WNDCLASSEXW){0};
-    wc.cbSize = sizeof(WNDCLASSEXW);
-    wc.style = CS_OWNDC;
-    wc.lpfnWndProc = window_proc;
-    wc.hInstance = instance;
-    wc.lpszClassName = L"abc123";
-    wc.cbClsExtra = 0;
-    wc.cbWndExtra = 0;
-    wc.hCursor = 0;
-    wc.hIcon = 0;
-    wc.lpszMenuName = 0;
-    wc.hbrBackground = 0;
 
-	ATOM res = RegisterClassExW(&wc);
-	assert(res);
-	
+    HINSTANCE instance = GetModuleHandleW(0);
+
+    local_persist bool class_initted = false;
+    if (!class_initted) {
+        class_initted = true;
+        WNDCLASSEXW wc = (WNDCLASSEXW){0};
+        wc.cbSize = sizeof(WNDCLASSEXW);
+        wc.style = CS_OWNDC;
+        wc.lpfnWndProc = window_proc;
+        wc.hInstance = instance;
+        wc.lpszClassName = L"abc123";
+        wc.cbClsExtra = 0;
+        wc.cbWndExtra = 0;
+        wc.hCursor = 0;
+        wc.hIcon = 0;
+        wc.lpszMenuName = 0;
+        wc.hbrBackground = 0;
+    
+    	ATOM res = RegisterClassExW(&wc);
+    	assert(res);
+    }
+
 	RECT rect = (RECT){0, 0, (LONG)desc.width, (LONG)desc.height};
-	
-	
+
+
 	DWORD style = WS_OVERLAPPEDWINDOW;
 	DWORD style_ex = WS_EX_CLIENTEDGE;
-	
+
 	AdjustWindowRectEx(&rect, style, 0, style_ex);
-	
+
 	u16 title[256];
 	u64 title_length = _win_utf8_to_wide(desc.title, title, 256);
 	title[title_length] = 0;
-	
+
     // Create the window
     HWND hwnd = CreateWindowExW(
         style_ex,
@@ -716,20 +810,24 @@ Surface_Handle sys_make_surface(Surface_Desc desc) {
         CW_USEDEFAULT, CW_USEDEFAULT, rect.right-rect.left, rect.bottom-rect.top,
         0, 0, instance, 0
     );
-    
+
     if (!hwnd) return 0;
-    UpdateWindow(hwnd);
-    
-    ShowWindow(hwnd, SW_SHOW);
     
     s->handle = hwnd;
     
+    UpdateWindow(hwnd);
+    
+    surface_unset_flags(hwnd, ~desc.flags);
+    surface_set_flags(hwnd, desc.flags);
+    
+
+
     return hwnd;
 }
 void surface_close(Surface_Handle s) {
     _Surface_State *state = _get_surface_state(s);
     if (!state) return; // todo(charlie) sys_error
-    
+
     DestroyWindow((HWND)s);
     state->allocated = false;
     state->handle = 0;
@@ -752,19 +850,68 @@ bool surface_should_close(Surface_Handle s) {
     return state->should_close;
 }
 
+bool surface_set_flags(Surface_Handle h, Surface_Flags flags) {
+    int ex_style = GetWindowLongW((HWND)h, GWL_EXSTYLE);
+    int style = GetWindowLongW((HWND)h, GWL_STYLE);
+    
+    if (flags & SURFACE_FLAG_HIDDEN) {
+        ex_style |= WS_EX_TOOLWINDOW;
+    }
+    
+    if (flags & SURFACE_FLAG_TOPMOST) {
+        ex_style |= WS_EX_TOPMOST;
+    }
+    
+    SetWindowLongW((HWND)h, GWL_EXSTYLE, ex_style);
+    SetWindowLongW((HWND)h, GWL_STYLE, style);
+    
+    if (flags & SURFACE_FLAG_HIDDEN) {
+        ShowWindow((HWND)h, SW_HIDE);
+    }
+    
+    if (flags & SURFACE_FLAG_TOPMOST) {
+        SetWindowPos((HWND)h, HWND_TOPMOST, 0, 0, 0, 0, SWP_NOREPOSITION | SWP_NOSIZE | SWP_NOMOVE);
+    }
+    
+    return true;
+}
+bool surface_unset_flags(Surface_Handle h, Surface_Flags flags) {
+    int ex_style = GetWindowLongW((HWND)h, GWL_EXSTYLE);
+    int style = GetWindowLongW((HWND)h, GWL_STYLE);
+    
+    if (flags & SURFACE_FLAG_HIDDEN) {
+        ex_style &= ~(WS_EX_TOOLWINDOW);
+    }
+    
+    if (flags & SURFACE_FLAG_TOPMOST) {
+        ex_style &= ~(WS_EX_TOPMOST);
+    }
+    
+    SetWindowLongW((HWND)h, GWL_EXSTYLE, ex_style);
+    SetWindowLongW((HWND)h, GWL_STYLE, style);
+    
+    if (flags & SURFACE_FLAG_HIDDEN) {
+        ShowWindow((HWND)h, SW_SHOW);
+    }
+    if (flags & SURFACE_FLAG_TOPMOST) {
+        SetWindowPos((HWND)h, HWND_NOTOPMOST, 0, 0, 0, 0, SWP_NOREPOSITION | SWP_NOSIZE | SWP_NOMOVE);
+    }
+    return true;
+}
+
 void sys_print_stack_trace(File_Handle handle) {
 
     void* process = GetCurrentProcess();
     void* thread = GetCurrentThread();
-    
+
     SymInitialize(process, 0, 1);
-    
+
     CONTEXT context;
     STACKFRAME64 stack = (STACKFRAME64) {0};
 
     context.ContextFlags = CONTEXT_FULL;
     RtlCaptureContext(&context);
-    
+
     // #Portability cpu arch
     int machineType = IMAGE_FILE_MACHINE_AMD64;
     stack.AddrPC.Offset = context.Rip;
@@ -781,7 +928,7 @@ void sys_print_stack_trace(File_Handle handle) {
         if (!StackWalk64((DWORD)machineType, process, thread, &stack, &context, 0, SymFunctionTableAccess64, SymGetModuleBase64, 0)) {
             break;
         }
-        
+
         DWORD64 displacement = 0;
         char buffer[sizeof(SYMBOL_INFO) + WIN32_MAX_SYMBOL_NAME_LENGTH];
         PSYMBOL_INFO symbol = (PSYMBOL_INFO)buffer;
@@ -793,7 +940,7 @@ void sys_print_stack_trace(File_Handle handle) {
             u32 displacement_line;
             line.SizeOfStruct = sizeof(IMAGEHLP_LINE64);
 
-            
+
             if (SymGetLineFromAddr64(process, stack.AddrPC.Offset, (PDWORD)&displacement_line, &line)) {
                 sys_write_string(handle, STR(line.FileName));
                 sys_write_string(handle, STR(" Line "));
@@ -804,7 +951,7 @@ void sys_print_stack_trace(File_Handle handle) {
                 sys_write_string(handle, STR(" "));
                 sys_write_string(handle, STR(symbol->Name));
                 sys_write_string(handle, STR("\n"));
-                
+
             } else {
                 u8 sym_buffer[1024];
                 string result = (string) {0, sym_buffer};
@@ -812,7 +959,7 @@ void sys_print_stack_trace(File_Handle handle) {
                 memcpy(result.data, symbol->Name, symbol->NameLen + 1);
                 sys_write_string(handle, result);
             }
-            
+
         } else {
             sys_write_string(handle, STR("<unavailable>\n"));
         }
@@ -835,8 +982,12 @@ void sys_print_stack_trace(File_Handle handle) {
 #undef bool
 
 pthread_t _android_stdout_thread;
+pthread_t _android_stderr_thread;
 int _android_stdout_pipe[2];
-// Must be provided by android project
+int _android_user_stdout_handle = -1;
+int _android_stderr_pipe[2];
+int _android_user_stderr_handle = -1;
+
 ANativeActivity *_android_activity = 0;
 ANativeWindow *_android_window = 0;
 jobject _android_context;
@@ -846,55 +997,56 @@ s64 _android_previous_vsync_time = 0;
 f64 _android_refresh_rate = 0.0f;
 
 static void _android_onDestroy(ANativeActivity* activity) {
-    
+
 }
 
 static void _android_onStart(ANativeActivity* activity) {
-    
+
 }
 
 static void _android_onResume(ANativeActivity* activity) {
-    
+
 }
 
 static void* _android_onSaveInstanceState(ANativeActivity* activity, size_t* outLen) {
-    return NULL;
+    return 0;
 }
 
 static void _android_onPause(ANativeActivity* activity) {
-    
+
 }
 
 static void _android_onStop(ANativeActivity* activity) {
-    
+
 }
 
 static void _android_onConfigurationChanged(ANativeActivity* activity) {
-    
+
 }
 
 static void _android_onLowMemory(ANativeActivity* activity) {
-    
+
 }
 
 static void _android_onWindowFocusChanged(ANativeActivity* activity, int focused) {
-    
+
 }
 
 static void _android_onNativeWindowCreated(ANativeActivity* activity, ANativeWindow* window) {
     _android_window = window;
+    __android_log_print(ANDROID_LOG_INFO, "android", "Set _android_window to %p", window);
 }
 
 static void _android_onNativeWindowDestroyed(ANativeActivity* activity, ANativeWindow* window) {
-    
+
 }
 
 static void _android_onInputQueueCreated(ANativeActivity* activity, AInputQueue* queue) {
-    
+
 }
 
 static void _android_onInputQueueDestroyed(ANativeActivity* activity, AInputQueue* queue) {
-    
+
 }
 
 void _android_vsync_callback(s64 frame_time_nanos, void* data) {
@@ -917,10 +1069,10 @@ void* _android_main_thread_proc(void* arg) {
 
     extern int _android_main(void);
     int code = _android_main();
-    
+
     __android_log_print(ANDROID_LOG_INFO, "android thread", "Exit android thread");
     ANativeActivity_finish(_android_activity);
-    
+
     return (void*)(u64)code;
 }
 
@@ -942,18 +1094,19 @@ void ANativeActivity_onCreate(ANativeActivity* activity, void* savedState,
     activity->callbacks->onInputQueueDestroyed = _android_onInputQueueDestroyed;
 
     activity->instance = 0;
-    
+
     _android_activity = activity;
-    
+
     AChoreographer* choreographer = AChoreographer_getInstance();
     assert(choreographer);
     AChoreographer_postFrameCallback(choreographer, _android_vsync_callback, 0);
-    
+
     pthread_create(&_android_main_thread, 0, _android_main_thread_proc, 0);
 }
 
 
 pthread_mutex_t _android_stdout_pending_mutex;
+pthread_mutex_t _android_stderr_pending_mutex;
 
 void* _android_stdout_thread_proc(void* arg) {
     char buffer[1024];
@@ -966,39 +1119,66 @@ void* _android_stdout_thread_proc(void* arg) {
         __android_log_print(ANDROID_LOG_INFO, "stdout", "%s", buffer);
         pthread_mutex_unlock(&_android_stdout_pending_mutex);
     }
-    
+
     __android_log_print(ANDROID_LOG_INFO, "stdout", "Stdout closed");
+
+    return 0;
+}
+
+void* _android_stderr_thread_proc(void* arg) {
+    char buffer[1024];
+    ssize_t bytesRead;
+
+    while ((bytesRead = read(_android_stderr_pipe[0], buffer, sizeof(buffer) - 1)) > 0) {
+        pthread_mutex_lock(&_android_stderr_pending_mutex);
+        usleep(50000);
+        buffer[bytesRead] = '\0';
+        __android_log_print(ANDROID_LOG_INFO, "stderr", "%s", buffer);
+        pthread_mutex_unlock(&_android_stderr_pending_mutex);
+    }
+
+    __android_log_print(ANDROID_LOG_INFO, "stderr", "Stderr closed");
 
     return 0;
 }
 
 int _android_main(void) {
     pipe(_android_stdout_pipe);
-    
+    pipe(_android_stderr_pipe);
+
     pthread_attr_t attr;
     struct sched_param param;
-    
+
     pthread_attr_init(&attr);
     pthread_attr_setschedpolicy(&attr, SCHED_OTHER);
-    
+
     param.sched_priority = 0;
     pthread_attr_setschedparam(&attr, &param);
 #if CSTD11
     pthread_attr_setinheritsched(&attr, PTHREAD_EXPLICIT_SCHED);
 #endif
 
-    pthread_mutex_init(&_android_stdout_pending_mutex, NULL);
+    pthread_mutex_init(&_android_stdout_pending_mutex, 0);
     pthread_create(&_android_stdout_thread, &attr, _android_stdout_thread_proc, 0);
+
+    pthread_mutex_init(&_android_stderr_pending_mutex, 0);
+    pthread_create(&_android_stderr_thread, &attr, _android_stderr_thread_proc, 0);
 
     extern int main(void);
     int code = main();
-    
+
     _android_running = false;
-    
+
     pthread_mutex_lock(&_android_stdout_pending_mutex);
     close(_android_stdout_pipe[0]);
     close(_android_stdout_pipe[1]);
     pthread_mutex_unlock(&_android_stdout_pending_mutex);
+
+    pthread_mutex_lock(&_android_stderr_pending_mutex);
+    close(_android_stderr_pipe[0]);
+    close(_android_stderr_pipe[1]);
+    pthread_mutex_unlock(&_android_stderr_pending_mutex);
+
     return code;
 }
 
@@ -1007,7 +1187,7 @@ u64 sys_query_monitors(Physical_Monitor *buffer, u64 max_count) {
     if (!buffer) return 1;
     if (max_count == 0) return 0;
 
-    
+
 
     // Retrieve display resolution using ANativeWindow
     ANativeWindow* window = _android_window;
@@ -1029,32 +1209,32 @@ u64 sys_query_monitors(Physical_Monitor *buffer, u64 max_count) {
 
     memcpy(buffer[0].name, "Android display", sizeof("Android display")-1);
     buffer[0].name_count = sizeof("Android display")-1;
-    
+
     buffer[0].refresh_rate = (s64)_android_refresh_rate;
     buffer[0].resolution_x = width;
     buffer[0].resolution_y = height;
     buffer[0].pos_x = 0;
     buffer[0].pos_y = 0;
     buffer[0].scale = scale;
-    buffer[0].handle = NULL;
+    buffer[0].handle = 0;
 
     return 1;
 }
 
-
 File_Handle sys_get_stdout(void) {
-    return (File_Handle)(u64)_android_stdout_pipe[1];
+    if (_android_user_stdout_handle == -1) return (File_Handle)(u64)_android_stdout_pipe[1];
+    else return (File_Handle)(u64)_android_user_stdout_handle;
 }
 File_Handle sys_get_stderr(void) {
-    return (File_Handle)(u64)_android_stdout_pipe[1];
+    if (_android_user_stderr_handle == -1) return (File_Handle)(u64)_android_stderr_pipe[1];
+    else return (File_Handle)(u64)_android_user_stderr_handle;
 }
 
-u32 sys_write(File_Handle f, void *data, u64 size) {
-    return (u32)write((int)(u64)f, data, size);
+void sys_set_stdout(File_Handle h) {
+    _android_user_stdout_handle = (int)(u64)h;
 }
-
-u32 sys_write_string(File_Handle f, string s) {
-    return sys_write(f, s.data, s.count);
+void sys_set_stderr(File_Handle h) {
+    _android_user_stderr_handle = (int)(u64)h;
 }
 
 Surface_Handle sys_get_surface() {
@@ -1068,8 +1248,93 @@ bool surface_should_close(Surface_Handle s) {
     return false;
 }
 
+bool surface_set_flags(Surface_Handle h, Surface_Flags flags) {
+    return false;
+}
+bool surface_unset_flags(Surface_Handle h, Surface_Flags flags) {
+    return false;
+}
+
 void sys_print_stack_trace(File_Handle handle) {
     sys_write_string(handle, STR("<Stack trace unimplemented>"));
+}
+
+#elif (OS_FLAGS & OS_FLAG_EMSCRIPTEN)
+
+/////////////////////////////////////////////////////
+//////
+// :Emscripten
+//////
+/////////////////////////////////////////////////////
+
+#include <emscripten.h>
+#include <emscripten/html5.h>
+#undef bool
+
+u64 sys_query_monitors(Physical_Monitor *buffer, u64 max_count)
+{
+    if (!buffer) {
+        return 1;
+    }
+    if (max_count == 0) {
+        return 0;
+    }
+    double scale = emscripten_get_device_pixel_ratio();
+
+    int width = 0;
+    int height = 0;
+    emscripten_get_canvas_element_size("#canvas", &width, &height);
+
+    {
+        memcpy(buffer[0].name, "Web Display", sizeof("Web Display")-1);
+        buffer[0].name_count = sizeof("Web Display")-1;
+
+        buffer[0].refresh_rate = 60;
+
+        buffer[0].resolution_x = width;
+        buffer[0].resolution_y = height;
+
+        buffer[0].pos_x = 0;
+        buffer[0].pos_y = 0;
+
+        buffer[0].scale = scale;
+
+        buffer[0].handle = 0;
+    }
+
+    return 1;
+}
+
+File_Handle sys_get_stdout(void) {
+    return (File_Handle)1;
+}
+File_Handle sys_get_stderr(void) {
+    return (File_Handle)2;
+}
+
+void sys_set_stdout(File_Handle h) {
+    (void)h;
+}
+void sys_set_stderr(File_Handle h) {
+    (void)h;
+}
+
+Surface_Handle sys_get_surface(void) {
+    return (Surface_Handle)69; // todo(charlie) revisit
+}
+
+void surface_poll_events(Surface_Handle surface) {
+    (void)surface;
+}
+bool surface_should_close(Surface_Handle s) {
+    (void)s;
+    return false;
+}
+
+void sys_print_stack_trace(File_Handle handle) {
+    char buffer[16384];
+    int len = emscripten_get_callstack(EM_LOG_C_STACK, buffer, 16384);
+    sys_write(handle, buffer, (u64)len);
 }
 
 #endif // OS_FLAGS & XXXXX

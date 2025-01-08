@@ -1,3 +1,6 @@
+#if 0
+#include "ostd.h" // For syntax highlighting.
+#endif
 
 // Natural logarithm
 float32 ln32(float32 x);

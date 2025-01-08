@@ -1,3 +1,7 @@
+#if 0
+#include "ostd.h" // For syntax highlighting.
+#endif
+
 #define UTF16_SURROGATE_HIGH_START  0xD800
 #define UTF16_SURROGATE_HIGH_END    0xDBFF
 #define UTF16_SURROGATE_LOW_START   0xDC00

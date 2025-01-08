@@ -1,6 +1,5 @@
-#define OSTD_IMPL
-
-/* Begin include: ostd.h */
+#ifndef OSTD_H_
+#define OSTD_H_
 
 #ifdef __clang__
 #pragma clang diagnostic push
@@ -12,13 +11,20 @@
 #pragma clang diagnostic ignored "-Wdeclaration-after-statement"
 #pragma clang diagnostic ignored "-Wcovered-switch-default"
 #pragma clang diagnostic ignored "-Wcast-align"
+#pragma clang diagnostic ignored "-Wunused-function"
 #ifdef _MSC_VER
 #pragma clang diagnostic ignored "-Wunsafe-buffer-usage"
+#endif
+#ifdef __EMSCRIPTEN__
+#pragma clang diagnostic ignored "-Wpadded"
 #endif
 #endif
 
 
 /* Begin include: base.h */
+
+#if 0
+#endif
 
 /*
             Compiler
@@ -95,8 +101,19 @@
     ((CLANG && GNU) ? COMPILER_FLAG_CLANG_GNU : 0) \
 )
 
+// Architexture
 
-
+#if defined(_M_IX86) || defined(__i386__) || defined(__EMSCRIPTEN__)
+    #define ARCH_X86 1
+#elif defined(_M_X64) || defined(_M_AMD64) || defined(__x86_64__)
+    #define ARCH_X64 1
+#elif defined(_M_ARM) || defined(__arm__)
+    #define ARCH_ARM 1
+#elif defined(_M_ARM64) || defined(__aarch64__)
+    #define ARCH_ARM64 1
+#else
+    #error "Unknown architecture"
+#endif
 
 #define local_persist static
 #define forward_global extern
@@ -166,6 +183,9 @@
 #define OS_FLAG_STEAMOS           (1 << 7)
 #define OS_FLAG_LINUX_BASED       (1 << 8)
 #define OS_FLAG_HAS_WINDOW_SYSTEM (1 << 9)
+#define OS_FLAG_EMSCRIPTEN        (1 << 10)
+
+#define OS_FLAG_WEB OS_FLAG_EMSCRIPTEN
 
 #ifdef _WIN32
     #define OS_FLAGS (OS_FLAG_WINDOWS | OS_FLAG_HAS_WINDOW_SYSTEM)
@@ -184,6 +204,8 @@
     #define OS_FLAGS (OS_FLAG_UNIX | OS_FLAG_LINUX_BASED | OS_FLAG_LINUX | OS_FLAG_STEAMOS)
 #elif defined(__linux__)
     #define OS_FLAGS (OS_FLAG_UNIX | OS_FLAG_LINUX_BASED | OS_FLAG_LINUX | OS_FLAG_HAS_WINDOW_SYSTEM)
+#elif defined(__EMSCRIPTEN__)
+    #define OS_FLAGS (OS_FLAG_UNIX | OS_FLAG_EMSCRIPTEN)
 #elif defined(__unix__) || defined(__unix)
     #define OS_FLAGS (OS_FLAG_UNIX)
 #else
@@ -204,26 +226,23 @@
     typedef signed __int64    s64;
     typedef unsigned __int64 uintptr;
     #pragma clang diagnostic pop
-    
-    
+
 #elif COMPILER_FLAGS & COMPILER_FLAG_GNU
 
-    // todo(charlie) inspect at a gnu stdint.h
-    typedef unsigned char     u8;
-    typedef signed char       s8;
-    typedef unsigned short    u16;
-    typedef signed short      s16;
-    typedef unsigned int      u32;
-    typedef signed int        s32;
-    typedef unsigned long     u64;
-    typedef signed long       s64;
+    typedef __UINT64_TYPE__ u64;
+    typedef __INT64_TYPE__  s64;
+    typedef __UINT32_TYPE__ u32;
+    typedef __INT32_TYPE__  s32;
+    typedef __UINT16_TYPE__ u16;
+    typedef __INT16_TYPE__  s16;
+    typedef __UINT8_TYPE__  u8;
+    typedef __INT8_TYPE__   s8;
     
-    typedef u64 uintptr;
-    
+    typedef __UINTPTR_TYPE__  uintptr;
+
 #else
 
     #include <stdint.h>
-    #error hi
     typedef uint8_t  u8;
     typedef int8_t   s8;
     typedef uint16_t u16;
@@ -232,6 +251,8 @@
     typedef int32_t  s32;
     typedef uint64_t u64;
     typedef int64_t  s64;
+    
+     typedef uintptr_t uintptr;
 
 #endif
 
@@ -279,9 +300,21 @@ typedef float128 f128;
 #define S64_MIN (-9223372036854775807LL - 1)
 #define S64_MAX 9223372036854775807LL
 
+#if defined(ARCH_X64) || defined (ARCH_ARM64)
+typedef s64 sys_int;
+typedef u64 sys_uint;
+#define SYS_INT_MAX SYS_S64_MAX
+#define SYS_UINT_MAX SYS_U64_MAX
+#else
+typedef s32 sys_int;
+typedef u32 sys_uint;
+#define SYS_INT_MAX S32_MAX
+#define SYS_UINT_MAX U32_MAX
+#endif
+
 #if !CSTD_C23
     #pragma clang diagnostic push
-#if COMPILER_FLAGS & COMPILER_FLAG_MSC
+#if (COMPILER_FLAGS & COMPILER_FLAG_CLANG) && ((COMPILER_FLAGS & COMPILER_FLAG_MSC) || COMPILER_FLAGS & COMPILER_FLAG_EMSCRIPTEN)
     #pragma clang diagnostic ignored "-Wc23-compat"
 #endif
     typedef s8 bool;
@@ -315,7 +348,8 @@ typedef int32x2 int2;
 
 #define STRINGIFY(x) #x
 #define TOSTRING(x) STRINGIFY(x)
-#define assertmsg(x, msg)  do { \
+#define assertmsg(x, msg) assertmsgs(x, STR(msg))
+#define assertmsgs(x, msg)  do { \
         if (!(x)) {\
             sys_write_string(sys_get_stderr(), STR("\n========================================================\n"));\
             sys_write_string(sys_get_stderr(), STR("==========!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!==========\n"));\
@@ -340,30 +374,30 @@ typedef int32x2 int2;
             debug_break();\
         } \
     } while(0)
-#define assert(x) assertmsg(x, (string){0})
+#define assert(x) assertmsg(x, "")
 
-inline void *memcpy(void *dst, const void * src, u64 n);
+inline void *memcpy(void *dst, const void * src, sys_uint n);
 // todo(charlie) inline asm / dynamically load crt's if msvc
-inline void *memset(void *dst, s32 c, u64 n) {
-    u64 i;
+inline void *memset(void *dst, s32 c, sys_uint n) {
+    sys_uint i;
     for (i = 0; i+4 < n; i += 4)  *((s32*)dst + (i/4)) = c;
     if (i < n) memcpy(dst, &c, n-i);
     return dst;
 }
-inline void *memcpy(void *dst, const void * src, u64 n) {
-    for (u64 i = 0; i < n; i += 1)  *((u8*)dst + i) = *((const u8*)src + i);
+inline void *memcpy(void *dst, const void * src, sys_uint n) {
+    for (sys_uint i = 0; i < n; i += 1)  *((u8*)dst + i) = *((const u8*)src + i);
     return dst;
 }
-inline void *memmove(void *dst, const void *src, u64 n) {
+inline void *memmove(void *dst, const void *src, sys_uint n) {
     if (!n) return dst;
-    if ((u64)dst > (u64)src)
+    if ((sys_uint)dst > (sys_uint)src)
         for (s64 i = (s64)n-1; i >= 0; i -= 1)  *((u8*)dst + i) = *((const u8*)src + i);
     else
-        for (u64 i = 0; i < n; i += 1)  *((u8*)dst + i) = *((const u8*)src + i);
+        for (sys_uint i = 0; i < n; i += 1)  *((u8*)dst + i) = *((const u8*)src + i);
     return dst;
 }
 
-inline int memcmp(const void* a, const void* b, u64 n) {
+inline int memcmp(const void* a, const void* b, sys_uint n) {
     const u8 *p1 = (const u8 *)a;
     const u8 *p2 = (const u8 *)b;
 
@@ -390,10 +424,14 @@ u64 format_float(float64 x, int decimal_places, void *buffer, u64 buffer_size);
 
 #define PP_EXCLUDE_FIRST_ARG_HELPER(x, ...) __VA_ARGS__
 #define PP_EXCLUDE_FIRST_ARG(...) PP_EXCLUDE_FIRST_ARG_HELPER(__VA_ARGS__)
+
+
 /* End include: base.h */
 
 
 /* Begin include: math.h */
+#if 0
+#endif
 
 // Natural logarithm
 float32 ln32(float32 x);
@@ -424,7 +462,8 @@ float64 ln64(float64 x) {
 
 
 /* Begin include: utility.h */
-
+#if 0
+#endif
 
 #define min(a, b) ((a) < (b) ? (a) : (b))
 #define max(a, b) ((a) > (b) ? (a) : (b))
@@ -434,35 +473,41 @@ float64 ln64(float64 x) {
 
 
 /* Begin include: string.h */
+#if 0
+#endif
 
 typedef struct string {
     u64 count;
     u8 *data;
+
 } string;
 
-inline u64 c_style_strlen(const char *s) {
+unit_local inline u64 c_style_strlen(const char *s) {
     const char *p = s;
     while (*p++) {}
     return (u64)(p-s-1);
 }
 
-#define STR(c) ((string){ c_style_strlen(c), (u8*)c })
+#define STR(c) ((string){ c_style_strlen((const char*)c), (u8*)(uintptr)(const void*)(c) })
+#define STRN(n, c) ((string){ n, (u8*)(uintptr)(const void*)(c) })
+#define RSTR(...) STR(#__VA_ARGS__)
 
-inline bool strings_match(string a, string b) {
+unit_local inline bool strings_match(string a, string b) {
     if (a.count != b.count) return false;
-    
+
     if (a.data == b.data) return true; // Pointers and counts match
-    
+
     if (a.count == 0 || b.count == 0) return false;
     if (a.data  == 0 || b.data  == 0) return false;
-    
-    return memcmp(a.data, b.data, a.count) == 0;
+
+    return memcmp(a.data, b.data, (sys_uint)a.count) == 0;
 }
 /* End include: string.h */
 
 
 /* Begin include: system.h */
-
+#if 0
+#endif
 
 #define SYS_MEMORY_RESERVE (1 << 0)
 #define SYS_MEMORY_ALLOCATE (1 << 1)
@@ -499,7 +544,7 @@ typedef struct Physical_Monitor {
 	float64 scale;
 	int64 pos_x;
 	int64 pos_y;
-	
+
 	void *handle;
 } Physical_Monitor;
 
@@ -514,9 +559,17 @@ typedef void* File_Handle;
 File_Handle sys_get_stdout(void);
 File_Handle sys_get_stderr(void);
 
-u32 sys_write(File_Handle f, void *data, u64 size);
-u32 sys_write_string(File_Handle f, string s);
+void sys_set_stdout(File_Handle h);
+void sys_set_stderr(File_Handle h);
 
+s64 sys_write(File_Handle h, void *data, u64 size);
+s64 sys_write_string(File_Handle h, string s);
+
+s64 sys_read(File_Handle h, void *buffer, u64 buffer_size);
+
+bool sys_make_pipe(File_Handle *read, File_Handle *write);
+
+void sys_close(File_Handle h);
 
 //////
 // Surfaces (Window)
@@ -527,7 +580,7 @@ typedef void* Surface_Handle;
 // note(charlie)
 // Some systems have window systems, like win32, where you can create/destroy/manage
 // multiple windows, while other platforms, like android, only has a single surface
-// for your program to draw to. 
+// for your program to draw to.
 // Making a thin abstraction layer that works with both types of system doesn't really
 // make sense, unless we only allow a single full-screen surface on all platforms.
 // However, since this library aims to be useful on all systems, we can't really do that.
@@ -541,7 +594,7 @@ typedef void* Surface_Handle;
 // systems.
 // Suggestions for "initialization" of a surface if your program needs to deploy on both
 // mobiles/consoles and desktops:
-// 
+//
 // // In init:
 // #if OS_FLAGS & OS_FLAG_HAS_WINDOW_SYSTEM
 //     Surface_Desc desc = ...;
@@ -549,9 +602,13 @@ typedef void* Surface_Handle;
 // #else
 //     my_surface = sys_get_surface();
 // #endif
-// 
+//
 // And after that, you can use surface functions in a completely portable way.
 
+// todo(charlie) more flags
+typedef u64 Surface_Flags;
+#define SURFACE_FLAG_HIDDEN (1 << 0)
+#define SURFACE_FLAG_TOPMOST (1 << 1)
 
 #if (OS_FLAGS & OS_FLAG_HAS_WINDOW_SYSTEM)
 
@@ -563,14 +620,16 @@ typedef struct Surface_Desc {
     u32 y_pos;
     string title;
     bool fullscreen;
+    Surface_Flags flags;
 } Surface_Desc;
-inline Surface_Desc Surface_Desc_default(void) {
+unit_local inline Surface_Desc Surface_Desc_default(void) {
     Surface_Desc desc = (Surface_Desc) {0};
     desc.width = 800;
     desc.height = 600;
     desc.x_pos = 0;
     desc.y_pos = 0;
-    desc.title = STR("ostd window");
+    desc.title = RSTR(ostd window);
+    desc.flags = 0;
     return desc;
 }
 Surface_Handle sys_make_surface(Surface_Desc desc);
@@ -585,6 +644,10 @@ Surface_Handle sys_get_surface(void);
 
 void surface_poll_events(Surface_Handle surface);
 bool surface_should_close(Surface_Handle s);
+
+// Will return false on systems where the flag isn't implemented
+bool surface_set_flags(Surface_Handle h, Surface_Flags flags);
+bool surface_unset_flags(Surface_Handle h, Surface_Flags flags);
 
 //////
 // Debug
@@ -609,7 +672,7 @@ void sys_print_stack_trace(File_Handle handle);
 #if (OS_FLAGS & OS_FLAG_HAS_WINDOW_SYSTEM)
 
 typedef struct _Surface_State {
-    Surface_Handle *handle;
+    Surface_Handle handle;
     bool allocated;
     bool should_close;
 } _Surface_State;
@@ -667,87 +730,87 @@ typedef struct _Mapped_Region_Desc_Buffer {
     u32 count;
 } _Mapped_Region_Desc_Buffer;
 
-// Buffers of mapped regions, each the size of a page 
+// Buffers of mapped regions, each the size of a page
 // (with a count of sizeof(_Mapped_Region_Desc) / page_size
-_Mapped_Region_Desc_Buffer *_unix_mapped_region_buffers = 0;
-u64 _unix_mapped_region_buffers_allocated_count = 0;
-u64 _unix_mapped_region_buffers_count = 0;
+unit_local _Mapped_Region_Desc_Buffer *_unix_mapped_region_buffers = 0;
+unit_local u64 _unix_mapped_region_buffers_allocated_count = 0;
+unit_local u64 _unix_mapped_region_buffers_count = 0;
 
 // todo(charlie): mutex
-void _unix_add_mapped_region(void *start, u64 page_count) {
+unit_local void _unix_add_mapped_region(void *start, u64 page_count) {
     System_Info info = sys_get_info();
     if (!_unix_mapped_region_buffers) {
-        _unix_mapped_region_buffers = (_Mapped_Region_Desc_Buffer *)mmap(0, info.page_size, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+        _unix_mapped_region_buffers = (_Mapped_Region_Desc_Buffer *)mmap(0, (sys_uint)info.page_size, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
         assert(_unix_mapped_region_buffers); // todo(charlie) revise
-        memset(_unix_mapped_region_buffers, 0, info.page_size);
+        memset(_unix_mapped_region_buffers, 0, (sys_uint)info.page_size);
         _unix_mapped_region_buffers_allocated_count = info.page_size/sizeof(_Mapped_Region_Desc_Buffer);
         _unix_mapped_region_buffers_count = 0;
     }
-    
+
     for (u64 i = 0; i < _unix_mapped_region_buffers_count; i += 1) {
         _Mapped_Region_Desc_Buffer buffer = _unix_mapped_region_buffers[i];
         assert(buffer.regions);
         assert(buffer.count);
-        
+
         for (u32 j = 0; j < buffer.count; j += 1) {
             _Mapped_Region_Desc *region = buffer.regions + j;
-            
+
             if (!region->taken) {
                 region->taken = true;
                 region->start = start;
-                region->page_count = page_count;
+                region->page_count = (sys_uint)page_count;
                 return;
             }
         }
     }
-    
+
     ///
     // We did not find free memory for a region descriptor,
     // so allocate a new one
-    
-    
+
+
     // Grow buffer of buffers one page at a time
     if (_unix_mapped_region_buffers_count == _unix_mapped_region_buffers_allocated_count) {
         u64 old_count = _unix_mapped_region_buffers_allocated_count/info.page_size;
         u64 new_count = old_count + 1;
-        
-        _Mapped_Region_Desc_Buffer *new_buffers = (_Mapped_Region_Desc_Buffer *)mmap(0, info.page_size*new_count, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+
+        _Mapped_Region_Desc_Buffer *new_buffers = (_Mapped_Region_Desc_Buffer *)mmap(0, (sys_uint)(info.page_size*new_count), PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
         assert(new_buffers); // todo(charlie) revise
-        
-        memcpy(new_buffers, _unix_mapped_region_buffers, old_count*info.page_size);
-        
-        munmap(_unix_mapped_region_buffers, info.page_size*old_count);
+
+        memcpy(new_buffers, _unix_mapped_region_buffers, (sys_uint)(old_count*info.page_size));
+
+        munmap(_unix_mapped_region_buffers, (sys_uint)(info.page_size*old_count));
         _unix_mapped_region_buffers = new_buffers;
-        
-        memset((u8*)_unix_mapped_region_buffers + info.page_size*old_count, 0, info.page_size);
-        
+
+        memset((u8*)_unix_mapped_region_buffers + info.page_size*old_count, 0, (sys_uint)info.page_size);
+
         _unix_mapped_region_buffers_allocated_count = new_count;
     }
-    
+
     assert(_unix_mapped_region_buffers_count < _unix_mapped_region_buffers_allocated_count);
-    
+
     // Grab & initialize next buffer
     _Mapped_Region_Desc_Buffer *buffer = &_unix_mapped_region_buffers[_unix_mapped_region_buffers_count++];
-    buffer->count = info.page_size/sizeof(_Mapped_Region_Desc);
-    buffer->regions = mmap(0, info.page_size, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
-    memset(buffer->regions, 0, info.page_size);
+    buffer->count = (sys_uint)(info.page_size/sizeof(_Mapped_Region_Desc));
+    buffer->regions = mmap(0, (sys_uint)info.page_size, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+    memset(buffer->regions, 0, (sys_uint)info.page_size);
     assert(buffer->regions); // todo(charlie) revise
-    
+
     buffer->regions[0].taken = true;
     buffer->regions[0].start = start;
-    buffer->regions[0].page_count = page_count;
+    buffer->regions[0].page_count = (u32)page_count;
 }
 
-_Mapped_Region_Desc *_unix_find_mapped_region(void *start) {
+unit_local _Mapped_Region_Desc *_unix_find_mapped_region(void *start) {
     for (u64 i = 0; i < _unix_mapped_region_buffers_count; i += 1) {
         _Mapped_Region_Desc_Buffer buffer = _unix_mapped_region_buffers[i];
         assert(buffer.regions);
         assert(buffer.count);
-        
+
         for (u32 j = 0; j < buffer.count; j += 1) {
             _Mapped_Region_Desc *region = buffer.regions + j;
             if (!region->taken) continue;
-            
+
             if (region->start == start) {
                 return region;
             }
@@ -789,16 +852,16 @@ void *sys_map_pages(u64 action, void *virtual_base, u64 number_of_pages) {
     if (action & SYS_MEMORY_ALLOCATE) {
         prot |= PROT_READ | PROT_WRITE;
     }
-    
+
     if (virtual_base) {
         flags |= MAP_FIXED;
     }
 
-    void *result = mmap(virtual_base, amount_in_bytes, prot, flags, -1, 0);
+    void *result = mmap(virtual_base, (sys_uint)amount_in_bytes, prot, flags, -1, 0);
     if (result == MAP_FAILED) {
-        return NULL;
+        return 0;
     }
-    
+
     _unix_add_mapped_region(result, number_of_pages);
 
     return result;
@@ -806,17 +869,18 @@ void *sys_map_pages(u64 action, void *virtual_base, u64 number_of_pages) {
 
 bool sys_unmap_pages(void *address) {
     System_Info info = sys_get_info();
-    
+
     _Mapped_Region_Desc *region = _unix_find_mapped_region(address);
     if (region) {
-        munmap(region->start, info.page_size * region->page_count);
+        munmap(region->start, (sys_uint)(info.page_size * region->page_count));
         region->taken = false;
     }
-    
+
     return region != 0;
 }
 
 bool sys_deallocate_pages(void *address, u64 number_of_pages) {
+#if !(COMPILER_FLAGS & COMPILER_FLAG_EMSCRIPTEN)
     System_Info info = sys_get_info();
     u64 amount_in_bytes = info.page_size * number_of_pages;
 
@@ -824,21 +888,25 @@ bool sys_deallocate_pages(void *address, u64 number_of_pages) {
         return false;
     }
     return true;
+#else
+    (void)address; (void)number_of_pages;
+    return true;
+#endif
 }
 
 u64 sys_query_mapped_regions(void *start, void *end, Mapped_Memory_Info *result, u64 result_count) {
     u64 counter = 0;
     if (!result) result_count = U64_MAX;
-    
+
     for (u64 i = 0; i < _unix_mapped_region_buffers_count; i += 1) {
         _Mapped_Region_Desc_Buffer buffer = _unix_mapped_region_buffers[i];
         assert(buffer.regions);
         assert(buffer.count);
-        
+
         for (u32 j = 0; j < buffer.count; j += 1) {
             _Mapped_Region_Desc *region = buffer.regions + j;
             if (!region->taken) continue;
-            
+
             if ((u64)region->start >= (u64)start && (u64)region->start < (u64)end) {
                 if (result && result_count > counter) {
                     Mapped_Memory_Info m = (Mapped_Memory_Info){ 0 };
@@ -850,9 +918,34 @@ u64 sys_query_mapped_regions(void *start, void *end, Mapped_Memory_Info *result,
             }
         }
     }
-    
+
     return counter;
 }
+
+s64 sys_write(File_Handle f, void *data, u64 size) {
+    return (s64)write((int)(u64)f, data, (sys_uint)size);
+}
+
+s64 sys_write_string(File_Handle f, string s) {
+    return sys_write(f, s.data, s.count);
+}
+
+s64 sys_read(File_Handle h, void *buffer, u64 buffer_size) {
+    return (s64)read((int)(u64)h, buffer, (sys_uint)buffer_size);
+}
+
+bool sys_make_pipe(File_Handle *read, File_Handle *write) {
+    int pipe_fds[2];
+    if (pipe(pipe_fds) == -1) return false;
+    *read = (File_Handle)(u64)pipe_fds[0];
+    *write = (File_Handle)(u64)pipe_fds[1];
+    return true;
+}
+
+void sys_close(File_Handle h) {
+    close((int)(u64)h);
+}
+
 #endif // OS_FLAGS & OS_FLAG_UNIX
 
 #if (OS_FLAGS & OS_FLAG_WINDOWS)
@@ -870,18 +963,15 @@ u64 sys_query_mapped_regions(void *start, void *end, Mapped_Memory_Info *result,
     #pragma comment(lib, "dbghelp")
 #endif // COMPILER_FLAGS & COMPILER_FLAG_MSC
 
-
+//#define WIN32_LEAN_AND_MEAN
+//#include <Windows.h>
 
 #if defined(_WINDOWS_) // User included windows.h
-    #ifndef  // WIN32_LEAN_AND_MEAN
+    #ifndef  WIN32_LEAN_AND_MEAN
         #error For ostd to work with windows.h included, you need to #define WIN32_LEAN_AND_MEAN
     #endif // WIN32_LEAN_AND_MEAN
     #ifndef _DBGHELP_
-
-/* Begin include: dbghelp.h */
-/* Warning: Included file not found: dbghelp.h */
-
-/* End include: dbghelp.h */
+        #include <DbgHelp.h>
     #endif // _DBGHELP_
 #endif // defined(_WINDOWS_)
 
@@ -889,16 +979,8 @@ u64 sys_query_mapped_regions(void *start, void *end, Mapped_Memory_Info *result,
 // then he can define OSTD_INCLUDE_WINDOWS
 #ifdef OSTD_INCLUDE_WINDOWS
     #define WIN32_LEAN_AND_MEAN
-
-/* Begin include: windows.h */
-/* Warning: Included file not found: windows.h */
-
-/* End include: windows.h */
-
-/* Begin include: dbghelp.h */
-/* Skipped duplicate include: dbghelp.h */
-
-/* End include: dbghelp.h */
+    #include <Windows.h>
+    #include <DbgHelp.h>
 #endif // OSTD_INCLUDE_WINDOWS
 
 // We manually declare windows functions so we don't need to bloat compilation and
@@ -1024,7 +1106,7 @@ typedef PCWSTR *PZPCWSTR;
 typedef const PCWSTR *PCZPCWSTR;
 typedef const WCHAR *LPCUWSTR, *PCUWSTR;
 
-// what the fuck 
+// what the fuck
 
 // who thought this was a good idea
 
@@ -1151,47 +1233,47 @@ typedef struct DECLSPEC_ALIGN(16) _XMM_SAVE_AREA32
     DWORD MxCsr;
     DWORD MxCsr_Mask;
     M128A FloatRegisters[8];
-    
+
     #if defined(_WIN64)
-    
+
     M128A XmmRegisters[16];
     BYTE  Reserved4[96];
-    
+
     #else
-    
+
     M128A XmmRegisters[8];
     BYTE  Reserved4[224];
-    
+
     #endif
-    
+
 } XMM_SAVE_AREA32;
 typedef struct DECLSPEC_ALIGN(16) _CONTEXT {
-    
+
     //
     // Register parameter home addresses.
     //
     // N.B. These fields are for convience - they could be used to extend the
     //      context record in the future.
     //
-    
+
     DWORD64 P1Home;
     DWORD64 P2Home;
     DWORD64 P3Home;
     DWORD64 P4Home;
     DWORD64 P5Home;
     DWORD64 P6Home;
-    
+
     //
     // Control flags.
     //
-    
+
     DWORD ContextFlags;
     DWORD MxCsr;
-    
+
     //
     // Segment Registers and processor flags.
     //
-    
+
     WORD   SegCs;
     WORD   SegDs;
     WORD   SegEs;
@@ -1199,22 +1281,22 @@ typedef struct DECLSPEC_ALIGN(16) _CONTEXT {
     WORD   SegGs;
     WORD   SegSs;
     DWORD EFlags;
-    
+
     //
     // Debug registers
     //
-    
+
     DWORD64 Dr0;
     DWORD64 Dr1;
     DWORD64 Dr2;
     DWORD64 Dr3;
     DWORD64 Dr6;
     DWORD64 Dr7;
-    
+
     //
     // Integer registers.
     //
-    
+
     DWORD64 Rax;
     DWORD64 Rcx;
     DWORD64 Rdx;
@@ -1231,17 +1313,17 @@ typedef struct DECLSPEC_ALIGN(16) _CONTEXT {
     DWORD64 R13;
     DWORD64 R14;
     DWORD64 R15;
-    
+
     //
     // Program counter.
     //
-    
+
     DWORD64 Rip;
-    
+
     //
     // Floating point state.
     //
-    
+
     union {
         XMM_SAVE_AREA32 FltSave;
         struct {
@@ -1265,18 +1347,18 @@ typedef struct DECLSPEC_ALIGN(16) _CONTEXT {
             M128A Xmm15;
         } DUMMYSTRUCTNAME;
     } DUMMYUNIONNAME;
-    
+
     //
     // Vector registers.
     //
-    
+
     M128A VectorRegister[26];
     DWORD64 VectorControl;
-    
+
     //
     // Special debug control registers.
     //
-    
+
     DWORD64 DebugControl;
     DWORD64 LastBranchToRip;
     DWORD64 LastBranchFromRip;
@@ -1297,7 +1379,7 @@ typedef struct _tagADDRESS64 {
 } ADDRESS64, *LPADDRESS64;
 
 typedef struct _KDHELP64 {
-    
+
     DWORD64   Thread;
     DWORD   ThCallbackStack;
     DWORD   ThCallbackBStore;
@@ -1315,7 +1397,7 @@ typedef struct _KDHELP64 {
     DWORD     RetpolineStubOffset;
     DWORD     RetpolineStubSize;
     DWORD64   Reserved0[2];
-    
+
 } KDHELP64, *PKDHELP64;
 
 typedef struct _tagSTACKFRAME64 {
@@ -1372,7 +1454,7 @@ typedef struct _OVERLAPPED {
         } ;
         PVOID Pointer;
     } ;
-    
+
     HANDLE hEvent;
 } OVERLAPPED, *LPOVERLAPPED;
 #ifdef __clang__
@@ -1473,19 +1555,6 @@ typedef struct _DISPLAY_DEVICEW {
   WCHAR DeviceKey[128];
 } DISPLAY_DEVICEW, *PDISPLAY_DEVICEW, *LPDISPLAY_DEVICEW;
 
-typedef enum MONITOR_DPI_TYPE {
-  MDT_EFFECTIVE_DPI = 0,
-  MDT_ANGULAR_DPI = 1,
-  MDT_RAW_DPI = 2,
-  MDT_DEFAULT
-} MONITOR_DPI_TYPE;
-
-typedef enum PROCESS_DPI_AWARENESS {
-  PROCESS_DPI_UNAWARE = 0,
-  PROCESS_SYSTEM_DPI_AWARE = 1,
-  PROCESS_PER_MONITOR_DPI_AWARE = 2
-} PROCESS_DPI_AWARENESS;
-
 typedef struct tagWNDCLASSEXW {
   UINT      cbSize;
   UINT      style;
@@ -1500,6 +1569,12 @@ typedef struct tagWNDCLASSEXW {
   LPCWSTR   lpszClassName;
   HICON     hIconSm;
 } WNDCLASSEXW, *PWNDCLASSEXW, *NPWNDCLASSEXW, *LPWNDCLASSEXW;
+
+typedef struct _SECURITY_ATTRIBUTES {
+  DWORD  nLength;
+  LPVOID lpSecurityDescriptor;
+  BOOL   bInheritHandle;
+} SECURITY_ATTRIBUTES, *PSECURITY_ATTRIBUTES, *LPSECURITY_ATTRIBUTES;
 
 typedef struct _GUID {
   unsigned long  Data1;
@@ -1656,6 +1731,9 @@ typedef void* DPI_AWARENESS_CONTEXT;
 #define WS_EX_PALETTEWINDOW     (WS_EX_WINDOWEDGE | WS_EX_TOOLWINDOW | WS_EX_TOPMOST)
 
 #endif /* WINVER >= 0x0400 */
+
+#define GWL_STYLE -16
+#define GWL_EXSTYLE -20
 
 #if(_WIN32_WINNT >= 0x0500)
 #define WS_EX_LAYERED           0x00080000
@@ -2472,6 +2550,34 @@ typedef struct tagTRACKMOUSEEVENT {
 #define PM_REMOVE           0x0001
 #define PM_NOYIELD          0x0002
 
+#define HWND_BOTTOM ((HWND)1)
+#define HWND_NOTOPMOST ((HWND)-2)
+#define HWND_TOP ((HWND)0)
+#define HWND_TOPMOST ((HWND)-1)
+
+/*
+ * SetWindowPos Flags
+ */
+#define SWP_NOSIZE          0x0001
+#define SWP_NOMOVE          0x0002
+#define SWP_NOZORDER        0x0004
+#define SWP_NOREDRAW        0x0008
+#define SWP_NOACTIVATE      0x0010
+#define SWP_FRAMECHANGED    0x0020  /* The frame changed: send WM_NCCALCSIZE */
+#define SWP_SHOWWINDOW      0x0040
+#define SWP_HIDEWINDOW      0x0080
+#define SWP_NOCOPYBITS      0x0100
+#define SWP_NOOWNERZORDER   0x0200  /* Don't do owner Z ordering */
+#define SWP_NOSENDCHANGING  0x0400  /* Don't send WM_WINDOWPOSCHANGING */
+
+#define SWP_DRAWFRAME       SWP_FRAMECHANGED
+#define SWP_NOREPOSITION    SWP_NOOWNERZORDER
+
+#if(WINVER >= 0x0400)
+#define SWP_DEFERERASE      0x2000 // same as SWP_DEFERDRAWING
+#define SWP_ASYNCWINDOWPOS  0x4000 // same as SWP_CREATESPB
+#endif /* WINVER >= 0x0400 */
+
 
 WINDOWS_IMPORT void WINAPI GetSystemInfo(LPSYSTEM_INFO lpSystemInfo);
 
@@ -2481,8 +2587,10 @@ WINDOWS_IMPORT s32 WINAPI VirtualFree(void *lpAddress, size_t dwSize, u32 dwFree
 WINDOWS_IMPORT size_t WINAPI VirtualQuery(void* lpAddress, PMEMORY_BASIC_INFORMATION lpBuffer, u32 dwLength);
 
 WINDOWS_IMPORT void* WINAPI GetStdHandle(u32 nStdHandle);
+WINDOWS_IMPORT BOOL WINAPI SetStdHandle( DWORD nStdHandle, HANDLE hHandle);
 
-WINDOWS_IMPORT s32 WINAPI WriteFile(void* hFile, LPCVOID lpBuffer, DWORD nNumberOfBytesToWrite, LPDWORD lpNumberOfBytesWritten, LPOVERLAPPED lpOverlapped);
+WINDOWS_IMPORT s32 WINAPI WriteFile(HANDLE hFile, LPCVOID lpBuffer, DWORD nNumberOfBytesToWrite, LPDWORD lpNumberOfBytesWritten, LPOVERLAPPED lpOverlapped);
+WINDOWS_IMPORT BOOL WINAPI ReadFile( HANDLE hFile, LPVOID lpBuffer, DWORD nNumberOfBytesToRead, LPDWORD lpNumberOfBytesRead, LPOVERLAPPED lpOverlapped);
 
 WINDOWS_IMPORT void* WINAPI GetCurrentProcess(void);
 WINDOWS_IMPORT void* WINAPI GetCurrentThread(void);
@@ -2504,7 +2612,7 @@ WINDOWS_IMPORT BOOL WINAPI EnumDisplaySettingsW( LPCWSTR lpszDeviceName, DWORD i
 
 WINDOWS_IMPORT BOOL WINAPI EnumDisplayDevicesW( LPCWSTR lpDevice, DWORD iDevNum, PDISPLAY_DEVICEW lpDisplayDevice, DWORD dwFlags);
 
-WINDOWS_IMPORT HRESULT WINAPI GetDpiForMonitor( HMONITOR hmonitor, MONITOR_DPI_TYPE dpiType, UINT *dpiX, UINT *dpiY);
+
 
 WINDOWS_IMPORT HMONITOR WINAPI MonitorFromWindow( HWND hwnd, DWORD dwFlags);
 
@@ -2512,10 +2620,6 @@ WINDOWS_IMPORT int WINAPI WideCharToMultiByte( UINT CodePage, DWORD dwFlags, LPC
 
 typedef BOOL (*MONITORENUMPROC)( HMONITOR unnamedParam1, HDC unnamedParam2, LPRECT unnamedParam3, LPARAM unnamedParam4);
 WINDOWS_IMPORT BOOL WINAPI EnumDisplayMonitors( HDC hdc, LPCRECT lprcClip, MONITORENUMPROC lpfnEnum, LPARAM dwData);
-
-WINDOWS_IMPORT HRESULT WINAPI SetProcessDpiAwareness(PROCESS_DPI_AWARENESS value);
-
-WINDOWS_IMPORT BOOL WINAPI SetProcessDpiAwarenessContext(DPI_AWARENESS_CONTEXT value);
 
 WINDOWS_IMPORT HMODULE WINAPI GetModuleHandleA(LPCSTR lpModuleName);
 WINDOWS_IMPORT HMODULE WINAPI GetModuleHandleW(LPCWSTR lpModuleName);
@@ -2554,9 +2658,36 @@ WINDOWS_IMPORT LRESULT WINAPI DispatchMessageW(const MSG *lpMsg);
 WINDOWS_IMPORT LRESULT WINAPI DefWindowProcW(HWND hWnd,UINT Msg,WPARAM wParam,LPARAM lParam);
 
 WINDOWS_IMPORT BOOL WINAPI DestroyWindow(HWND hWnd);
+
+WINDOWS_IMPORT LONG WINAPI GetWindowLongW( HWND hWnd, int nIndex);
+WINDOWS_IMPORT LONG WINAPI SetWindowLongW(HWND hWnd, int nIndex, LONG dwNewLong);
+WINDOWS_IMPORT BOOL WINAPI SetWindowPos( HWND hWnd, HWND hWndInsertAfter, int X, int Y, int cx, int cy, UINT uFlags);
+
+WINDOWS_IMPORT BOOL WINAPI CreatePipe( HANDLE* hReadPipe, HANDLE* hWritePipe, LPSECURITY_ATTRIBUTES lpPipeAttributes, DWORD nSize);
+
+WINDOWS_IMPORT BOOL WINAPI CloseHandle(HANDLE hObject);
+
+
 /* End include: windows_loader.h */
 #endif // _WINDOWS_
 
+typedef enum MONITOR_DPI_TYPE {
+  MDT_EFFECTIVE_DPI = 0,
+  MDT_ANGULAR_DPI = 1,
+  MDT_RAW_DPI = 2,
+  MDT_DEFAULT
+} MONITOR_DPI_TYPE;
+
+typedef enum PROCESS_DPI_AWARENESS {
+  PROCESS_DPI_UNAWARE = 0,
+  PROCESS_SYSTEM_DPI_AWARE = 1,
+  PROCESS_PER_MONITOR_DPI_AWARE = 2
+} PROCESS_DPI_AWARENESS;
+__declspec(dllimport) HRESULT __stdcall SetProcessDpiAwareness(PROCESS_DPI_AWARENESS value);
+
+__declspec(dllimport) BOOL __stdcall SetProcessDpiAwarenessContext(DPI_AWARENESS_CONTEXT value);
+
+__declspec(dllimport) HRESULT __stdcall GetDpiForMonitor( HMONITOR hmonitor, MONITOR_DPI_TYPE dpiType, UINT *dpiX, UINT *dpiY);
 
 
 unit_local void _win_lazy_enable_dpi_awarness(void) {
@@ -2584,27 +2715,27 @@ unit_local LRESULT window_proc ( HWND hwnd,  u32 message,  WPARAM wparam,  LPARA
         case WM_CLOSE:
             state->should_close = true;
             break;
-    
+
         default: {
             return DefWindowProcW(hwnd, message, wparam, lparam);
         }
     }
-    
+
     return 0;
 }
 
 
 void *sys_map_pages(u64 action, void *virtual_base, u64 number_of_pages) {
-    
+
     // todo(charlie) attempt multiple times in case of failure.
-    
+
     System_Info info = sys_get_info();
-    
+
     u64 amount_in_bytes = info.page_size * number_of_pages;
 
     u32 flags = 0;
     u32 protection = 0;
-    
+
     if (action & SYS_MEMORY_RESERVE)  {
         flags |= MEM_RESERVE;
         protection = PAGE_NOACCESS;
@@ -2613,12 +2744,12 @@ void *sys_map_pages(u64 action, void *virtual_base, u64 number_of_pages) {
         flags |= MEM_COMMIT;
         protection = PAGE_READWRITE;
     }
-    
+
     void *result = VirtualAlloc(virtual_base, amount_in_bytes, flags, protection);
-    
+
     // todo(charlie)
     // Some error reporting so user can see what went wrong if !result
-    
+
     return result;
 }
 
@@ -2631,33 +2762,33 @@ bool sys_unmap_pages(void *address) {
 
 bool sys_deallocate_pages(void *address, u64 number_of_pages) {
     System_Info info = sys_get_info();
-    
+
     u64 amount_in_bytes = info.page_size*number_of_pages;
-    
+
     return VirtualFree(address, amount_in_bytes, MEM_DECOMMIT) != 0;
 }
 
 u64 sys_query_mapped_regions(void *start, void *end, Mapped_Memory_Info *result, u64 result_count) {
     System_Info info = sys_get_info();
-    
+
     start = (void*)(((u64)start + info.page_size-1) & ~(info.page_size-1));
 
     void *p = start;
     u64 counter = 0;
-    
+
     void *current_base = 0;
-    
+
     MEMORY_BASIC_INFORMATION last_info;
     bool trailing_pointer = false;
     while ((u64)p < (u64)end) {
-        
+
         MEMORY_BASIC_INFORMATION mem_info = (MEMORY_BASIC_INFORMATION){0};
-        
+
         size_t r = VirtualQuery(p, &mem_info, sizeof(MEMORY_BASIC_INFORMATION));
         // todo(charlie)  VirtualQuery might fail for random reasons
         if (r != 0 && mem_info.AllocationBase) {
             if (current_base && (u64)current_base < (u64)mem_info.AllocationBase) {
-            
+
                 if (result && result_count > counter) {
                     Mapped_Memory_Info m = (Mapped_Memory_Info){0};
                     m.base = current_base;
@@ -2665,13 +2796,13 @@ u64 sys_query_mapped_regions(void *start, void *end, Mapped_Memory_Info *result,
                     result[counter] = m;
                     trailing_pointer = false;
                 }
-                
+
                 counter += 1;
-                
+
             }
             current_base = mem_info.AllocationBase;
         }
-        
+
         if (r != 0) {
             p = (u8*)p + mem_info.RegionSize;
             if (mem_info.AllocationBase) {
@@ -2680,7 +2811,7 @@ u64 sys_query_mapped_regions(void *start, void *end, Mapped_Memory_Info *result,
             }
         }
     }
-    
+
     if (trailing_pointer) {
         // todo(charlie) multiple attempts
         if (result_count > counter) {
@@ -2691,24 +2822,24 @@ u64 sys_query_mapped_regions(void *start, void *end, Mapped_Memory_Info *result,
         }
         counter += 1;
     }
-    
+
     return counter;
 }
 
 System_Info sys_get_info(void) {
     local_persist System_Info info;
     local_persist bool has_retrieved_info = false;
-    
+
     if (!has_retrieved_info) {
         has_retrieved_info = true;
-        
+
         SYSTEM_INFO win32_info;
         GetSystemInfo(&win32_info);
-        
+
         info.page_size = (u64)win32_info.dwPageSize;
         info.granularity = win32_info.dwAllocationGranularity;
     }
-    
+
     return info;
 }
 
@@ -2786,14 +2917,36 @@ File_Handle sys_get_stderr(void) {
     return (File_Handle)GetStdHandle((u32)-12);
 }
 
-u32 sys_write(File_Handle f, void *data, u64 size) {
-    u32 written;
-    WriteFile(f, data, (DWORD)size, (unsigned long*)&written, 0);
-    return written;
+bool sys_make_pipe(File_Handle *read, File_Handle *write) {
+    HANDLE read_handle, write_handle;
+    SECURITY_ATTRIBUTES sa = {sizeof(SECURITY_ATTRIBUTES), 0, true};
+    if (!CreatePipe(&read_handle, &write_handle, &sa, 0)) return false;
+    *read = (File_Handle)read_handle;
+    *write = (File_Handle)write_handle;
+    return true;
 }
 
-u32 sys_write_string(File_Handle f, string s) {
+s64 sys_write(File_Handle f, void *data, u64 size) {
+    u32 written;
+    WriteFile(f, data, (DWORD)size, (unsigned long*)&written, 0);
+    if (written == 0 && size != 0) return -1;
+    return (s64)written;
+}
+
+s64 sys_write_string(File_Handle f, string s) {
     return sys_write(f, s.data, s.count);
+}
+
+s64 sys_read(File_Handle h, void *buffer, u64 buffer_size) {
+    DWORD read = 0;
+    BOOL ok = ReadFile(h, (LPVOID)buffer, (DWORD)buffer_size, &read, 0);
+    if (!ok) return -1;
+
+    return (s64)read;
+}
+
+void sys_close(File_Handle h) {
+    CloseHandle((HANDLE)h);
 }
 
 Surface_Handle sys_make_surface(Surface_Desc desc) {
@@ -2802,37 +2955,41 @@ Surface_Handle sys_make_surface(Surface_Desc desc) {
         // todo(charlie) sys_error
         return 0;
     }
-    
-    HINSTANCE instance = GetModuleHandleW(0);
-    
-    WNDCLASSEXW wc = (WNDCLASSEXW){0};
-    wc.cbSize = sizeof(WNDCLASSEXW);
-    wc.style = CS_OWNDC;
-    wc.lpfnWndProc = window_proc;
-    wc.hInstance = instance;
-    wc.lpszClassName = L"abc123";
-    wc.cbClsExtra = 0;
-    wc.cbWndExtra = 0;
-    wc.hCursor = 0;
-    wc.hIcon = 0;
-    wc.lpszMenuName = 0;
-    wc.hbrBackground = 0;
 
-	ATOM res = RegisterClassExW(&wc);
-	assert(res);
-	
+    HINSTANCE instance = GetModuleHandleW(0);
+
+    local_persist bool class_initted = false;
+    if (!class_initted) {
+        class_initted = true;
+        WNDCLASSEXW wc = (WNDCLASSEXW){0};
+        wc.cbSize = sizeof(WNDCLASSEXW);
+        wc.style = CS_OWNDC;
+        wc.lpfnWndProc = window_proc;
+        wc.hInstance = instance;
+        wc.lpszClassName = L"abc123";
+        wc.cbClsExtra = 0;
+        wc.cbWndExtra = 0;
+        wc.hCursor = 0;
+        wc.hIcon = 0;
+        wc.lpszMenuName = 0;
+        wc.hbrBackground = 0;
+    
+    	ATOM res = RegisterClassExW(&wc);
+    	assert(res);
+    }
+
 	RECT rect = (RECT){0, 0, (LONG)desc.width, (LONG)desc.height};
-	
-	
+
+
 	DWORD style = WS_OVERLAPPEDWINDOW;
 	DWORD style_ex = WS_EX_CLIENTEDGE;
-	
+
 	AdjustWindowRectEx(&rect, style, 0, style_ex);
-	
+
 	u16 title[256];
 	u64 title_length = _win_utf8_to_wide(desc.title, title, 256);
 	title[title_length] = 0;
-	
+
     // Create the window
     HWND hwnd = CreateWindowExW(
         style_ex,
@@ -2842,20 +2999,24 @@ Surface_Handle sys_make_surface(Surface_Desc desc) {
         CW_USEDEFAULT, CW_USEDEFAULT, rect.right-rect.left, rect.bottom-rect.top,
         0, 0, instance, 0
     );
-    
+
     if (!hwnd) return 0;
-    UpdateWindow(hwnd);
-    
-    ShowWindow(hwnd, SW_SHOW);
     
     s->handle = hwnd;
     
+    UpdateWindow(hwnd);
+    
+    surface_unset_flags(hwnd, ~desc.flags);
+    surface_set_flags(hwnd, desc.flags);
+    
+
+
     return hwnd;
 }
 void surface_close(Surface_Handle s) {
     _Surface_State *state = _get_surface_state(s);
     if (!state) return; // todo(charlie) sys_error
-    
+
     DestroyWindow((HWND)s);
     state->allocated = false;
     state->handle = 0;
@@ -2878,19 +3039,68 @@ bool surface_should_close(Surface_Handle s) {
     return state->should_close;
 }
 
+bool surface_set_flags(Surface_Handle h, Surface_Flags flags) {
+    int ex_style = GetWindowLongW((HWND)h, GWL_EXSTYLE);
+    int style = GetWindowLongW((HWND)h, GWL_STYLE);
+    
+    if (flags & SURFACE_FLAG_HIDDEN) {
+        ex_style |= WS_EX_TOOLWINDOW;
+    }
+    
+    if (flags & SURFACE_FLAG_TOPMOST) {
+        ex_style |= WS_EX_TOPMOST;
+    }
+    
+    SetWindowLongW((HWND)h, GWL_EXSTYLE, ex_style);
+    SetWindowLongW((HWND)h, GWL_STYLE, style);
+    
+    if (flags & SURFACE_FLAG_HIDDEN) {
+        ShowWindow((HWND)h, SW_HIDE);
+    }
+    
+    if (flags & SURFACE_FLAG_TOPMOST) {
+        SetWindowPos((HWND)h, HWND_TOPMOST, 0, 0, 0, 0, SWP_NOREPOSITION | SWP_NOSIZE | SWP_NOMOVE);
+    }
+    
+    return true;
+}
+bool surface_unset_flags(Surface_Handle h, Surface_Flags flags) {
+    int ex_style = GetWindowLongW((HWND)h, GWL_EXSTYLE);
+    int style = GetWindowLongW((HWND)h, GWL_STYLE);
+    
+    if (flags & SURFACE_FLAG_HIDDEN) {
+        ex_style &= ~(WS_EX_TOOLWINDOW);
+    }
+    
+    if (flags & SURFACE_FLAG_TOPMOST) {
+        ex_style &= ~(WS_EX_TOPMOST);
+    }
+    
+    SetWindowLongW((HWND)h, GWL_EXSTYLE, ex_style);
+    SetWindowLongW((HWND)h, GWL_STYLE, style);
+    
+    if (flags & SURFACE_FLAG_HIDDEN) {
+        ShowWindow((HWND)h, SW_SHOW);
+    }
+    if (flags & SURFACE_FLAG_TOPMOST) {
+        SetWindowPos((HWND)h, HWND_NOTOPMOST, 0, 0, 0, 0, SWP_NOREPOSITION | SWP_NOSIZE | SWP_NOMOVE);
+    }
+    return true;
+}
+
 void sys_print_stack_trace(File_Handle handle) {
 
     void* process = GetCurrentProcess();
     void* thread = GetCurrentThread();
-    
+
     SymInitialize(process, 0, 1);
-    
+
     CONTEXT context;
     STACKFRAME64 stack = (STACKFRAME64) {0};
 
     context.ContextFlags = CONTEXT_FULL;
     RtlCaptureContext(&context);
-    
+
     // #Portability cpu arch
     int machineType = IMAGE_FILE_MACHINE_AMD64;
     stack.AddrPC.Offset = context.Rip;
@@ -2907,7 +3117,7 @@ void sys_print_stack_trace(File_Handle handle) {
         if (!StackWalk64((DWORD)machineType, process, thread, &stack, &context, 0, SymFunctionTableAccess64, SymGetModuleBase64, 0)) {
             break;
         }
-        
+
         DWORD64 displacement = 0;
         char buffer[sizeof(SYMBOL_INFO) + WIN32_MAX_SYMBOL_NAME_LENGTH];
         PSYMBOL_INFO symbol = (PSYMBOL_INFO)buffer;
@@ -2919,7 +3129,7 @@ void sys_print_stack_trace(File_Handle handle) {
             u32 displacement_line;
             line.SizeOfStruct = sizeof(IMAGEHLP_LINE64);
 
-            
+
             if (SymGetLineFromAddr64(process, stack.AddrPC.Offset, (PDWORD)&displacement_line, &line)) {
                 sys_write_string(handle, STR(line.FileName));
                 sys_write_string(handle, STR(" Line "));
@@ -2930,7 +3140,7 @@ void sys_print_stack_trace(File_Handle handle) {
                 sys_write_string(handle, STR(" "));
                 sys_write_string(handle, STR(symbol->Name));
                 sys_write_string(handle, STR("\n"));
-                
+
             } else {
                 u8 sym_buffer[1024];
                 string result = (string) {0, sym_buffer};
@@ -2938,7 +3148,7 @@ void sys_print_stack_trace(File_Handle handle) {
                 memcpy(result.data, symbol->Name, symbol->NameLen + 1);
                 sys_write_string(handle, result);
             }
-            
+
         } else {
             sys_write_string(handle, STR("<unavailable>\n"));
         }
@@ -2961,8 +3171,12 @@ void sys_print_stack_trace(File_Handle handle) {
 #undef bool
 
 pthread_t _android_stdout_thread;
+pthread_t _android_stderr_thread;
 int _android_stdout_pipe[2];
-// Must be provided by android project
+int _android_user_stdout_handle = -1;
+int _android_stderr_pipe[2];
+int _android_user_stderr_handle = -1;
+
 ANativeActivity *_android_activity = 0;
 ANativeWindow *_android_window = 0;
 jobject _android_context;
@@ -2972,39 +3186,39 @@ s64 _android_previous_vsync_time = 0;
 f64 _android_refresh_rate = 0.0f;
 
 static void _android_onDestroy(ANativeActivity* activity) {
-    
+
 }
 
 static void _android_onStart(ANativeActivity* activity) {
-    
+
 }
 
 static void _android_onResume(ANativeActivity* activity) {
-    
+
 }
 
 static void* _android_onSaveInstanceState(ANativeActivity* activity, size_t* outLen) {
-    return NULL;
+    return 0;
 }
 
 static void _android_onPause(ANativeActivity* activity) {
-    
+
 }
 
 static void _android_onStop(ANativeActivity* activity) {
-    
+
 }
 
 static void _android_onConfigurationChanged(ANativeActivity* activity) {
-    
+
 }
 
 static void _android_onLowMemory(ANativeActivity* activity) {
-    
+
 }
 
 static void _android_onWindowFocusChanged(ANativeActivity* activity, int focused) {
-    
+
 }
 
 static void _android_onNativeWindowCreated(ANativeActivity* activity, ANativeWindow* window) {
@@ -3012,15 +3226,15 @@ static void _android_onNativeWindowCreated(ANativeActivity* activity, ANativeWin
 }
 
 static void _android_onNativeWindowDestroyed(ANativeActivity* activity, ANativeWindow* window) {
-    
+
 }
 
 static void _android_onInputQueueCreated(ANativeActivity* activity, AInputQueue* queue) {
-    
+
 }
 
 static void _android_onInputQueueDestroyed(ANativeActivity* activity, AInputQueue* queue) {
-    
+
 }
 
 void _android_vsync_callback(s64 frame_time_nanos, void* data) {
@@ -3043,10 +3257,10 @@ void* _android_main_thread_proc(void* arg) {
 
     extern int _android_main(void);
     int code = _android_main();
-    
+
     __android_log_print(ANDROID_LOG_INFO, "android thread", "Exit android thread");
     ANativeActivity_finish(_android_activity);
-    
+
     return (void*)(u64)code;
 }
 
@@ -3068,18 +3282,19 @@ void ANativeActivity_onCreate(ANativeActivity* activity, void* savedState,
     activity->callbacks->onInputQueueDestroyed = _android_onInputQueueDestroyed;
 
     activity->instance = 0;
-    
+
     _android_activity = activity;
-    
+
     AChoreographer* choreographer = AChoreographer_getInstance();
     assert(choreographer);
     AChoreographer_postFrameCallback(choreographer, _android_vsync_callback, 0);
-    
+
     pthread_create(&_android_main_thread, 0, _android_main_thread_proc, 0);
 }
 
 
 pthread_mutex_t _android_stdout_pending_mutex;
+pthread_mutex_t _android_stderr_pending_mutex;
 
 void* _android_stdout_thread_proc(void* arg) {
     char buffer[1024];
@@ -3092,39 +3307,66 @@ void* _android_stdout_thread_proc(void* arg) {
         __android_log_print(ANDROID_LOG_INFO, "stdout", "%s", buffer);
         pthread_mutex_unlock(&_android_stdout_pending_mutex);
     }
-    
+
     __android_log_print(ANDROID_LOG_INFO, "stdout", "Stdout closed");
+
+    return 0;
+}
+
+void* _android_stderr_thread_proc(void* arg) {
+    char buffer[1024];
+    ssize_t bytesRead;
+
+    while ((bytesRead = read(_android_stderr_pipe[0], buffer, sizeof(buffer) - 1)) > 0) {
+        pthread_mutex_lock(&_android_stderr_pending_mutex);
+        usleep(50000);
+        buffer[bytesRead] = '\0';
+        __android_log_print(ANDROID_LOG_INFO, "stderr", "%s", buffer);
+        pthread_mutex_unlock(&_android_stderr_pending_mutex);
+    }
+
+    __android_log_print(ANDROID_LOG_INFO, "stderr", "Stderr closed");
 
     return 0;
 }
 
 int _android_main(void) {
     pipe(_android_stdout_pipe);
-    
+    pipe(_android_stderr_pipe);
+
     pthread_attr_t attr;
     struct sched_param param;
-    
+
     pthread_attr_init(&attr);
     pthread_attr_setschedpolicy(&attr, SCHED_OTHER);
-    
+
     param.sched_priority = 0;
     pthread_attr_setschedparam(&attr, &param);
 #if CSTD11
     pthread_attr_setinheritsched(&attr, PTHREAD_EXPLICIT_SCHED);
 #endif
 
-    pthread_mutex_init(&_android_stdout_pending_mutex, NULL);
+    pthread_mutex_init(&_android_stdout_pending_mutex, 0);
     pthread_create(&_android_stdout_thread, &attr, _android_stdout_thread_proc, 0);
+
+    pthread_mutex_init(&_android_stderr_pending_mutex, 0);
+    pthread_create(&_android_stderr_thread, &attr, _android_stderr_thread_proc, 0);
 
     extern int main(void);
     int code = main();
-    
+
     _android_running = false;
-    
+
     pthread_mutex_lock(&_android_stdout_pending_mutex);
     close(_android_stdout_pipe[0]);
     close(_android_stdout_pipe[1]);
     pthread_mutex_unlock(&_android_stdout_pending_mutex);
+
+    pthread_mutex_lock(&_android_stderr_pending_mutex);
+    close(_android_stderr_pipe[0]);
+    close(_android_stderr_pipe[1]);
+    pthread_mutex_unlock(&_android_stderr_pending_mutex);
+
     return code;
 }
 
@@ -3133,7 +3375,7 @@ u64 sys_query_monitors(Physical_Monitor *buffer, u64 max_count) {
     if (!buffer) return 1;
     if (max_count == 0) return 0;
 
-    
+
 
     // Retrieve display resolution using ANativeWindow
     ANativeWindow* window = _android_window;
@@ -3155,32 +3397,32 @@ u64 sys_query_monitors(Physical_Monitor *buffer, u64 max_count) {
 
     memcpy(buffer[0].name, "Android display", sizeof("Android display")-1);
     buffer[0].name_count = sizeof("Android display")-1;
-    
+
     buffer[0].refresh_rate = (s64)_android_refresh_rate;
     buffer[0].resolution_x = width;
     buffer[0].resolution_y = height;
     buffer[0].pos_x = 0;
     buffer[0].pos_y = 0;
     buffer[0].scale = scale;
-    buffer[0].handle = NULL;
+    buffer[0].handle = 0;
 
     return 1;
 }
 
-
 File_Handle sys_get_stdout(void) {
-    return (File_Handle)(u64)_android_stdout_pipe[1];
+    if (_android_user_stdout_handle == -1) return (File_Handle)(u64)_android_stdout_pipe[1];
+    else return (File_Handle)(u64)_android_user_stdout_handle;
 }
 File_Handle sys_get_stderr(void) {
-    return (File_Handle)(u64)_android_stdout_pipe[1];
+    if (_android_user_stderr_handle == -1) return (File_Handle)(u64)_android_stderr_pipe[1];
+    else return (File_Handle)(u64)_android_user_stderr_handle;
 }
 
-u32 sys_write(File_Handle f, void *data, u64 size) {
-    return (u32)write((int)(u64)f, data, size);
+void sys_set_stdout(File_Handle h) {
+    _android_user_stdout_handle = (int)(u64)h;
 }
-
-u32 sys_write_string(File_Handle f, string s) {
-    return sys_write(f, s.data, s.count);
+void sys_set_stderr(File_Handle h) {
+    _android_user_stderr_handle = (int)(u64)h;
 }
 
 Surface_Handle sys_get_surface() {
@@ -3194,8 +3436,93 @@ bool surface_should_close(Surface_Handle s) {
     return false;
 }
 
+bool surface_set_flags(Surface_Handle h, Surface_Flags flags) {
+    return false;
+}
+bool surface_unset_flags(Surface_Handle h, Surface_Flags flags) {
+    return false;
+}
+
 void sys_print_stack_trace(File_Handle handle) {
     sys_write_string(handle, STR("<Stack trace unimplemented>"));
+}
+
+#elif (OS_FLAGS & OS_FLAG_EMSCRIPTEN)
+
+/////////////////////////////////////////////////////
+//////
+// :Emscripten
+//////
+/////////////////////////////////////////////////////
+
+#include <emscripten.h>
+#include <emscripten/html5.h>
+#undef bool
+
+u64 sys_query_monitors(Physical_Monitor *buffer, u64 max_count)
+{
+    if (!buffer) {
+        return 1;
+    }
+    if (max_count == 0) {
+        return 0;
+    }
+    double scale = emscripten_get_device_pixel_ratio();
+
+    int width = 0;
+    int height = 0;
+    emscripten_get_canvas_element_size("#canvas", &width, &height);
+
+    {
+        memcpy(buffer[0].name, "Web Display", sizeof("Web Display")-1);
+        buffer[0].name_count = sizeof("Web Display")-1;
+
+        buffer[0].refresh_rate = 60;
+
+        buffer[0].resolution_x = width;
+        buffer[0].resolution_y = height;
+
+        buffer[0].pos_x = 0;
+        buffer[0].pos_y = 0;
+
+        buffer[0].scale = scale;
+
+        buffer[0].handle = 0;
+    }
+
+    return 1;
+}
+
+File_Handle sys_get_stdout(void) {
+    return (File_Handle)1;
+}
+File_Handle sys_get_stderr(void) {
+    return (File_Handle)2;
+}
+
+void sys_set_stdout(File_Handle h) {
+    (void)h;
+}
+void sys_set_stderr(File_Handle h) {
+    (void)h;
+}
+
+Surface_Handle sys_get_surface(void) {
+    return (Surface_Handle)69; // todo(charlie) revisit
+}
+
+void surface_poll_events(Surface_Handle surface) {
+    (void)surface;
+}
+bool surface_should_close(Surface_Handle s) {
+    (void)s;
+    return false;
+}
+
+void sys_print_stack_trace(File_Handle handle) {
+    char buffer[16384];
+    int len = emscripten_get_callstack(EM_LOG_C_STACK, buffer, 16384);
+    sys_write(handle, buffer, (u64)len);
 }
 
 #endif // OS_FLAGS & XXXXX
@@ -3205,6 +3532,9 @@ void sys_print_stack_trace(File_Handle handle) {
 
 
 /* Begin include: unicode.h */
+#if 0
+#endif
+
 #define UTF16_SURROGATE_HIGH_START  0xD800
 #define UTF16_SURROGATE_HIGH_END    0xDBFF
 #define UTF16_SURROGATE_LOW_START   0xDC00
@@ -3316,6 +3646,8 @@ Utf8_To_Utf16_Result one_utf8_to_utf16(u8 *s, s64 source_length, bool strict) {
 
 
 /* Begin include: memory.h */
+#if 0
+#endif
 
 /////
 // Allocator
@@ -3326,21 +3658,26 @@ typedef enum Allocator_Message {
     ALLOCATOR_REALLOCATE,
     ALLOCATOR_FREE
 } Allocator_Message;
-typedef void*(*Allocator_Proc)(Allocator_Message msg, void *data, void *old, u64 old_n, u64 n);
+typedef void*(*Allocator_Proc)(Allocator_Message msg, void *data, void *old, u64 old_n, u64 n, u64 flags);
 
 typedef struct Allocator {
     void *data;
     Allocator_Proc proc;
 } Allocator;
 
-inline void *alloc(Allocator a, u64 n);
-inline void *realloc(Allocator a, void *p, u64 old_n, u64 n);
-inline void free(Allocator a, void *p);
+inline void *allocate(Allocator a, u64 n);
+inline void *reallocate(Allocator a, void *p, u64 old_n, u64 n);
+inline void deallocate(Allocator a, void *p);
 
-#define New(a, T) ((T*)alloc(a, sizeof(T)))
+inline void *allocatef(Allocator a, u64 n, u64 flags);
+inline void *reallocatef(Allocator a, void *p, u64 old_n, u64 n, u64 flags);
+inline void deallocatef(Allocator a, void *p, u64 flags);
 
-inline string string_alloc(Allocator a, u64 n);
-inline void string_free(Allocator a, string s);
+#define New(a, T) ((T*)allocate(a, sizeof(T)))
+#define NewBuffer(a, T, n) ((T*)allocate(a, sizeof(T)*n))
+
+inline string string_allocate(Allocator a, u64 n);
+inline void string_deallocate(Allocator a, string s);
 
 /////
 // Arena
@@ -3359,8 +3696,8 @@ void arena_pop(Arena *arena, u64 size);
 void arena_reset(Arena *arena);
 void free_arena(Arena arena);
 
-void* arena_allocator_proc(Allocator_Message msg, void *data, void *old, u64 old_n, u64 n);
-inline Allocator arena_allocator(Arena *a) { return (Allocator) { a, arena_allocator_proc }; }
+void* arena_allocator_proc(Allocator_Message msg, void *data, void *old, u64 old_n, u64 n, u64);
+unit_local inline Allocator arena_allocator(Arena *a) { return (Allocator) { a, arena_allocator_proc }; }
 
 /////
 // Temporary storage
@@ -3371,26 +3708,42 @@ inline Allocator arena_allocator(Arena *a) { return (Allocator) { a, arena_alloc
 
 Allocator get_temp(void);
 void reset_temporary_storage(void);
-void *talloc(size_t n);
+void *tallocate(size_t n);
 
 
 
 
-inline void *alloc(Allocator a, u64 n) {
-    return a.proc(ALLOCATOR_ALLOCATE, a.data, 0, 0, n);
+inline void *allocate(Allocator a, u64 n) {
+    return a.proc(ALLOCATOR_ALLOCATE, a.data, 0, 0, n, 0);
 }
-inline void *realloc(Allocator a, void *p, u64 old_n, u64 n) {
-    return a.proc(ALLOCATOR_REALLOCATE, a.data, p, old_n, n);
+inline void *reallocate(Allocator a, void *p, u64 old_n, u64 n) {
+    return a.proc(ALLOCATOR_REALLOCATE, a.data, p, old_n, n, 0);
 }
-inline void free(Allocator a, void *p) {
-    a.proc(ALLOCATOR_FREE, a.data, p, 0, 0);
+inline void deallocate(Allocator a, void *p) {
+    a.proc(ALLOCATOR_FREE, a.data, p, 0, 0, 0);
 }
 
-inline string string_alloc(Allocator a, u64 n) {
-    return (string) {n, (u8*)alloc(a, n)};
+inline void *allocatef(Allocator a, u64 n, u64 flags) {
+    return a.proc(ALLOCATOR_ALLOCATE, a.data, 0, 0, n, flags);
 }
-inline void string_free(Allocator a, string s) {
-    free(a, s.data);
+inline void *reallocatef(Allocator a, void *p, u64 old_n, u64 n, u64 flags) {
+    return a.proc(ALLOCATOR_REALLOCATE, a.data, p, old_n, n, flags);
+}
+inline void deallocatef(Allocator a, void *p, u64 flags) {
+    a.proc(ALLOCATOR_FREE, a.data, p, 0, 0, flags);
+}
+
+inline string string_allocate(Allocator a, u64 n) {
+    return (string) {n, (u8*)allocate(a, n)};
+}
+inline void string_deallocate(Allocator a, string s) {
+    deallocate(a, s.data);
+}
+
+inline string string_copy(Allocator a, string s) {
+    string new_s = string_allocate(a, s.count);
+    memcpy(new_s.data, s.data, s.count);
+    return new_s;
 }
 
 #ifdef OSTD_IMPL
@@ -3401,11 +3754,14 @@ unit_local bool _temp_initted = false;
 
 unit_local inline void _lazy_init_temporary_storage(void) {
     if (_temp_initted) return;
-    
-    _temp_arena = make_arena(sys_get_info().page_size*4, 1024);
-    
+
+#if OS_FLAGS & OS_FLAG_EMSCRIPTEN
+    _temp_arena = make_arena(1024*1024, 1024*1024);
+#else
+    _temp_arena = make_arena(sys_get_info().page_size*6900, 1024);
+#endif
     _temp = (Allocator) { &_temp_arena, arena_allocator_proc };
-    
+
     _temp_initted = true;
 }
 Allocator get_temp(void) {
@@ -3416,34 +3772,44 @@ void reset_temporary_storage(void) {
     _lazy_init_temporary_storage();
     arena_reset(&_temp_arena);
 }
-void *talloc(size_t n) {
+void *tallocate(size_t n) {
     _lazy_init_temporary_storage();
-    
-    return alloc(_temp, n);
+
+    return allocate(_temp, n);
 }
 
 Arena make_arena(u64 reserved_size, u64 initial_allocated_size) {
+    assert(reserved_size >= initial_allocated_size);
+
+#if OS_FLAGS & OS_FLAG_EMSCRIPTEN
+    assertmsg(reserved_size == initial_allocated_size, STR("Emscripten does not support reserved-only memory allocations. Arena initial allocation size must match reserved_size"));
+#endif // OS_FLAGS & OS_FLAG_EMSCRIPTEN
+
     System_Info info = sys_get_info();
-    
+
     // Align to page size
     reserved_size = (reserved_size + info.page_size - 1) & ~(info.page_size - 1);
     initial_allocated_size = (initial_allocated_size + info.page_size - 1) & ~(info.page_size - 1);
-    
+
     assert(initial_allocated_size <= reserved_size);
-    
+
     Arena arena;
-    
-    arena.start = sys_map_pages(SYS_MEMORY_RESERVE, 0, reserved_size/info.page_size);
-    assert(arena.start);
-    
+
+    if (reserved_size > initial_allocated_size) {
+        arena.start = sys_map_pages(SYS_MEMORY_RESERVE, 0, reserved_size/info.page_size);
+        assert(arena.start);
+        void *allocate_result = sys_map_pages(SYS_MEMORY_ALLOCATE, arena.start, initial_allocated_size/info.page_size);
+        assert(allocate_result == arena.start);
+    } else {
+        arena.start = sys_map_pages(SYS_MEMORY_RESERVE | SYS_MEMORY_ALLOCATE, 0, reserved_size/info.page_size);
+    }
+
     arena.position = arena.start;
-    
-    void *allocate_result = sys_map_pages(SYS_MEMORY_ALLOCATE, arena.start, initial_allocated_size/info.page_size);
-    assert(allocate_result == arena.start);
-    
+
+
     arena.reserved_size = reserved_size;
     arena.allocated_size = initial_allocated_size;
-    
+
     return arena;
 }
 void arena_reset(Arena *arena) {
@@ -3452,13 +3818,13 @@ void arena_reset(Arena *arena) {
 void free_arena(Arena arena) {
     void *start = arena.start;
     void *end = (u8*)arena.start + arena.reserved_size;
-    
+
     u64 pointer_count = sys_query_mapped_regions(start, end, 0, 0);
-    
+
     // todo(charlie)  use a temp scratch memory here
     Mapped_Memory_Info pointers[4096];
     sys_query_mapped_regions(start, end, pointers, pointer_count);
-    
+
     u32 i;
     for (i = 0; i < pointer_count; i += 1) {
         sys_unmap_pages(pointers[i].base);
@@ -3478,24 +3844,24 @@ void *arena_push(Arena *arena, u64 size) {
     if ((u64)arena->position + size > (u64)reserved_tail) {
         return 0;
     }
-    
+
     if ((u64)arena->position + size > (u64)allocated_tail) {
-        
+
         u64 amount_to_allocate = ((u64)arena->position + size) - (u64)allocated_tail;
-        
+
         amount_to_allocate = (amount_to_allocate + info.page_size-1) & ~(info.page_size-1);
-        
+
         u64 pages_to_allocate = amount_to_allocate / info.page_size;
-        
+
         void *allocate_result = sys_map_pages(SYS_MEMORY_ALLOCATE, allocated_tail, pages_to_allocate);
-        assertmsg(allocate_result == allocated_tail, STR("Failed allocating pages in arena"));
-        
+        assertmsg(allocate_result == allocated_tail, "Failed allocating pages in arena");
+
         arena->allocated_size += amount_to_allocate;
     }
 
     void *p = arena->position;
     arena->position = (u8*)arena->position + size;
-    
+
     return p;
 }
 
@@ -3504,7 +3870,8 @@ void arena_pop(Arena *arena, u64 size) {
     if ((u64)arena->position < (u64)arena->start)  arena->position = arena->start;
 }
 
-void* arena_allocator_proc(Allocator_Message msg, void *data, void *old, u64 old_n, u64 n) {
+void* arena_allocator_proc(Allocator_Message msg, void *data, void *old, u64 old_n, u64 n, u64 flags) {
+    (void)flags;
     Arena *a = (Arena*)data;
     switch (msg) {
         case ALLOCATOR_ALLOCATE:
@@ -3515,7 +3882,7 @@ void* arena_allocator_proc(Allocator_Message msg, void *data, void *old, u64 old
         {
             void* p = arena_push(a, n);
             if (old && old_n) {
-                memcpy(p, old, min(old_n, n));
+                memcpy(p, old, (sys_uint)min(old_n, n));
             }
             return p;
 
@@ -3524,13 +3891,13 @@ void* arena_allocator_proc(Allocator_Message msg, void *data, void *old, u64 old
         {
             break;
         }
-            
+
         default:
         {
             break;
         }
     }
-    
+
     return 0;
 }
 
@@ -3539,6 +3906,8 @@ void* arena_allocator_proc(Allocator_Message msg, void *data, void *old, u64 old
 
 
 /* Begin include: var_args.h */
+#if 0
+#endif
 
 // This is C90 so we need to do some macro nonsense to be able to do any form of variadic stuff.
 // It's to get slightly better var args than the standard C va_list.
@@ -3546,32 +3915,33 @@ void* arena_allocator_proc(Allocator_Message msg, void *data, void *old, u64 old
     To make a variadic arguments procedure:
     note the comma-swallowing "##"
     // note(charlie) comma-swallowing is a hit on #Portability
-    
+
     #define do_thing(arg1, ...)\
         MAKE_WRAPPED_CALL(do_thing_impl, arg1, ##__VA_ARGS__)
-    
+
     void do_thing_impl(int arg1, u64 arg_count, ...) {
         Var_Arg args[MAX_VAR_ARGS];
         get_var_args(arg_count, args);
-    
-        
+
+
     }
 */
 
+#define _VA_LIST_DEFINED
 #ifndef va_start
     #if (COMPILER_FLAGS & COMPILER_FLAG_MSC)
         #define va_list  char*
-        
+
         #define _SLOTSIZEOF(t)  (sizeof(t))
         #define _APALIGN(t,ap)  (__alignof(t))
-        
+
         #define __crt_va_start(ap, x)  ((void)(__va_start(&ap, x)))
         #define __crt_va_arg(ap, t)                                               \
         ((sizeof(t) > sizeof(uintptr) || (sizeof(t) & (sizeof(t) - 1)) != 0) \
             ? **(t**)((ap += sizeof(uintptr)) - sizeof(uintptr))             \
             :  *(t* )((ap += sizeof(uintptr)) - sizeof(uintptr)))
         #define __crt_va_end(ap)        ((void)(ap = (va_list)0))
-        
+
         #define va_start __crt_va_start
         #define va_arg   __crt_va_arg
         #define va_end   __crt_va_end
@@ -3601,7 +3971,7 @@ typedef struct Var_Arg {
     u64 int_val;
     float64 flt_val;
     string str_val;
-    
+
     u64 size;
 } Var_Arg;
 
@@ -3613,7 +3983,7 @@ typedef struct Var_Arg {
 
 #define PP_NARG(...) PP_ARG_N(__VA_ARGS__, PP_RSEQ_N())
 
-#define PP_ARG_N(...) PP_ARG_N_(__VA_ARGS__)
+#define PP_ARG_N(...) PP_ARG_N_(__VA_ARGS__, DUMMY)
 
 #define PP_RSEQ_N() 140,139,138,137,136,135,134,133,132,131,130,129,128,127,126,125,124,123,122,121,120,119,118,117,116,115,114,113,112,111,110,109,108,107,106,105,104,103,102,101,100,99,98,97,96,95,94,93,92,91,90,89,88,87,86,85,84,83,82,81,80,79,78,77,76,75,74,73,72,71,70,69,68,67,66,65,64,63,62,61,60,59,58,57,56,55,54,53,52,51,50,49,48,47,46,45,44,43,42,41,40,39,38,37,36,35,34,33,32,31,30,29,28,27,26,25,24,23,22,21,20,19,18,17,16,15,14,13,12,11,10,9,8,7,6,5,4,3,2,1,0
 
@@ -3846,16 +4216,17 @@ typedef struct Var_Arg {
 /* End include: var_args.h */
 
 /* Begin include: print.h */
-
+#if 0
+#endif
 
 /*
 
     TODO:
-        
+
         - Specify int base
             %ib16 - base 16
         - Padding, 0 padding
-            %i-4   "   5" 
+            %i-4   "   5"
                    "  81"
             %i4    "5   "
                    "81  "
@@ -3864,13 +4235,13 @@ typedef struct Var_Arg {
         - Decimal places
             %f.3   "1.123"
             %f.5   "1.12340"
-            
+
             %f04.3 "0001.123""
-            
+
         - Null terminated string %s0 or %cs or %ns
-        
+
         - Stack-backed buffered print() (instead of temporary allocation)
-            
+
 
 */
 
@@ -3879,9 +4250,10 @@ typedef struct Var_Arg {
 //////
 
 // note(charlie) comma-swallowing is a hit on #Portability
-#define format_string(buffer, buffer_size, fmt, ...)  _format_string_ugly(buffer, buffer_size, fmt, ##__VA_ARGS__)
+#define format_string(buffer, buffer_size, fmt, ...)  _format_string_ugly(buffer, buffer_size, STR(fmt), ##__VA_ARGS__)
+#define format_strings(buffer, buffer_size, fmt, ...)  _format_string_ugly(buffer, buffer_size, fmt, ##__VA_ARGS__)
 
-u64 format_string_args(void *buffer, u64 buffer_size, string fmt, u64 arg_count, Var_Arg *args);
+u64 format_string_args(void *buffer, u64 buffer_size, string fmt, u64 arg_count, Var_Arg *args, u64 *consumed_args);
 
 u64 format_signed_int(s64 x, int base, void *buffer, u64 buffer_size);
 u64 format_unsigned_int(u64 x, int base, void *buffer, u64 buffer_size);
@@ -3891,14 +4263,32 @@ u64 format_float(float64 x, int decimal_places, void *buffer, u64 buffer_size);
 // Printing
 //////
 
+typedef struct Source_Location {
+    u64 line;
+    string file;
+    string function;
+} Source_Location;
+#define HERE(...) (Source_Location) {__LINE__, STR(__FILE__), STR(__func__)}
+
 // note(charlie) comma-swallowing is a hit on #Portability
-#define sprint(allocator, fmt, ...)  _sprint_ugly(allocator,  fmt, ##__VA_ARGS__)
-#define tprint(fmt, ...)             _tprint_ugly(fmt, ##__VA_ARGS__)
-#define print(fmt, ...)              _print_ugly(fmt, ##__VA_ARGS__)
+#define sprint(allocator, fmt, ...)  _sprint_ugly(allocator,  STR(fmt), ##__VA_ARGS__)
+#define sprints(allocator, fmt, ...) _sprint_ugly(allocator,  fmt, ##__VA_ARGS__)
+#define tprint(fmt, ...)             _tprint_ugly(STR(fmt), ##__VA_ARGS__)
+#define tprints(fmt, ...)            _tprint_ugly(fmt, ##__VA_ARGS__)
+#define print(fmt, ...)              _print_ugly(STR(fmt), ##__VA_ARGS__)
+#define prints(fmt, ...)             _print_ugly(fmt, ##__VA_ARGS__)
 
 string sprint_args(Allocator a, string fmt, u64 arg_count, Var_Arg *args);
 string tprint_args(string fmt, u64 arg_count, Var_Arg *args);
 void   print_args(string fmt, u64 arg_count, Var_Arg *args);
+void   log_args(u64 flags, Source_Location location, string fmt, u64 arg_count, Var_Arg *args);
+
+typedef void (*Logger_Proc)(string message, u64 flags, Source_Location location);
+extern Logger_Proc logger;
+
+void default_logger(string message, u64 flags, Source_Location location);
+#define log(flags, fmt, ...)              _log_ugly(flags, STR(fmt), ##__VA_ARGS__)
+#define logs(flags, fmt, ...)             _log_ugly(flags, fmt, ##__VA_ARGS__)
 
 //////
 // Internal
@@ -3915,30 +4305,42 @@ void   print_args(string fmt, u64 arg_count, Var_Arg *args);
     MAKE_WRAPPED_CALL(tprint_impl, _make_print_desc((Allocator){0}, fmt), ##__VA_ARGS__)
 #define _print_ugly(fmt, ...)\
     MAKE_WRAPPED_CALL(print_impl, _make_print_desc((Allocator){0}, fmt), ##__VA_ARGS__)
-    
 
+#define _log_ugly(flags, fmt, ...)\
+    MAKE_WRAPPED_CALL(log_impl, _make_log_desc((Allocator){0}, fmt, flags, HERE()), ##__VA_ARGS__)
 
 typedef struct _Format_String_Desc {
     void *buffer;
     u64 buffer_size;
     string fmt;
 } _Format_String_Desc;
-inline _Format_String_Desc _make_format_string_desc(void *buffer, u64 buffer_size, string fmt) {
+unit_local inline _Format_String_Desc _make_format_string_desc(void *buffer, u64 buffer_size, string fmt) {
     return (_Format_String_Desc) {buffer, buffer_size, fmt};
-} 
+}
 
 typedef struct _Print_Desc {
     Allocator a;
     string fmt;
 } _Print_Desc;
-inline _Print_Desc _make_print_desc(Allocator a, string fmt) {
+unit_local inline _Print_Desc _make_print_desc(Allocator a, string fmt) {
     return (_Print_Desc) {a, fmt};
-} 
+}
+
+typedef struct _Log_Desc {
+    Allocator a;
+    string fmt;
+    u64 flags;
+    Source_Location location;
+} _Log_Desc;
+unit_local inline _Log_Desc _make_log_desc(Allocator a, string fmt, u64 flags, Source_Location location) {
+    return (_Log_Desc) {a, fmt, flags, location};
+}
 
 u64 format_string_impl(_Format_String_Desc desc, u64 arg_count, ...);
 string sprint_impl(_Print_Desc desc, u64 arg_count, ...);
 string tprint_impl(_Print_Desc desc, u64 arg_count, ...);
 void print_impl(_Print_Desc desc, u64 arg_count, ...);
+void log_impl(_Log_Desc desc, u64 arg_count, ...);
 
 #ifdef OSTD_IMPL
 
@@ -3946,33 +4348,33 @@ u64 format_string_impl(_Format_String_Desc desc, u64 arg_count, ...) {
     Var_Arg args[MAX_VAR_ARGS];
 
     get_var_args(arg_count, args);
-    
-    return format_string_args(desc.buffer, desc.buffer_size, desc.fmt, arg_count, args);
+
+    return format_string_args(desc.buffer, desc.buffer_size, desc.fmt, arg_count, args, 0);
 }
 
-u64 format_string_args(void *buffer, u64 buffer_size, string fmt, u64 arg_count, Var_Arg *args) {
-    
+u64 format_string_args(void *buffer, u64 buffer_size, string fmt, u64 arg_count, Var_Arg *args, u64 *consumed_args) {
+
     if (!buffer) buffer_size = U64_MAX;
-    
+
     u64 next_arg_index = 0;
-    
+
     u64 written = 0;
-    
+
     for (u64 i = 0; i < fmt.count; i += 1) {
         if (fmt.data[i] == '%' && next_arg_index < arg_count && i < fmt.count-1) {
             Var_Arg arg = args[next_arg_index];
-        
+
             //u32 left_padding = 0;
             //u32 right_padding = 0;
             //u32 left_0_padding = 0;
             //u32 right_0_padding = 0;
-            
+
             int base = 10;
             int decimal_places = 5;
-            
+
             u8 small_str[64];
             string str = (string) { 0, small_str };
-            
+
             if (fmt.data[i+1] == 'u') {
                 str.count = format_unsigned_int(arg.int_val, base, str.data, 32);
                 i += 1;
@@ -4000,7 +4402,7 @@ u64 format_string_args(void *buffer, u64 buffer_size, string fmt, u64 arg_count,
                 str = arg.str_val;
                 i += 1;
             } else {
-                
+
                 char msg[] = "<Unknown format specifier '  '>";
                 memcpy(str.data, msg, sizeof(msg)-1);
                 str.count = sizeof(msg)-1;
@@ -4008,20 +4410,22 @@ u64 format_string_args(void *buffer, u64 buffer_size, string fmt, u64 arg_count,
                 str.data[str.count-3] = fmt.data[i+1];
                 i += 1;
             }
-            
+
             if (str.count) {
                 u64 to_write = str.count;
-                
+
                 if (written + to_write > buffer_size) {
                     to_write -= buffer_size - (written + to_write);
                 }
-                
+
                 if (to_write) {
-                    if (buffer) memcpy((u8*)buffer + written, str.data, to_write);
+                    if (buffer) memcpy((u8*)buffer + written, str.data, (sys_uint)to_write);
                     written += str.count;
                 }
             }
-            
+
+            if (consumed_args) (*consumed_args) += 1;
+
             next_arg_index += 1;
         } else {
             if (written + 1 <= buffer_size) {
@@ -4030,7 +4434,7 @@ u64 format_string_args(void *buffer, u64 buffer_size, string fmt, u64 arg_count,
             }
         }
     }
-    
+
     return written;
 }
 
@@ -4049,43 +4453,74 @@ void print_impl(_Print_Desc desc, u64 arg_count, ...) {
     get_var_args(arg_count, args);
     print_args(desc.fmt, arg_count, args);
 }
+void log_impl(_Log_Desc desc, u64 arg_count, ...) {
+    Var_Arg args[MAX_VAR_ARGS];
+    get_var_args(arg_count, args);
+    log_args(desc.flags, desc.location, desc.fmt, arg_count, args);
+}
 
 string sprint_args(Allocator a, string fmt, u64 arg_count, Var_Arg *args) {
-    u64 n = format_string_args(0, 0, fmt, arg_count, args);
-    
-    void *buffer = alloc(a, n);
-    
-    format_string_args(buffer, n, fmt, arg_count, args);
-    
+    u64 n = format_string_args(0, 0, fmt, arg_count, args, 0);
+
+    void *buffer = allocate(a, n);
+
+    format_string_args(buffer, n, fmt, arg_count, args, 0);
+
     return (string) { n, (u8*)buffer };
 }
 string tprint_args(string fmt, u64 arg_count, Var_Arg *args) {
     return sprint_args(get_temp(), fmt, arg_count, args);
 }
 void print_args(string fmt, u64 arg_count, Var_Arg *args) {
-    // todo(charlie) dont use any allocators here and just buffer it in a stack allocated
-    // buffer instead. print being dependent on temp allocator is really bad. We generally
-    // want it to be completely self-contained.
+
+    u64 n = format_string_args(0, 0, fmt, arg_count, args, 0);
+
+    u8 buffer[4096];
+    u64 written = 0;
+
+    while (written < n) {
+        u64 to_write = min(n, 4096);
+        u64 consumed_args;
+        format_string_args(buffer, to_write, fmt, arg_count, args, &consumed_args);
+        args += consumed_args;
+        arg_count -= consumed_args;
+
+        sys_write(sys_get_stdout(), buffer, to_write);
+
+        written += to_write;
+    }
+}
+void log_args(u64 flags, Source_Location location, string fmt, u64 arg_count, Var_Arg *args) {
+
     string s = tprint_args(fmt, arg_count, args);
     
-    sys_write_string(sys_get_stdout(), s);
+    if (!logger) {
+        default_logger(s, flags, location);
+    } else {
+        logger(s, flags, location);
+    }
+}
+
+void default_logger(string message, u64 flags, Source_Location location) {
+    (void)flags;
+    print("%s:%u: %s\n", location.file, location.line, message);
 }
 
 // todo(charlie) make a less naive and slow version of this !
 unit_local u64 _format_int(void *px, int base, bool _signed, void *buffer, u64 buffer_size) {
     assert(base >= 2 && base <= 36); // 0-z
-    
+
     if (!buffer) buffer_size = U64_MAX;
-    
+
     u8 digits[36];
     memcpy(digits, "0123456789abcdefghijklmnopqrstuvxyz", 36);
-    
+
     void *tail = (u8*)buffer + buffer_size - 1;
-    
+
     u64 written = 0;
-    
+
     bool neg = false;
-    
+
     u64 abs_val;
     if (_signed) {
         s64 signed_val = *(s64*)px;
@@ -4096,42 +4531,42 @@ unit_local u64 _format_int(void *px, int base, bool _signed, void *buffer, u64 b
     else {
         abs_val = *(u64*)px;
     }
-    
+
     if (abs_val == 0 && written < buffer_size) {
         if (buffer) *(u8*)buffer = '0';
         return 1;
     }
-    
+
     u64 digit_count = (u64)(ln64((float64)abs_val)/ln64((float64)base));
-    
+
     u64 skip = 0;
     if (digit_count > buffer_size) {
         skip = digit_count-buffer_size+1;
     }
-    
+
     while (abs_val != 0) {
         u8 digit = digits[abs_val%(u64)base];
-        
+
         if (skip == 0 && written < buffer_size) {
             if (buffer) *((u8*)tail - written) = digit;
             written += 1;
         }
-        
+
         abs_val /= (u64)base;
         if (skip > 0) skip -= 1;
     }
-    
+
     // Write the '-' if negative number
     if (neg && written < buffer_size) {
         if (buffer) *((u8*)tail - written) = '-';
         written += 1;
     }
-    
+
     // Since we wrote right-to-left, shift down to overwrite the bytes we did not touch
     if (buffer) {
-        memmove(buffer, (u8*)tail - written + 1, written);
+        memmove(buffer, (u8*)tail - written + 1, (sys_uint)written);
     }
-    
+
     return written;
 }
 u64 format_signed_int(s64 x, int base, void *buffer, u64 buffer_size) {
@@ -4147,7 +4582,7 @@ u64 format_float(float64 x, int decimal_places, void *buffer, u64 buffer_size) {
     if (!buffer) buffer_size = U64_MAX;
 
     u64 written = 0;
-    
+
     bool neg = x < 0.0;
     if (neg) x = -x;
 
@@ -4163,7 +4598,7 @@ u64 format_float(float64 x, int decimal_places, void *buffer, u64 buffer_size) {
 
     for (int i = 0; i < decimal_places && written < buffer_size; i++) {
         fractional_part *= 10.0;
-        u8 digit = (u8) fractional_part; 
+        u8 digit = (u8) fractional_part;
         fractional_part -= digit;
 
         *((u8*)buffer + written) = '0' + digit;
@@ -4171,7 +4606,7 @@ u64 format_float(float64 x, int decimal_places, void *buffer, u64 buffer_size) {
     }
 
     if (neg && written < buffer_size) {
-        memmove((u8*)buffer + 1, buffer, written);
+        memmove((u8*)buffer + 1, buffer, (sys_uint)written);
         *((u8*)buffer) = '-';
         if (buffer) written += 1;
     }
@@ -4179,10 +4614,1341 @@ u64 format_float(float64 x, int decimal_places, void *buffer, u64 buffer_size) {
     return written;
 }
 
+Logger_Proc logger = 0;
+
 #endif // OSTD_IMPL
+
 /* End include: print.h */
+
+
+/* Begin include: graphics.h */
+#if 0
+#endif
+
+typedef enum Oga_Result {
+    OGA_OK,
+    
+    // Trying to use device features that were not available.
+    // Check Oga_Device::features flags for whether or not a feature is available.
+    OGA_CONTEXT_INIT_ERROR_MISSING_DEVICE_FEATURES,
+    // The given family index is not within the range 0 .. Oga_Device::logical_engine_family_count
+    OGA_CREATE_LOGICAL_ENGINE_ERROR_FAMILY_INDEX_OUT_OF_RANGE,
+    // The given logical_engine creation count overflows that of Oga_Logical_Engine_Family_Info::logical_engine_capacity
+    OGA_CREATE_LOGICAL_ENGINE_ERROR_FAMILY_CAPACITY_OVERFLOW,
+} Oga_Result;
+
+unit_local inline string oga_get_result_name(Oga_Result r) {
+    switch (r) {
+        case OGA_OK: return STR("OGA_OK");
+        case OGA_CONTEXT_INIT_ERROR_MISSING_DEVICE_FEATURES:   return STR("OGA_CONTEXT_INIT_ERROR_MISSING_DEVICE_FEATURES");
+        case OGA_CREATE_LOGICAL_ENGINE_ERROR_FAMILY_INDEX_OUT_OF_RANGE: return STR("OGA_CREATE_LOGICAL_ENGINE_ERROR_FAMILY_INDEX_OUT_OF_RANGE");
+        case OGA_CREATE_LOGICAL_ENGINE_ERROR_FAMILY_CAPACITY_OVERFLOW:  return STR("OGA_CREATE_LOGICAL_ENGINE_ERROR_FAMILY_CAPACITY_OVERFLOW");
+        default: return STR("<>");
+    }
+    return STR("<>");
+}
+unit_local inline string oga_get_result_message(Oga_Result r) {
+    switch (r) {
+        case OGA_OK: return STR("No error");
+        case OGA_CONTEXT_INIT_ERROR_MISSING_DEVICE_FEATURES:
+            return STR("Trying to use device features that were not available. Check Oga_Device::features flags for whether or not a feature is available.");
+        case OGA_CREATE_LOGICAL_ENGINE_ERROR_FAMILY_INDEX_OUT_OF_RANGE:
+            return STR("The given family index is not within the range 0 .. Oga_Device::logical_engine_family_count");
+        case OGA_CREATE_LOGICAL_ENGINE_ERROR_FAMILY_CAPACITY_OVERFLOW:
+            return STR("The given logical_engine creation count overflows that of Oga_Logical_Engine_Family_Info::logical_engine_capacity");
+        default: return STR("<>");
+    }
+    return STR("<>");
+}
+
+typedef enum Oga_Format_Kind {
+    OGA_FORMAT_R8_UNORM,
+    OGA_FORMAT_R8_SNORM,
+    OGA_FORMAT_R8_UINT,
+    OGA_FORMAT_R8_SINT,
+    OGA_FORMAT_R8G8_UNORM,
+    OGA_FORMAT_R8G8_SNORM,
+    OGA_FORMAT_R8G8_UINT,
+    OGA_FORMAT_R8G8_SINT,
+    OGA_FORMAT_R8G8B8A8_UNORM,
+    OGA_FORMAT_R8G8B8A8_SNORM,
+    OGA_FORMAT_R8G8B8A8_UINT,
+    OGA_FORMAT_R8G8B8A8_SINT,
+    OGA_FORMAT_R8G8B8A8_SRGB,
+    OGA_FORMAT_B8G8R8A8_UNORM,
+    OGA_FORMAT_B8G8R8A8_SNORM,
+    OGA_FORMAT_B8G8R8A8_UINT,
+    OGA_FORMAT_B8G8R8A8_SINT,
+    OGA_FORMAT_B8G8R8A8_SRGB,
+    OGA_FORMAT_R16G16B16A16_SFLOAT,
+    OGA_FORMAT_R32G32B32A32_SFLOAT,
+    OGA_FORMAT_DEPTH32_SFLOAT,
+    OGA_FORMAT_DEPTH32_SFLOAT_S8_UINT,
+    OGA_FORMAT_DEPTH24_UNORM_S8_UINT,
+    OGA_FORMAT_DEPTH16_UNORM
+} Oga_Format_Kind;
+
+unit_local inline string oga_format_str(Oga_Format_Kind f) {
+    switch (f) {
+        case OGA_FORMAT_R8_UNORM:               return RSTR(R8_UNORM);
+        case OGA_FORMAT_R8_SNORM:               return RSTR(R8_SNORM);
+        case OGA_FORMAT_R8_UINT:                return RSTR(R8_UINT);
+        case OGA_FORMAT_R8_SINT:                return RSTR(R8_SINT);
+        case OGA_FORMAT_R8G8_UNORM:             return RSTR(R8G8_UNORM);
+        case OGA_FORMAT_R8G8_SNORM:             return RSTR(R8G8_SNORM);
+        case OGA_FORMAT_R8G8_UINT:              return RSTR(R8G8_UINT);
+        case OGA_FORMAT_R8G8_SINT:              return RSTR(R8G8_SINT);
+        case OGA_FORMAT_R8G8B8A8_UNORM:         return RSTR(R8G8B8A8_UNORM);
+        case OGA_FORMAT_R8G8B8A8_SNORM:         return RSTR(R8G8B8A8_SNORM);
+        case OGA_FORMAT_R8G8B8A8_UINT:          return RSTR(R8G8B8A8_UINT);
+        case OGA_FORMAT_R8G8B8A8_SINT:          return RSTR(R8G8B8A8_SINT);
+        case OGA_FORMAT_R8G8B8A8_SRGB:          return RSTR(R8G8B8A8_SRGB);
+        case OGA_FORMAT_B8G8R8A8_UNORM:         return RSTR(B8G8R8A8_UNORM);
+        case OGA_FORMAT_B8G8R8A8_SNORM:         return RSTR(B8G8R8A8_SNORM);
+        case OGA_FORMAT_B8G8R8A8_UINT:          return RSTR(B8G8R8A8_UINT);
+        case OGA_FORMAT_B8G8R8A8_SINT:          return RSTR(B8G8R8A8_SINT);
+        case OGA_FORMAT_B8G8R8A8_SRGB:          return RSTR(B8G8R8A8_SRGB);
+        case OGA_FORMAT_R16G16B16A16_SFLOAT:    return RSTR(R16G16B16A16_SFLOAT);
+        case OGA_FORMAT_R32G32B32A32_SFLOAT:    return RSTR(R32G32B32A32_SFLOAT);
+        case OGA_FORMAT_DEPTH32_SFLOAT:         return RSTR(DEPTH32_SFLOAT);
+        case OGA_FORMAT_DEPTH32_SFLOAT_S8_UINT: return RSTR(DEPTH32_SFLOAT_S8_UINT);
+        case OGA_FORMAT_DEPTH24_UNORM_S8_UINT:  return RSTR(DEPTH24_UNORM_S8_UINT);
+        case OGA_FORMAT_DEPTH16_UNORM:          return RSTR(DEPTH16_UNORM);
+        default: return RSTR(<>);
+    }
+    return RSTR(<>);
+}
+
+typedef enum Oga_Memory_Property_Flag {
+    // Memory is near GPU and accessed with high performance
+    OGA_MEMORY_PROPERTY_GPU_LOCAL  = 0x00000001,
+    // Memory can be mapped
+    OGA_MEMORY_PROPERTY_GPU_TO_CPU_MAPPABLE  = 0x00000002,
+    // Memory is directly reflected on CPU. Mapping is not needed to access memory
+    OGA_MEMORY_PROPERTY_GPU_TO_CPU_REFLECTED = 0x00000004,
+    // Cached memory is accessed quicker, but does not instantly reflect GPU writes
+    OGA_MEMORY_PROPERTY_GPU_TO_CPU_CACHED   = 0x00000008,
+} Oga_Memory_Property_Flag;
+
+// Unique identifer/handle for an instance of something.
+// For example, if we need to know if two Oga_Device's are the same, we compare
+// test them with a,id == b.id.
+typedef void* Oga_Id;
+
+typedef enum Oga_Sample_Count_Flag {
+    OGA_SAMPLE_COUNT_1 = 1 << 0,
+    OGA_SAMPLE_COUNT_2 = 1 << 1,
+    OGA_SAMPLE_COUNT_4 = 1 << 2,
+    OGA_SAMPLE_COUNT_8 = 1 << 3,
+    OGA_SAMPLE_COUNT_16 = 1 << 4,
+    OGA_SAMPLE_COUNT_32 = 1 << 5,
+    OGA_SAMPLE_COUNT_64 = 1 << 6,
+    OGA_SAMPLE_COUNT_128 = 1 << 7
+} Oga_Sample_Count_Flag;
+
+//////
+// Device
+
+typedef enum Oga_Logical_Engine_Family_Flags {
+    OGA_LOGICAL_ENGINE_GRAPHICS = 1 << 0,
+    OGA_LOGICAL_ENGINE_COMPUTE = 1 << 1,
+    OGA_LOGICAL_ENGINE_TRANSFER = 1 << 2,
+    OGA_LOGICAL_ENGINE_PRESENT = 1 << 3,
+} Oga_Logical_Engine_Family_Flags;
+
+typedef struct Oga_Logical_Engine_Family_Info {
+    Oga_Logical_Engine_Family_Flags flags;
+    u32 logical_engine_capacity;
+} Oga_Logical_Engine_Family_Info;
+
+typedef struct Oga_Memory_Heap {
+    Oga_Memory_Property_Flag properties;
+    u64 size;
+} Oga_Memory_Heap;
+
+typedef enum Oga_Device_Kind {
+    OGA_DEVICE_DISCRETE,
+    OGA_DEVICE_INTEGRATED,
+    OGA_DEVICE_CPU, // Software implementations
+    OGA_DEVICE_OTHER,
+} Oga_Device_Kind;
+
+// todo(charlie) populate this with an exhaustive list. 
+typedef struct Oga_Device_Limits {
+    u64 max_shader_items_sets_per_stage;
+    
+    u64 max_fast_data_blocks_per_stage;
+    u64 max_large_data_blocks_per_stage;
+    u64 max_fast_images_per_stage;
+    u64 max_large_images_per_stage;
+    u64 max_samplers_per_stage;
+    
+    u64 max_fast_data_blocks_per_layout;
+    u64 max_large_data_blocks_per_layout;
+    u64 max_fast_images_per_layout;
+    u64 max_large_images_per_layout;
+    u64 max_samplers_per_layout;
+    
+    u64 max_memory_allocations;
+    u64 max_sampler_allocations;
+    
+    u64 max_image_dimension_1d;
+    u64 max_image_dimension_2d;
+    u64 max_image_dimension_3d;
+    
+    u64 max_fast_access_data_block_size;
+    
+    u64 max_vertex_layout_attributes;
+    u64 max_vertex_layout_bindings;
+    u64 max_vertex_layout_attribute_offset;
+    u64 max_vertex_layout_binding_stride;
+    
+    u64 max_fragment_stage_output_attachments;
+    
+    float32 max_sampler_anisotropy;
+    
+    u64 max_viewports;
+    u64 max_viewport_width;
+    u64 max_viewport_height;
+    
+    u64 max_framebuffer_width;
+    u64 max_framebuffer_height;
+    
+    u64 max_color_attachments;
+    
+    u64 min_memory_map_alignment;
+    
+    Oga_Sample_Count_Flag supported_sample_counts_framebuffer;
+    
+    Oga_Sample_Count_Flag supported_sample_counts_fast_image_float;
+    Oga_Sample_Count_Flag supported_sample_counts_large_image_float;
+    Oga_Sample_Count_Flag supported_sample_counts_fast_image_int;
+    Oga_Sample_Count_Flag supported_sample_counts_large_image_int;
+    
+    
+} Oga_Device_Limits;
+
+typedef u64 Oga_Device_Feature_Flag;
+
+#define OGA_DEVICE_FEATURE_GRAPHICS_TIMESTAMP (1 << 0)
+#define OGA_DEVICE_FEATURE_COMPUTE_TIMESTAMP (1 << 1)
+
+#define OGA_MAX_DEVICE_LOGICAL_ENGINE_FAMILIES 32
+#define OGA_MAX_DEVICE_LOGICAL_ENGINES_PER_FAMILY 32
+#define OGA_MAX_MEMORY_HEAPS_PER_DEVICE 32
+typedef struct Oga_Device {
+    void *id;
+    
+    Oga_Device_Kind kind;
+
+    // string
+    u8 device_name_data[256];
+    u64 device_name_length;
+    
+    string vendor_name;
+    u32 driver_version_raw;
+    
+    // string
+    u8 driver_version_data[128];
+    u64 driver_version_length;
+    
+    Oga_Device_Limits limits;
+
+    Oga_Logical_Engine_Family_Info logical_engine_family_infos[OGA_MAX_DEVICE_LOGICAL_ENGINE_FAMILIES];
+    u32 logical_engine_family_count;
+    
+    Oga_Format_Kind depth_format;
+    
+    Oga_Memory_Heap memory_heaps[OGA_MAX_MEMORY_HEAPS_PER_DEVICE];
+    u64 memory_heap_count;
+    u64 total_gpu_local_memory;
+    
+    Oga_Device_Feature_Flag features;
+
+} Oga_Device;
+
+typedef enum Oga_Device_Pick_Flag {
+    OGA_DEVICE_PICK_PREFER_DISCRETE = 1 << 0,
+    OGA_DEVICE_PICK_PREFER_INTEGRATED = 1 << 1,
+    OGA_DEVICE_PICK_PREFER_CPU = 1 << 2,
+    OGA_DEVICE_PICK_REQUIRE_DISCRETE = 1 << 3,
+    OGA_DEVICE_PICK_REQUIRE_INTEGRATED = 1 << 4,
+    OGA_DEVICE_PICK_REQUIRE_CPU = 1 << 5,
+} Oga_Device_Pick_Flag;
+
+u64 oga_query_devices(Oga_Device *buffer, u64 buffer_count);
+Oga_Device *oga_get_devices(Allocator a, u64 *count);
+
+typedef struct Oga_Pick_Device_Result {
+    bool passed;
+    Oga_Device device;
+    Oga_Device_Pick_Flag failed_pick_flags;
+    Oga_Device_Feature_Flag failed_required_features;
+    Oga_Device_Feature_Flag failed_preferred_features;
+} Oga_Pick_Device_Result;
+Oga_Pick_Device_Result oga_pick_device(Oga_Device_Pick_Flag pick_flags, Oga_Device_Feature_Flag required_features, Oga_Device_Feature_Flag preferred_features);
+
+//////////
+/// Oga Context
+
+
+typedef struct Oga_Logical_Engines_Create_Desc {
+    u32 count;
+    float32 priorities[OGA_MAX_DEVICE_LOGICAL_ENGINES_PER_FAMILY]; // normalized 0.0-1.0.
+} Oga_Logical_Engines_Create_Desc;
+
+
+typedef struct Oga_Context_Desc {
+    // Indices match to that of Oga_Device::logical_engine_family_infos.
+    // So the create logical_engines of family 0, you set the desc in logical_engine_create_descs[0].
+    // Leave descs uninitialized to make no logical_engines in that family.
+    Oga_Logical_Engines_Create_Desc logical_engine_create_descs[OGA_MAX_DEVICE_LOGICAL_ENGINE_FAMILIES];    
+    Oga_Device_Feature_Flag enabled_features;
+} Oga_Context_Desc;
+
+// Some hardware expose their engines, some don't.
+// So we deal with Logical Engines, which may or may not map directly to
+// hardware engines.
+// Equivalent to a vulkan Queue
+typedef struct Oga_Logical_Engine {
+    void *id;
+    u32 index;
+} Oga_Logical_Engine;
+
+typedef struct Oga_Logical_Engine_Group {
+    Oga_Logical_Engine logical_engines[OGA_MAX_DEVICE_LOGICAL_ENGINES_PER_FAMILY];
+    u64 logical_engine_count;
+} Oga_Logical_Engine_Group;
+
+typedef struct Oga_Context {
+    void *id;
+    Oga_Device device;
+    Oga_Logical_Engine_Group logical_engines_by_family[OGA_MAX_DEVICE_LOGICAL_ENGINE_FAMILIES];
+} Oga_Context;
+
+Oga_Result oga_init_context(Oga_Device target_device, Oga_Context_Desc desc, Oga_Context *context);
+void oga_uninit_context(Oga_Context *context);
+
+//////////
+/// Memory
+
+typedef void* Oga_Memory_Handle;
+
+typedef enum Oga_Allocator_Message {
+    OGA_ALLOCATOR_ALLOCATE,
+    OGA_ALLOCATOR_DEALLOCATE
+} Oga_Allocator_Message;
+
+typedef Oga_Memory_Handle (*Oga_Allocator_Proc_)(
+        Oga_Allocator_Message msg,
+        Oga_Memory_Handle mem,
+        u64 size,
+        Oga_Memory_Property_Flag props,
+        u64 flags
+    );
+typedef Oga_Allocator_Proc_ Oga_Allocator_Proc;
+
+// Allocator for video memory
+typedef struct Oga_Allocator {
+    void *data;
+    Oga_Allocator_Proc proc;
+} Oga_Allocator;
+
+Oga_Memory_Handle oga_allocate(Oga_Allocator a, u64 size, Oga_Memory_Property_Flag props, u64 flags);
+void oga_deallocate(Oga_Allocator a, Oga_Memory_Handle mem);
+
+Oga_Memory_Handle oga_default_allocator(Oga_Allocator_Message msg, Oga_Memory_Handle mem, u64 size, Oga_Memory_Property_Flag props, u64 flags);
+
+typedef enum Oga_Memory_View_Kind {
+    OGA_MEMORY_VIEW_KIND_SHADER_ITEM_DESCRIPTOR,
+    OGA_MEMORY_VIEW_KIND_VERTEX_LIST,
+    OGA_MEMORY_VIEW_KIND_INDEX_LIST,
+    OGA_MEMORY_VIEW_KIND_COPY_TASK,
+} Oga_Memory_View_Kind;
+
+typedef enum Oga_Memory_View_Flag {
+    OGA_MEMORY_VIEW_FLAG_COPY_DST = 1 << 0,
+    OGA_MEMORY_VIEW_FLAG_COPY_SRC = 1 << 1,
+} Oga_Memory_View_Flag;
+
+typedef enum Oga_Shader_Item_Descriptor_Kind {
+    OGA_SHADER_ITEM_DESCRIPTOR_KIND_DATA_BLOCK,
+    OGA_SHADER_ITEM_DESCRIPTOR_KIND_IMAGE1D,
+    OGA_SHADER_ITEM_DESCRIPTOR_KIND_IMAGE2D,
+    OGA_SHADER_ITEM_DESCRIPTOR_KIND_IMAGE3D,
+} Oga_Shader_Item_Descriptor_Kind;
+
+typedef enum Oga_Shader_Item_Descriptor_Flag {
+    OGA_SHADER_ITEM_DESCRIPTOR_FLAG_READ,
+    OGA_SHADER_ITEM_DESCRIPTOR_FLAG_WRITE,
+    
+    // When a shader item descriptor is flagged with large or write, it can have larger
+    // storage (or be written to) at the cost of memory access performance.
+    // see limits max_fast_access_xxxxx_size
+    OGA_SHADER_ITEM_DESCRIPTOR_FLAG_LARGE,
+} Oga_Shader_Item_Descriptor_Flag;
+
+typedef struct Oga_Shader_Item_Descriptor_Desc {
+    Oga_Shader_Item_Descriptor_Kind kind;
+    Oga_Shader_Item_Descriptor_Flag flags;
+    
+} Oga_Shader_Item_Descriptor_Desc;
+
+typedef struct Oga_Vertex_List_Desc  {
+    int _;  
+} Oga_Vertex_List_Desc;
+
+typedef struct Oga_Index_List_Desc  {
+    int _;  
+    
+} Oga_Index_List_Desc;
+
+typedef struct Oga_Copy_Task_Desc  {
+    int _;  
+    
+} Oga_Copy_Task_Desc;
+
+typedef struct Oga_Memory_View_Desc {
+    Oga_Memory_View_Kind kind;
+    Oga_Memory_View_Flag flags;
+    
+    Oga_Memory_Handle memory;
+    
+    union {
+        Oga_Shader_Item_Descriptor_Desc shader_item_descriptor;
+        Oga_Vertex_List_Desc vertex_list;
+        Oga_Index_List_Desc index_list;
+        Oga_Copy_Task_Desc copy_task;
+    } UNION;
+} Oga_Memory_View_Desc;
+
+//Oga_Result oga_make_memory_view(Oga_Context c, Oga_Memory_View_Desc desc);
+
+
+#ifdef OGA_IMPL_AUTO
+    #if (OS_FLAGS & OS_FLAG_WEB)
+        #define OGA_IMPL_WEBGPU
+    #elif (OS_FLAGS & OS_FLAG_WINDOWS)
+        #define OGA_IMPL_D3D12
+    #elif (OS_FLAGS & OS_FLAG_APPLE)
+        #define OGA_IMPL_METAL
+    #elif OS_FLAGS != 0
+        // If recognized OS, fallback to vulkan, because it's probably supported.
+        // todo(charlie) consoles
+        #define OGA_IMPL_VULKAN
+    #endif
+#endif // OGA_IMPL_HARDWARE_AUTO
+
+#ifdef OSTD_IMPL
+
+Oga_Pick_Device_Result oga_pick_device(Oga_Device_Pick_Flag pick_flags, Oga_Device_Feature_Flag required_features, Oga_Device_Feature_Flag preferred_features) {
+    
+    Oga_Device devices[32];
+    u64 device_count = oga_query_devices(devices, 32);
+    
+    s64 device_scores[32] = {0};
+    
+    Oga_Pick_Device_Result results[32] = {0};
+    
+    for (u64 i = 0; i < device_count; i += 1) {
+        Oga_Device device = devices[i];
+        s64 *pscore = &device_scores[i];
+        
+        results[i].device = device;
+        
+        if ((pick_flags & OGA_DEVICE_PICK_REQUIRE_DISCRETE) && device.kind != OGA_DEVICE_DISCRETE)  {
+            results[i].passed = false;
+            results[i].failed_pick_flags |= OGA_DEVICE_PICK_REQUIRE_DISCRETE;
+            continue;
+        }
+        if ((pick_flags & OGA_DEVICE_PICK_REQUIRE_INTEGRATED) && device.kind != OGA_DEVICE_INTEGRATED)  {
+            results[i].passed = false;
+            results[i].failed_pick_flags |= OGA_DEVICE_PICK_REQUIRE_INTEGRATED;
+            continue;
+        }
+        if ((pick_flags & OGA_DEVICE_PICK_REQUIRE_CPU) && device.kind != OGA_DEVICE_CPU)  {
+            results[i].passed = false;
+            results[i].failed_pick_flags |= OGA_DEVICE_PICK_REQUIRE_CPU;
+            continue;
+        }
+        
+        if ((required_features & device.features) != required_features) {
+            results[i].passed = false;
+            results[i].failed_required_features |= ((required_features & device.features) & required_features); 
+            continue;
+        }
+            
+        if ((pick_flags & OGA_DEVICE_PICK_PREFER_DISCRETE) && device.kind == OGA_DEVICE_DISCRETE) 
+            *pscore += 1000;
+        if ((pick_flags & OGA_DEVICE_PICK_PREFER_INTEGRATED) && device.kind == OGA_DEVICE_INTEGRATED) 
+            *pscore += 1000;
+        if ((pick_flags & OGA_DEVICE_PICK_PREFER_CPU) && device.kind == OGA_DEVICE_CPU) 
+            *pscore += 1000;
+        
+        u64 preferred_features_count = 0;
+        for (u64 f = 0; f < 64; f += 1) {
+            // Feature flag is preferred ?
+            if (preferred_features & (1 << f)) {
+                preferred_features_count += 1;
+            }
+        }
+        
+        if (preferred_features_count) {
+            s64 score_per_feature = 1000/preferred_features_count;
+            
+            for (u64 f = 0; f < 64; f += 1) {
+                // Feature flag is preferred ?
+                if (preferred_features & (1 << f)) {
+                    // Preferred feature flag is set on device ?
+                    if (device.features & (1 << f)) {
+                        *pscore += score_per_feature;
+                    } else {
+                        results[i].failed_preferred_features |= (1 << f);
+                    }
+                } 
+            }
+        } else {
+            *pscore += 1;
+        }
+        
+        results[i].passed = *pscore > 0;
+    }
+    
+    s64 max_score = 0;
+    u64 winner_index = 0;
+    for (u64 i = 0; i < device_count; i += 1) {
+        if (device_scores[i] > max_score) {
+            max_score = device_scores[i];
+            winner_index = i;
+        }
+    }
+    return results[winner_index];
+}
+
+#define VENDOR_ID_NVIDIA   0x10DE
+#define VENDOR_ID_AMD      0x1002
+#define VENDOR_ID_INTEL    0x8086
+#define VENDOR_ID_ARM      0x13B5
+#define VENDOR_ID_IMGTEC   0x1010
+#define VENDOR_ID_QUALCOMM 0x5143
+
+unit_local inline string _str_vendor_id(u32 id) {
+    switch (id) {
+        case VENDOR_ID_NVIDIA:   return RSTR(Nvidia);
+        case VENDOR_ID_AMD:      return RSTR(Amd);
+        case VENDOR_ID_INTEL:    return RSTR(Intel);
+        case VENDOR_ID_ARM:      return RSTR(Arm);
+        case VENDOR_ID_IMGTEC:   return RSTR(ImgTec);
+        case VENDOR_ID_QUALCOMM: return RSTR(Qualcomm);
+        default: return RSTR(<Unknown Vendor ID>);
+    }
+
+}
+
+unit_local u64 _format_driver_version(u32 vendor_id, u32 driver_version, u8 *buffer, u64 buffer_size) {
+    if (vendor_id == VENDOR_ID_NVIDIA) {
+        u32 major = (driver_version >> 22) & 0x3FF;
+        u32 minor = (driver_version >> 14) & 0xFF;
+        u32 patch = (driver_version >> 6) & 0xFF;
+        u32 build = driver_version & 0x3F;
+        return format_string(buffer, buffer_size, "%u.%u.%u build %u", major, minor, patch, build);
+    } else if (vendor_id == VENDOR_ID_NVIDIA) {
+        u32 major = (driver_version >> 14);
+        u32 minor = driver_version & 0x3FFF;
+        return format_string(buffer, buffer_size, "%u.%u", major, minor);
+    } else {
+        return format_string(buffer, buffer_size, "%u", driver_version);
+    }
+}
+
+inline string oga_format_str(Oga_Format_Kind f);
+
+#ifdef OGA_IMPL_VULKAN
+
+/////////////////////////////////////////////////////
+//////
+// :Vulkan
+//////
+/////////////////////////////////////////////////////
+
+#if COMPILER_FLAGS & COMPILER_FLAG_MSC
+    #pragma comment(lib, "vendors/vulkan-1.lib")
+#endif // COMPILER_FLAGS & COMPILER_FLAG_MSC
+
+#if (OS_FLAGS & (OS_FLAG_WINDOWS | OS_FLAG_LINUX | OS_FLAG_MACOS | OS_FLAG_IOS | OS_FLAG_ANDROID)) == 0
+    #error Vulkan is not supported on target platform
+#else
+
+/* Begin include: graphics_vulkan.h */
+
+#include <vulkan/vulkan.h>
+
+// For syntax highligthing
+#if 0
+// noconcat
+#include "../vendors/vulkan/vulkan.h"
+#endif
+
+
+
+// We manually include the vulkan-specific headers, otherwise vulkan.h will include windows.h
+#if OS_FLAGS & OS_FLAG_WINDOWS
+#include <vulkan/vulkan_win32.h>
+#elif OS_FLAGS & OS_FLAG_LINUX
+#include <vulkan/vulkan_xlib.h>
+#elif OS_FLAGS & OS_FLAG_MACOS
+#include <vulkan/vulkan_macos.h>
+#elif OS_FLAGS & OS_FLAG_IOS
+#include <vulkan/vulkan_ios.h>
+#elif OS_FLAGS & OS_FLAG_ANDROID
+#include <vulkan/vulkan_android.h>
+#else
+#error Vulkan is not supported on target platform
+#endif
+
+unit_local inline VkFormat _oga_to_vk_format(Oga_Format_Kind k) {
+    switch (k) {
+        case OGA_FORMAT_R8_UNORM:               return VK_FORMAT_R8_UNORM;
+        case OGA_FORMAT_R8_SNORM:               return VK_FORMAT_R8_SNORM;
+        case OGA_FORMAT_R8_UINT:                return VK_FORMAT_R8_UINT;
+        case OGA_FORMAT_R8_SINT:                return VK_FORMAT_R8_SINT;
+        case OGA_FORMAT_R8G8_UNORM:             return VK_FORMAT_R8G8_UNORM;
+        case OGA_FORMAT_R8G8_SNORM:             return VK_FORMAT_R8G8_SNORM;
+        case OGA_FORMAT_R8G8_UINT:              return VK_FORMAT_R8G8_UINT;
+        case OGA_FORMAT_R8G8_SINT:              return VK_FORMAT_R8G8_SINT;
+        case OGA_FORMAT_R8G8B8A8_UNORM:         return VK_FORMAT_R8G8B8A8_UNORM;
+        case OGA_FORMAT_R8G8B8A8_SNORM:         return VK_FORMAT_R8G8B8A8_SNORM;
+        case OGA_FORMAT_R8G8B8A8_UINT:          return VK_FORMAT_R8G8B8A8_UINT;
+        case OGA_FORMAT_R8G8B8A8_SINT:          return VK_FORMAT_R8G8B8A8_SINT;
+        case OGA_FORMAT_R8G8B8A8_SRGB:          return VK_FORMAT_R8G8B8A8_SRGB;
+        case OGA_FORMAT_B8G8R8A8_UNORM:         return VK_FORMAT_B8G8R8A8_UNORM;
+        case OGA_FORMAT_B8G8R8A8_SNORM:         return VK_FORMAT_B8G8R8A8_SNORM;
+        case OGA_FORMAT_B8G8R8A8_UINT:          return VK_FORMAT_B8G8R8A8_UINT;
+        case OGA_FORMAT_B8G8R8A8_SINT:          return VK_FORMAT_B8G8R8A8_SINT;
+        case OGA_FORMAT_B8G8R8A8_SRGB:          return VK_FORMAT_B8G8R8A8_SRGB;
+        case OGA_FORMAT_R16G16B16A16_SFLOAT:    return VK_FORMAT_R16G16B16A16_SFLOAT;
+        case OGA_FORMAT_R32G32B32A32_SFLOAT:    return VK_FORMAT_R32G32B32A32_SFLOAT;
+        case OGA_FORMAT_DEPTH32_SFLOAT:         return VK_FORMAT_D32_SFLOAT;
+        case OGA_FORMAT_DEPTH32_SFLOAT_S8_UINT: return VK_FORMAT_D32_SFLOAT_S8_UINT;
+        case OGA_FORMAT_DEPTH24_UNORM_S8_UINT:  return VK_FORMAT_D24_UNORM_S8_UINT;
+        case OGA_FORMAT_DEPTH16_UNORM:          return VK_FORMAT_D16_UNORM;
+        
+        default:
+        return (VkFormat)0;
+    }
+    return (VkFormat)0;
+}
+unit_local inline Oga_Format_Kind _vk_to_oga_format(VkFormat k) {
+    switch ((s64)k) {
+        case VK_FORMAT_R8_UNORM:            return OGA_FORMAT_R8_UNORM;
+        case VK_FORMAT_R8_SNORM:            return OGA_FORMAT_R8_SNORM;
+        case VK_FORMAT_R8_UINT:             return OGA_FORMAT_R8_UINT;
+        case VK_FORMAT_R8_SINT:             return OGA_FORMAT_R8_SINT;
+        case VK_FORMAT_R8G8_UNORM:          return OGA_FORMAT_R8G8_UNORM;
+        case VK_FORMAT_R8G8_SNORM:          return OGA_FORMAT_R8G8_SNORM;
+        case VK_FORMAT_R8G8_UINT:           return OGA_FORMAT_R8G8_UINT;
+        case VK_FORMAT_R8G8_SINT:           return OGA_FORMAT_R8G8_SINT;
+        case VK_FORMAT_R8G8B8A8_UNORM:      return OGA_FORMAT_R8G8B8A8_UNORM;
+        case VK_FORMAT_R8G8B8A8_SNORM:      return OGA_FORMAT_R8G8B8A8_SNORM;
+        case VK_FORMAT_R8G8B8A8_UINT:       return OGA_FORMAT_R8G8B8A8_UINT;
+        case VK_FORMAT_R8G8B8A8_SINT:       return OGA_FORMAT_R8G8B8A8_SINT;
+        case VK_FORMAT_R8G8B8A8_SRGB:       return OGA_FORMAT_R8G8B8A8_SRGB;
+        case VK_FORMAT_B8G8R8A8_UNORM:      return OGA_FORMAT_B8G8R8A8_UNORM;
+        case VK_FORMAT_B8G8R8A8_SNORM:      return OGA_FORMAT_B8G8R8A8_SNORM;
+        case VK_FORMAT_B8G8R8A8_UINT:       return OGA_FORMAT_B8G8R8A8_UINT;
+        case VK_FORMAT_B8G8R8A8_SINT:       return OGA_FORMAT_B8G8R8A8_SINT;
+        case VK_FORMAT_B8G8R8A8_SRGB:       return OGA_FORMAT_B8G8R8A8_SRGB;
+        case VK_FORMAT_R16G16B16A16_SFLOAT: return OGA_FORMAT_R16G16B16A16_SFLOAT;
+        case VK_FORMAT_R32G32B32A32_SFLOAT: return OGA_FORMAT_R32G32B32A32_SFLOAT;
+        case VK_FORMAT_D32_SFLOAT:          return OGA_FORMAT_DEPTH32_SFLOAT;
+        case VK_FORMAT_D32_SFLOAT_S8_UINT:  return OGA_FORMAT_DEPTH32_SFLOAT_S8_UINT;
+        case VK_FORMAT_D24_UNORM_S8_UINT:   return OGA_FORMAT_DEPTH24_UNORM_S8_UINT;
+        case VK_FORMAT_D16_UNORM:           return OGA_FORMAT_DEPTH16_UNORM;
+        
+        default:
+        return (Oga_Format_Kind)0;
+    }
+    return (Oga_Format_Kind)0;
+}
+
+
+unit_local inline string _str_vk_result(VkResult result) {
+    switch ((s64)result) {
+        case VK_SUCCESS:                                            return RSTR(VK_SUCCESS);
+        case VK_NOT_READY:                                          return RSTR(VK_NOT_READY);
+        case VK_TIMEOUT:                                            return RSTR(VK_TIMEOUT);
+        case VK_EVENT_SET:                                          return RSTR(VK_EVENT_SET);
+        case VK_EVENT_RESET:                                        return RSTR(VK_EVENT_RESET);
+        case VK_INCOMPLETE:                                         return RSTR(VK_INCOMPLETE);
+        case VK_ERROR_OUT_OF_HOST_MEMORY:                           return RSTR(VK_ERROR_OUT_OF_HOST_MEMORY);
+        case VK_ERROR_OUT_OF_DEVICE_MEMORY:                         return RSTR(VK_ERROR_OUT_OF_DEVICE_MEMORY);
+        case VK_ERROR_INITIALIZATION_FAILED:                        return RSTR(VK_ERROR_INITIALIZATION_FAILED);
+        case VK_ERROR_DEVICE_LOST:                                  return RSTR(VK_ERROR_DEVICE_LOST);
+        case VK_ERROR_MEMORY_MAP_FAILED:                            return RSTR(VK_ERROR_MEMORY_MAP_FAILED);
+        case VK_ERROR_LAYER_NOT_PRESENT:                            return RSTR(VK_ERROR_LAYER_NOT_PRESENT);
+        case VK_ERROR_EXTENSION_NOT_PRESENT:                        return RSTR(VK_ERROR_EXTENSION_NOT_PRESENT);
+        case VK_ERROR_FEATURE_NOT_PRESENT:                          return RSTR(VK_ERROR_FEATURE_NOT_PRESENT);
+        case VK_ERROR_INCOMPATIBLE_DRIVER:                          return RSTR(VK_ERROR_INCOMPATIBLE_DRIVER);
+        case VK_ERROR_TOO_MANY_OBJECTS:                             return RSTR(VK_ERROR_TOO_MANY_OBJECTS);
+        case VK_ERROR_FORMAT_NOT_SUPPORTED:                         return RSTR(VK_ERROR_FORMAT_NOT_SUPPORTED);
+        case VK_ERROR_FRAGMENTED_POOL:                              return RSTR(VK_ERROR_FRAGMENTED_POOL);
+        case VK_ERROR_UNKNOWN:                                      return RSTR(VK_ERROR_UNKNOWN);
+        case VK_ERROR_OUT_OF_POOL_MEMORY:                           return RSTR(VK_ERROR_OUT_OF_POOL_MEMORY);
+        case VK_ERROR_INVALID_EXTERNAL_HANDLE:                      return RSTR(VK_ERROR_INVALID_EXTERNAL_HANDLE);
+        case VK_ERROR_FRAGMENTATION:                                return RSTR(VK_ERROR_FRAGMENTATION);
+        case VK_ERROR_INVALID_OPAQUE_CAPTURE_ADDRESS:               return RSTR(VK_ERROR_INVALID_OPAQUE_CAPTURE_ADDRESS);
+        case VK_PIPELINE_COMPILE_REQUIRED:                          return RSTR(VK_PIPELINE_COMPILE_REQUIRED);
+        case VK_ERROR_SURFACE_LOST_KHR:                             return RSTR(VK_ERROR_SURFACE_LOST_KHR);
+        case VK_ERROR_NATIVE_WINDOW_IN_USE_KHR:                     return RSTR(VK_ERROR_NATIVE_WINDOW_IN_USE_KHR);
+        case VK_SUBOPTIMAL_KHR:                                     return RSTR(VK_SUBOPTIMAL_KHR);
+        case VK_ERROR_OUT_OF_DATE_KHR:                              return RSTR(VK_ERROR_OUT_OF_DATE_KHR);
+        case VK_ERROR_INCOMPATIBLE_DISPLAY_KHR:                     return RSTR(VK_ERROR_INCOMPATIBLE_DISPLAY_KHR);
+        case VK_ERROR_VALIDATION_FAILED_EXT:                        return RSTR(VK_ERROR_VALIDATION_FAILED_EXT);
+        case VK_ERROR_INVALID_SHADER_NV:                            return RSTR(VK_ERROR_INVALID_SHADER_NV);
+        case VK_ERROR_INVALID_DRM_FORMAT_MODIFIER_PLANE_LAYOUT_EXT: return RSTR(VK_ERROR_INVALID_DRM_FORMAT_MODIFIER_PLANE_LAYOUT_EXT);
+        case VK_ERROR_FULL_SCREEN_EXCLUSIVE_MODE_LOST_EXT:          return RSTR(VK_ERROR_FULL_SCREEN_EXCLUSIVE_MODE_LOST_EXT);
+        case VK_THREAD_IDLE_KHR:                                    return RSTR(VK_THREAD_IDLE_KHR);
+        case VK_THREAD_DONE_KHR:                                    return RSTR(VK_THREAD_DONE_KHR);
+        case VK_OPERATION_DEFERRED_KHR:                             return RSTR(VK_OPERATION_DEFERRED_KHR);
+        case VK_OPERATION_NOT_DEFERRED_KHR:                         return RSTR(VK_OPERATION_NOT_DEFERRED_KHR);
+        
+        case VK_RESULT_MAX_ENUM:
+        default: return STR("<>");
+    }
+    return STR("<>");
+}
+
+#define _vk_assert(expr) do { VkResult _res = expr; string _res_str = _str_vk_result(_res); assertmsgs(expr == VK_SUCCESS, tprint("Vulkan call %s failed: %s. If you see this, you're either doing something very wrong, or there is an internal error in Oga.", STR(#expr), _res_str)); } while(0)
+
+
+unit_local VkDebugUtilsMessengerEXT _vk_messenger;
+
+unit_local VkBool32 _vk_debug_callback(
+    VkDebugUtilsMessageSeverityFlagBitsEXT           messageSeverity,
+    VkDebugUtilsMessageTypeFlagsEXT                  messageTypes,
+    const VkDebugUtilsMessengerCallbackDataEXT*      pCallbackData,
+    void*                                            pUserData) {
+    
+    (void)messageTypes; (void)pUserData;
+    string sev;
+    
+    if (messageSeverity == VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT)
+        sev = RSTR("WARNING");
+    else if (messageSeverity == VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT)
+        sev = RSTR("ERROR");
+    else
+        sev = RSTR("INFO");
+    
+    log(0, "\n-----------------VK VALIDATION MESSAGE-----------------");
+    log(0, "Severity: %s", sev);
+    if (pCallbackData->pMessageIdName)
+        log(0, "- Message ID: %s", STR(pCallbackData->pMessageIdName));
+    if (pCallbackData->pMessage)
+        log(0, "- Message: %s", STR(pCallbackData->pMessage));
+        
+    return 0;
+}
+
+unit_local inline bool _vk_select_format(VkFormat *formats, u32 num_formats, VkImageTiling tiling, VkFormatFeatureFlags features, VkPhysicalDevice vk_device, VkFormat *result) {
+    for (u32 i = 0; i < num_formats; i += 1) {
+        VkFormat format = formats[i];
+        
+        VkFormatProperties props;
+        vkGetPhysicalDeviceFormatProperties(vk_device, format, &props);
+        
+        if (tiling == VK_IMAGE_TILING_LINEAR && (features & props.linearTilingFeatures) == features) {
+            *result = format;
+            return true;
+        }
+        if (tiling == VK_IMAGE_TILING_OPTIMAL && (features & props.optimalTilingFeatures) == features) {
+            *result = format;
+            return true;
+        }
+    }
+    
+    return false;
+}
+
+unit_local inline VkInstance _vk_instance(void) {
+    local_persist VkInstance instance = 0;
+    
+    if (!instance) {
+        
+        VkApplicationInfo app_info = (VkApplicationInfo){0};
+        app_info.sType = VK_STRUCTURE_TYPE_APPLICATION_INFO;
+        app_info.pApplicationName = "Ostd App";
+        app_info.applicationVersion = VK_MAKE_VERSION(1, 0, 0);
+        app_info.pEngineName = "Oga";
+        app_info.engineVersion = VK_MAKE_VERSION(1, 0, 0);
+        app_info.apiVersion = VK_API_VERSION_1_0;
+    
+        VkInstanceCreateInfo create_info = (VkInstanceCreateInfo){0};
+        create_info.sType = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO;
+        create_info.pApplicationInfo = &app_info;
+        
+#if OS_FLAGS & OS_FLAG_WINDOWS
+        const char *required_extensions[] = {
+            
+#ifdef DEBUG
+            VK_EXT_DEBUG_UTILS_EXTENSION_NAME,
+#endif // _DEBUG
+            VK_KHR_SURFACE_EXTENSION_NAME,
+            VK_KHR_WIN32_SURFACE_EXTENSION_NAME
+        };
+#elif OS_FLAGS & OS_FLAG_LINUX
+    // Depending on your display server, pick one:
+    static const char* required_extensions[] = {
+#ifdef DEBUG
+        VK_EXT_DEBUG_UTILS_EXTENSION_NAME,
+#endif
+        VK_KHR_SURFACE_EXTENSION_NAME,
+        VK_KHR_XLIB_SURFACE_EXTENSION_NAME
+    };
+#elif OS_FLAGS & OS_FLAG_MACOS
+    // MoltenVK-specific extension for macOS
+    static const char* required_extensions[] = {
+#ifdef DEBUG
+        VK_EXT_DEBUG_UTILS_EXTENSION_NAME,
+#endif
+        VK_KHR_SURFACE_EXTENSION_NAME,
+        "VK_MVK_macos_surface",
+        "VK_KHR_portability_enumeration"
+    };
+    create_info.flags |= VK_INSTANCE_CREATE_ENUMERATE_PORTABILITY_BIT_KHR;
+#elif OS_FLAGS & OS_FLAG_IOS
+    // MoltenVK-specific extension for iOS
+    static const char* required_extensions[] = {
+#ifdef DEBUG
+        VK_EXT_DEBUG_UTILS_EXTENSION_NAME,
+#endif
+        VK_KHR_SURFACE_EXTENSION_NAME,
+        "VK_MVK_ios_surface",
+        "VK_KHR_portability_enumeration"
+    };
+    create_info.flags |= VK_INSTANCE_CREATE_ENUMERATE_PORTABILITY_BIT_KHR;
+#elif OS_FLAGS & OS_FLAG_ANDROID
+    static const char* required_extensions[] = {
+#ifdef DEBUG
+        VK_EXT_DEBUG_UTILS_EXTENSION_NAME,
+#endif
+        VK_KHR_SURFACE_EXTENSION_NAME,
+        VK_KHR_ANDROID_SURFACE_EXTENSION_NAME
+    };
+
+#else
+    #error VK instance extension query not set up for this OS
+#endif
+        u64 num_required_extensions = sizeof(required_extensions) / sizeof(char*);
+        
+        log(0, "Looking for extensions:");
+        for (u64 i = 0; i < num_required_extensions; i += 1) {
+            log(0, "\t%s", STR(required_extensions[i]));
+        }
+        
+        u32 num_available_extensions;
+        _vk_assert(vkEnumerateInstanceExtensionProperties(0, &num_available_extensions, 0));
+        VkExtensionProperties *available_extensions = NewBuffer(get_temp(), VkExtensionProperties, num_available_extensions);
+        memset(available_extensions, 0, num_available_extensions*sizeof(VkExtensionProperties));
+        _vk_assert(vkEnumerateInstanceExtensionProperties(0, &num_available_extensions, available_extensions));
+        bool any_missing = false;
+        for (u64 i = 0; i < num_required_extensions; i += 1) {
+            const char *required = required_extensions[i];
+            
+            bool match = false;
+            for (u64 j = 0; j < num_available_extensions; j += 1) {
+                const char *available = available_extensions[j].extensionName;
+                if (strings_match(STR(required), STR(available))) {
+                    match = true;
+                    break;
+                }
+            }
+            
+            if (match == false) {
+                any_missing = true;
+                log(0, "Missing required vulkan extension '%s'", STR(required));
+            } else {
+                log(0, "Found '%s'..", STR(required));
+            }
+        }
+        
+        assertmsg(!any_missing, "Basic vulkan extensions were missing, cannot proceed. Make sure you have a proper vulkan SDK installed.");
+        
+        create_info.ppEnabledExtensionNames = required_extensions;
+        create_info.enabledExtensionCount = (u32)num_required_extensions;
+        
+#ifdef DEBUG
+        const char *wanted_layers[] = {"VK_LAYER_KHRONOS_validation"};
+        u32 num_wanted_layers = (u64)(sizeof(wanted_layers)/sizeof(char*));
+        
+        u32 num_available_layers;
+        _vk_assert(vkEnumerateInstanceLayerProperties(&num_available_layers, 0));
+        
+        VkLayerProperties *available_layers = NewBuffer(get_temp(), VkLayerProperties, num_available_layers);
+        _vk_assert(vkEnumerateInstanceLayerProperties(&num_available_layers, available_layers));
+        
+        const char *final_layers[32];
+        u32 num_final_layers = 0;
+        
+        any_missing = false;
+        for (u64 i = 0; i < num_wanted_layers; i += 1) {
+            const char *wanted = wanted_layers[i];
+            
+            bool match = false;
+            for (u64 j = 0; j < num_available_layers; j += 1) {
+                const char *available = available_layers[j].layerName;
+                if (strings_match(STR(wanted), STR(available))) {
+                    match = true;
+                    break;
+                }
+            }
+            
+            if (match == false) {
+                any_missing = true;
+                log(0, "Missing wanted vulkan debug layer '%s'", STR(wanted));
+            } else {
+                final_layers[num_final_layers++] = wanted;
+                log(0, "Found validation layer %s", STR(wanted));
+            }
+        }
+    
+        create_info.enabledLayerCount = num_final_layers;
+        create_info.ppEnabledLayerNames = final_layers;
+#else
+        create_info.enabledLayerCount = 0;
+#endif
+        
+        _vk_assert(vkCreateInstance(&create_info, 0, &instance));
+        
+#if DEBUG
+        VkDebugUtilsMessengerCreateInfoEXT debug_create_info = (VkDebugUtilsMessengerCreateInfoEXT){0};
+        debug_create_info.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_MESSENGER_CREATE_INFO_EXT;
+        
+        debug_create_info.messageSeverity = 
+            VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT |
+            VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT;
+        
+        debug_create_info.messageType = 
+            VK_DEBUG_UTILS_MESSAGE_TYPE_GENERAL_BIT_EXT |
+            VK_DEBUG_UTILS_MESSAGE_TYPE_VALIDATION_BIT_EXT | 
+            VK_DEBUG_UTILS_MESSAGE_TYPE_PERFORMANCE_BIT_EXT;
+            
+        debug_create_info.pfnUserCallback = _vk_debug_callback;
+        
+        PFN_vkCreateDebugUtilsMessengerEXT _vkCreateDebugUtilsMessengerEXT  = (PFN_vkCreateDebugUtilsMessengerEXT)(void*)vkGetInstanceProcAddr(_vk_instance(), "vkCreateDebugUtilsMessengerEXT");
+        
+        if (_vkCreateDebugUtilsMessengerEXT(_vk_instance(), &debug_create_info, 0, &_vk_messenger) != VK_SUCCESS) {
+            log(0, "Failed creating vulkan debug messenger");
+        }
+#endif // DEBUG
+    }
+    
+    
+    return instance;
+}
+
+
+
+unit_local VkResult vkCreateSurfaceKHR(Surface_Handle h, VkSurfaceKHR *result) {
+#if OS_FLAGS & OS_FLAG_WINDOWS            
+    VkWin32SurfaceCreateInfoKHR create_info = (VkWin32SurfaceCreateInfoKHR){0};
+    create_info.sType = VK_STRUCTURE_TYPE_WIN32_SURFACE_CREATE_INFO_KHR;
+    create_info.hwnd = (HWND)h;
+    create_info.hinstance = GetModuleHandleW(0);
+    return vkCreateWin32SurfaceKHR(_vk_instance(), &create_info, 0, result);
+#elif OS_FLAGS & OS_FLAG_LINUX
+    VkXlibSurfaceCreateInfoKHR create_info = (VkXlibSurfaceCreateInfoKHR){0};
+    create_info.sType = VK_STRUCTURE_TYPE_XLIB_SURFACE_CREATE_INFO_KHR;
+    create_info.window = (Window)h;
+    create_info.dpy = ???;
+    return vkCreateXlibSurfaceKHR(_vk_instance(), &create_info, 0, result);
+#elif OS_FLAGS & OS_FLAG_MACOS
+    VkMacOSSurfaceCreateInfoMVK create_info = (VkMacOSSurfaceCreateInfoMVK){0};
+    create_info.sType = VK_STRUCTURE_TYPE_MACOS_SURFACE_CREATE_INFO_MVK;
+    create_info.pView = h;
+    return vkCreateMacOSSurfaceMVK(_vk_instance(), &create_info, 0, result);
+#elif OS_FLAGS & OS_FLAG_IOS
+    VkIOSSurfaceCreateInfoMVK create_info = (VkIOSSurfaceCreateInfoMVK){0};
+    create_info.sType = VK_STRUCTURE_TYPE_MACOS_SURFACE_CREATE_INFO_MVK;
+    create_info.pView = h;
+    return vkCreateIOSSurfaceMVK(_vk_instance(), &create_info, 0, result);
+#elif OS_FLAGS & OS_FLAG_ANDROID
+    VkAndroidSurfaceCreateInfoKHR create_info = (VkAndroidSurfaceCreateInfoKHR){0};
+    create_info.sType = VK_STRUCTURE_TYPE_MACOS_SURFACE_CREATE_INFO_MVK;
+    create_info.window = (ANativeWindow*)h;
+    return vkCreateAndroidSurfaceKHR(_vk_instance(), &create_info, 0, result);
+#else
+    #error VK surface creation not implemented for this os
+#endif
+}
+
+u64 oga_query_devices(Oga_Device *buffer, u64 buffer_count) {
+    u32 device_count;
+    _vk_assert(vkEnumeratePhysicalDevices(_vk_instance(), &device_count,  0));
+    
+    if (buffer) {
+        memset(buffer, 0, buffer_count*sizeof(Oga_Device));
+        VkPhysicalDevice vk_devices[256];
+        _vk_assert(vkEnumeratePhysicalDevices(_vk_instance(), &device_count,  vk_devices));
+        
+        for (u32 i = 0; i < min(device_count, (u32)buffer_count); i += 1) {
+            Oga_Device *device = buffer + i;
+            VkPhysicalDevice vk_device = vk_devices[i];
+        
+        
+            ////
+            // Yoink info
+            
+            VkPhysicalDeviceProperties props;
+            VkPhysicalDeviceMemoryProperties mem_props;
+            VkPhysicalDeviceFeatures features;
+        
+            vkGetPhysicalDeviceProperties(vk_device, &props);
+            vkGetPhysicalDeviceMemoryProperties(vk_device, &mem_props);
+            vkGetPhysicalDeviceFeatures(vk_device, &features);
+            
+            u32 ext_count;
+            vkEnumerateDeviceExtensionProperties(vk_device, 0, &ext_count, 0);
+            VkExtensionProperties *ext_props = NewBuffer(get_temp(), VkExtensionProperties, ext_count);
+            vkEnumerateDeviceExtensionProperties(vk_device, 0, &ext_count, ext_props);
+            
+            u32 logical_engine_family_count;
+            vkGetPhysicalDeviceQueueFamilyProperties(vk_device, &logical_engine_family_count, 0);
+            VkQueueFamilyProperties *logical_engine_family_props = NewBuffer(get_temp(), VkQueueFamilyProperties, logical_engine_family_count);
+            vkGetPhysicalDeviceQueueFamilyProperties(vk_device, &logical_engine_family_count, logical_engine_family_props);
+            
+            
+            /////
+            // Copy over info into our API
+            
+            ///
+            // Kind
+            if (props.deviceType == VK_PHYSICAL_DEVICE_TYPE_INTEGRATED_GPU)
+                device->kind = OGA_DEVICE_INTEGRATED;
+            else if (props.deviceType == VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU)
+                device->kind = OGA_DEVICE_DISCRETE;
+            else if (props.deviceType == VK_PHYSICAL_DEVICE_TYPE_CPU)
+                device->kind = OGA_DEVICE_CPU;
+            ///
+            // Stuff
+            memcpy(device->device_name_data, props.deviceName, min(sizeof(device->device_name_data), sizeof(props.deviceName)));
+            device->device_name_length = c_style_strlen((const char*)device->device_name_data);
+            device->vendor_name = _str_vendor_id(props.vendorID);
+            device->driver_version_raw = props.driverVersion;
+            device->driver_version_length = _format_driver_version(props.vendorID, props.driverVersion, device->driver_version_data, sizeof(device->driver_version_data));
+           
+            
+            ///
+            // Logical Engine flags
+            
+            // note(charlie) annoyingly, we need an existing surface to look for
+            // surface support in logical_engines. So, we just make a temporary invisible
+            // surface and then delete it when done.
+#if OS_FLAGS & OS_FLAG_HAS_WINDOW_SYSTEM
+            Surface_Desc desc = DEFAULT(Surface_Desc);
+            desc.width = 1;
+            desc.height = 1;
+            desc.flags = SURFACE_FLAG_HIDDEN;
+            Surface_Handle temp_sys_surface = sys_make_surface(desc);
+#else
+            Surface_Handle temp_sys_surface = sys_get_surface();
+#endif
+            
+            VkSurfaceKHR temp_vk_surface;
+            _vk_assert(vkCreateSurfaceKHR(temp_sys_surface, &temp_vk_surface));
+            
+            device->logical_engine_family_count = logical_engine_family_count;
+            for (u32 j = 0; j < logical_engine_family_count; j += 1) {
+                Oga_Logical_Engine_Family_Info *info = &device->logical_engine_family_infos[j];
+                VkQueueFamilyProperties family_props = logical_engine_family_props[j];
+            
+                VkBool32 val;
+                _vk_assert(vkGetPhysicalDeviceSurfaceSupportKHR(vk_device, j, temp_vk_surface, &val));
+                if (val) info->flags |= OGA_LOGICAL_ENGINE_PRESENT;
+                
+                info->logical_engine_capacity = family_props.queueCount;
+                
+                if (family_props.queueFlags & VK_QUEUE_GRAPHICS_BIT)
+                    info->flags |= OGA_LOGICAL_ENGINE_GRAPHICS;
+                if (family_props.queueFlags & VK_QUEUE_COMPUTE_BIT)
+                    info->flags |= OGA_LOGICAL_ENGINE_COMPUTE;
+                if (family_props.queueFlags & VK_QUEUE_TRANSFER_BIT)
+                    info->flags |= OGA_LOGICAL_ENGINE_TRANSFER;
+            }
+            
+            vkDestroySurfaceKHR(_vk_instance(), temp_vk_surface, 0);
+
+#if OS_FLAGS & OS_FLAG_HAS_WINDOW_SYSTEM
+            surface_close(temp_sys_surface);
+#endif
+
+            ///
+            // Depth format
+        
+            VkFormat depth_formats[] =  {
+                VK_FORMAT_D32_SFLOAT,
+                VK_FORMAT_D32_SFLOAT_S8_UINT,
+                VK_FORMAT_D24_UNORM_S8_UINT,
+                VK_FORMAT_D16_UNORM
+            };
+            
+            VkFormat vk_depth_format;
+            bool ok = _vk_select_format(depth_formats, sizeof(depth_formats)/sizeof(VkFormat), VK_IMAGE_TILING_OPTIMAL, VK_FORMAT_FEATURE_DEPTH_STENCIL_ATTACHMENT_BIT, vk_device, &vk_depth_format);
+            
+            if (!ok) {
+                log(0, ("WARNING: Could not find a supported depth format on this device."));
+                vk_depth_format = VK_FORMAT_D32_SFLOAT;
+            }
+            
+            device->depth_format = _vk_to_oga_format(vk_depth_format);
+            
+            /////
+            // Memory heaps
+            
+            for (u32 j = 0; j < mem_props.memoryHeapCount; j += 1) {
+                device->memory_heaps[j].size = (u64)mem_props.memoryHeaps[j].size;
+            }
+            device->memory_heap_count = mem_props.memoryHeapCount;
+            
+            for (u32 j = 0; j < mem_props.memoryTypeCount; j += 1) {
+                VkMemoryType type = mem_props.memoryTypes[j];
+                Oga_Memory_Heap *heap = &device->memory_heaps[type.heapIndex];
+                
+                
+                
+                if (type.propertyFlags & VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT)
+                    heap->properties |= OGA_MEMORY_PROPERTY_GPU_LOCAL;
+                if (type.propertyFlags & VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT)
+                    heap->properties |= OGA_MEMORY_PROPERTY_GPU_TO_CPU_MAPPABLE;
+                if (type.propertyFlags & VK_MEMORY_PROPERTY_HOST_COHERENT_BIT)
+                    heap->properties |= OGA_MEMORY_PROPERTY_GPU_TO_CPU_REFLECTED;
+                if (type.propertyFlags & VK_MEMORY_PROPERTY_HOST_CACHED_BIT)
+                    heap->properties |= OGA_MEMORY_PROPERTY_GPU_TO_CPU_CACHED;
+            }
+            
+            for (u32 j = 0; j < device->memory_heap_count; j += 1) {
+                if (device->memory_heaps[j].properties & OGA_MEMORY_PROPERTY_GPU_LOCAL)
+                    device->total_gpu_local_memory += device->memory_heaps[j].size;
+            }
+            
+            
+            if (props.limits.timestampComputeAndGraphics) {
+                device->features |= (OGA_DEVICE_FEATURE_GRAPHICS_TIMESTAMP |
+                                     OGA_DEVICE_FEATURE_COMPUTE_TIMESTAMP);
+            }
+            
+            device->limits.max_shader_items_sets_per_stage = props.limits.maxPerStageResources;
+            device->limits.max_fast_data_blocks_per_stage = props.limits.maxPerStageDescriptorUniformBuffers;
+            device->limits.max_large_data_blocks_per_stage = props.limits.maxPerStageDescriptorStorageBuffers;
+            device->limits.max_fast_images_per_stage = props.limits.maxPerStageDescriptorSampledImages;
+            device->limits.max_large_images_per_stage = props.limits.maxPerStageDescriptorStorageImages;
+            device->limits.max_samplers_per_stage = props.limits.maxPerStageDescriptorSamplers;
+            device->limits.max_fast_data_blocks_per_layout = props.limits.maxDescriptorSetUniformBuffers;
+            device->limits.max_large_data_blocks_per_layout = props.limits.maxDescriptorSetStorageBuffers;
+            device->limits.max_fast_images_per_layout = props.limits.maxDescriptorSetSampledImages;
+            device->limits.max_large_images_per_layout = props.limits.maxDescriptorSetStorageImages;
+            device->limits.max_samplers_per_layout = props.limits.maxDescriptorSetSamplers;
+            device->limits.max_memory_allocations = props.limits.maxMemoryAllocationCount;
+            device->limits.max_sampler_allocations = props.limits.maxSamplerAllocationCount;
+            device->limits.max_image_dimension_1d = props.limits.maxImageDimension1D;
+            device->limits.max_image_dimension_2d = props.limits.maxImageDimension2D;
+            device->limits.max_image_dimension_3d = props.limits.maxImageDimension3D;
+            device->limits.max_fast_access_data_block_size = props.limits.maxUniformBufferRange;
+            device->limits.max_vertex_layout_attributes = props.limits.maxVertexInputAttributes;
+            device->limits.max_vertex_layout_bindings = props.limits.maxVertexInputBindings;
+            device->limits.max_vertex_layout_attribute_offset = props.limits.maxVertexInputAttributeOffset;
+            device->limits.max_vertex_layout_binding_stride = props.limits.maxVertexInputBindingStride;
+            device->limits.max_fragment_stage_output_attachments = props.limits.maxFragmentOutputAttachments;
+            device->limits.max_sampler_anisotropy = props.limits.maxSamplerAnisotropy;
+            device->limits.max_viewports = props.limits.maxViewports;
+            device->limits.max_viewport_width = props.limits.maxViewportDimensions[0];
+            device->limits.max_viewport_height = props.limits.maxViewportDimensions[1];
+            device->limits.max_framebuffer_width = props.limits.maxFramebufferWidth;
+            device->limits.max_framebuffer_height = props.limits.maxFramebufferHeight;
+            device->limits.max_color_attachments = props.limits.maxColorAttachments;
+            device->limits.min_memory_map_alignment = props.limits.minMemoryMapAlignment;
+            for (u64 f = 1; f < VK_SAMPLE_COUNT_FLAG_BITS_MAX_ENUM; f = f << 1)
+                if (props.limits.framebufferColorSampleCounts & f) device->limits.supported_sample_counts_framebuffer |= f;
+            for (u64 f = 1; f < VK_SAMPLE_COUNT_FLAG_BITS_MAX_ENUM; f = f << 1)
+                if (props.limits.sampledImageColorSampleCounts & f) device->limits.supported_sample_counts_fast_image_float |= f;
+            for (u64 f = 1; f < VK_SAMPLE_COUNT_FLAG_BITS_MAX_ENUM; f = f << 1)
+                if (props.limits.storageImageSampleCounts & f) device->limits.supported_sample_counts_large_image_float |= f;
+            for (u64 f = 1; f < VK_SAMPLE_COUNT_FLAG_BITS_MAX_ENUM; f = f << 1)
+                if (props.limits.sampledImageIntegerSampleCounts & f) device->limits.supported_sample_counts_fast_image_int |= f;
+            for (u64 f = 1; f < VK_SAMPLE_COUNT_FLAG_BITS_MAX_ENUM; f = f << 1)
+                if (props.limits.storageImageSampleCounts & f) device->limits.supported_sample_counts_large_image_int |= f;
+            
+            device->id = vk_device;
+        }
+    }
+    
+    return device_count;
+}
+
+Oga_Device *oga_get_devices(Allocator a, u64 *count) {
+    *count = oga_query_devices(0, 0);
+    
+    Oga_Device *devices = NewBuffer(a, Oga_Device, *count);
+    oga_query_devices(devices, *count);
+    
+    return devices;
+}
+
+
+Oga_Result oga_init_context(Oga_Device target_device, Oga_Context_Desc desc, Oga_Context *context) {
+    
+    const char *required_extensions[] = {
+        VK_KHR_SWAPCHAIN_EXTENSION_NAME
+    };
+    
+    if ((desc.enabled_features & target_device.features) != desc.enabled_features) {
+        return OGA_CONTEXT_INIT_ERROR_MISSING_DEVICE_FEATURES;
+    }
+    
+    VkPhysicalDeviceFeatures enabled_features = (VkPhysicalDeviceFeatures){0};
+    // if (desc.enabled_features & OGA_DEVICE_FEATURE_XXXX) enabled_features.xxxx = true;
+    
+    VkDeviceQueueCreateInfo logical_engine_infos[OGA_MAX_DEVICE_LOGICAL_ENGINE_FAMILIES] = {0};
+    
+    u64 logical_engines_desc_count = 0;
+    for (u64 family_index = 0; family_index < OGA_MAX_DEVICE_LOGICAL_ENGINE_FAMILIES; family_index += 1) {
+        Oga_Logical_Engines_Create_Desc logical_engines_desc = desc.logical_engine_create_descs[family_index];
+        if (logical_engines_desc.count > 0) {
+            
+            if (family_index >= target_device.logical_engine_family_count) {
+                return OGA_CREATE_LOGICAL_ENGINE_ERROR_FAMILY_INDEX_OUT_OF_RANGE;
+            }
+            
+            Oga_Logical_Engine_Family_Info family = target_device.logical_engine_family_infos[family_index];
+            if (logical_engines_desc.count >= family.logical_engine_capacity) {
+                return OGA_CREATE_LOGICAL_ENGINE_ERROR_FAMILY_CAPACITY_OVERFLOW;
+            }
+            
+            VkDeviceQueueCreateInfo *info = &logical_engine_infos[logical_engines_desc_count];
+            info->sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
+            info->queueFamilyIndex = (u32)family_index;
+            info->queueCount = (u32)logical_engines_desc.count;
+            info->pQueuePriorities = logical_engines_desc.priorities;
+            
+            logical_engines_desc_count += 1;
+        }
+    }
+    
+    
+    VkDeviceCreateInfo info = (VkDeviceCreateInfo) {0};
+    info.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
+    info.enabledExtensionCount = (u32)(sizeof(required_extensions)/sizeof(char*));
+    info.ppEnabledExtensionNames = required_extensions;
+    info.pEnabledFeatures = &enabled_features;
+    info.queueCreateInfoCount = (u32)logical_engines_desc_count;
+    info.pQueueCreateInfos = logical_engine_infos;
+    
+    *context = (Oga_Context){0};
+    _vk_assert(vkCreateDevice(target_device.id, &info, 0, (VkDevice*)&context->id));
+    context->device = target_device;
+    
+    for (u64 family_index = 0; family_index < OGA_MAX_DEVICE_LOGICAL_ENGINE_FAMILIES; family_index += 1) {
+        Oga_Logical_Engines_Create_Desc logical_engines_desc = desc.logical_engine_create_descs[family_index];
+        Oga_Logical_Engine_Group *group = &context->logical_engines_by_family[family_index];
+        for (u64 logical_engine_index = 0; logical_engine_index < logical_engines_desc.count; logical_engine_index += 1) {
+            Oga_Logical_Engine *logical_engine = &group->logical_engines[logical_engine_index];
+            vkGetDeviceQueue(
+                context->id, 
+                (u32)family_index, 
+                (u32)logical_engine_index, 
+                (VkQueue*)&logical_engine->id
+            );
+            logical_engine->index = (u32)logical_engine_index;
+        }
+    }
+    
+    return OGA_OK;
+}
+void oga_uninit_context(Oga_Context *context) {
+    vkDeviceWaitIdle(context->id);
+    
+    vkDestroyDevice(context->id, 0);
+}
+/* End include: graphics_vulkan.h */
+#endif // (OS_FLAGS & (OS_FLAG_WINDOWS | OS_FLAG_LINUX | OS_FLAG_MACOS | OS_FLAG_IOS | OS_FLAG_ANDROID))
+
+// OGA_IMPL_VULKAN
+#elif defined(OGA_IMPL_WEBGPU)
+
+/////////////////////////////////////////////////////
+//////
+// :WebGPU
+//////
+/////////////////////////////////////////////////////
+
+#if !(OS_FLAGS & OS_FLAG_WEB)
+    #error WebGPU can only be implemented when targetting web (Emscripten)
+#else
+
+/* Begin include: graphics_webgpu.h */
+
+
+#error WebGPU graphics is not implemented
+/* End include: graphics_webgpu.h */
+#endif
+
+// OGA_IMPL_WEBGPU
+#elif defined(OGA_IMPL_D3D12)
+
+/////////////////////////////////////////////////////
+//////
+// :D3D12
+//////
+/////////////////////////////////////////////////////
+
+#if !(OS_FLAGS & OS_FLAG_WINDOWS)
+    #error D3D12 can only be implemented when targetting Windows
+#else
+
+/* Begin include: graphics_d3d12.h */
+
+
+#error D3D12 graphics is not implemented
+/* End include: graphics_d3d12.h */
+#endif
+
+//OGA_IMPL_D3D12
+#elif defined(OGA_IMPL_METAL)
+
+/////////////////////////////////////////////////////
+//////
+// :Metal
+//////
+/////////////////////////////////////////////////////
+
+#if !(OS_FLAGS & OS_FLAG_APPLE)
+    #error Metal can only be implemented when targetting Apple
+#else
+
+/* Begin include: graphics_metal.h */
+
+
+#error Metal graphics is not implemented
+/* End include: graphics_metal.h */
+#endif
+
+//OGA_IMPL_METAL
+#else
+
+/////////////////////////////////////////////////////
+//////
+// :Software
+//////
+/////////////////////////////////////////////////////
+
+#endif
+
+#endif // OSTD_IMPL
+
+
+/* End include: graphics.h */
 
 #ifdef OSTD_NO_IGNORE_WARNINGS
 #pragma clang diagnostic pop
 #endif // OSTD_NO_IGNORE_WARNINGS
-/* End include: ostd.h */
+
+#endif // OSTD_H_

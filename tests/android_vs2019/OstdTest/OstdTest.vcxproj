@@ -113,6 +113,7 @@
     <NativeBuildBackend>Ninja</NativeBuildBackend>
     <AndroidMinSdkVersion>24</AndroidMinSdkVersion>
     <CLanguageStandard>c99</CLanguageStandard>
+    <CppLanguageStandard>cpp98</CppLanguageStandard>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Asan|Win32'" Label="Configuration">
     <ConfigurationType>Application</ConfigurationType>
@@ -158,6 +159,7 @@
     <NativeBuildBackend>Ninja</NativeBuildBackend>
     <AndroidMinSdkVersion>24</AndroidMinSdkVersion>
     <CLanguageStandard>c99</CLanguageStandard>
+    <CppLanguageStandard>cpp98</CppLanguageStandard>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='HWAsan|Android-arm64-v8a'" Label="Configuration">
     <ConfigurationType>Application</ConfigurationType>
@@ -170,6 +172,7 @@
     <AndroidMinSdkVersion>24</AndroidMinSdkVersion>
     <AndroidNdkVersion>26.3.11579264</AndroidNdkVersion>
     <CLanguageStandard>c99</CLanguageStandard>
+    <CppLanguageStandard>cpp98</CppLanguageStandard>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'" Label="Configuration">
     <ConfigurationType>Application</ConfigurationType>
@@ -197,6 +200,7 @@
     <NativeBuildBackend>Ninja</NativeBuildBackend>
     <AndroidMinSdkVersion>24</AndroidMinSdkVersion>
     <CLanguageStandard>c99</CLanguageStandard>
+    <CppLanguageStandard>cpp98</CppLanguageStandard>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'" Label="Configuration">
     <ConfigurationType>Application</ConfigurationType>
@@ -546,7 +550,7 @@
     <Link>
       <SubSystem>Console</SubSystem>
       <GenerateDebugInformation>true</GenerateDebugInformation>
-      <LibraryDependencies>log;atomic;GLESv2;EGL;android;</LibraryDependencies>
+      <LibraryDependencies>vulkan;log;atomic;GLESv2;EGL;android;</LibraryDependencies>
       <AdditionalLibraryDirectories>%(AdditionalLibraryDirectories);$(SysrootLink)\usr\lib</AdditionalLibraryDirectories>
     </Link>
     <PostBuildEvent>
@@ -573,7 +577,7 @@
     <Link>
       <SubSystem>Console</SubSystem>
       <GenerateDebugInformation>true</GenerateDebugInformation>
-      <LibraryDependencies>log;atomic;GLESv2;EGL;android;</LibraryDependencies>
+      <LibraryDependencies>vulkan;log;atomic;GLESv2;EGL;android;</LibraryDependencies>
       <AdditionalLibraryDirectories>%(AdditionalLibraryDirectories);$(SysrootLink)\usr\lib</AdditionalLibraryDirectories>
     </Link>
     <PostBuildEvent>
@@ -600,7 +604,7 @@
     <Link>
       <SubSystem>Console</SubSystem>
       <GenerateDebugInformation>true</GenerateDebugInformation>
-      <LibraryDependencies>log;atomic;GLESv2;EGL;android;</LibraryDependencies>
+      <LibraryDependencies>vulkan;log;atomic;GLESv2;EGL;android;</LibraryDependencies>
       <AdditionalLibraryDirectories>%(AdditionalLibraryDirectories);$(SysrootLink)\usr\lib</AdditionalLibraryDirectories>
     </Link>
     <PostBuildEvent>
@@ -733,7 +737,7 @@
       <EnableCOMDATFolding>true</EnableCOMDATFolding>
       <OptimizeReferences>true</OptimizeReferences>
       <GenerateDebugInformation>true</GenerateDebugInformation>
-      <LibraryDependencies>log;atomic;GLESv2;EGL;android</LibraryDependencies>
+      <LibraryDependencies>vulkan;log;atomic;GLESv2;EGL;android;</LibraryDependencies>
     </Link>
     <PostBuildEvent>
       <Command>

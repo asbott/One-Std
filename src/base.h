@@ -1,4 +1,8 @@
 
+#if 0
+#include "ostd.h" // For syntax highlighting.
+#endif
+
 /*
             Compiler
 */
@@ -74,8 +78,19 @@
     ((CLANG && GNU) ? COMPILER_FLAG_CLANG_GNU : 0) \
 )
 
+// Architexture
 
-
+#if defined(_M_IX86) || defined(__i386__) || defined(__EMSCRIPTEN__)
+    #define ARCH_X86 1
+#elif defined(_M_X64) || defined(_M_AMD64) || defined(__x86_64__)
+    #define ARCH_X64 1
+#elif defined(_M_ARM) || defined(__arm__)
+    #define ARCH_ARM 1
+#elif defined(_M_ARM64) || defined(__aarch64__)
+    #define ARCH_ARM64 1
+#else
+    #error "Unknown architecture"
+#endif
 
 #define local_persist static
 #define forward_global extern
@@ -145,6 +160,9 @@
 #define OS_FLAG_STEAMOS           (1 << 7)
 #define OS_FLAG_LINUX_BASED       (1 << 8)
 #define OS_FLAG_HAS_WINDOW_SYSTEM (1 << 9)
+#define OS_FLAG_EMSCRIPTEN        (1 << 10)
+
+#define OS_FLAG_WEB OS_FLAG_EMSCRIPTEN
 
 #ifdef _WIN32
     #define OS_FLAGS (OS_FLAG_WINDOWS | OS_FLAG_HAS_WINDOW_SYSTEM)
@@ -163,6 +181,8 @@
     #define OS_FLAGS (OS_FLAG_UNIX | OS_FLAG_LINUX_BASED | OS_FLAG_LINUX | OS_FLAG_STEAMOS)
 #elif defined(__linux__)
     #define OS_FLAGS (OS_FLAG_UNIX | OS_FLAG_LINUX_BASED | OS_FLAG_LINUX | OS_FLAG_HAS_WINDOW_SYSTEM)
+#elif defined(__EMSCRIPTEN__)
+    #define OS_FLAGS (OS_FLAG_UNIX | OS_FLAG_EMSCRIPTEN)
 #elif defined(__unix__) || defined(__unix)
     #define OS_FLAGS (OS_FLAG_UNIX)
 #else
@@ -183,26 +203,23 @@
     typedef signed __int64    s64;
     typedef unsigned __int64 uintptr;
     #pragma clang diagnostic pop
-    
-    
+
 #elif COMPILER_FLAGS & COMPILER_FLAG_GNU
 
-    // todo(charlie) inspect at a gnu stdint.h
-    typedef unsigned char     u8;
-    typedef signed char       s8;
-    typedef unsigned short    u16;
-    typedef signed short      s16;
-    typedef unsigned int      u32;
-    typedef signed int        s32;
-    typedef unsigned long     u64;
-    typedef signed long       s64;
+    typedef __UINT64_TYPE__ u64;
+    typedef __INT64_TYPE__  s64;
+    typedef __UINT32_TYPE__ u32;
+    typedef __INT32_TYPE__  s32;
+    typedef __UINT16_TYPE__ u16;
+    typedef __INT16_TYPE__  s16;
+    typedef __UINT8_TYPE__  u8;
+    typedef __INT8_TYPE__   s8;
     
-    typedef u64 uintptr;
-    
+    typedef __UINTPTR_TYPE__  uintptr;
+
 #else
 
     #include <stdint.h>
-    #error hi
     typedef uint8_t  u8;
     typedef int8_t   s8;
     typedef uint16_t u16;
@@ -211,6 +228,8 @@
     typedef int32_t  s32;
     typedef uint64_t u64;
     typedef int64_t  s64;
+    
+     typedef uintptr_t uintptr;
 
 #endif
 
@@ -258,9 +277,21 @@ typedef float128 f128;
 #define S64_MIN (-9223372036854775807LL - 1)
 #define S64_MAX 9223372036854775807LL
 
+#if defined(ARCH_X64) || defined (ARCH_ARM64)
+typedef s64 sys_int;
+typedef u64 sys_uint;
+#define SYS_INT_MAX SYS_S64_MAX
+#define SYS_UINT_MAX SYS_U64_MAX
+#else
+typedef s32 sys_int;
+typedef u32 sys_uint;
+#define SYS_INT_MAX S32_MAX
+#define SYS_UINT_MAX U32_MAX
+#endif
+
 #if !CSTD_C23
     #pragma clang diagnostic push
-#if COMPILER_FLAGS & COMPILER_FLAG_MSC
+#if (COMPILER_FLAGS & COMPILER_FLAG_CLANG) && ((COMPILER_FLAGS & COMPILER_FLAG_MSC) || COMPILER_FLAGS & COMPILER_FLAG_EMSCRIPTEN)
     #pragma clang diagnostic ignored "-Wc23-compat"
 #endif
     typedef s8 bool;
@@ -294,7 +325,8 @@ typedef int32x2 int2;
 
 #define STRINGIFY(x) #x
 #define TOSTRING(x) STRINGIFY(x)
-#define assertmsg(x, msg)  do { \
+#define assertmsg(x, msg) assertmsgs(x, STR(msg))
+#define assertmsgs(x, msg)  do { \
         if (!(x)) {\
             sys_write_string(sys_get_stderr(), STR("\n========================================================\n"));\
             sys_write_string(sys_get_stderr(), STR("==========!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!==========\n"));\
@@ -319,30 +351,30 @@ typedef int32x2 int2;
             debug_break();\
         } \
     } while(0)
-#define assert(x) assertmsg(x, (string){0})
+#define assert(x) assertmsg(x, "")
 
-inline void *memcpy(void *dst, const void * src, u64 n);
+inline void *memcpy(void *dst, const void * src, sys_uint n);
 // todo(charlie) inline asm / dynamically load crt's if msvc
-inline void *memset(void *dst, s32 c, u64 n) {
-    u64 i;
+inline void *memset(void *dst, s32 c, sys_uint n) {
+    sys_uint i;
     for (i = 0; i+4 < n; i += 4)  *((s32*)dst + (i/4)) = c;
     if (i < n) memcpy(dst, &c, n-i);
     return dst;
 }
-inline void *memcpy(void *dst, const void * src, u64 n) {
-    for (u64 i = 0; i < n; i += 1)  *((u8*)dst + i) = *((const u8*)src + i);
+inline void *memcpy(void *dst, const void * src, sys_uint n) {
+    for (sys_uint i = 0; i < n; i += 1)  *((u8*)dst + i) = *((const u8*)src + i);
     return dst;
 }
-inline void *memmove(void *dst, const void *src, u64 n) {
+inline void *memmove(void *dst, const void *src, sys_uint n) {
     if (!n) return dst;
-    if ((u64)dst > (u64)src)
+    if ((sys_uint)dst > (sys_uint)src)
         for (s64 i = (s64)n-1; i >= 0; i -= 1)  *((u8*)dst + i) = *((const u8*)src + i);
     else
-        for (u64 i = 0; i < n; i += 1)  *((u8*)dst + i) = *((const u8*)src + i);
+        for (sys_uint i = 0; i < n; i += 1)  *((u8*)dst + i) = *((const u8*)src + i);
     return dst;
 }
 
-inline int memcmp(const void* a, const void* b, u64 n) {
+inline int memcmp(const void* a, const void* b, sys_uint n) {
     const u8 *p1 = (const u8 *)a;
     const u8 *p2 = (const u8 *)b;
 
@@ -369,3 +401,4 @@ u64 format_float(float64 x, int decimal_places, void *buffer, u64 buffer_size);
 
 #define PP_EXCLUDE_FIRST_ARG_HELPER(x, ...) __VA_ARGS__
 #define PP_EXCLUDE_FIRST_ARG(...) PP_EXCLUDE_FIRST_ARG_HELPER(__VA_ARGS__)
+

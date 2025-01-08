@@ -1,3 +1,4 @@
+#include "ostd.h" // For syntax highlighting.
 
 #define WINVER 0x0A00
 #define _WIN32_WINNT 0x0A00
@@ -116,7 +117,7 @@ typedef PCWSTR *PZPCWSTR;
 typedef const PCWSTR *PCZPCWSTR;
 typedef const WCHAR *LPCUWSTR, *PCUWSTR;
 
-// what the fuck 
+// what the fuck
 
 // who thought this was a good idea
 
@@ -243,47 +244,47 @@ typedef struct DECLSPEC_ALIGN(16) _XMM_SAVE_AREA32
     DWORD MxCsr;
     DWORD MxCsr_Mask;
     M128A FloatRegisters[8];
-    
+
     #if defined(_WIN64)
-    
+
     M128A XmmRegisters[16];
     BYTE  Reserved4[96];
-    
+
     #else
-    
+
     M128A XmmRegisters[8];
     BYTE  Reserved4[224];
-    
+
     #endif
-    
+
 } XMM_SAVE_AREA32;
 typedef struct DECLSPEC_ALIGN(16) _CONTEXT {
-    
+
     //
     // Register parameter home addresses.
     //
     // N.B. These fields are for convience - they could be used to extend the
     //      context record in the future.
     //
-    
+
     DWORD64 P1Home;
     DWORD64 P2Home;
     DWORD64 P3Home;
     DWORD64 P4Home;
     DWORD64 P5Home;
     DWORD64 P6Home;
-    
+
     //
     // Control flags.
     //
-    
+
     DWORD ContextFlags;
     DWORD MxCsr;
-    
+
     //
     // Segment Registers and processor flags.
     //
-    
+
     WORD   SegCs;
     WORD   SegDs;
     WORD   SegEs;
@@ -291,22 +292,22 @@ typedef struct DECLSPEC_ALIGN(16) _CONTEXT {
     WORD   SegGs;
     WORD   SegSs;
     DWORD EFlags;
-    
+
     //
     // Debug registers
     //
-    
+
     DWORD64 Dr0;
     DWORD64 Dr1;
     DWORD64 Dr2;
     DWORD64 Dr3;
     DWORD64 Dr6;
     DWORD64 Dr7;
-    
+
     //
     // Integer registers.
     //
-    
+
     DWORD64 Rax;
     DWORD64 Rcx;
     DWORD64 Rdx;
@@ -323,17 +324,17 @@ typedef struct DECLSPEC_ALIGN(16) _CONTEXT {
     DWORD64 R13;
     DWORD64 R14;
     DWORD64 R15;
-    
+
     //
     // Program counter.
     //
-    
+
     DWORD64 Rip;
-    
+
     //
     // Floating point state.
     //
-    
+
     union {
         XMM_SAVE_AREA32 FltSave;
         struct {
@@ -357,18 +358,18 @@ typedef struct DECLSPEC_ALIGN(16) _CONTEXT {
             M128A Xmm15;
         } DUMMYSTRUCTNAME;
     } DUMMYUNIONNAME;
-    
+
     //
     // Vector registers.
     //
-    
+
     M128A VectorRegister[26];
     DWORD64 VectorControl;
-    
+
     //
     // Special debug control registers.
     //
-    
+
     DWORD64 DebugControl;
     DWORD64 LastBranchToRip;
     DWORD64 LastBranchFromRip;
@@ -389,7 +390,7 @@ typedef struct _tagADDRESS64 {
 } ADDRESS64, *LPADDRESS64;
 
 typedef struct _KDHELP64 {
-    
+
     DWORD64   Thread;
     DWORD   ThCallbackStack;
     DWORD   ThCallbackBStore;
@@ -407,7 +408,7 @@ typedef struct _KDHELP64 {
     DWORD     RetpolineStubOffset;
     DWORD     RetpolineStubSize;
     DWORD64   Reserved0[2];
-    
+
 } KDHELP64, *PKDHELP64;
 
 typedef struct _tagSTACKFRAME64 {
@@ -464,7 +465,7 @@ typedef struct _OVERLAPPED {
         } ;
         PVOID Pointer;
     } ;
-    
+
     HANDLE hEvent;
 } OVERLAPPED, *LPOVERLAPPED;
 #ifdef __clang__
@@ -565,19 +566,6 @@ typedef struct _DISPLAY_DEVICEW {
   WCHAR DeviceKey[128];
 } DISPLAY_DEVICEW, *PDISPLAY_DEVICEW, *LPDISPLAY_DEVICEW;
 
-typedef enum MONITOR_DPI_TYPE {
-  MDT_EFFECTIVE_DPI = 0,
-  MDT_ANGULAR_DPI = 1,
-  MDT_RAW_DPI = 2,
-  MDT_DEFAULT
-} MONITOR_DPI_TYPE;
-
-typedef enum PROCESS_DPI_AWARENESS {
-  PROCESS_DPI_UNAWARE = 0,
-  PROCESS_SYSTEM_DPI_AWARE = 1,
-  PROCESS_PER_MONITOR_DPI_AWARE = 2
-} PROCESS_DPI_AWARENESS;
-
 typedef struct tagWNDCLASSEXW {
   UINT      cbSize;
   UINT      style;
@@ -592,6 +580,12 @@ typedef struct tagWNDCLASSEXW {
   LPCWSTR   lpszClassName;
   HICON     hIconSm;
 } WNDCLASSEXW, *PWNDCLASSEXW, *NPWNDCLASSEXW, *LPWNDCLASSEXW;
+
+typedef struct _SECURITY_ATTRIBUTES {
+  DWORD  nLength;
+  LPVOID lpSecurityDescriptor;
+  BOOL   bInheritHandle;
+} SECURITY_ATTRIBUTES, *PSECURITY_ATTRIBUTES, *LPSECURITY_ATTRIBUTES;
 
 typedef struct _GUID {
   unsigned long  Data1;
@@ -748,6 +742,9 @@ typedef void* DPI_AWARENESS_CONTEXT;
 #define WS_EX_PALETTEWINDOW     (WS_EX_WINDOWEDGE | WS_EX_TOOLWINDOW | WS_EX_TOPMOST)
 
 #endif /* WINVER >= 0x0400 */
+
+#define GWL_STYLE -16
+#define GWL_EXSTYLE -20
 
 #if(_WIN32_WINNT >= 0x0500)
 #define WS_EX_LAYERED           0x00080000
@@ -1564,6 +1561,34 @@ typedef struct tagTRACKMOUSEEVENT {
 #define PM_REMOVE           0x0001
 #define PM_NOYIELD          0x0002
 
+#define HWND_BOTTOM ((HWND)1)
+#define HWND_NOTOPMOST ((HWND)-2)
+#define HWND_TOP ((HWND)0)
+#define HWND_TOPMOST ((HWND)-1)
+
+/*
+ * SetWindowPos Flags
+ */
+#define SWP_NOSIZE          0x0001
+#define SWP_NOMOVE          0x0002
+#define SWP_NOZORDER        0x0004
+#define SWP_NOREDRAW        0x0008
+#define SWP_NOACTIVATE      0x0010
+#define SWP_FRAMECHANGED    0x0020  /* The frame changed: send WM_NCCALCSIZE */
+#define SWP_SHOWWINDOW      0x0040
+#define SWP_HIDEWINDOW      0x0080
+#define SWP_NOCOPYBITS      0x0100
+#define SWP_NOOWNERZORDER   0x0200  /* Don't do owner Z ordering */
+#define SWP_NOSENDCHANGING  0x0400  /* Don't send WM_WINDOWPOSCHANGING */
+
+#define SWP_DRAWFRAME       SWP_FRAMECHANGED
+#define SWP_NOREPOSITION    SWP_NOOWNERZORDER
+
+#if(WINVER >= 0x0400)
+#define SWP_DEFERERASE      0x2000 // same as SWP_DEFERDRAWING
+#define SWP_ASYNCWINDOWPOS  0x4000 // same as SWP_CREATESPB
+#endif /* WINVER >= 0x0400 */
+
 
 WINDOWS_IMPORT void WINAPI GetSystemInfo(LPSYSTEM_INFO lpSystemInfo);
 
@@ -1573,8 +1598,10 @@ WINDOWS_IMPORT s32 WINAPI VirtualFree(void *lpAddress, size_t dwSize, u32 dwFree
 WINDOWS_IMPORT size_t WINAPI VirtualQuery(void* lpAddress, PMEMORY_BASIC_INFORMATION lpBuffer, u32 dwLength);
 
 WINDOWS_IMPORT void* WINAPI GetStdHandle(u32 nStdHandle);
+WINDOWS_IMPORT BOOL WINAPI SetStdHandle( DWORD nStdHandle, HANDLE hHandle);
 
-WINDOWS_IMPORT s32 WINAPI WriteFile(void* hFile, LPCVOID lpBuffer, DWORD nNumberOfBytesToWrite, LPDWORD lpNumberOfBytesWritten, LPOVERLAPPED lpOverlapped);
+WINDOWS_IMPORT s32 WINAPI WriteFile(HANDLE hFile, LPCVOID lpBuffer, DWORD nNumberOfBytesToWrite, LPDWORD lpNumberOfBytesWritten, LPOVERLAPPED lpOverlapped);
+WINDOWS_IMPORT BOOL WINAPI ReadFile( HANDLE hFile, LPVOID lpBuffer, DWORD nNumberOfBytesToRead, LPDWORD lpNumberOfBytesRead, LPOVERLAPPED lpOverlapped);
 
 WINDOWS_IMPORT void* WINAPI GetCurrentProcess(void);
 WINDOWS_IMPORT void* WINAPI GetCurrentThread(void);
@@ -1596,7 +1623,7 @@ WINDOWS_IMPORT BOOL WINAPI EnumDisplaySettingsW( LPCWSTR lpszDeviceName, DWORD i
 
 WINDOWS_IMPORT BOOL WINAPI EnumDisplayDevicesW( LPCWSTR lpDevice, DWORD iDevNum, PDISPLAY_DEVICEW lpDisplayDevice, DWORD dwFlags);
 
-WINDOWS_IMPORT HRESULT WINAPI GetDpiForMonitor( HMONITOR hmonitor, MONITOR_DPI_TYPE dpiType, UINT *dpiX, UINT *dpiY);
+
 
 WINDOWS_IMPORT HMONITOR WINAPI MonitorFromWindow( HWND hwnd, DWORD dwFlags);
 
@@ -1604,10 +1631,6 @@ WINDOWS_IMPORT int WINAPI WideCharToMultiByte( UINT CodePage, DWORD dwFlags, LPC
 
 typedef BOOL (*MONITORENUMPROC)( HMONITOR unnamedParam1, HDC unnamedParam2, LPRECT unnamedParam3, LPARAM unnamedParam4);
 WINDOWS_IMPORT BOOL WINAPI EnumDisplayMonitors( HDC hdc, LPCRECT lprcClip, MONITORENUMPROC lpfnEnum, LPARAM dwData);
-
-WINDOWS_IMPORT HRESULT WINAPI SetProcessDpiAwareness(PROCESS_DPI_AWARENESS value);
-
-WINDOWS_IMPORT BOOL WINAPI SetProcessDpiAwarenessContext(DPI_AWARENESS_CONTEXT value);
 
 WINDOWS_IMPORT HMODULE WINAPI GetModuleHandleA(LPCSTR lpModuleName);
 WINDOWS_IMPORT HMODULE WINAPI GetModuleHandleW(LPCWSTR lpModuleName);
@@ -1646,3 +1669,12 @@ WINDOWS_IMPORT LRESULT WINAPI DispatchMessageW(const MSG *lpMsg);
 WINDOWS_IMPORT LRESULT WINAPI DefWindowProcW(HWND hWnd,UINT Msg,WPARAM wParam,LPARAM lParam);
 
 WINDOWS_IMPORT BOOL WINAPI DestroyWindow(HWND hWnd);
+
+WINDOWS_IMPORT LONG WINAPI GetWindowLongW( HWND hWnd, int nIndex);
+WINDOWS_IMPORT LONG WINAPI SetWindowLongW(HWND hWnd, int nIndex, LONG dwNewLong);
+WINDOWS_IMPORT BOOL WINAPI SetWindowPos( HWND hWnd, HWND hWndInsertAfter, int X, int Y, int cx, int cy, UINT uFlags);
+
+WINDOWS_IMPORT BOOL WINAPI CreatePipe( HANDLE* hReadPipe, HANDLE* hWritePipe, LPSECURITY_ATTRIBUTES lpPipeAttributes, DWORD nSize);
+
+WINDOWS_IMPORT BOOL WINAPI CloseHandle(HANDLE hObject);
+

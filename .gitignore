@@ -14,3 +14,9 @@ build/
 *.user
 *.bin
 *.lock
+*.probe
+
+test.wasm
+test.em
+test.html
+test.js

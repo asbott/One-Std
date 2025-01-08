@@ -1,3 +1,6 @@
+#if 0
+#include "ostd.h" // For syntax highlighting.
+#endif
 
 /////
 // Allocator
@@ -8,21 +11,26 @@ typedef enum Allocator_Message {
     ALLOCATOR_REALLOCATE,
     ALLOCATOR_FREE
 } Allocator_Message;
-typedef void*(*Allocator_Proc)(Allocator_Message msg, void *data, void *old, u64 old_n, u64 n);
+typedef void*(*Allocator_Proc)(Allocator_Message msg, void *data, void *old, u64 old_n, u64 n, u64 flags);
 
 typedef struct Allocator {
     void *data;
     Allocator_Proc proc;
 } Allocator;
 
-inline void *alloc(Allocator a, u64 n);
-inline void *realloc(Allocator a, void *p, u64 old_n, u64 n);
-inline void free(Allocator a, void *p);
+inline void *allocate(Allocator a, u64 n);
+inline void *reallocate(Allocator a, void *p, u64 old_n, u64 n);
+inline void deallocate(Allocator a, void *p);
 
-#define New(a, T) ((T*)alloc(a, sizeof(T)))
+inline void *allocatef(Allocator a, u64 n, u64 flags);
+inline void *reallocatef(Allocator a, void *p, u64 old_n, u64 n, u64 flags);
+inline void deallocatef(Allocator a, void *p, u64 flags);
 
-inline string string_alloc(Allocator a, u64 n);
-inline void string_free(Allocator a, string s);
+#define New(a, T) ((T*)allocate(a, sizeof(T)))
+#define NewBuffer(a, T, n) ((T*)allocate(a, sizeof(T)*n))
+
+inline string string_allocate(Allocator a, u64 n);
+inline void string_deallocate(Allocator a, string s);
 
 /////
 // Arena
@@ -41,8 +49,8 @@ void arena_pop(Arena *arena, u64 size);
 void arena_reset(Arena *arena);
 void free_arena(Arena arena);
 
-void* arena_allocator_proc(Allocator_Message msg, void *data, void *old, u64 old_n, u64 n);
-inline Allocator arena_allocator(Arena *a) { return (Allocator) { a, arena_allocator_proc }; }
+void* arena_allocator_proc(Allocator_Message msg, void *data, void *old, u64 old_n, u64 n, u64);
+unit_local inline Allocator arena_allocator(Arena *a) { return (Allocator) { a, arena_allocator_proc }; }
 
 /////
 // Temporary storage
@@ -53,26 +61,42 @@ inline Allocator arena_allocator(Arena *a) { return (Allocator) { a, arena_alloc
 
 Allocator get_temp(void);
 void reset_temporary_storage(void);
-void *talloc(size_t n);
+void *tallocate(size_t n);
 
 
 
 
-inline void *alloc(Allocator a, u64 n) {
-    return a.proc(ALLOCATOR_ALLOCATE, a.data, 0, 0, n);
+inline void *allocate(Allocator a, u64 n) {
+    return a.proc(ALLOCATOR_ALLOCATE, a.data, 0, 0, n, 0);
 }
-inline void *realloc(Allocator a, void *p, u64 old_n, u64 n) {
-    return a.proc(ALLOCATOR_REALLOCATE, a.data, p, old_n, n);
+inline void *reallocate(Allocator a, void *p, u64 old_n, u64 n) {
+    return a.proc(ALLOCATOR_REALLOCATE, a.data, p, old_n, n, 0);
 }
-inline void free(Allocator a, void *p) {
-    a.proc(ALLOCATOR_FREE, a.data, p, 0, 0);
+inline void deallocate(Allocator a, void *p) {
+    a.proc(ALLOCATOR_FREE, a.data, p, 0, 0, 0);
 }
 
-inline string string_alloc(Allocator a, u64 n) {
-    return (string) {n, (u8*)alloc(a, n)};
+inline void *allocatef(Allocator a, u64 n, u64 flags) {
+    return a.proc(ALLOCATOR_ALLOCATE, a.data, 0, 0, n, flags);
 }
-inline void string_free(Allocator a, string s) {
-    free(a, s.data);
+inline void *reallocatef(Allocator a, void *p, u64 old_n, u64 n, u64 flags) {
+    return a.proc(ALLOCATOR_REALLOCATE, a.data, p, old_n, n, flags);
+}
+inline void deallocatef(Allocator a, void *p, u64 flags) {
+    a.proc(ALLOCATOR_FREE, a.data, p, 0, 0, flags);
+}
+
+inline string string_allocate(Allocator a, u64 n) {
+    return (string) {n, (u8*)allocate(a, n)};
+}
+inline void string_deallocate(Allocator a, string s) {
+    deallocate(a, s.data);
+}
+
+inline string string_copy(Allocator a, string s) {
+    string new_s = string_allocate(a, s.count);
+    memcpy(new_s.data, s.data, s.count);
+    return new_s;
 }
 
 #ifdef OSTD_IMPL
@@ -83,11 +107,14 @@ unit_local bool _temp_initted = false;
 
 unit_local inline void _lazy_init_temporary_storage(void) {
     if (_temp_initted) return;
-    
-    _temp_arena = make_arena(sys_get_info().page_size*4, 1024);
-    
+
+#if OS_FLAGS & OS_FLAG_EMSCRIPTEN
+    _temp_arena = make_arena(1024*1024, 1024*1024);
+#else
+    _temp_arena = make_arena(sys_get_info().page_size*6900, 1024);
+#endif
     _temp = (Allocator) { &_temp_arena, arena_allocator_proc };
-    
+
     _temp_initted = true;
 }
 Allocator get_temp(void) {
@@ -98,34 +125,44 @@ void reset_temporary_storage(void) {
     _lazy_init_temporary_storage();
     arena_reset(&_temp_arena);
 }
-void *talloc(size_t n) {
+void *tallocate(size_t n) {
     _lazy_init_temporary_storage();
-    
-    return alloc(_temp, n);
+
+    return allocate(_temp, n);
 }
 
 Arena make_arena(u64 reserved_size, u64 initial_allocated_size) {
+    assert(reserved_size >= initial_allocated_size);
+
+#if OS_FLAGS & OS_FLAG_EMSCRIPTEN
+    assertmsg(reserved_size == initial_allocated_size, STR("Emscripten does not support reserved-only memory allocations. Arena initial allocation size must match reserved_size"));
+#endif // OS_FLAGS & OS_FLAG_EMSCRIPTEN
+
     System_Info info = sys_get_info();
-    
+
     // Align to page size
     reserved_size = (reserved_size + info.page_size - 1) & ~(info.page_size - 1);
     initial_allocated_size = (initial_allocated_size + info.page_size - 1) & ~(info.page_size - 1);
-    
+
     assert(initial_allocated_size <= reserved_size);
-    
+
     Arena arena;
-    
-    arena.start = sys_map_pages(SYS_MEMORY_RESERVE, 0, reserved_size/info.page_size);
-    assert(arena.start);
-    
+
+    if (reserved_size > initial_allocated_size) {
+        arena.start = sys_map_pages(SYS_MEMORY_RESERVE, 0, reserved_size/info.page_size);
+        assert(arena.start);
+        void *allocate_result = sys_map_pages(SYS_MEMORY_ALLOCATE, arena.start, initial_allocated_size/info.page_size);
+        assert(allocate_result == arena.start);
+    } else {
+        arena.start = sys_map_pages(SYS_MEMORY_RESERVE | SYS_MEMORY_ALLOCATE, 0, reserved_size/info.page_size);
+    }
+
     arena.position = arena.start;
-    
-    void *allocate_result = sys_map_pages(SYS_MEMORY_ALLOCATE, arena.start, initial_allocated_size/info.page_size);
-    assert(allocate_result == arena.start);
-    
+
+
     arena.reserved_size = reserved_size;
     arena.allocated_size = initial_allocated_size;
-    
+
     return arena;
 }
 void arena_reset(Arena *arena) {
@@ -134,13 +171,13 @@ void arena_reset(Arena *arena) {
 void free_arena(Arena arena) {
     void *start = arena.start;
     void *end = (u8*)arena.start + arena.reserved_size;
-    
+
     u64 pointer_count = sys_query_mapped_regions(start, end, 0, 0);
-    
+
     // todo(charlie)  use a temp scratch memory here
     Mapped_Memory_Info pointers[4096];
     sys_query_mapped_regions(start, end, pointers, pointer_count);
-    
+
     u32 i;
     for (i = 0; i < pointer_count; i += 1) {
         sys_unmap_pages(pointers[i].base);
@@ -160,24 +197,24 @@ void *arena_push(Arena *arena, u64 size) {
     if ((u64)arena->position + size > (u64)reserved_tail) {
         return 0;
     }
-    
+
     if ((u64)arena->position + size > (u64)allocated_tail) {
-        
+
         u64 amount_to_allocate = ((u64)arena->position + size) - (u64)allocated_tail;
-        
+
         amount_to_allocate = (amount_to_allocate + info.page_size-1) & ~(info.page_size-1);
-        
+
         u64 pages_to_allocate = amount_to_allocate / info.page_size;
-        
+
         void *allocate_result = sys_map_pages(SYS_MEMORY_ALLOCATE, allocated_tail, pages_to_allocate);
-        assertmsg(allocate_result == allocated_tail, STR("Failed allocating pages in arena"));
-        
+        assertmsg(allocate_result == allocated_tail, "Failed allocating pages in arena");
+
         arena->allocated_size += amount_to_allocate;
     }
 
     void *p = arena->position;
     arena->position = (u8*)arena->position + size;
-    
+
     return p;
 }
 
@@ -186,7 +223,8 @@ void arena_pop(Arena *arena, u64 size) {
     if ((u64)arena->position < (u64)arena->start)  arena->position = arena->start;
 }
 
-void* arena_allocator_proc(Allocator_Message msg, void *data, void *old, u64 old_n, u64 n) {
+void* arena_allocator_proc(Allocator_Message msg, void *data, void *old, u64 old_n, u64 n, u64 flags) {
+    (void)flags;
     Arena *a = (Arena*)data;
     switch (msg) {
         case ALLOCATOR_ALLOCATE:
@@ -197,7 +235,7 @@ void* arena_allocator_proc(Allocator_Message msg, void *data, void *old, u64 old
         {
             void* p = arena_push(a, n);
             if (old && old_n) {
-                memcpy(p, old, min(old_n, n));
+                memcpy(p, old, (sys_uint)min(old_n, n));
             }
             return p;
 
@@ -206,13 +244,13 @@ void* arena_allocator_proc(Allocator_Message msg, void *data, void *old, u64 old
         {
             break;
         }
-            
+
         default:
         {
             break;
         }
     }
-    
+
     return 0;
 }
 
