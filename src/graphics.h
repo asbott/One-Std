@@ -4,7 +4,7 @@
 
 typedef enum Oga_Result {
     OGA_OK,
-    
+
     // Trying to use device features that were not available.
     // Check Oga_Device::features flags for whether or not a feature is available.
     OGA_CONTEXT_INIT_ERROR_MISSING_DEVICE_FEATURES,
@@ -150,59 +150,59 @@ typedef enum Oga_Device_Kind {
     OGA_DEVICE_OTHER,
 } Oga_Device_Kind;
 
-// todo(charlie) populate this with an exhaustive list. 
+// todo(charlie) populate this with an exhaustive list.
 typedef struct Oga_Device_Limits {
     u64 max_shader_items_sets_per_stage;
-    
+
     u64 max_fast_data_blocks_per_stage;
     u64 max_large_data_blocks_per_stage;
     u64 max_fast_images_per_stage;
     u64 max_large_images_per_stage;
     u64 max_samplers_per_stage;
-    
+
     u64 max_fast_data_blocks_per_layout;
     u64 max_large_data_blocks_per_layout;
     u64 max_fast_images_per_layout;
     u64 max_large_images_per_layout;
     u64 max_samplers_per_layout;
-    
+
     u64 max_memory_allocations;
     u64 max_sampler_allocations;
-    
+
     u64 max_image_dimension_1d;
     u64 max_image_dimension_2d;
     u64 max_image_dimension_3d;
-    
+
     u64 max_fast_access_data_block_size;
-    
+
     u64 max_vertex_layout_attributes;
     u64 max_vertex_layout_bindings;
     u64 max_vertex_layout_attribute_offset;
     u64 max_vertex_layout_binding_stride;
-    
+
     u64 max_fragment_stage_output_attachments;
-    
+
     float32 max_sampler_anisotropy;
-    
+
     u64 max_viewports;
     u64 max_viewport_width;
     u64 max_viewport_height;
-    
+
     u64 max_framebuffer_width;
     u64 max_framebuffer_height;
-    
+
     u64 max_color_attachments;
-    
+
     u64 min_memory_map_alignment;
-    
+
     Oga_Sample_Count_Flag supported_sample_counts_framebuffer;
-    
+
     Oga_Sample_Count_Flag supported_sample_counts_fast_image_float;
     Oga_Sample_Count_Flag supported_sample_counts_large_image_float;
     Oga_Sample_Count_Flag supported_sample_counts_fast_image_int;
     Oga_Sample_Count_Flag supported_sample_counts_large_image_int;
-    
-    
+
+
 } Oga_Device_Limits;
 
 typedef u64 Oga_Device_Feature_Flag;
@@ -215,31 +215,31 @@ typedef u64 Oga_Device_Feature_Flag;
 #define OGA_MAX_MEMORY_HEAPS_PER_DEVICE 32
 typedef struct Oga_Device {
     void *id;
-    
+
     Oga_Device_Kind kind;
 
     // string
     u8 device_name_data[256];
     u64 device_name_length;
-    
+
     string vendor_name;
     u32 driver_version_raw;
-    
+
     // string
     u8 driver_version_data[128];
     u64 driver_version_length;
-    
+
     Oga_Device_Limits limits;
 
     Oga_Logical_Engine_Family_Info logical_engine_family_infos[OGA_MAX_DEVICE_LOGICAL_ENGINE_FAMILIES];
     u32 logical_engine_family_count;
-    
+
     Oga_Format_Kind depth_format;
-    
+
     Oga_Memory_Heap memory_heaps[OGA_MAX_MEMORY_HEAPS_PER_DEVICE];
     u64 memory_heap_count;
     u64 total_gpu_local_memory;
-    
+
     Oga_Device_Feature_Flag features;
 
 } Oga_Device;
@@ -279,7 +279,7 @@ typedef struct Oga_Context_Desc {
     // Indices match to that of Oga_Device::logical_engine_family_infos.
     // So the create logical_engines of family 0, you set the desc in logical_engine_create_descs[0].
     // Leave descs uninitialized to make no logical_engines in that family.
-    Oga_Logical_Engines_Create_Desc logical_engine_create_descs[OGA_MAX_DEVICE_LOGICAL_ENGINE_FAMILIES];    
+    Oga_Logical_Engines_Create_Desc logical_engine_create_descs[OGA_MAX_DEVICE_LOGICAL_ENGINE_FAMILIES];
     Oga_Device_Feature_Flag enabled_features;
 } Oga_Context_Desc;
 
@@ -358,7 +358,7 @@ typedef enum Oga_Shader_Item_Descriptor_Kind {
 typedef enum Oga_Shader_Item_Descriptor_Flag {
     OGA_SHADER_ITEM_DESCRIPTOR_FLAG_READ,
     OGA_SHADER_ITEM_DESCRIPTOR_FLAG_WRITE,
-    
+
     // When a shader item descriptor is flagged with large or write, it can have larger
     // storage (or be written to) at the cost of memory access performance.
     // see limits max_fast_access_xxxxx_size
@@ -368,29 +368,29 @@ typedef enum Oga_Shader_Item_Descriptor_Flag {
 typedef struct Oga_Shader_Item_Descriptor_Desc {
     Oga_Shader_Item_Descriptor_Kind kind;
     Oga_Shader_Item_Descriptor_Flag flags;
-    
+
 } Oga_Shader_Item_Descriptor_Desc;
 
 typedef struct Oga_Vertex_List_Desc  {
-    int _;  
+    int _;
 } Oga_Vertex_List_Desc;
 
 typedef struct Oga_Index_List_Desc  {
-    int _;  
-    
+    int _;
+
 } Oga_Index_List_Desc;
 
 typedef struct Oga_Copy_Task_Desc  {
-    int _;  
-    
+    int _;
+
 } Oga_Copy_Task_Desc;
 
 typedef struct Oga_Memory_View_Desc {
     Oga_Memory_View_Kind kind;
     Oga_Memory_View_Flag flags;
-    
+
     Oga_Memory_Handle memory;
-    
+
     union {
         Oga_Shader_Item_Descriptor_Desc shader_item_descriptor;
         Oga_Vertex_List_Desc vertex_list;
@@ -419,20 +419,20 @@ typedef struct Oga_Memory_View_Desc {
 #ifdef OSTD_IMPL
 
 Oga_Pick_Device_Result oga_pick_device(Oga_Device_Pick_Flag pick_flags, Oga_Device_Feature_Flag required_features, Oga_Device_Feature_Flag preferred_features) {
-    
+
     Oga_Device devices[32];
     u64 device_count = oga_query_devices(devices, 32);
-    
+
     s64 device_scores[32] = {0};
-    
+
     Oga_Pick_Device_Result results[32] = {0};
-    
+
     for (u64 i = 0; i < device_count; i += 1) {
         Oga_Device device = devices[i];
         s64 *pscore = &device_scores[i];
-        
+
         results[i].device = device;
-        
+
         if ((pick_flags & OGA_DEVICE_PICK_REQUIRE_DISCRETE) && device.kind != OGA_DEVICE_DISCRETE)  {
             results[i].passed = false;
             results[i].failed_pick_flags |= OGA_DEVICE_PICK_REQUIRE_DISCRETE;
@@ -448,20 +448,20 @@ Oga_Pick_Device_Result oga_pick_device(Oga_Device_Pick_Flag pick_flags, Oga_Devi
             results[i].failed_pick_flags |= OGA_DEVICE_PICK_REQUIRE_CPU;
             continue;
         }
-        
+
         if ((required_features & device.features) != required_features) {
             results[i].passed = false;
-            results[i].failed_required_features |= ((required_features & device.features) & required_features); 
+            results[i].failed_required_features |= ((required_features & device.features) & required_features);
             continue;
         }
-            
-        if ((pick_flags & OGA_DEVICE_PICK_PREFER_DISCRETE) && device.kind == OGA_DEVICE_DISCRETE) 
+
+        if ((pick_flags & OGA_DEVICE_PICK_PREFER_DISCRETE) && device.kind == OGA_DEVICE_DISCRETE)
             *pscore += 1000;
-        if ((pick_flags & OGA_DEVICE_PICK_PREFER_INTEGRATED) && device.kind == OGA_DEVICE_INTEGRATED) 
+        if ((pick_flags & OGA_DEVICE_PICK_PREFER_INTEGRATED) && device.kind == OGA_DEVICE_INTEGRATED)
             *pscore += 1000;
-        if ((pick_flags & OGA_DEVICE_PICK_PREFER_CPU) && device.kind == OGA_DEVICE_CPU) 
+        if ((pick_flags & OGA_DEVICE_PICK_PREFER_CPU) && device.kind == OGA_DEVICE_CPU)
             *pscore += 1000;
-        
+
         u64 preferred_features_count = 0;
         for (u64 f = 0; f < 64; f += 1) {
             // Feature flag is preferred ?
@@ -469,10 +469,10 @@ Oga_Pick_Device_Result oga_pick_device(Oga_Device_Pick_Flag pick_flags, Oga_Devi
                 preferred_features_count += 1;
             }
         }
-        
+
         if (preferred_features_count) {
             s64 score_per_feature = 1000/preferred_features_count;
-            
+
             for (u64 f = 0; f < 64; f += 1) {
                 // Feature flag is preferred ?
                 if (preferred_features & (1 << f)) {
@@ -482,15 +482,15 @@ Oga_Pick_Device_Result oga_pick_device(Oga_Device_Pick_Flag pick_flags, Oga_Devi
                     } else {
                         results[i].failed_preferred_features |= (1 << f);
                     }
-                } 
+                }
             }
         } else {
             *pscore += 1;
         }
-        
+
         results[i].passed = *pscore > 0;
     }
-    
+
     s64 max_score = 0;
     u64 winner_index = 0;
     for (u64 i = 0; i < device_count; i += 1) {

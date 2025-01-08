@@ -27,3 +27,4 @@ float64 ln64(float64 x) {
 }
 
 #endif // OSTD_IMPL
+

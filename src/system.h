@@ -164,8 +164,16 @@ void sys_print_stack_trace(File_Handle handle);
 
 #if (OS_FLAGS & OS_FLAG_HAS_WINDOW_SYSTEM)
 
+struct _XDisplay;
+typedef struct _XDisplay Display;
+struct wl_display;
+typedef struct wl_display wl_display;
+
 typedef struct _Surface_State {
     Surface_Handle handle;
+#if OS_FLAGS & OS_FLAG_LINUX
+    Display *xlib_display;
+#endif
     bool allocated;
     bool should_close;
 } _Surface_State;
@@ -213,6 +221,7 @@ unit_local _Surface_State *_get_surface_state(Surface_Handle h) {
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <errno.h>
+#include <execinfo.h>
 #undef bool
 
 typedef struct _Mapped_Region_Desc {
@@ -718,11 +727,6 @@ u64 sys_query_monitors(Physical_Monitor *buffer, u64 max_count) {
     EnumDisplayMonitors(0, 0, _win_query_monitors_callback, (LPARAM)&ctx);
     return ctx.count;
 }
-
-typedef struct TotalRectContext {
-    RECT rect;
-} TotalRectContext;
-
 
 File_Handle sys_get_stdout(void) {
     return (File_Handle)GetStdHandle((u32)-11);
@@ -1264,45 +1268,225 @@ void sys_print_stack_trace(File_Handle handle) {
 
 #elif (OS_FLAGS & OS_FLAG_LINUX)
 
+/////////////////////////////////////////////////////
+//////
+// :Linux
+//////
+/////////////////////////////////////////////////////
+
 #include <X11/Xlib.h>
+#include <X11/extensions/Xrandr.h>
+
+u64 sys_query_monitors(Physical_Monitor *buffer, u64 max_count)
+{
+    Display *dpy = XOpenDisplay(NULL);
+    if (!dpy) {
+        // Could not open X display
+        return 0;
+    }
+
+    Window root = RootWindow(dpy, DefaultScreen(dpy));
+
+    XRRScreenResources *res = XRRGetScreenResources(dpy, root);
+    if (!res) {
+        XCloseDisplay(dpy);
+        return 0;
+    }
+
+    u64 total_found = 0;
+
+    for (int i = 0; i < res->noutput; i++) {
+        XRROutputInfo *output_info = XRRGetOutputInfo(dpy, res, res->outputs[i]);
+        if (!output_info) {
+            continue;
+        }
+
+        // Only count if it's connected and has an active CRTC
+        if (output_info->connection == RR_Connected && output_info->crtc) {
+            XRRCrtcInfo *crtc_info = XRRGetCrtcInfo(dpy, res, output_info->crtc);
+            if (crtc_info) {
+                if (buffer && total_found < max_count) {
+                    Physical_Monitor *pm = &buffer[total_found];
+                    memset(pm, 0, sizeof(*pm));
+
+                    memcpy(pm->name, output_info->name, sizeof(pm->name) - 1);
+                    pm->name[sizeof(pm->name) - 1] = '\0';
+                    pm->name_count = (u64)(c_style_strlen((char*)pm->name) + 1);
+
+                    pm->pos_x       = crtc_info->x;
+                    pm->pos_y       = crtc_info->y;
+                    pm->resolution_x = crtc_info->width;
+                    pm->resolution_y = crtc_info->height;
+
+                    // todo(charlie) this is a hacky approximation that might not work very well so
+                    // I will need to revisit it.
+                    double refresh = 0.0;
+                    for (int m = 0; m < res->nmode; m++) {
+                        if (res->modes[m].id == crtc_info->mode) {
+                            XRRModeInfo *mode_info = &res->modes[m];
+                            if (mode_info->hTotal && mode_info->vTotal) {
+                                refresh = (double)mode_info->dotClock /
+                                          (double)(mode_info->hTotal * mode_info->vTotal);
+                            }
+                            break;
+                        }
+                    }
+                    pm->refresh_rate = (u64)(refresh + 0.5);
+
+                    pm->scale = 1.0;
+
+                    pm->handle = (void*)(uintptr)res->outputs[i];
+                }
+                total_found++;
+                XRRFreeCrtcInfo(crtc_info);
+            }
+        }
+        XRRFreeOutputInfo(output_info);
+    }
+
+    XRRFreeScreenResources(res);
+    XCloseDisplay(dpy);
+
+    return total_found;
+}
 
 File_Handle sys_get_stdout(void) {
-    return 0;
+    return (File_Handle)(u64)STDOUT_FILENO;
 }
+
 File_Handle sys_get_stderr(void) {
-    return 0;
+    return (File_Handle)(u64)STDERR_FILENO;
 }
 
 void sys_set_stdout(File_Handle h) {
-    (void)h;
-}
-void sys_set_stderr(File_Handle h) {
-    (void)h;
+    dup2((int)(u64)h, STDOUT_FILENO);
 }
 
-Surface_Handle sys_get_surface(void) {
-    return 0;
+void sys_set_stderr(File_Handle h) {
+    dup2((int)(u64)h, STDERR_FILENO);
+}
+
+unit_local bool _x11_initted = false;
+
+Surface_Handle sys_make_surface(Surface_Desc desc) {
+        if (!_x11_initted) {
+            XInitThreads();
+            _x11_initted = true;
+        }
+
+        Display *display = XOpenDisplay(NULL);
+        if (!display) {
+            sys_write_string(sys_get_stdout(), STR("Failed to open X display\n"));
+            return 0;
+        }
+
+        int screen = DefaultScreen(display);
+        unsigned long white = WhitePixel(display, screen);
+
+        Window window = XCreateSimpleWindow(
+            display,
+            DefaultRootWindow(display),
+            0, 0,
+            desc.width, desc.height,
+            0,
+            0,
+            white
+        );
+
+
+        char ctitle[256];
+        memcpy(ctitle, desc.title.data, min(desc.title.count, 255));
+        ctitle[min(desc.title.count, 255)] = 0;
+        XStoreName(display, window, ctitle);
+
+        XSelectInput(display, window, ExposureMask | KeyPressMask | StructureNotifyMask);
+
+        if (!(desc.flags & SURFACE_FLAG_HIDDEN)) {
+            XMapWindow(display, window);
+        }
+
+        _Surface_State *surface = (_Surface_State *)_alloc_surface_state();
+        surface->xlib_display = display;
+        surface->handle = (Surface_Handle)window;
+        surface->should_close = false;
+        return (Surface_Handle)surface;
+}
+
+void surface_close(Surface_Handle s) {
+    if (!s) return;
+    _Surface_State *state = (_Surface_State *)s;
+
+    XDestroyWindow(state->xlib_display, (Window)state->handle);
+    XCloseDisplay(state->xlib_display);
+
+    state->allocated = false;
 }
 
 void surface_poll_events(Surface_Handle surface) {
-    (void)surface;
+    if (!surface) return;
+    _Surface_State *state = (_Surface_State *)surface;
+
+    while (XPending(state->xlib_display)) {
+        XEvent evt;
+        XNextEvent(state->xlib_display, &evt);
+        switch (evt.type) {
+            case ClientMessage:
+            case DestroyNotify:
+                state->should_close = true;
+                break;
+            default:
+                break;
+        }
+    }
 }
+
 bool surface_should_close(Surface_Handle s) {
-    (void)s;
-    return false;
+    if (!s) return true;
+    _Surface_State *state = (_Surface_State *)s;
+    return state->should_close;
 }
 
 bool surface_set_flags(Surface_Handle h, Surface_Flags flags) {
-    (void)h;(void)flags;
-    return false;
+    if (!h) return false;
+    _Surface_State *state = (_Surface_State *)h;
+
+    if (flags & SURFACE_FLAG_HIDDEN) {
+        XUnmapWindow(state->xlib_display, (Window)state->handle);
+    }
+    if (flags & SURFACE_FLAG_TOPMOST) {
+
+    }
+    return true;
 }
+
 bool surface_unset_flags(Surface_Handle h, Surface_Flags flags) {
-    (void)h;(void)flags;
-    return false;
+    if (!h) return false;
+    _Surface_State *state = (_Surface_State *)h;
+
+    if (flags & SURFACE_FLAG_HIDDEN) {
+        XMapWindow(state->xlib_display, (Window)state->handle);
+    }
+
+    if (flags & SURFACE_FLAG_TOPMOST) {
+    }
+    return true;
 }
 
 void sys_print_stack_trace(File_Handle handle) {
-    sys_write_string(handle, STR("<Stack trace unimplemented>"));
+    void *stack[64];
+    int frames = backtrace(stack, 64);
+    char **symbols = backtrace_symbols(stack, frames);
+
+    if (symbols) {
+        for (int i = 0; i < frames; i++) {
+            sys_write_string(handle, STR(symbols[i]));
+            sys_write_string(handle, STR("\n"));
+        }
+        //free(symbols);
+        // #Leak
+    } else {
+        sys_write_string(handle, STR("<Stack trace unavailable>\n"));
+    }
 }
 
 #elif (OS_FLAGS & OS_FLAG_EMSCRIPTEN)
@@ -1386,3 +1570,4 @@ void sys_print_stack_trace(File_Handle handle) {
 #endif // OS_FLAGS & XXXXX
 
 #endif // OSTD_IMPL
+

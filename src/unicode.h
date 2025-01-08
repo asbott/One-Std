@@ -109,3 +109,4 @@ Utf8_To_Utf16_Result one_utf8_to_utf16(u8 *s, s64 source_length, bool strict) {
 }
 
 #endif //OSTD_IMPL
+

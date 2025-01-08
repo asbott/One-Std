@@ -29,3 +29,4 @@ unit_local inline bool strings_match(string a, string b) {
 
     return memcmp(a.data, b.data, (sys_uint)a.count) == 0;
 }
+

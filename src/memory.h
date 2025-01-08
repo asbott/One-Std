@@ -175,7 +175,7 @@ void free_arena(Arena arena) {
     u64 pointer_count = sys_query_mapped_regions(start, end, 0, 0);
 
     // todo(charlie)  use a temp scratch memory here
-    Mapped_Memory_Info pointers[4096];
+    Mapped_Memory_Info pointers[4096] = {0};
     sys_query_mapped_regions(start, end, pointers, pointer_count);
 
     u32 i;
@@ -255,3 +255,4 @@ void* arena_allocator_proc(Allocator_Message msg, void *data, void *old, u64 old
 }
 
 #endif // OSTD_IMPL
+

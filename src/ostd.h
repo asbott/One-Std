@@ -1,24 +1,18 @@
 #ifndef OSTD_H_
 #define OSTD_H_
 
+#if defined(__GNUC__) || defined(__GNUG__)
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wattributes"
+#endif
+
 #ifdef __clang__
 #pragma clang diagnostic push
-#pragma clang diagnostic ignored "-Wincompatible-library-redeclaration"
-//#pragma clang diagnostic ignored "-Wgnu-zero-variadic-macro-arguments"
-#pragma clang diagnostic ignored "-Wnewline-eof"
-#pragma clang diagnostic ignored "-Wkeyword-macro"
-#pragma clang diagnostic ignored "-Wreserved-identifier"
-#pragma clang diagnostic ignored "-Wdeclaration-after-statement"
-#pragma clang diagnostic ignored "-Wcovered-switch-default"
-#pragma clang diagnostic ignored "-Wcast-align"
-#pragma clang diagnostic ignored "-Wunused-function"
-#ifdef _MSC_VER
-#pragma clang diagnostic ignored "-Wunsafe-buffer-usage"
-#endif
+#pragma clang diagnostic ignored "-Wattributes"
 #ifdef __EMSCRIPTEN__
 #pragma clang diagnostic ignored "-Wpadded"
-#endif
-#endif
+#endif // __EMSCRIPTEN__
+#endif // __clang__
 
 #include "base.h"
 
@@ -39,8 +33,13 @@
 
 #include "graphics.h"
 
-#ifdef OSTD_NO_IGNORE_WARNINGS
+#if defined(__clang__)
 #pragma clang diagnostic pop
-#endif // OSTD_NO_IGNORE_WARNINGS
+#endif
+
+#if defined(__GNUC__) || defined(__GNUG__)
+#pragma GCC diagnostic pop
+#endif
 
 #endif // OSTD_H_
+

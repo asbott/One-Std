@@ -25,6 +25,16 @@
 #error Vulkan is not supported on target platform
 #endif
 
+#if defined(__GNUC__) || defined(__GNUG__)
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wunused-function"
+#endif
+
+#ifdef __clang__
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wunused-function"
+#endif // __clang__
+
 unit_local inline VkFormat _oga_to_vk_format(Oga_Format_Kind k) {
     switch (k) {
         case OGA_FORMAT_R8_UNORM:               return VK_FORMAT_R8_UNORM;
@@ -90,6 +100,14 @@ unit_local inline Oga_Format_Kind _vk_to_oga_format(VkFormat k) {
     return (Oga_Format_Kind)0;
 }
 
+#if defined(__clang__)
+#pragma clang diagnostic pop
+#endif
+
+#if defined(__GNUC__) || defined(__GNUG__)
+#pragma GCC diagnostic pop
+#endif
+
 
 unit_local inline string _str_vk_result(VkResult result) {
     switch ((s64)result) {
@@ -142,6 +160,7 @@ unit_local inline string _str_vk_result(VkResult result) {
 
 unit_local VkDebugUtilsMessengerEXT _vk_messenger;
 
+#ifdef DEBUG
 unit_local VkBool32 _vk_debug_callback(
     VkDebugUtilsMessageSeverityFlagBitsEXT           messageSeverity,
     VkDebugUtilsMessageTypeFlagsEXT                  messageTypes,
@@ -167,6 +186,7 @@ unit_local VkBool32 _vk_debug_callback(
 
     return 0;
 }
+#endif
 
 unit_local inline bool _vk_select_format(VkFormat *formats, u32 num_formats, VkImageTiling tiling, VkFormatFeatureFlags features, VkPhysicalDevice vk_device, VkFormat *result) {
     for (u32 i = 0; i < num_formats; i += 1) {
@@ -196,10 +216,10 @@ unit_local inline VkInstance _vk_instance(void) {
         VkApplicationInfo app_info = (VkApplicationInfo){0};
         app_info.sType = VK_STRUCTURE_TYPE_APPLICATION_INFO;
         app_info.pApplicationName = "Ostd App";
-        app_info.applicationVersion = VK_MAKE_VERSION(1, 0, 0);
+        app_info.applicationVersion = VK_MAKE_VERSION(0, 0, 1);
         app_info.pEngineName = "Oga";
         app_info.engineVersion = VK_MAKE_VERSION(1, 0, 0);
-        app_info.apiVersion = VK_API_VERSION_1_0;
+        app_info.apiVersion = VK_API_VERSION_1_1;
 
         VkInstanceCreateInfo create_info = (VkInstanceCreateInfo){0};
         create_info.sType = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO;
@@ -353,9 +373,10 @@ unit_local inline VkInstance _vk_instance(void) {
 
         debug_create_info.pfnUserCallback = _vk_debug_callback;
 
-        PFN_vkCreateDebugUtilsMessengerEXT _vkCreateDebugUtilsMessengerEXT  = (PFN_vkCreateDebugUtilsMessengerEXT)(void*)vkGetInstanceProcAddr(_vk_instance(), "vkCreateDebugUtilsMessengerEXT");
+        void (*untyped)(void) = vkGetInstanceProcAddr(instance, "vkCreateDebugUtilsMessengerEXT");
+        PFN_vkCreateDebugUtilsMessengerEXT _vkCreateDebugUtilsMessengerEXT  = (PFN_vkCreateDebugUtilsMessengerEXT)*(PFN_vkCreateDebugUtilsMessengerEXT*)(void**)&untyped;
 
-        if (_vkCreateDebugUtilsMessengerEXT(_vk_instance(), &debug_create_info, 0, &_vk_messenger) != VK_SUCCESS) {
+        if (_vkCreateDebugUtilsMessengerEXT(instance, &debug_create_info, 0, &_vk_messenger) != VK_SUCCESS) {
             log(0, "Failed creating vulkan debug messenger");
         }
 #endif // DEBUG
@@ -377,9 +398,8 @@ unit_local VkResult vkCreateSurfaceKHR(Surface_Handle h, VkSurfaceKHR *result) {
 #elif OS_FLAGS & OS_FLAG_LINUX
     VkXlibSurfaceCreateInfoKHR create_info = (VkXlibSurfaceCreateInfoKHR){0};
     create_info.sType = VK_STRUCTURE_TYPE_XLIB_SURFACE_CREATE_INFO_KHR;
-    create_info.window = (Window)h;
-    create_info.dpy = 0;
-    assert(false);
+    create_info.window = (Window)_get_surface_state(h)->handle;
+    create_info.dpy = _get_surface_state(h)->xlib_display;
     return vkCreateXlibSurfaceKHR(_vk_instance(), &create_info, 0, result);
 #elif OS_FLAGS & OS_FLAG_MACOS
     VkMacOSSurfaceCreateInfoMVK create_info = (VkMacOSSurfaceCreateInfoMVK){0};
@@ -689,3 +709,4 @@ void oga_uninit_context(Oga_Context *context) {
     vkDestroyDevice(context->id, 0);
     *context = (Oga_Context){0};
 }
+

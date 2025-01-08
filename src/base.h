@@ -98,10 +98,17 @@
 
 // make inline actually inline if supported by compiler
 
+#ifdef __clang__
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wkeyword-macro"
+#endif
 #if COMPILER_FLAGS & COMPILER_FLAG_GNU
     #define inline __attribute__((always_inline))
 #elif COMPILER_FLAGS & COMPILER_FLAG_MSC
     #define inline __forceinline
+#endif
+#ifdef __clang__
+#pragma clang diagnostic pop
 #endif
 
 #define CSTD_C90 1

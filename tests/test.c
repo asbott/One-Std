@@ -23,15 +23,15 @@ int main(void) {
     test_memory();
     test_print();
     test_sys2();
-    
+
     u64 device_count = 0;
     Oga_Device *devices = oga_get_devices(get_temp(), &device_count);
 
     assert(device_count > 0 && device_count < 128);
-    
+
     for (u32 i = 0; i < device_count; i += 1) {
         Oga_Device *device = devices + i;
-        
+
         string depth_str = oga_format_str(device->depth_format);
         print(("Device %u:\n"), i);
         print(("\t%s - %s %s\n"), STRN(device->device_name_length, device->device_name_data), device->vendor_name, STRN(device->driver_version_length, device->driver_version_data));
@@ -44,42 +44,42 @@ int main(void) {
             default: break;
         }
         print(("\tDepth: %s\n"), depth_str);
-        
+
         print(("\t%u Logical Engine families:\n"), device->logical_engine_family_count);
         for (u32 j = 0; j < device->logical_engine_family_count; j += 1) {
             Oga_Logical_Engine_Family_Info family = device->logical_engine_family_infos[j];
-            
+
             print(("\t\t"));
-            
+
             if (family.flags & OGA_LOGICAL_ENGINE_GRAPHICS) print(("GRAPHICS "));
             if (family.flags & OGA_LOGICAL_ENGINE_COMPUTE) print(("COMPUTE "));
             if (family.flags & OGA_LOGICAL_ENGINE_TRANSFER) print(("TRANSFER "));
             if (family.flags & OGA_LOGICAL_ENGINE_PRESENT) print(("PRESENT "));
-            
+
             print(("| %u logical_engines\n"), family.logical_engine_capacity);
-            
+
         }
         u64 mem_gb = device->total_gpu_local_memory/(1024*1024);
         print(("\tLocal memory: %u MB\n"), mem_gb);
         print(("\t%u Heaps:\n"), device->memory_heap_count);
         for (u64 j = 0; j < device->memory_heap_count; j += 1) {
             print(("\t\t"));
-            
+
             Oga_Memory_Heap heap = device->memory_heaps[j];
-            if (heap.properties & OGA_MEMORY_PROPERTY_GPU_LOCAL) 
+            if (heap.properties & OGA_MEMORY_PROPERTY_GPU_LOCAL)
                 print(("GPU-LOCAL "));
-            if (heap.properties & OGA_MEMORY_PROPERTY_GPU_TO_CPU_MAPPABLE) 
+            if (heap.properties & OGA_MEMORY_PROPERTY_GPU_TO_CPU_MAPPABLE)
                 print(("CPU-MAPPABLE "));
-            if (heap.properties & OGA_MEMORY_PROPERTY_GPU_TO_CPU_REFLECTED) 
+            if (heap.properties & OGA_MEMORY_PROPERTY_GPU_TO_CPU_REFLECTED)
                 print(("CPU-REFLECTED "));
-            if (heap.properties & OGA_MEMORY_PROPERTY_GPU_TO_CPU_CACHED) 
+            if (heap.properties & OGA_MEMORY_PROPERTY_GPU_TO_CPU_CACHED)
                 print(("CPU-CACHED "));
-                
+
             mem_gb = heap.size/(1024*1024);
             print(("| %u MB\n"), mem_gb);
         }
     }
-    
+
     Oga_Pick_Device_Result pick0 = oga_pick_device(
         OGA_DEVICE_PICK_PREFER_DISCRETE,
         0,
@@ -105,7 +105,7 @@ int main(void) {
         0,
         0
     );
-    
+
     string s0 = (pick0.passed ? (STRN(pick0.device.device_name_length, pick0.device.device_name_data)) : STR("NONE"));
     print("PREFER_DISCRETE: %s\n", s0);
     string s1 = (pick1.passed ? (STRN(pick1.device.device_name_length, pick1.device.device_name_data)) : STR("NONE"));
@@ -126,18 +126,18 @@ int main(void) {
     // Just pick the first logical_engine that has the flag we need.
     for (u32 family_index = 0; family_index < target_device.logical_engine_family_count; family_index += 1) {
         Oga_Logical_Engine_Family_Info family = target_device.logical_engine_family_infos[family_index];
-        
+
         if ((family.flags & OGA_LOGICAL_ENGINE_GRAPHICS) && family_index_graphics == U64_MAX) {
             family_index_graphics = family_index;
-        } 
+        }
         if ((family.flags & OGA_LOGICAL_ENGINE_PRESENT) && family_index_present == U64_MAX) {
             family_index_present = family_index;
-        } 
+        }
         if ((family.flags & OGA_LOGICAL_ENGINE_COMPUTE) && family_index_compute == U64_MAX) {
             family_index_compute = family_index;
-        } 
+        }
     }
-    
+
     if (family_index_graphics == U64_MAX) {
         print("Error: no graphics logical_engines.\n");
         return 1;
@@ -150,38 +150,38 @@ int main(void) {
         print("Error: no compute logical_engines.\n");
         return 1;
     }
-    
+
 
     Oga_Context_Desc context_desc = (Oga_Context_Desc){0};
-    
+
     Oga_Logical_Engines_Create_Desc *graphics_desc = &context_desc.logical_engine_create_descs[family_index_graphics];
     Oga_Logical_Engines_Create_Desc *present_desc = &context_desc.logical_engine_create_descs[family_index_present];
     Oga_Logical_Engines_Create_Desc *compute_desc = &context_desc.logical_engine_create_descs[family_index_compute];
-    
+
     Oga_Logical_Engine_Family_Info graphics_family = target_device.logical_engine_family_infos[family_index_graphics];
     Oga_Logical_Engine_Family_Info present_family = target_device.logical_engine_family_infos[family_index_present];
     Oga_Logical_Engine_Family_Info compute_family = target_device.logical_engine_family_infos[family_index_compute];
-    
+
     // Try creating separate logical_engines if logical_engines belong to same family and capacity allows.
-    
+
     graphics_desc->count = min(graphics_desc->count+1, graphics_family.logical_engine_capacity);
-    u64 logical_engine_index_graphics = graphics_desc->count-1; 
-    
+    u64 logical_engine_index_graphics = graphics_desc->count-1;
+
     present_desc->count = min(present_desc->count+1, present_family.logical_engine_capacity);
     u64 logical_engine_index_present = present_desc->count-1;
-    
+
     compute_desc->count = min(compute_desc->count+1, compute_family.logical_engine_capacity);
     u64 logical_engine_index_compute = compute_desc->count-1;
-    
+
     Oga_Context context;
-    Oga_Result context_result = oga_init_context(target_device, context_desc, &context); 
+    Oga_Result context_result = oga_init_context(target_device, context_desc, &context);
     if (context_result != OGA_OK) {
         string err_name = oga_get_result_name(context_result);
         string err_msg = oga_get_result_message(context_result);
         print("oga_init_failed with error %s: '%s'\n", err_name, err_msg);
         return 1;
     }
-    
+
     Oga_Logical_Engine graphics_logical_engine = context.logical_engines_by_family[family_index_graphics].logical_engines[logical_engine_index_graphics];
     Oga_Logical_Engine present_logical_engine = context.logical_engines_by_family[family_index_present].logical_engines[logical_engine_index_present];
     Oga_Logical_Engine compute_logical_engine = context.logical_engines_by_family[family_index_compute].logical_engines[logical_engine_index_compute];
@@ -431,3 +431,4 @@ void test_print(void) {
 
     arena_allocator((Arena*)0);
 }
+
