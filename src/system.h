@@ -202,6 +202,9 @@ unit_local _Surface_State *_get_surface_state(Surface_Handle h) {
 //////
 /////////////////////////////////////////////////////
 
+#if COMPILER_FLAGS & COMPILER_FLAG_GNU
+    #define _GNU_SOURCE
+#endif
 // todo(charlie) dynamically link & manually  define some stuff to minimize namespace bloat here
 #include <unistd.h>
 #include <sched.h>
@@ -784,7 +787,7 @@ Surface_Handle sys_make_surface(Surface_Desc desc) {
         wc.hIcon = 0;
         wc.lpszMenuName = 0;
         wc.hbrBackground = 0;
-    
+
     	ATOM res = RegisterClassExW(&wc);
     	assert(res);
     }
@@ -812,14 +815,14 @@ Surface_Handle sys_make_surface(Surface_Desc desc) {
     );
 
     if (!hwnd) return 0;
-    
+
     s->handle = hwnd;
-    
+
     UpdateWindow(hwnd);
-    
+
     surface_unset_flags(hwnd, ~desc.flags);
     surface_set_flags(hwnd, desc.flags);
-    
+
 
 
     return hwnd;
@@ -853,43 +856,43 @@ bool surface_should_close(Surface_Handle s) {
 bool surface_set_flags(Surface_Handle h, Surface_Flags flags) {
     int ex_style = GetWindowLongW((HWND)h, GWL_EXSTYLE);
     int style = GetWindowLongW((HWND)h, GWL_STYLE);
-    
+
     if (flags & SURFACE_FLAG_HIDDEN) {
         ex_style |= WS_EX_TOOLWINDOW;
     }
-    
+
     if (flags & SURFACE_FLAG_TOPMOST) {
         ex_style |= WS_EX_TOPMOST;
     }
-    
+
     SetWindowLongW((HWND)h, GWL_EXSTYLE, ex_style);
     SetWindowLongW((HWND)h, GWL_STYLE, style);
-    
+
     if (flags & SURFACE_FLAG_HIDDEN) {
         ShowWindow((HWND)h, SW_HIDE);
     }
-    
+
     if (flags & SURFACE_FLAG_TOPMOST) {
         SetWindowPos((HWND)h, HWND_TOPMOST, 0, 0, 0, 0, SWP_NOREPOSITION | SWP_NOSIZE | SWP_NOMOVE);
     }
-    
+
     return true;
 }
 bool surface_unset_flags(Surface_Handle h, Surface_Flags flags) {
     int ex_style = GetWindowLongW((HWND)h, GWL_EXSTYLE);
     int style = GetWindowLongW((HWND)h, GWL_STYLE);
-    
+
     if (flags & SURFACE_FLAG_HIDDEN) {
         ex_style &= ~(WS_EX_TOOLWINDOW);
     }
-    
+
     if (flags & SURFACE_FLAG_TOPMOST) {
         ex_style &= ~(WS_EX_TOPMOST);
     }
-    
+
     SetWindowLongW((HWND)h, GWL_EXSTYLE, ex_style);
     SetWindowLongW((HWND)h, GWL_STYLE, style);
-    
+
     if (flags & SURFACE_FLAG_HIDDEN) {
         ShowWindow((HWND)h, SW_SHOW);
     }
@@ -1237,7 +1240,7 @@ void sys_set_stderr(File_Handle h) {
     _android_user_stderr_handle = (int)(u64)h;
 }
 
-Surface_Handle sys_get_surface() {
+Surface_Handle sys_get_surface(void) {
     return (Surface_Handle)_android_window;
 }
 
@@ -1261,37 +1264,40 @@ void sys_print_stack_trace(File_Handle handle) {
 
 #elif (OS_FLAGS & OS_FLAG_LINUX)
 
+#include <X11/Xlib.h>
+
 File_Handle sys_get_stdout(void) {
-    if (_android_user_stdout_handle == -1) return (File_Handle)(u64)_android_stdout_pipe[1];
-    else return (File_Handle)(u64)_android_user_stdout_handle;
+    return 0;
 }
 File_Handle sys_get_stderr(void) {
-    if (_android_user_stderr_handle == -1) return (File_Handle)(u64)_android_stderr_pipe[1];
-    else return (File_Handle)(u64)_android_user_stderr_handle;
+    return 0;
 }
 
 void sys_set_stdout(File_Handle h) {
-    _android_user_stdout_handle = (int)(u64)h;
+    (void)h;
 }
 void sys_set_stderr(File_Handle h) {
-    _android_user_stderr_handle = (int)(u64)h;
+    (void)h;
 }
 
-Surface_Handle sys_get_surface() {
-    return (Surface_Handle)_android_window;
+Surface_Handle sys_get_surface(void) {
+    return 0;
 }
 
 void surface_poll_events(Surface_Handle surface) {
     (void)surface;
 }
 bool surface_should_close(Surface_Handle s) {
+    (void)s;
     return false;
 }
 
 bool surface_set_flags(Surface_Handle h, Surface_Flags flags) {
+    (void)h;(void)flags;
     return false;
 }
 bool surface_unset_flags(Surface_Handle h, Surface_Flags flags) {
+    (void)h;(void)flags;
     return false;
 }
 

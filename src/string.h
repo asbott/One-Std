@@ -18,6 +18,7 @@ unit_local inline u64 c_style_strlen(const char *s) {
 #define STRN(n, c) ((string){ n, (u8*)(uintptr)(const void*)(c) })
 #define RSTR(...) STR(#__VA_ARGS__)
 
+inline int memcmp(const void* a, const void* b, sys_uint n);
 unit_local inline bool strings_match(string a, string b) {
     if (a.count != b.count) return false;
 

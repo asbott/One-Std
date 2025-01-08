@@ -39,7 +39,7 @@
         #define va_arg   __crt_va_arg
         #define va_end   __crt_va_end
         #define va_copy(destination, source) ((destination) = (source))
-    #elif COMPILER_FLAGS & COMPILER_FLAG_CLANG_GNU
+    #elif COMPILER_FLAGS & COMPILER_FLAG_GNU
         #define va_start __builtin_va_start
         #define va_list  __builtin_va_list
         #define va_arg   __builtin_va_arg

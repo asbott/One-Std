@@ -32,9 +32,8 @@
 // Formatting
 //////
 
-// note(charlie) comma-swallowing is a hit on #Portability
-#define format_string(buffer, buffer_size, fmt, ...)  _format_string_ugly(buffer, buffer_size, STR(fmt), ##__VA_ARGS__)
-#define format_strings(buffer, buffer_size, fmt, ...)  _format_string_ugly(buffer, buffer_size, fmt, ##__VA_ARGS__)
+#define format_string(buffer, buffer_size, /*fmt, */...)  _format_string_ugly(buffer, buffer_size, __VA_ARGS__)
+#define format_strings(buffer, buffer_size, fmt, /*fmt, */...)  _format_strings_ugly(buffer, buffer_size, __VA_ARGS__)
 
 u64 format_string_args(void *buffer, u64 buffer_size, string fmt, u64 arg_count, Var_Arg *args, u64 *consumed_args);
 
@@ -53,13 +52,12 @@ typedef struct Source_Location {
 } Source_Location;
 #define HERE(...) (Source_Location) {__LINE__, STR(__FILE__), STR(__func__)}
 
-// note(charlie) comma-swallowing is a hit on #Portability
-#define sprint(allocator, fmt, ...)  _sprint_ugly(allocator,  STR(fmt), ##__VA_ARGS__)
-#define sprints(allocator, fmt, ...) _sprint_ugly(allocator,  fmt, ##__VA_ARGS__)
-#define tprint(fmt, ...)             _tprint_ugly(STR(fmt), ##__VA_ARGS__)
-#define tprints(fmt, ...)            _tprint_ugly(fmt, ##__VA_ARGS__)
-#define print(fmt, ...)              _print_ugly(STR(fmt), ##__VA_ARGS__)
-#define prints(fmt, ...)             _print_ugly(fmt, ##__VA_ARGS__)
+#define sprint(allocator, /*fmt, */...)  _sprint_ugly(allocator, __VA_ARGS__)
+#define sprints(allocator, /*fmt, */...) _sprints_ugly(allocator, __VA_ARGS__)
+#define tprint(/*fmt, */...)             _tprint_ugly(__VA_ARGS__)
+#define tprints(/*fmt, */...)            _tprints_ugly(__VA_ARGS__)
+#define print(/*fmt, */...)              _print_ugly(__VA_ARGS__)
+#define prints(/*fmt, */...)             _prints_ugly(__VA_ARGS__)
 
 string sprint_args(Allocator a, string fmt, u64 arg_count, Var_Arg *args);
 string tprint_args(string fmt, u64 arg_count, Var_Arg *args);
@@ -70,8 +68,9 @@ typedef void (*Logger_Proc)(string message, u64 flags, Source_Location location)
 extern Logger_Proc logger;
 
 void default_logger(string message, u64 flags, Source_Location location);
-#define log(flags, fmt, ...)              _log_ugly(flags, STR(fmt), ##__VA_ARGS__)
-#define logs(flags, fmt, ...)             _log_ugly(flags, fmt, ##__VA_ARGS__)
+
+#define log(flags, /*fmt, */...)              _log_ugly(flags, __VA_ARGS__)
+#define logs(flags, /*fmt, */ ...)             _logs_ugly(flags, __VA_ARGS__)
 
 //////
 // Internal
@@ -80,17 +79,29 @@ void default_logger(string message, u64 flags, Source_Location location);
 // note(charlie): These bloat the code and makes it less good at self-documenting,
 // so I made a prettier indirection for the readable part of the file.
 
-#define _format_string_ugly(buffer, buffer_size, fmt, ...)\
-    MAKE_WRAPPED_CALL(format_string_impl, _make_format_string_desc(buffer, buffer_size, fmt), ##__VA_ARGS__)
-#define _sprint_ugly(allocator, fmt, ...)\
-    MAKE_WRAPPED_CALL(sprint_impl, _make_print_desc(allocator, fmt), ##__VA_ARGS__)
-#define _tprint_ugly(fmt, ...)\
-    MAKE_WRAPPED_CALL(tprint_impl, _make_print_desc((Allocator){0}, fmt), ##__VA_ARGS__)
-#define _print_ugly(fmt, ...)\
-    MAKE_WRAPPED_CALL(print_impl, _make_print_desc((Allocator){0}, fmt), ##__VA_ARGS__)
+#define _format_string_ugly(buffer, buffer_size, ...)\
+    MAKE_WRAPPED_CALL(format_string_impl, _make_format_string_desc(buffer, buffer_size, STR(PP_FIRST_ARG(__VA_ARGS__))), __VA_ARGS__)
+#define _format_strings_ugly(buffer, buffer_size, ...)\
+    MAKE_WRAPPED_CALL(format_string_impl, _make_format_string_desc(buffer, buffer_size, PP_FIRST_ARG(__VA_ARGS__)), __VA_ARGS__)
 
-#define _log_ugly(flags, fmt, ...)\
-    MAKE_WRAPPED_CALL(log_impl, _make_log_desc((Allocator){0}, fmt, flags, HERE()), ##__VA_ARGS__)
+
+#define _sprint_ugly(allocator, ...)\
+    MAKE_WRAPPED_CALL(sprint_impl, _make_print_desc(allocator, STR(PP_FIRST_ARG(__VA_ARGS__))), __VA_ARGS__)
+#define _sprints_ugly(allocator, ...)\
+    MAKE_WRAPPED_CALL(sprint_impl, _make_print_desc(allocator, PP_FIRST_ARG(__VA_ARGS__)), __VA_ARGS__)
+#define _tprint_ugly(...)\
+    MAKE_WRAPPED_CALL(tprint_impl, _make_print_desc((Allocator){0}, STR(PP_FIRST_ARG(__VA_ARGS__))), __VA_ARGS__)
+#define _tprints_ugly(...)\
+    MAKE_WRAPPED_CALL(tprint_impl, _make_print_desc((Allocator){0}, PP_FIRST_ARG(__VA_ARGS__)), __VA_ARGS__)
+#define _print_ugly(...)\
+    MAKE_WRAPPED_CALL(print_impl, _make_print_desc((Allocator){0}, STR(PP_FIRST_ARG(__VA_ARGS__))), __VA_ARGS__)
+#define _prints_ugly(...)\
+    MAKE_WRAPPED_CALL(print_impl, _make_print_desc((Allocator){0}, PP_FIRST_ARG(__VA_ARGS__)), __VA_ARGS__)
+
+#define _log_ugly(flags, ...)\
+    MAKE_WRAPPED_CALL(log_impl, _make_log_desc((Allocator){0}, STR(PP_FIRST_ARG(__VA_ARGS__)), flags, HERE()), __VA_ARGS__)
+#define _logs_ugly(flags, ...)\
+    MAKE_WRAPPED_CALL(log_impl, _make_log_desc((Allocator){0}, PP_FIRST_ARG(__VA_ARGS__), flags, HERE()), __VA_ARGS__)
 
 typedef struct _Format_String_Desc {
     void *buffer;
@@ -276,7 +287,7 @@ void print_args(string fmt, u64 arg_count, Var_Arg *args) {
 void log_args(u64 flags, Source_Location location, string fmt, u64 arg_count, Var_Arg *args) {
 
     string s = tprint_args(fmt, arg_count, args);
-    
+
     if (!logger) {
         default_logger(s, flags, location);
     } else {

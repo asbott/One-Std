@@ -214,7 +214,7 @@
     typedef __INT16_TYPE__  s16;
     typedef __UINT8_TYPE__  u8;
     typedef __INT8_TYPE__   s8;
-    
+
     typedef __UINTPTR_TYPE__  uintptr;
 
 #else
@@ -228,7 +228,7 @@
     typedef int32_t  s32;
     typedef uint64_t u64;
     typedef int64_t  s64;
-    
+
      typedef uintptr_t uintptr;
 
 #endif
@@ -290,14 +290,16 @@ typedef u32 sys_uint;
 #endif
 
 #if !CSTD_C23
-    #pragma clang diagnostic push
 #if (COMPILER_FLAGS & COMPILER_FLAG_CLANG) && ((COMPILER_FLAGS & COMPILER_FLAG_MSC) || COMPILER_FLAGS & COMPILER_FLAG_EMSCRIPTEN)
+    #pragma clang diagnostic push
     #pragma clang diagnostic ignored "-Wc23-compat"
 #endif
     typedef s8 bool;
     #define true 1
     #define false 0
+#if (COMPILER_FLAGS & COMPILER_FLAG_CLANG) && ((COMPILER_FLAGS & COMPILER_FLAG_MSC) || COMPILER_FLAGS & COMPILER_FLAG_EMSCRIPTEN)
     #pragma clang diagnostic pop
+#endif
 #endif
 
 typedef union float32x2 {
@@ -396,9 +398,9 @@ u64 format_float(float64 x, int decimal_places, void *buffer, u64 buffer_size);
 
 
 
-#define PP_FIRST_ARG_HELPER(x, ...) x
-#define PP_FIRST_ARG(...) PP_FIRST_ARG_HELPER(__VA_ARGS__)
+#define PP_FIRST_ARG_HELPER(first, ...) first
+#define PP_FIRST_ARG(...) PP_FIRST_ARG_HELPER(__VA_ARGS__, 0)
 
-#define PP_EXCLUDE_FIRST_ARG_HELPER(x, ...) __VA_ARGS__
-#define PP_EXCLUDE_FIRST_ARG(...) PP_EXCLUDE_FIRST_ARG_HELPER(__VA_ARGS__)
+#define PP_EXCLUDE_FIRST_ARG_HELPER(first, ...) __VA_ARGS__
+#define PP_EXCLUDE_FIRST_ARG(...) PP_EXCLUDE_FIRST_ARG_HELPER(__VA_ARGS__,)
 

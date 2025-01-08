@@ -51,7 +51,7 @@ unit_local inline VkFormat _oga_to_vk_format(Oga_Format_Kind k) {
         case OGA_FORMAT_DEPTH32_SFLOAT_S8_UINT: return VK_FORMAT_D32_SFLOAT_S8_UINT;
         case OGA_FORMAT_DEPTH24_UNORM_S8_UINT:  return VK_FORMAT_D24_UNORM_S8_UINT;
         case OGA_FORMAT_DEPTH16_UNORM:          return VK_FORMAT_D16_UNORM;
-        
+
         default:
         return (VkFormat)0;
     }
@@ -83,7 +83,7 @@ unit_local inline Oga_Format_Kind _vk_to_oga_format(VkFormat k) {
         case VK_FORMAT_D32_SFLOAT_S8_UINT:  return OGA_FORMAT_DEPTH32_SFLOAT_S8_UINT;
         case VK_FORMAT_D24_UNORM_S8_UINT:   return OGA_FORMAT_DEPTH24_UNORM_S8_UINT;
         case VK_FORMAT_D16_UNORM:           return OGA_FORMAT_DEPTH16_UNORM;
-        
+
         default:
         return (Oga_Format_Kind)0;
     }
@@ -130,7 +130,7 @@ unit_local inline string _str_vk_result(VkResult result) {
         case VK_THREAD_DONE_KHR:                                    return RSTR(VK_THREAD_DONE_KHR);
         case VK_OPERATION_DEFERRED_KHR:                             return RSTR(VK_OPERATION_DEFERRED_KHR);
         case VK_OPERATION_NOT_DEFERRED_KHR:                         return RSTR(VK_OPERATION_NOT_DEFERRED_KHR);
-        
+
         case VK_RESULT_MAX_ENUM:
         default: return STR("<>");
     }
@@ -147,34 +147,34 @@ unit_local VkBool32 _vk_debug_callback(
     VkDebugUtilsMessageTypeFlagsEXT                  messageTypes,
     const VkDebugUtilsMessengerCallbackDataEXT*      pCallbackData,
     void*                                            pUserData) {
-    
+
     (void)messageTypes; (void)pUserData;
     string sev;
-    
+
     if (messageSeverity == VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT)
         sev = RSTR("WARNING");
     else if (messageSeverity == VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT)
         sev = RSTR("ERROR");
     else
         sev = RSTR("INFO");
-    
+
     log(0, "\n-----------------VK VALIDATION MESSAGE-----------------");
     log(0, "Severity: %s", sev);
     if (pCallbackData->pMessageIdName)
         log(0, "- Message ID: %s", STR(pCallbackData->pMessageIdName));
     if (pCallbackData->pMessage)
         log(0, "- Message: %s", STR(pCallbackData->pMessage));
-        
+
     return 0;
 }
 
 unit_local inline bool _vk_select_format(VkFormat *formats, u32 num_formats, VkImageTiling tiling, VkFormatFeatureFlags features, VkPhysicalDevice vk_device, VkFormat *result) {
     for (u32 i = 0; i < num_formats; i += 1) {
         VkFormat format = formats[i];
-        
+
         VkFormatProperties props;
         vkGetPhysicalDeviceFormatProperties(vk_device, format, &props);
-        
+
         if (tiling == VK_IMAGE_TILING_LINEAR && (features & props.linearTilingFeatures) == features) {
             *result = format;
             return true;
@@ -184,15 +184,15 @@ unit_local inline bool _vk_select_format(VkFormat *formats, u32 num_formats, VkI
             return true;
         }
     }
-    
+
     return false;
 }
 
 unit_local inline VkInstance _vk_instance(void) {
     local_persist VkInstance instance = 0;
-    
+
     if (!instance) {
-        
+
         VkApplicationInfo app_info = (VkApplicationInfo){0};
         app_info.sType = VK_STRUCTURE_TYPE_APPLICATION_INFO;
         app_info.pApplicationName = "Ostd App";
@@ -200,14 +200,14 @@ unit_local inline VkInstance _vk_instance(void) {
         app_info.pEngineName = "Oga";
         app_info.engineVersion = VK_MAKE_VERSION(1, 0, 0);
         app_info.apiVersion = VK_API_VERSION_1_0;
-    
+
         VkInstanceCreateInfo create_info = (VkInstanceCreateInfo){0};
         create_info.sType = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO;
         create_info.pApplicationInfo = &app_info;
-        
+
 #if OS_FLAGS & OS_FLAG_WINDOWS
         const char *required_extensions[] = {
-            
+
 #ifdef DEBUG
             VK_EXT_DEBUG_UTILS_EXTENSION_NAME,
 #endif // _DEBUG
@@ -258,12 +258,12 @@ unit_local inline VkInstance _vk_instance(void) {
     #error VK instance extension query not set up for this OS
 #endif
         u64 num_required_extensions = sizeof(required_extensions) / sizeof(char*);
-        
+
         log(0, "Looking for extensions:");
         for (u64 i = 0; i < num_required_extensions; i += 1) {
             log(0, "\t%s", STR(required_extensions[i]));
         }
-        
+
         u32 num_available_extensions;
         _vk_assert(vkEnumerateInstanceExtensionProperties(0, &num_available_extensions, 0));
         VkExtensionProperties *available_extensions = NewBuffer(get_temp(), VkExtensionProperties, num_available_extensions);
@@ -272,7 +272,7 @@ unit_local inline VkInstance _vk_instance(void) {
         bool any_missing = false;
         for (u64 i = 0; i < num_required_extensions; i += 1) {
             const char *required = required_extensions[i];
-            
+
             bool match = false;
             for (u64 j = 0; j < num_available_extensions; j += 1) {
                 const char *available = available_extensions[j].extensionName;
@@ -281,7 +281,7 @@ unit_local inline VkInstance _vk_instance(void) {
                     break;
                 }
             }
-            
+
             if (match == false) {
                 any_missing = true;
                 log(0, "Missing required vulkan extension '%s'", STR(required));
@@ -289,29 +289,29 @@ unit_local inline VkInstance _vk_instance(void) {
                 log(0, "Found '%s'..", STR(required));
             }
         }
-        
+
         assertmsg(!any_missing, "Basic vulkan extensions were missing, cannot proceed. Make sure you have a proper vulkan SDK installed.");
-        
+
         create_info.ppEnabledExtensionNames = required_extensions;
         create_info.enabledExtensionCount = (u32)num_required_extensions;
-        
+
 #ifdef DEBUG
         const char *wanted_layers[] = {"VK_LAYER_KHRONOS_validation"};
         u32 num_wanted_layers = (u64)(sizeof(wanted_layers)/sizeof(char*));
-        
+
         u32 num_available_layers;
         _vk_assert(vkEnumerateInstanceLayerProperties(&num_available_layers, 0));
-        
+
         VkLayerProperties *available_layers = NewBuffer(get_temp(), VkLayerProperties, num_available_layers);
         _vk_assert(vkEnumerateInstanceLayerProperties(&num_available_layers, available_layers));
-        
+
         const char *final_layers[32];
         u32 num_final_layers = 0;
-        
+
         any_missing = false;
         for (u64 i = 0; i < num_wanted_layers; i += 1) {
             const char *wanted = wanted_layers[i];
-            
+
             bool match = false;
             for (u64 j = 0; j < num_available_layers; j += 1) {
                 const char *available = available_layers[j].layerName;
@@ -320,7 +320,7 @@ unit_local inline VkInstance _vk_instance(void) {
                     break;
                 }
             }
-            
+
             if (match == false) {
                 any_missing = true;
                 log(0, "Missing wanted vulkan debug layer '%s'", STR(wanted));
@@ -329,46 +329,46 @@ unit_local inline VkInstance _vk_instance(void) {
                 log(0, "Found validation layer %s", STR(wanted));
             }
         }
-    
+
         create_info.enabledLayerCount = num_final_layers;
         create_info.ppEnabledLayerNames = final_layers;
 #else
         create_info.enabledLayerCount = 0;
 #endif
-        
+
         _vk_assert(vkCreateInstance(&create_info, 0, &instance));
-        
+
 #if DEBUG
         VkDebugUtilsMessengerCreateInfoEXT debug_create_info = (VkDebugUtilsMessengerCreateInfoEXT){0};
         debug_create_info.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_MESSENGER_CREATE_INFO_EXT;
-        
-        debug_create_info.messageSeverity = 
+
+        debug_create_info.messageSeverity =
             VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT |
             VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT;
-        
-        debug_create_info.messageType = 
+
+        debug_create_info.messageType =
             VK_DEBUG_UTILS_MESSAGE_TYPE_GENERAL_BIT_EXT |
-            VK_DEBUG_UTILS_MESSAGE_TYPE_VALIDATION_BIT_EXT | 
+            VK_DEBUG_UTILS_MESSAGE_TYPE_VALIDATION_BIT_EXT |
             VK_DEBUG_UTILS_MESSAGE_TYPE_PERFORMANCE_BIT_EXT;
-            
+
         debug_create_info.pfnUserCallback = _vk_debug_callback;
-        
+
         PFN_vkCreateDebugUtilsMessengerEXT _vkCreateDebugUtilsMessengerEXT  = (PFN_vkCreateDebugUtilsMessengerEXT)(void*)vkGetInstanceProcAddr(_vk_instance(), "vkCreateDebugUtilsMessengerEXT");
-        
+
         if (_vkCreateDebugUtilsMessengerEXT(_vk_instance(), &debug_create_info, 0, &_vk_messenger) != VK_SUCCESS) {
             log(0, "Failed creating vulkan debug messenger");
         }
 #endif // DEBUG
     }
-    
-    
+
+
     return instance;
 }
 
 
 
 unit_local VkResult vkCreateSurfaceKHR(Surface_Handle h, VkSurfaceKHR *result) {
-#if OS_FLAGS & OS_FLAG_WINDOWS            
+#if OS_FLAGS & OS_FLAG_WINDOWS
     VkWin32SurfaceCreateInfoKHR create_info = (VkWin32SurfaceCreateInfoKHR){0};
     create_info.sType = VK_STRUCTURE_TYPE_WIN32_SURFACE_CREATE_INFO_KHR;
     create_info.hwnd = (HWND)h;
@@ -378,7 +378,8 @@ unit_local VkResult vkCreateSurfaceKHR(Surface_Handle h, VkSurfaceKHR *result) {
     VkXlibSurfaceCreateInfoKHR create_info = (VkXlibSurfaceCreateInfoKHR){0};
     create_info.sType = VK_STRUCTURE_TYPE_XLIB_SURFACE_CREATE_INFO_KHR;
     create_info.window = (Window)h;
-    create_info.dpy = ???;
+    create_info.dpy = 0;
+    assert(false);
     return vkCreateXlibSurfaceKHR(_vk_instance(), &create_info, 0, result);
 #elif OS_FLAGS & OS_FLAG_MACOS
     VkMacOSSurfaceCreateInfoMVK create_info = (VkMacOSSurfaceCreateInfoMVK){0};
@@ -403,42 +404,42 @@ unit_local VkResult vkCreateSurfaceKHR(Surface_Handle h, VkSurfaceKHR *result) {
 u64 oga_query_devices(Oga_Device *buffer, u64 buffer_count) {
     u32 device_count;
     _vk_assert(vkEnumeratePhysicalDevices(_vk_instance(), &device_count,  0));
-    
+
     if (buffer) {
         memset(buffer, 0, buffer_count*sizeof(Oga_Device));
         VkPhysicalDevice vk_devices[256];
         _vk_assert(vkEnumeratePhysicalDevices(_vk_instance(), &device_count,  vk_devices));
-        
+
         for (u32 i = 0; i < min(device_count, (u32)buffer_count); i += 1) {
             Oga_Device *device = buffer + i;
             VkPhysicalDevice vk_device = vk_devices[i];
-        
-        
+
+
             ////
             // Yoink info
-            
+
             VkPhysicalDeviceProperties props;
             VkPhysicalDeviceMemoryProperties mem_props;
             VkPhysicalDeviceFeatures features;
-        
+
             vkGetPhysicalDeviceProperties(vk_device, &props);
             vkGetPhysicalDeviceMemoryProperties(vk_device, &mem_props);
             vkGetPhysicalDeviceFeatures(vk_device, &features);
-            
+
             u32 ext_count;
             vkEnumerateDeviceExtensionProperties(vk_device, 0, &ext_count, 0);
             VkExtensionProperties *ext_props = NewBuffer(get_temp(), VkExtensionProperties, ext_count);
             vkEnumerateDeviceExtensionProperties(vk_device, 0, &ext_count, ext_props);
-            
+
             u32 logical_engine_family_count;
             vkGetPhysicalDeviceQueueFamilyProperties(vk_device, &logical_engine_family_count, 0);
             VkQueueFamilyProperties *logical_engine_family_props = NewBuffer(get_temp(), VkQueueFamilyProperties, logical_engine_family_count);
             vkGetPhysicalDeviceQueueFamilyProperties(vk_device, &logical_engine_family_count, logical_engine_family_props);
-            
-            
+
+
             /////
             // Copy over info into our API
-            
+
             ///
             // Kind
             if (props.deviceType == VK_PHYSICAL_DEVICE_TYPE_INTEGRATED_GPU)
@@ -454,11 +455,11 @@ u64 oga_query_devices(Oga_Device *buffer, u64 buffer_count) {
             device->vendor_name = _str_vendor_id(props.vendorID);
             device->driver_version_raw = props.driverVersion;
             device->driver_version_length = _format_driver_version(props.vendorID, props.driverVersion, device->driver_version_data, sizeof(device->driver_version_data));
-           
-            
+
+
             ///
             // Logical Engine flags
-            
+
             // note(charlie) annoyingly, we need an existing surface to look for
             // surface support in logical_engines. So, we just make a temporary invisible
             // surface and then delete it when done.
@@ -471,21 +472,21 @@ u64 oga_query_devices(Oga_Device *buffer, u64 buffer_count) {
 #else
             Surface_Handle temp_sys_surface = sys_get_surface();
 #endif
-            
+
             VkSurfaceKHR temp_vk_surface;
             _vk_assert(vkCreateSurfaceKHR(temp_sys_surface, &temp_vk_surface));
-            
+
             device->logical_engine_family_count = logical_engine_family_count;
             for (u32 j = 0; j < logical_engine_family_count; j += 1) {
                 Oga_Logical_Engine_Family_Info *info = &device->logical_engine_family_infos[j];
                 VkQueueFamilyProperties family_props = logical_engine_family_props[j];
-            
+
                 VkBool32 val;
                 _vk_assert(vkGetPhysicalDeviceSurfaceSupportKHR(vk_device, j, temp_vk_surface, &val));
                 if (val) info->flags |= OGA_LOGICAL_ENGINE_PRESENT;
-                
+
                 info->logical_engine_capacity = family_props.queueCount;
-                
+
                 if (family_props.queueFlags & VK_QUEUE_GRAPHICS_BIT)
                     info->flags |= OGA_LOGICAL_ENGINE_GRAPHICS;
                 if (family_props.queueFlags & VK_QUEUE_COMPUTE_BIT)
@@ -493,7 +494,7 @@ u64 oga_query_devices(Oga_Device *buffer, u64 buffer_count) {
                 if (family_props.queueFlags & VK_QUEUE_TRANSFER_BIT)
                     info->flags |= OGA_LOGICAL_ENGINE_TRANSFER;
             }
-            
+
             vkDestroySurfaceKHR(_vk_instance(), temp_vk_surface, 0);
 
 #if OS_FLAGS & OS_FLAG_HAS_WINDOW_SYSTEM
@@ -502,38 +503,38 @@ u64 oga_query_devices(Oga_Device *buffer, u64 buffer_count) {
 
             ///
             // Depth format
-        
+
             VkFormat depth_formats[] =  {
                 VK_FORMAT_D32_SFLOAT,
                 VK_FORMAT_D32_SFLOAT_S8_UINT,
                 VK_FORMAT_D24_UNORM_S8_UINT,
                 VK_FORMAT_D16_UNORM
             };
-            
+
             VkFormat vk_depth_format;
             bool ok = _vk_select_format(depth_formats, sizeof(depth_formats)/sizeof(VkFormat), VK_IMAGE_TILING_OPTIMAL, VK_FORMAT_FEATURE_DEPTH_STENCIL_ATTACHMENT_BIT, vk_device, &vk_depth_format);
-            
+
             if (!ok) {
                 log(0, ("WARNING: Could not find a supported depth format on this device."));
                 vk_depth_format = VK_FORMAT_D32_SFLOAT;
             }
-            
+
             device->depth_format = _vk_to_oga_format(vk_depth_format);
-            
+
             /////
             // Memory heaps
-            
+
             for (u32 j = 0; j < mem_props.memoryHeapCount; j += 1) {
                 device->memory_heaps[j].size = (u64)mem_props.memoryHeaps[j].size;
             }
             device->memory_heap_count = mem_props.memoryHeapCount;
-            
+
             for (u32 j = 0; j < mem_props.memoryTypeCount; j += 1) {
                 VkMemoryType type = mem_props.memoryTypes[j];
                 Oga_Memory_Heap *heap = &device->memory_heaps[type.heapIndex];
-                
-                
-                
+
+
+
                 if (type.propertyFlags & VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT)
                     heap->properties |= OGA_MEMORY_PROPERTY_GPU_LOCAL;
                 if (type.propertyFlags & VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT)
@@ -543,18 +544,18 @@ u64 oga_query_devices(Oga_Device *buffer, u64 buffer_count) {
                 if (type.propertyFlags & VK_MEMORY_PROPERTY_HOST_CACHED_BIT)
                     heap->properties |= OGA_MEMORY_PROPERTY_GPU_TO_CPU_CACHED;
             }
-            
+
             for (u32 j = 0; j < device->memory_heap_count; j += 1) {
                 if (device->memory_heaps[j].properties & OGA_MEMORY_PROPERTY_GPU_LOCAL)
                     device->total_gpu_local_memory += device->memory_heaps[j].size;
             }
-            
-            
+
+
             if (props.limits.timestampComputeAndGraphics) {
                 device->features |= (OGA_DEVICE_FEATURE_GRAPHICS_TIMESTAMP |
                                      OGA_DEVICE_FEATURE_COMPUTE_TIMESTAMP);
             }
-            
+
             device->limits.max_shader_items_sets_per_stage = props.limits.maxPerStageResources;
             device->limits.max_fast_data_blocks_per_stage = props.limits.maxPerStageDescriptorUniformBuffers;
             device->limits.max_large_data_blocks_per_stage = props.limits.maxPerStageDescriptorStorageBuffers;
@@ -595,64 +596,64 @@ u64 oga_query_devices(Oga_Device *buffer, u64 buffer_count) {
                 if (props.limits.sampledImageIntegerSampleCounts & f) device->limits.supported_sample_counts_fast_image_int |= f;
             for (u64 f = 1; f < VK_SAMPLE_COUNT_FLAG_BITS_MAX_ENUM; f = f << 1)
                 if (props.limits.storageImageSampleCounts & f) device->limits.supported_sample_counts_large_image_int |= f;
-            
+
             device->id = vk_device;
         }
     }
-    
+
     return device_count;
 }
 
 Oga_Device *oga_get_devices(Allocator a, u64 *count) {
     *count = oga_query_devices(0, 0);
-    
+
     Oga_Device *devices = NewBuffer(a, Oga_Device, *count);
     oga_query_devices(devices, *count);
-    
+
     return devices;
 }
 
 
 Oga_Result oga_init_context(Oga_Device target_device, Oga_Context_Desc desc, Oga_Context *context) {
-    
+
     const char *required_extensions[] = {
         VK_KHR_SWAPCHAIN_EXTENSION_NAME
     };
-    
+
     if ((desc.enabled_features & target_device.features) != desc.enabled_features) {
         return OGA_CONTEXT_INIT_ERROR_MISSING_DEVICE_FEATURES;
     }
-    
+
     VkPhysicalDeviceFeatures enabled_features = (VkPhysicalDeviceFeatures){0};
     // if (desc.enabled_features & OGA_DEVICE_FEATURE_XXXX) enabled_features.xxxx = true;
-    
+
     VkDeviceQueueCreateInfo logical_engine_infos[OGA_MAX_DEVICE_LOGICAL_ENGINE_FAMILIES] = {0};
-    
+
     u64 logical_engines_desc_count = 0;
     for (u64 family_index = 0; family_index < OGA_MAX_DEVICE_LOGICAL_ENGINE_FAMILIES; family_index += 1) {
         Oga_Logical_Engines_Create_Desc logical_engines_desc = desc.logical_engine_create_descs[family_index];
         if (logical_engines_desc.count > 0) {
-            
+
             if (family_index >= target_device.logical_engine_family_count) {
                 return OGA_CREATE_LOGICAL_ENGINE_ERROR_FAMILY_INDEX_OUT_OF_RANGE;
             }
-            
+
             Oga_Logical_Engine_Family_Info family = target_device.logical_engine_family_infos[family_index];
             if (logical_engines_desc.count > family.logical_engine_capacity) {
                 return OGA_CREATE_LOGICAL_ENGINE_ERROR_FAMILY_CAPACITY_OVERFLOW;
             }
-            
+
             VkDeviceQueueCreateInfo *info = &logical_engine_infos[logical_engines_desc_count];
             info->sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
             info->queueFamilyIndex = (u32)family_index;
             info->queueCount = (u32)logical_engines_desc.count;
             info->pQueuePriorities = logical_engines_desc.priorities;
-            
+
             logical_engines_desc_count += 1;
         }
     }
-    
-    
+
+
     VkDeviceCreateInfo info = (VkDeviceCreateInfo) {0};
     info.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
     info.enabledExtensionCount = (u32)(sizeof(required_extensions)/sizeof(char*));
@@ -660,31 +661,31 @@ Oga_Result oga_init_context(Oga_Device target_device, Oga_Context_Desc desc, Oga
     info.pEnabledFeatures = &enabled_features;
     info.queueCreateInfoCount = (u32)logical_engines_desc_count;
     info.pQueueCreateInfos = logical_engine_infos;
-    
+
     *context = (Oga_Context){0};
     _vk_assert(vkCreateDevice(target_device.id, &info, 0, (VkDevice*)&context->id));
     context->device = target_device;
-    
+
     for (u64 family_index = 0; family_index < OGA_MAX_DEVICE_LOGICAL_ENGINE_FAMILIES; family_index += 1) {
         Oga_Logical_Engines_Create_Desc logical_engines_desc = desc.logical_engine_create_descs[family_index];
         Oga_Logical_Engine_Group *group = &context->logical_engines_by_family[family_index];
         for (u64 logical_engine_index = 0; logical_engine_index < logical_engines_desc.count; logical_engine_index += 1) {
             Oga_Logical_Engine *logical_engine = &group->logical_engines[logical_engine_index];
             vkGetDeviceQueue(
-                context->id, 
-                (u32)family_index, 
-                (u32)logical_engine_index, 
+                context->id,
+                (u32)family_index,
+                (u32)logical_engine_index,
                 (VkQueue*)&logical_engine->id
             );
             logical_engine->index = (u32)logical_engine_index;
         }
     }
-    
+
     return OGA_OK;
 }
 void oga_uninit_context(Oga_Context *context) {
     vkDeviceWaitIdle(context->id);
-    
+
     vkDestroyDevice(context->id, 0);
     *context = (Oga_Context){0};
 }
