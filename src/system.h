@@ -1259,6 +1259,46 @@ void sys_print_stack_trace(File_Handle handle) {
     sys_write_string(handle, STR("<Stack trace unimplemented>"));
 }
 
+#elif (OS_FLAGS & OS_FLAG_LINUX)
+
+File_Handle sys_get_stdout(void) {
+    if (_android_user_stdout_handle == -1) return (File_Handle)(u64)_android_stdout_pipe[1];
+    else return (File_Handle)(u64)_android_user_stdout_handle;
+}
+File_Handle sys_get_stderr(void) {
+    if (_android_user_stderr_handle == -1) return (File_Handle)(u64)_android_stderr_pipe[1];
+    else return (File_Handle)(u64)_android_user_stderr_handle;
+}
+
+void sys_set_stdout(File_Handle h) {
+    _android_user_stdout_handle = (int)(u64)h;
+}
+void sys_set_stderr(File_Handle h) {
+    _android_user_stderr_handle = (int)(u64)h;
+}
+
+Surface_Handle sys_get_surface() {
+    return (Surface_Handle)_android_window;
+}
+
+void surface_poll_events(Surface_Handle surface) {
+    (void)surface;
+}
+bool surface_should_close(Surface_Handle s) {
+    return false;
+}
+
+bool surface_set_flags(Surface_Handle h, Surface_Flags flags) {
+    return false;
+}
+bool surface_unset_flags(Surface_Handle h, Surface_Flags flags) {
+    return false;
+}
+
+void sys_print_stack_trace(File_Handle handle) {
+    sys_write_string(handle, STR("<Stack trace unimplemented>"));
+}
+
 #elif (OS_FLAGS & OS_FLAG_EMSCRIPTEN)
 
 /////////////////////////////////////////////////////
