@@ -402,5 +402,5 @@ u64 format_float(float64 x, int decimal_places, void *buffer, u64 buffer_size);
 #define PP_FIRST_ARG(...) PP_FIRST_ARG_HELPER(__VA_ARGS__, 0)
 
 #define PP_EXCLUDE_FIRST_ARG_HELPER(first, ...) __VA_ARGS__
-#define PP_EXCLUDE_FIRST_ARG(...) PP_EXCLUDE_FIRST_ARG_HELPER(__VA_ARGS__,)
+#define PP_EXCLUDE_FIRST_ARG(...) PP_EXCLUDE_FIRST_ARG_HELPER(__VA_ARGS__)
 

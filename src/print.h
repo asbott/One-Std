@@ -99,9 +99,9 @@ void default_logger(string message, u64 flags, Source_Location location);
     MAKE_WRAPPED_CALL(print_impl, _make_print_desc((Allocator){0}, PP_FIRST_ARG(__VA_ARGS__)), __VA_ARGS__)
 
 #define _log_ugly(flags, ...)\
-    MAKE_WRAPPED_CALL(log_impl, _make_log_desc((Allocator){0}, STR(PP_FIRST_ARG(__VA_ARGS__)), flags, HERE()), __VA_ARGS__)
+    MAKE_WRAPPED_CALL(log_impl, _make_log_desc((Allocator){0}, STR(PP_FIRST_ARG(__VA_ARGS__)), flags, HERE()), PP_EXCLUDE_FIRST_ARG(__VA_ARGS__, (string){0}))
 #define _logs_ugly(flags, ...)\
-    MAKE_WRAPPED_CALL(log_impl, _make_log_desc((Allocator){0}, PP_FIRST_ARG(__VA_ARGS__), flags, HERE()), __VA_ARGS__)
+    MAKE_WRAPPED_CALL(log_impl, _make_log_desc((Allocator){0}, PP_FIRST_ARG(__VA_ARGS__), flags, HERE()), PP_EXCLUDE_FIRST_ARG(__VA_ARGS__,  (string){0}))
 
 typedef struct _Format_String_Desc {
     void *buffer;
