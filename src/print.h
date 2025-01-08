@@ -80,23 +80,23 @@ void default_logger(string message, u64 flags, Source_Location location);
 // so I made a prettier indirection for the readable part of the file.
 
 #define _format_string_ugly(buffer, buffer_size, ...)\
-    MAKE_WRAPPED_CALL(format_string_impl, _make_format_string_desc(buffer, buffer_size, STR(PP_FIRST_ARG(__VA_ARGS__))), __VA_ARGS__)
+    MAKE_WRAPPED_CALL(format_string_impl, _make_format_string_desc(buffer, buffer_size, STR(PP_FIRST_ARG(__VA_ARGS__))), PP_EXCLUDE_FIRST_ARG(__VA_ARGS__, (string){0}))
 #define _format_strings_ugly(buffer, buffer_size, ...)\
-    MAKE_WRAPPED_CALL(format_string_impl, _make_format_string_desc(buffer, buffer_size, PP_FIRST_ARG(__VA_ARGS__)), __VA_ARGS__)
+    MAKE_WRAPPED_CALL(format_string_impl, _make_format_string_desc(buffer, buffer_size, PP_FIRST_ARG(__VA_ARGS__)), PP_EXCLUDE_FIRST_ARG(__VA_ARGS__, (string){0}))
 
 
 #define _sprint_ugly(allocator, ...)\
-    MAKE_WRAPPED_CALL(sprint_impl, _make_print_desc(allocator, STR(PP_FIRST_ARG(__VA_ARGS__))), __VA_ARGS__)
+    MAKE_WRAPPED_CALL(sprint_impl, _make_print_desc(allocator, STR(PP_FIRST_ARG(__VA_ARGS__))), PP_EXCLUDE_FIRST_ARG(__VA_ARGS__, (string){0}))
 #define _sprints_ugly(allocator, ...)\
-    MAKE_WRAPPED_CALL(sprint_impl, _make_print_desc(allocator, PP_FIRST_ARG(__VA_ARGS__)), __VA_ARGS__)
+    MAKE_WRAPPED_CALL(sprint_impl, _make_print_desc(allocator, PP_FIRST_ARG(__VA_ARGS__)), PP_EXCLUDE_FIRST_ARG(__VA_ARGS__, (string){0}))
 #define _tprint_ugly(...)\
-    MAKE_WRAPPED_CALL(tprint_impl, _make_print_desc((Allocator){0}, STR(PP_FIRST_ARG(__VA_ARGS__))), __VA_ARGS__)
+    MAKE_WRAPPED_CALL(tprint_impl, _make_print_desc((Allocator){0}, STR(PP_FIRST_ARG(__VA_ARGS__))), PP_EXCLUDE_FIRST_ARG(__VA_ARGS__, (string){0}))
 #define _tprints_ugly(...)\
-    MAKE_WRAPPED_CALL(tprint_impl, _make_print_desc((Allocator){0}, PP_FIRST_ARG(__VA_ARGS__)), __VA_ARGS__)
+    MAKE_WRAPPED_CALL(tprint_impl, _make_print_desc((Allocator){0}, PP_FIRST_ARG(__VA_ARGS__)), PP_EXCLUDE_FIRST_ARG(__VA_ARGS__, (string){0}))
 #define _print_ugly(...)\
-    MAKE_WRAPPED_CALL(print_impl, _make_print_desc((Allocator){0}, STR(PP_FIRST_ARG(__VA_ARGS__))), __VA_ARGS__)
+    MAKE_WRAPPED_CALL(print_impl, _make_print_desc((Allocator){0}, STR(PP_FIRST_ARG(__VA_ARGS__))), PP_EXCLUDE_FIRST_ARG(__VA_ARGS__, (string){0}))
 #define _prints_ugly(...)\
-    MAKE_WRAPPED_CALL(print_impl, _make_print_desc((Allocator){0}, PP_FIRST_ARG(__VA_ARGS__)), __VA_ARGS__)
+    MAKE_WRAPPED_CALL(print_impl, _make_print_desc((Allocator){0}, PP_FIRST_ARG(__VA_ARGS__)), PP_EXCLUDE_FIRST_ARG(__VA_ARGS__, (string){0}))
 
 #define _log_ugly(flags, ...)\
     MAKE_WRAPPED_CALL(log_impl, _make_log_desc((Allocator){0}, STR(PP_FIRST_ARG(__VA_ARGS__)), flags, HERE()), PP_EXCLUDE_FIRST_ARG(__VA_ARGS__, (string){0}))

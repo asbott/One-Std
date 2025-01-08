@@ -49,5 +49,5 @@ def generate_macros(N):
     return '\n'.join(macros)
 
 
-with open("var_args_macros.h", 'w') as file:
+with open("src/var_args_macros.h", 'w') as file:
     file.write(str(generate_macros(70)))

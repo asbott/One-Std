@@ -410,6 +410,7 @@ void test_print(void) {
     assert(result.count == 13);
     assert(strings_match(result, STR("Hello, World!")));
 
+
     s16 val1 = 42;
     s32 val2 = -812736812;
     result = tprint(("Value1: %i, Value2: %i"), val1, val2);
