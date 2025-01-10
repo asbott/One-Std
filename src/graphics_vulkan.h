@@ -35,7 +35,22 @@
 #pragma clang diagnostic ignored "-Wunused-function"
 #endif // __clang__
 
-unit_local inline VkFormat _oga_to_vk_format(Oga_Format_Kind k) {
+typedef struct _Vk_Image2D_State {
+    VkImage image;
+    VkImageView view;
+} _Vk_Image2D_State;
+
+typedef struct _Vk_Swapchain_State {
+    VkSwapchainKHR vk_swapchain;
+    VkSurfaceKHR vk_surface;
+} _Vk_Swapchain_State;
+
+typedef struct _Vk_Pipeline_State {
+    VkPipeline pipeline;
+    VkPipelineLayout layout;
+} _Vk_Pipeline_State;
+
+unit_local inline VkFormat _oga_to_vk_format(Oga_Format k) {
     switch (k) {
         case OGA_FORMAT_R8_UNORM:               return VK_FORMAT_R8_UNORM;
         case OGA_FORMAT_R8_SNORM:               return VK_FORMAT_R8_SNORM;
@@ -62,12 +77,13 @@ unit_local inline VkFormat _oga_to_vk_format(Oga_Format_Kind k) {
         case OGA_FORMAT_DEPTH24_UNORM_S8_UINT:  return VK_FORMAT_D24_UNORM_S8_UINT;
         case OGA_FORMAT_DEPTH16_UNORM:          return VK_FORMAT_D16_UNORM;
 
+        case OGA_FORMAT_ENUM_MAX:
         default:
         return (VkFormat)0;
     }
     return (VkFormat)0;
 }
-unit_local inline Oga_Format_Kind _vk_to_oga_format(VkFormat k) {
+unit_local inline Oga_Format _vk_to_oga_format(VkFormat k) {
     switch ((s64)k) {
         case VK_FORMAT_R8_UNORM:            return OGA_FORMAT_R8_UNORM;
         case VK_FORMAT_R8_SNORM:            return OGA_FORMAT_R8_SNORM;
@@ -94,10 +110,11 @@ unit_local inline Oga_Format_Kind _vk_to_oga_format(VkFormat k) {
         case VK_FORMAT_D24_UNORM_S8_UINT:   return OGA_FORMAT_DEPTH24_UNORM_S8_UINT;
         case VK_FORMAT_D16_UNORM:           return OGA_FORMAT_DEPTH16_UNORM;
 
+        case OGA_FORMAT_ENUM_MAX:
         default:
-        return (Oga_Format_Kind)0;
+        return (Oga_Format)0;
     }
-    return (Oga_Format_Kind)0;
+    return (Oga_Format)0;
 }
 
 #if defined(__clang__)
@@ -155,7 +172,8 @@ unit_local inline string _str_vk_result(VkResult result) {
     return STR("<>");
 }
 
-#define _vk_assert(expr) do { VkResult _res = expr; string _res_str = _str_vk_result(_res); assertmsgs(_res == VK_SUCCESS, tprint("Vulkan call %s failed: %s. If you see this, you're either doing something very wrong, or there is an internal error in Oga.", STR(#expr), _res_str)); } while(0)
+#define _vk_assert1(expr) do { VkResult _res = expr; string _res_str = _str_vk_result(_res); assertmsgs(_res == VK_SUCCESS, tprint("Vulkan call %s failed: %s. If you see this, you're either doing something very wrong, or there is an internal error in Oga.", STR(#expr), _res_str)); } while(0)
+#define _vk_assert2(expr) do { VkResult _res = expr; if (_res == VK_ERROR_OUT_OF_DEVICE_MEMORY) return OGA_ERROR_OUT_OF_DEVICE_MEMORY; string _res_str = _str_vk_result(_res); assertmsgs(_res == VK_SUCCESS, tprint("Vulkan call %s failed: %s. If you see this, you're either doing something very wrong, or there is an internal error in Oga.", STR(#expr), _res_str)); } while(0)
 
 
 unit_local VkDebugUtilsMessengerEXT _vk_messenger;
@@ -166,6 +184,10 @@ unit_local VkBool32 _vk_debug_callback(
     VkDebugUtilsMessageTypeFlagsEXT                  messageTypes,
     const VkDebugUtilsMessengerCallbackDataEXT*      pCallbackData,
     void*                                            pUserData) {
+
+    // Ignoring dumb drivers
+    if (pCallbackData->messageIdNumber == (int)0x901f59ec) return 0;
+    if (pCallbackData->messageIdNumber == (int)0x1798d061) return 0;
 
     (void)messageTypes; (void)pUserData;
     string sev;
@@ -208,10 +230,64 @@ unit_local inline bool _vk_select_format(VkFormat *formats, u32 num_formats, VkI
     return false;
 }
 
-unit_local inline VkInstance _vk_instance(void) {
-    local_persist VkInstance instance = 0;
 
-    if (!instance) {
+unit_local bool _has_dynamic_rendering = false;
+unit_local VkInstance __instance = 0;
+unit_local inline VkInstance _vk_instance(void) {
+
+    if (!__instance) {
+    
+        u32 version_major = 0;
+        u32 version_minor = 0;
+        u32 version_patch = 0;
+        {
+            VkApplicationInfo query_app_info = (VkApplicationInfo){0};
+            query_app_info.sType = VK_STRUCTURE_TYPE_APPLICATION_INFO;
+            query_app_info.pApplicationName = "Vulkan Version Check";
+            query_app_info.applicationVersion = VK_MAKE_VERSION(1, 0, 0);
+            query_app_info.pEngineName = "No Engine";
+            query_app_info.engineVersion = VK_MAKE_VERSION(1, 0, 0);
+            query_app_info.apiVersion = VK_API_VERSION_1_0; 
+        
+            VkInstanceCreateInfo create_info = (VkInstanceCreateInfo){0};
+            create_info.sType = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO;
+            create_info.pApplicationInfo = &query_app_info;
+        
+            VkInstance query_instance;
+            VkResult result = vkCreateInstance(&create_info, 0, &query_instance);
+            if (result != VK_SUCCESS) {
+                print("Failed to create Vulkan query_instance.\n");
+                return 0;
+            }
+        
+            uint32_t device_count = 0;
+            vkEnumeratePhysicalDevices(query_instance, &device_count, 0);
+            if (device_count == 0) {
+                print("No Vulkan-compatible devices found.\n");
+                return 0;
+            }
+        
+            VkPhysicalDevice devices[256];
+            vkEnumeratePhysicalDevices(query_instance, &device_count, devices);
+        
+            for (uint32_t i = 0; i < device_count; i++) {
+                VkPhysicalDeviceProperties properties;
+                vkGetPhysicalDeviceProperties(devices[i], &properties);
+        
+                version_major = max(VK_VERSION_MAJOR(properties.apiVersion), version_major);
+                version_minor = max(VK_VERSION_MINOR(properties.apiVersion), version_minor);
+                version_patch = max(VK_VERSION_PATCH(properties.apiVersion), version_patch);
+            }
+        
+            vkDestroyInstance(query_instance, 0);
+        }
+    
+        log(0, "Supported Vulkan Instance API version: %u.%u\n", version_major, version_minor);
+
+        if (version_major >= 1 && version_minor >= 3) {
+            _has_dynamic_rendering = true;
+            
+        }
 
         VkApplicationInfo app_info = (VkApplicationInfo){0};
         app_info.sType = VK_STRUCTURE_TYPE_APPLICATION_INFO;
@@ -219,14 +295,14 @@ unit_local inline VkInstance _vk_instance(void) {
         app_info.applicationVersion = VK_MAKE_VERSION(0, 0, 1);
         app_info.pEngineName = "Oga";
         app_info.engineVersion = VK_MAKE_VERSION(1, 0, 0);
-        app_info.apiVersion = VK_API_VERSION_1_1;
+        app_info.apiVersion = VK_API_VERSION_1_3;
 
         VkInstanceCreateInfo create_info = (VkInstanceCreateInfo){0};
         create_info.sType = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO;
         create_info.pApplicationInfo = &app_info;
 
 #if OS_FLAGS & OS_FLAG_WINDOWS
-        const char *required_extensions[] = {
+        const char *minimum_extensions[] = {
 
 #ifdef DEBUG
             VK_EXT_DEBUG_UTILS_EXTENSION_NAME,
@@ -236,7 +312,7 @@ unit_local inline VkInstance _vk_instance(void) {
         };
 #elif OS_FLAGS & OS_FLAG_LINUX
     // Depending on your display server, pick one:
-    static const char* required_extensions[] = {
+    static const char* minimum_extensions[] = {
 #ifdef DEBUG
         VK_EXT_DEBUG_UTILS_EXTENSION_NAME,
 #endif
@@ -245,7 +321,7 @@ unit_local inline VkInstance _vk_instance(void) {
     };
 #elif OS_FLAGS & OS_FLAG_MACOS
     // MoltenVK-specific extension for macOS
-    static const char* required_extensions[] = {
+    static const char* minimum_extensions[] = {
 #ifdef DEBUG
         VK_EXT_DEBUG_UTILS_EXTENSION_NAME,
 #endif
@@ -256,7 +332,7 @@ unit_local inline VkInstance _vk_instance(void) {
     create_info.flags |= VK_INSTANCE_CREATE_ENUMERATE_PORTABILITY_BIT_KHR;
 #elif OS_FLAGS & OS_FLAG_IOS
     // MoltenVK-specific extension for iOS
-    static const char* required_extensions[] = {
+    static const char* minimum_extensions[] = {
 #ifdef DEBUG
         VK_EXT_DEBUG_UTILS_EXTENSION_NAME,
 #endif
@@ -266,7 +342,7 @@ unit_local inline VkInstance _vk_instance(void) {
     };
     create_info.flags |= VK_INSTANCE_CREATE_ENUMERATE_PORTABILITY_BIT_KHR;
 #elif OS_FLAGS & OS_FLAG_ANDROID
-    static const char* required_extensions[] = {
+    static const char* minimum_extensions[] = {
 #ifdef DEBUG
         VK_EXT_DEBUG_UTILS_EXTENSION_NAME,
 #endif
@@ -275,20 +351,55 @@ unit_local inline VkInstance _vk_instance(void) {
     };
 
 #else
-    #error VK instance extension query not set up for this OS
+    #error VK __instance extension query not set up for this OS
 #endif
-        u64 num_required_extensions = sizeof(required_extensions) / sizeof(char*);
+        
+        static const char* extra_extensions[4] = {0};
+        u64 extra_extension_count = 0;
+        u64 extra_start = sizeof(minimum_extensions) / sizeof(char*);
+        
+        if (!_has_dynamic_rendering) {
+            if (version_minor == 0) {
+                extra_extensions[extra_extension_count++] = "VK_KHR_get_physical_device_properties2";
+                extra_extensions[extra_extension_count++] = "VK_KHR_depth_stencil_resolve";
+                extra_extensions[extra_extension_count++] = "VK_KHR_create_renderpass2";
+                extra_extensions[extra_extension_count++] = "VK_KHR_dynamic_rendering";
+            } else if (version_minor == 1) {
+                extra_extensions[extra_extension_count++] = "VK_KHR_depth_stencil_resolve";
+                extra_extensions[extra_extension_count++] = "VK_KHR_create_renderpass2";
+                extra_extensions[extra_extension_count++] = "VK_KHR_dynamic_rendering";
+            } else if (version_minor == 2) {
+                extra_extensions[extra_extension_count++] = "VK_KHR_dynamic_rendering";                
+            } else {
+                log(0, "Dynamic rendering should be standard after 1.3, but it isnt, something is wrong.");
+            }
+        } else {
+            // *Sometimes* the driver wants this extension enabled even though it's > 1.3 ???
+            extra_extensions[extra_extension_count++] = "VK_KHR_dynamic_rendering";
+        }
+
+        u64 num_required_extensions = sizeof(minimum_extensions) / sizeof(char*) + extra_extension_count;
+        
+        const char *required_extensions[sizeof(minimum_extensions)/sizeof(char*)+sizeof(extra_extensions)/sizeof(char*)];
+        
+        for (u64 i = 0; i < sizeof(minimum_extensions) / sizeof(char*); i += 1) {
+            required_extensions[i] = minimum_extensions[i];
+        }
+        for (u64 i = extra_start; i < num_required_extensions; i += 1) {
+            required_extensions[i] = extra_extensions[i-extra_start];
+        }
 
         log(0, "Looking for extensions:");
         for (u64 i = 0; i < num_required_extensions; i += 1) {
             log(0, "\t%s", STR(required_extensions[i]));
         }
 
+        // #Portability dynamic rendering
         u32 num_available_extensions;
-        _vk_assert(vkEnumerateInstanceExtensionProperties(0, &num_available_extensions, 0));
+        _vk_assert1(vkEnumerateInstanceExtensionProperties(0, &num_available_extensions, 0));
         VkExtensionProperties *available_extensions = NewBuffer(get_temp(), VkExtensionProperties, num_available_extensions);
         memset(available_extensions, 0, num_available_extensions*sizeof(VkExtensionProperties));
-        _vk_assert(vkEnumerateInstanceExtensionProperties(0, &num_available_extensions, available_extensions));
+        _vk_assert1(vkEnumerateInstanceExtensionProperties(0, &num_available_extensions, available_extensions));
         bool any_missing = false;
         for (u64 i = 0; i < num_required_extensions; i += 1) {
             const char *required = required_extensions[i];
@@ -303,8 +414,26 @@ unit_local inline VkInstance _vk_instance(void) {
             }
 
             if (match == false) {
-                any_missing = true;
-                log(0, "Missing required vulkan extension '%s'", STR(required));
+                if (i < extra_start) {
+                    any_missing = true;
+                    log(0, "Missing required vulkan extension '%s'", STR(required));
+                    log(0, "List of available extensions:");
+                    for (u32 j = 0; j < num_available_extensions; j += 1) {
+                        const char *available = available_extensions[j].extensionName;
+                        log(0, "\t%s", STR(available));
+                    }
+                } else {
+                    log(0, "Missing optional vulkan extension '%s'", STR(required));
+                    
+                    extra_extension_count -= 1;
+                    num_required_extensions -= 1;
+                    if (extra_extension_count) {
+                        memmove(&required_extensions[i], &required_extensions[i+1], sizeof(char*)*num_required_extensions-i);
+                    }
+                    
+                }
+                
+                    
             } else {
                 log(0, "Found '%s'..", STR(required));
             }
@@ -320,10 +449,10 @@ unit_local inline VkInstance _vk_instance(void) {
         u32 num_wanted_layers = (u64)(sizeof(wanted_layers)/sizeof(char*));
 
         u32 num_available_layers;
-        _vk_assert(vkEnumerateInstanceLayerProperties(&num_available_layers, 0));
+        _vk_assert1(vkEnumerateInstanceLayerProperties(&num_available_layers, 0));
 
         VkLayerProperties *available_layers = NewBuffer(get_temp(), VkLayerProperties, num_available_layers);
-        _vk_assert(vkEnumerateInstanceLayerProperties(&num_available_layers, available_layers));
+        _vk_assert1(vkEnumerateInstanceLayerProperties(&num_available_layers, available_layers));
 
         const char *final_layers[32];
         u32 num_final_layers = 0;
@@ -343,7 +472,16 @@ unit_local inline VkInstance _vk_instance(void) {
 
             if (match == false) {
                 any_missing = true;
-                log(0, "Missing wanted vulkan debug layer '%s'", STR(wanted));
+                log(0, "Missing wanted vulkan validation layer '%s'", STR(wanted));
+                if (num_available_layers) {
+                    log(0, "List of available validation layers:");
+                    for (u32 j = 0; j < num_available_layers; j += 1) {
+                        const char *available = available_layers[j].layerName;
+                        log(0, "\t%s", STR(available));
+                    }
+                } else {
+                    log(0, "No validation layers available");
+                }
             } else {
                 final_layers[num_final_layers++] = wanted;
                 log(0, "Found validation layer %s", STR(wanted));
@@ -356,7 +494,7 @@ unit_local inline VkInstance _vk_instance(void) {
         create_info.enabledLayerCount = 0;
 #endif
 
-        _vk_assert(vkCreateInstance(&create_info, 0, &instance));
+        _vk_assert1(vkCreateInstance(&create_info, 0, &__instance));
 
 #if DEBUG
         VkDebugUtilsMessengerCreateInfoEXT debug_create_info = (VkDebugUtilsMessengerCreateInfoEXT){0};
@@ -373,19 +511,52 @@ unit_local inline VkInstance _vk_instance(void) {
 
         debug_create_info.pfnUserCallback = _vk_debug_callback;
 
-        void (*untyped)(void) = vkGetInstanceProcAddr(instance, "vkCreateDebugUtilsMessengerEXT");
+        void (*untyped)(void) = vkGetInstanceProcAddr(__instance, "vkCreateDebugUtilsMessengerEXT");
         PFN_vkCreateDebugUtilsMessengerEXT _vkCreateDebugUtilsMessengerEXT  = (PFN_vkCreateDebugUtilsMessengerEXT)*(PFN_vkCreateDebugUtilsMessengerEXT*)(void**)&untyped;
 
-        if (_vkCreateDebugUtilsMessengerEXT(instance, &debug_create_info, 0, &_vk_messenger) != VK_SUCCESS) {
+        if (_vkCreateDebugUtilsMessengerEXT(__instance, &debug_create_info, 0, &_vk_messenger) != VK_SUCCESS) {
             log(0, "Failed creating vulkan debug messenger");
         }
 #endif // DEBUG
     }
 
 
-    return instance;
+    return __instance;
 }
 
+void oga_reset(void) {
+    void (*untyped)(void) = vkGetInstanceProcAddr(__instance, "vkDestroyDebugUtilsMessengerEXT");
+    PFN_vkDestroyDebugUtilsMessengerEXT _vkDestroyDebugUtilsMessengerEXT  = (PFN_vkDestroyDebugUtilsMessengerEXT)*(PFN_vkDestroyDebugUtilsMessengerEXT*)(void**)&untyped;
+    _vkDestroyDebugUtilsMessengerEXT(_vk_instance(), _vk_messenger, 0);
+    vkDestroyInstance(_vk_instance(), 0);
+    __instance = 0;
+}
+
+unit_local void *_vk_allocate(void *ud, size_t size, size_t alignment, VkSystemAllocationScope scope) {
+    (void)scope;
+    Allocator *allocator = (Allocator *)ud;
+    return allocator->proc(ALLOCATOR_ALLOCATE, allocator->data, 0, 0, size, alignment);
+}
+
+unit_local void *_vk_reallocate(void *ud, void *old, size_t size, size_t alignment, VkSystemAllocationScope scope) {
+    (void)scope;
+    Allocator *allocator = (Allocator *)ud;
+    return allocator->proc(ALLOCATOR_REALLOCATE, allocator->data, old, 0, size, alignment);
+}
+
+unit_local void _vk_deallocate(void *ud, void *old) {
+    Allocator *allocator = (Allocator *)ud;
+    allocator->proc(ALLOCATOR_FREE, allocator->data, old, 0, 0, 0);
+}
+
+unit_local inline VkAllocationCallbacks _vk_allocator(Allocator *a) {
+    VkAllocationCallbacks c = (VkAllocationCallbacks){0};
+    c.pUserData = a;
+    c.pfnAllocation = _vk_allocate;
+    c.pfnReallocation = _vk_reallocate;
+    c.pfnFree = _vk_deallocate;
+    return c;
+}
 
 
 unit_local VkResult vkCreateSurfaceKHR(Surface_Handle h, VkSurfaceKHR *result) {
@@ -423,17 +594,31 @@ unit_local VkResult vkCreateSurfaceKHR(Surface_Handle h, VkSurfaceKHR *result) {
 
 u64 oga_query_devices(Oga_Device *buffer, u64 buffer_count) {
     u32 device_count;
-    _vk_assert(vkEnumeratePhysicalDevices(_vk_instance(), &device_count,  0));
+    _vk_assert1(vkEnumeratePhysicalDevices(_vk_instance(), &device_count,  0));
 
     if (buffer) {
         memset(buffer, 0, buffer_count*sizeof(Oga_Device));
         VkPhysicalDevice vk_devices[256];
-        _vk_assert(vkEnumeratePhysicalDevices(_vk_instance(), &device_count,  vk_devices));
+        _vk_assert1(vkEnumeratePhysicalDevices(_vk_instance(), &device_count,  vk_devices));
 
+        // note(charlie) annoyingly, we need an existing surface to look for
+        // surface support in logical_engines. So, we just make a temporary invisible
+        // surface and then delete it when done.
+#if OS_FLAGS & OS_FLAG_HAS_WINDOW_SYSTEM
+        Surface_Desc desc = DEFAULT(Surface_Desc);
+        desc.width = 1;
+        desc.height = 1;
+        desc.flags = SURFACE_FLAG_HIDDEN;
+        Surface_Handle temp_sys_surface = sys_make_surface(desc);
+#else
+        Surface_Handle temp_sys_surface = sys_get_surface();
+#endif
+
+        VkSurfaceKHR temp_vk_surface;
+        _vk_assert1(vkCreateSurfaceKHR(temp_sys_surface, &temp_vk_surface));
         for (u32 i = 0; i < min(device_count, (u32)buffer_count); i += 1) {
             Oga_Device *device = buffer + i;
             VkPhysicalDevice vk_device = vk_devices[i];
-
 
             ////
             // Yoink info
@@ -475,26 +660,16 @@ u64 oga_query_devices(Oga_Device *buffer, u64 buffer_count) {
             device->vendor_name = _str_vendor_id(props.vendorID);
             device->driver_version_raw = props.driverVersion;
             device->driver_version_length = _format_driver_version(props.vendorID, props.driverVersion, device->driver_version_data, sizeof(device->driver_version_data));
-
+            
+            _vk_assert1(vkEnumerateInstanceVersion(&device->api_version_raw));
+            u32 major = VK_VERSION_MAJOR(device->api_version_raw);
+            u32 minor = VK_VERSION_MINOR(device->api_version_raw);
+            u32 patch = VK_VERSION_PATCH(device->api_version_raw);
+            device->api_version_length = format_string(device->api_version_data, sizeof(device->api_version_data), "Vulkan %u.%u.%u", major, minor, patch);
 
             ///
             // Logical Engine flags
 
-            // note(charlie) annoyingly, we need an existing surface to look for
-            // surface support in logical_engines. So, we just make a temporary invisible
-            // surface and then delete it when done.
-#if OS_FLAGS & OS_FLAG_HAS_WINDOW_SYSTEM
-            Surface_Desc desc = DEFAULT(Surface_Desc);
-            desc.width = 1;
-            desc.height = 1;
-            desc.flags = SURFACE_FLAG_HIDDEN;
-            Surface_Handle temp_sys_surface = sys_make_surface(desc);
-#else
-            Surface_Handle temp_sys_surface = sys_get_surface();
-#endif
-
-            VkSurfaceKHR temp_vk_surface;
-            _vk_assert(vkCreateSurfaceKHR(temp_sys_surface, &temp_vk_surface));
 
             device->logical_engine_family_count = logical_engine_family_count;
             for (u32 j = 0; j < logical_engine_family_count; j += 1) {
@@ -502,7 +677,7 @@ u64 oga_query_devices(Oga_Device *buffer, u64 buffer_count) {
                 VkQueueFamilyProperties family_props = logical_engine_family_props[j];
 
                 VkBool32 val;
-                _vk_assert(vkGetPhysicalDeviceSurfaceSupportKHR(vk_device, j, temp_vk_surface, &val));
+                _vk_assert1(vkGetPhysicalDeviceSurfaceSupportKHR(vk_device, j, temp_vk_surface, &val));
                 if (val) info->flags |= OGA_LOGICAL_ENGINE_PRESENT;
 
                 info->logical_engine_capacity = family_props.queueCount;
@@ -514,12 +689,6 @@ u64 oga_query_devices(Oga_Device *buffer, u64 buffer_count) {
                 if (family_props.queueFlags & VK_QUEUE_TRANSFER_BIT)
                     info->flags |= OGA_LOGICAL_ENGINE_TRANSFER;
             }
-
-            vkDestroySurfaceKHR(_vk_instance(), temp_vk_surface, 0);
-
-#if OS_FLAGS & OS_FLAG_HAS_WINDOW_SYSTEM
-            surface_close(temp_sys_surface);
-#endif
 
             ///
             // Depth format
@@ -571,12 +740,29 @@ u64 oga_query_devices(Oga_Device *buffer, u64 buffer_count) {
             }
 
 
+            
+            /////
+            // Feature flags
             if (props.limits.timestampComputeAndGraphics) {
                 device->features |= (OGA_DEVICE_FEATURE_GRAPHICS_TIMESTAMP |
                                      OGA_DEVICE_FEATURE_COMPUTE_TIMESTAMP);
             }
+            
+            VkPresentModeKHR present_modes[32];
+            u32 present_mode_count = 32;
+            _vk_assert1(vkGetPhysicalDeviceSurfacePresentModesKHR(vk_device, temp_vk_surface, &present_mode_count, present_modes));
+            for (u32 j = 0; j < present_mode_count; j += 1) {
+                if (present_modes[j] == VK_PRESENT_MODE_MAILBOX_KHR)
+                    device->features |= OGA_DEVICE_FEATURE_PRESENT_MAILBOX;
+            }
+            
+            if (features.depthClamp)
+                device->features |= OGA_DEVICE_FEATURE_DEPTH_CLAMP;
+                
+            /////
+            // Limits
 
-            device->limits.max_shader_items_sets_per_stage = props.limits.maxPerStageResources;
+            device->limits.max_program_pointer_sets_per_stage = props.limits.maxPerStageResources;
             device->limits.max_fast_data_blocks_per_stage = props.limits.maxPerStageDescriptorUniformBuffers;
             device->limits.max_large_data_blocks_per_stage = props.limits.maxPerStageDescriptorStorageBuffers;
             device->limits.max_fast_images_per_stage = props.limits.maxPerStageDescriptorSampledImages;
@@ -607,7 +793,7 @@ u64 oga_query_devices(Oga_Device *buffer, u64 buffer_count) {
             device->limits.max_color_attachments = props.limits.maxColorAttachments;
             device->limits.min_memory_map_alignment = props.limits.minMemoryMapAlignment;
             for (u64 f = 1; f < VK_SAMPLE_COUNT_FLAG_BITS_MAX_ENUM; f = f << 1)
-                if (props.limits.framebufferColorSampleCounts & f) device->limits.supported_sample_counts_framebuffer |= f;
+                if (props.limits.framebufferColorSampleCounts & f) device->limits.supported_sample_counts_render_pass |= f;
             for (u64 f = 1; f < VK_SAMPLE_COUNT_FLAG_BITS_MAX_ENUM; f = f << 1)
                 if (props.limits.sampledImageColorSampleCounts & f) device->limits.supported_sample_counts_fast_image_float |= f;
             for (u64 f = 1; f < VK_SAMPLE_COUNT_FLAG_BITS_MAX_ENUM; f = f << 1)
@@ -617,8 +803,29 @@ u64 oga_query_devices(Oga_Device *buffer, u64 buffer_count) {
             for (u64 f = 1; f < VK_SAMPLE_COUNT_FLAG_BITS_MAX_ENUM; f = f << 1)
                 if (props.limits.storageImageSampleCounts & f) device->limits.supported_sample_counts_large_image_int |= f;
 
+
+            /////
+            // Surface formats
+            
+            u32 vk_formats_count = 512;
+            VkSurfaceFormatKHR vk_formats[512];
+            _vk_assert1(vkGetPhysicalDeviceSurfaceFormatsKHR(vk_device, temp_vk_surface, &vk_formats_count, vk_formats));
+            
+            for (u32 j = 0; j < vk_formats_count; j += 1) {
+                if (vk_formats[j].colorSpace != VK_COLOR_SPACE_SRGB_NONLINEAR_KHR) continue;
+                Oga_Format oga_format = _vk_to_oga_format(vk_formats[j].format);
+                if (oga_format != 0) {
+                    device->supported_surface_formats[device->supported_surface_format_count++] = oga_format;
+                }
+            }
+        
             device->id = vk_device;
         }
+        vkDestroySurfaceKHR(_vk_instance(), temp_vk_surface, 0);
+
+#if OS_FLAGS & OS_FLAG_HAS_WINDOW_SYSTEM
+        surface_close(temp_sys_surface);
+#endif
     }
 
     return device_count;
@@ -634,7 +841,7 @@ Oga_Device *oga_get_devices(Allocator a, u64 *count) {
 }
 
 
-Oga_Result oga_init_context(Oga_Device target_device, Oga_Context_Desc desc, Oga_Context *context) {
+Oga_Result oga_init_context(Oga_Device target_device, Oga_Context_Desc desc, Oga_Context **context) {
 
     const char *required_extensions[] = {
         VK_KHR_SWAPCHAIN_EXTENSION_NAME
@@ -643,6 +850,17 @@ Oga_Result oga_init_context(Oga_Device target_device, Oga_Context_Desc desc, Oga
     if ((desc.enabled_features & target_device.features) != desc.enabled_features) {
         return OGA_CONTEXT_INIT_ERROR_MISSING_DEVICE_FEATURES;
     }
+
+    if (!desc.state_allocator.proc) {
+        return OGA_CONTEXT_INIT_ERROR_BAD_STATE_ALLOCATOR;
+    }
+    *context = New(desc.state_allocator, Oga_Context);
+    if (!*context) {
+        return OGA_ERROR_STATE_ALLOCATION_FAILED;
+    }
+    Oga_Context *c = *context;
+    *c = (Oga_Context){0};
+    c->state_allocator = desc.state_allocator;
 
     VkPhysicalDeviceFeatures enabled_features = (VkPhysicalDeviceFeatures){0};
     // if (desc.enabled_features & OGA_DEVICE_FEATURE_XXXX) enabled_features.xxxx = true;
@@ -673,6 +891,14 @@ Oga_Result oga_init_context(Oga_Device target_device, Oga_Context_Desc desc, Oga
         }
     }
 
+    // #Portability dynamic rendering
+    VkPhysicalDeviceDynamicRenderingFeaturesKHR dynamic_rendering = (VkPhysicalDeviceDynamicRenderingFeaturesKHR){0};
+    dynamic_rendering.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DYNAMIC_RENDERING_FEATURES_KHR;
+    dynamic_rendering.dynamicRendering = true;
+    
+    if (target_device.features & OGA_DEVICE_FEATURE_DEPTH_CLAMP) {
+        enabled_features.depthClamp = true;
+    }
 
     VkDeviceCreateInfo info = (VkDeviceCreateInfo) {0};
     info.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
@@ -681,18 +907,20 @@ Oga_Result oga_init_context(Oga_Device target_device, Oga_Context_Desc desc, Oga
     info.pEnabledFeatures = &enabled_features;
     info.queueCreateInfoCount = (u32)logical_engines_desc_count;
     info.pQueueCreateInfos = logical_engine_infos;
+    // #Portability dynamic rendering
+    info.pNext = &dynamic_rendering; // Enable dynamic rendering
 
-    *context = (Oga_Context){0};
-    _vk_assert(vkCreateDevice(target_device.id, &info, 0, (VkDevice*)&context->id));
-    context->device = target_device;
+    VkAllocationCallbacks vk_allocs = _vk_allocator(&c->state_allocator);
+    _vk_assert2(vkCreateDevice(target_device.id, &info, &vk_allocs, (VkDevice*)&c->id));
+    c->device = target_device;
 
     for (u64 family_index = 0; family_index < OGA_MAX_DEVICE_LOGICAL_ENGINE_FAMILIES; family_index += 1) {
         Oga_Logical_Engines_Create_Desc logical_engines_desc = desc.logical_engine_create_descs[family_index];
-        Oga_Logical_Engine_Group *group = &context->logical_engines_by_family[family_index];
+        Oga_Logical_Engine_Group *group = &c->logical_engines_by_family[family_index];
         for (u64 logical_engine_index = 0; logical_engine_index < logical_engines_desc.count; logical_engine_index += 1) {
             Oga_Logical_Engine *logical_engine = &group->logical_engines[logical_engine_index];
             vkGetDeviceQueue(
-                context->id,
+                c->id,
                 (u32)family_index,
                 (u32)logical_engine_index,
                 (VkQueue*)&logical_engine->id
@@ -704,9 +932,570 @@ Oga_Result oga_init_context(Oga_Device target_device, Oga_Context_Desc desc, Oga
     return OGA_OK;
 }
 void oga_uninit_context(Oga_Context *context) {
-    vkDeviceWaitIdle(context->id);
-
-    vkDestroyDevice(context->id, 0);
+    VkAllocationCallbacks vk_allocs = _vk_allocator(&context->state_allocator);
+    _vk_assert1(vkDeviceWaitIdle(context->id));
+    vkDestroyDevice(context->id, &vk_allocs);
+    
+    Allocator a = context->state_allocator;
     *context = (Oga_Context){0};
+    deallocate(a, context);
+}
+
+Oga_Result oga_init_swapchain(Oga_Context *context, Oga_Swapchain_Desc desc, Oga_Swapchain **swapchain) {
+    *swapchain = allocate(context->state_allocator, sizeof(Oga_Swapchain) + sizeof(_Vk_Swapchain_State));
+    if (!*swapchain) {
+        return OGA_ERROR_STATE_ALLOCATION_FAILED;
+    }
+    **swapchain = (Oga_Swapchain){0};
+    
+    _Vk_Swapchain_State *state = (_Vk_Swapchain_State*)(*swapchain+1);
+    
+    VkAllocationCallbacks vk_allocs = _vk_allocator(&context->state_allocator);
+    
+    if (vkCreateSurfaceKHR(desc.surface, &state->vk_surface) != VK_SUCCESS) {
+        deallocate((*swapchain)->context->state_allocator, swapchain);
+        return OGA_INIT_SWAPCHAIN_ERROR_SURFACE_REJECTED;
+    }
+    
+    (*swapchain)->id = state;
+    
+    VkSurfaceCapabilitiesKHR cap;
+    _vk_assert2(vkGetPhysicalDeviceSurfaceCapabilitiesKHR((VkPhysicalDevice)context->device.id, state->vk_surface, &cap));
+    
+    u32 image_count = clamp((u32)desc.requested_image_count, cap.minImageCount, min(cap.maxImageCount, MAX_SWAPCHAIN_IMAGES));
+    (*swapchain)->image_count = (u64)image_count;
+    
+    
+    VkPresentModeKHR vk_present_mode = VK_PRESENT_MODE_FIFO_KHR;
+    if (desc.present_mode == OGA_PRESENT_MODE_IMMEDIATE) {
+        VkPresentModeKHR present_modes[32];
+        u32 present_mode_count;
+        _vk_assert2(vkGetPhysicalDeviceSurfacePresentModesKHR((VkPhysicalDevice)context->device.id, state->vk_surface, &present_mode_count, present_modes));
+        for (u32 i = 0; i < present_mode_count; i += 1) {
+            if (present_modes[i] == VK_PRESENT_MODE_IMMEDIATE_KHR) {
+                vk_present_mode = VK_PRESENT_MODE_IMMEDIATE_KHR;
+                break;
+            }
+        }
+    } else if (desc.present_mode == OGA_PRESENT_MODE_VSYNC) {
+        vk_present_mode = VK_PRESENT_MODE_FIFO_KHR;
+        
+    } else if (desc.present_mode == OGA_PRESENT_MODE_VSYNC_MAILBOX && context->device.features & OGA_DEVICE_FEATURE_PRESENT_MAILBOX) {
+        vk_present_mode = VK_PRESENT_MODE_MAILBOX_KHR;
+    } else {
+        deallocate((*swapchain)->context->state_allocator, swapchain);
+        return OGA_INIT_SWAPCHAIN_ERROR_UNSUPPORTED_PRESENT_MODE;
+    }
+    
+    u32 *queue_families = 0;
+    u32 queue_families_count = 0;
+    if (desc.queue_families_with_access_count) {
+        queue_families = NewBuffer(get_temp(), u32, desc.queue_families_with_access_count);
+        for (u64 i = 0; i < desc.queue_families_with_access_count; i += 1) {
+            bool contains = false;
+            for (u64 j = 0; j < queue_families_count; j += 1) {
+                if (queue_families[j] == desc.queue_families_with_access[i]) {
+                    contains = true;
+                    break;
+                }
+            }
+            if (!contains) queue_families[queue_families_count++] = (u32)desc.queue_families_with_access[i];
+        }
+    }
+    
+    VkSwapchainCreateInfoKHR info = (VkSwapchainCreateInfoKHR){0};
+    info.sType = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR;
+    info.flags = 0;
+    info.surface = state->vk_surface;
+    info.minImageCount = image_count;
+    info.imageFormat = _oga_to_vk_format(desc.image_format);
+    info.imageColorSpace = VK_COLOR_SPACE_SRGB_NONLINEAR_KHR;
+    info.imageExtent.width = (u32)desc.width;
+    info.imageExtent.height = (u32)desc.height;
+    info.imageArrayLayers = 0;
+    info.imageUsage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
+    info.imageSharingMode = queue_families_count > 1 ? VK_SHARING_MODE_CONCURRENT : VK_SHARING_MODE_EXCLUSIVE;
+    info.queueFamilyIndexCount = queue_families_count;
+    info.pQueueFamilyIndices = queue_families;
+    info.preTransform = cap.currentTransform;
+    info.compositeAlpha = VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR;
+    info.presentMode = vk_present_mode;
+    info.clipped = VK_TRUE;
+    info.oldSwapchain = 0;
+    info.imageArrayLayers = 1;
+    
+    _vk_assert2(vkCreateSwapchainKHR((VkDevice)context->id, &info, &vk_allocs, &state->vk_swapchain));
+    
+    VkImage vk_images[MAX_SWAPCHAIN_IMAGES];
+    
+    vkGetSwapchainImagesKHR((VkDevice)context->id, state->vk_swapchain, (u32*)&(*swapchain)->image_count, vk_images);
+    
+    (*swapchain)->image_format = desc.image_format;
+    
+    u64 stride = sizeof(_Vk_Image2D_State)+sizeof(Oga_Image2D);
+    void *image_states_data = allocate(context->state_allocator, stride * (*swapchain)->image_count);
+    for (u64 i = 0; i < (*swapchain)->image_count; i += 1) {
+        Oga_Image2D *image = (Oga_Image2D*)((u8*)image_states_data + i*stride);
+        _Vk_Image2D_State *image_state = (_Vk_Image2D_State*)(image+1);
+        
+        image->pointer.id = image_state;
+        
+        image_state->image = vk_images[i];
+        
+        VkImageViewCreateInfo image_view_info = (VkImageViewCreateInfo){0};
+        image_view_info.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
+        image_view_info.image = image_state->image;
+        image_view_info.viewType = VK_IMAGE_VIEW_TYPE_2D;
+        image_view_info.format = _oga_to_vk_format((*swapchain)->image_format);
+        image_view_info.components.r = VK_COMPONENT_SWIZZLE_IDENTITY;
+        image_view_info.components.g = VK_COMPONENT_SWIZZLE_IDENTITY;
+        image_view_info.components.b = VK_COMPONENT_SWIZZLE_IDENTITY;
+        image_view_info.components.a = VK_COMPONENT_SWIZZLE_IDENTITY;
+        image_view_info.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+        image_view_info.subresourceRange.baseMipLevel = 0;
+        image_view_info.subresourceRange.levelCount = 1;
+        image_view_info.subresourceRange.baseArrayLayer = 0;
+        image_view_info.subresourceRange.layerCount = 1;
+        
+        _vk_assert2(vkCreateImageView((VkDevice)context->id, &image_view_info, &vk_allocs, &image_state->view));
+        
+        (*swapchain)->images[i] = image;
+    }
+    
+    (*swapchain)->context = context;
+    
+    return OGA_OK;
+}
+void oga_uninit_swapchain(Oga_Swapchain *swapchain) {
+    _Vk_Swapchain_State *state = (_Vk_Swapchain_State*)(swapchain->id);
+    VkAllocationCallbacks vk_allocs = _vk_allocator(&swapchain->context->state_allocator);
+    
+    _vk_assert1(vkDeviceWaitIdle(swapchain->context->id));
+    
+    for (u64 i = 0; i < swapchain->image_count; i += 1) {
+        _Vk_Image2D_State *image_state = (_Vk_Image2D_State*)(swapchain->images[i]->pointer.id);
+        vkDestroyImageView((VkDevice)swapchain->context->id, image_state->view, &vk_allocs);
+    }
+    
+    vkDestroySwapchainKHR((VkDevice)swapchain->context->id, state->vk_swapchain, &vk_allocs);
+    
+    
+    VkSurfaceKHR sur = state->vk_surface;
+    // Musnt use the vulkan allocation callbacks
+    
+    vkDestroySurfaceKHR(_vk_instance(), sur, 0);
+
+    Allocator a = swapchain->context->state_allocator;
+    
+    deallocate(a, swapchain->images[0]);
+    
+    *swapchain = (Oga_Swapchain){0};
+    deallocate(a, swapchain);
+}
+
+
+
+Oga_Result oga_init_program(Oga_Context *context, Oga_Program_Desc desc, Oga_Program **program) {
+    *program = allocate(context->state_allocator, sizeof(Oga_Program));
+    if (!*program) {
+        return OGA_ERROR_STATE_ALLOCATION_FAILED;
+    }
+    **program = (Oga_Program){0};
+    
+    VkShaderModuleCreateInfo info = (VkShaderModuleCreateInfo){0};
+    
+    info.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
+    info.codeSize = (size_t)desc.code_size;
+    info.pCode = desc.code;
+    
+    VkAllocationCallbacks vk_allocs = _vk_allocator(&context->state_allocator);
+    VkResult result = vkCreateShaderModule((VkDevice)context->id, &info, &vk_allocs, (VkShaderModule*)&(*program)->id);
+    
+    if (result != VK_SUCCESS) {
+        if (result == VK_ERROR_INVALID_SHADER_NV) {
+            deallocate(context->state_allocator, *program);
+            return OGA_INIT_PROGRAM_ERROR_BAD_CODE;
+        }
+        _vk_assert2(result);
+    }
+    
+    (*program)->context = context;
+    
+    return OGA_OK;
+}
+void oga_uninit_program(Oga_Program *program) {
+    VkAllocationCallbacks vk_allocs = _vk_allocator(&program->context->state_allocator);
+    
+    _vk_assert1(vkDeviceWaitIdle(program->context->id));
+    vkDestroyShaderModule((VkDevice)program->context->id, (VkShaderModule)program->id, &vk_allocs);
+    
+    Allocator a = program->context->state_allocator;
+    *program = (Oga_Program){0};
+    deallocate(a, program);
+}
+
+Oga_Result oga_init_render_passes(Oga_Context *context, Oga_Render_Pass_Desc* descs, Oga_Render_Pass **render_passes, u64 render_pass_count) {
+    VkGraphicsPipelineCreateInfo *infos = NewBuffer(get_temp(), VkGraphicsPipelineCreateInfo, render_pass_count);
+    
+    // todo(charlie)
+    // We use a lot of temporary storage here, so we would probably want to reset it back to where it was before,
+    // once that's implemented ..
+    for (u64 i = 0; i < render_pass_count; i += 1) {
+    
+        Oga_Render_Pass_Desc desc = descs[i];
+        
+        VkFormat *vk_formats = NewBuffer(get_temp(), VkFormat, desc.color_attachment_count);
+        for (u64 j = 0; j < desc.color_attachment_count; j += 1) {
+            vk_formats[j] = _oga_to_vk_format(desc.color_attachment_formats[j]);
+        }
+        
+        VkPipelineRenderingCreateInfoKHR *rendering = New(get_temp(), VkPipelineRenderingCreateInfoKHR);
+        *rendering = (VkPipelineRenderingCreateInfoKHR){0};
+        rendering->sType = VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO_KHR;
+        rendering->pNext = 0;
+        rendering->viewMask = 0;
+        rendering->colorAttachmentCount = (u32)desc.color_attachment_count;
+        rendering->pColorAttachmentFormats = vk_formats;
+        
+        VkPipelineCreateFlags pipeline_flags = (VkPipelineCreateFlags)(int)0;
+        if (desc.flags & OGA_RENDER_PASS_INHERITANCE_PARENT) pipeline_flags |= VK_PIPELINE_CREATE_ALLOW_DERIVATIVES_BIT;
+        if (desc.flags & OGA_RENDER_PASS_INHERITANCE_CHILD)  pipeline_flags |= VK_PIPELINE_CREATE_DERIVATIVE_BIT;
+        
+        char *vert_entry = NewBuffer(get_temp(), char, desc.vertex_program_entry_point.count);
+        char *frag_entry = NewBuffer(get_temp(), char, desc.fragment_program_entry_point.count);
+        memcpy(vert_entry, desc.vertex_program_entry_point.data, desc.vertex_program_entry_point.count);
+        memcpy(frag_entry, desc.fragment_program_entry_point.data, desc.fragment_program_entry_point.count);
+        vert_entry[desc.vertex_program_entry_point.count] = 0;
+        frag_entry[desc.fragment_program_entry_point.count] = 0;
+        
+        VkPipelineShaderStageCreateInfo *stages = NewBuffer(get_temp(), VkPipelineShaderStageCreateInfo, 2);
+        stages[0] = (VkPipelineShaderStageCreateInfo){0};
+        stages[0].sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
+        stages[0].stage = VK_SHADER_STAGE_VERTEX_BIT;
+        stages[0].module = (VkShaderModule)desc.vertex_program->id;
+        stages[0].pName = vert_entry;
+        
+        stages[1] = (VkPipelineShaderStageCreateInfo){0};
+        stages[1].sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
+        stages[1].stage = VK_SHADER_STAGE_FRAGMENT_BIT;
+        stages[1].module = (VkShaderModule)desc.fragment_program->id;
+        stages[1].pName = frag_entry;
+        
+        VkPipelineVertexInputStateCreateInfo *vertex_input = New(get_temp(), VkPipelineVertexInputStateCreateInfo);
+        *vertex_input = (VkPipelineVertexInputStateCreateInfo){0};
+        vertex_input->sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
+        vertex_input->vertexBindingDescriptionCount = 0;
+        vertex_input->vertexAttributeDescriptionCount = 0;
+        
+        VkPipelineInputAssemblyStateCreateInfo *ia = New(get_temp(), VkPipelineInputAssemblyStateCreateInfo);
+        *ia = (VkPipelineInputAssemblyStateCreateInfo){0};
+        ia->sType = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO;
+        ia->topology = (VkPrimitiveTopology)desc.topology; // #Volatile values must map to same as vulkan equivalents
+        
+        VkPipelineTessellationStateCreateInfo *tessellation = New(get_temp(), VkPipelineTessellationStateCreateInfo);
+        *tessellation = (VkPipelineTessellationStateCreateInfo){0};
+        tessellation->sType = VK_STRUCTURE_TYPE_PIPELINE_TESSELLATION_STATE_CREATE_INFO;
+        tessellation->patchControlPoints = 0;
+        
+        VkPipelineViewportStateCreateInfo *viewport = New(get_temp(), VkPipelineViewportStateCreateInfo);
+        *viewport = (VkPipelineViewportStateCreateInfo){0};
+        viewport->sType = VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO;
+        viewport->viewportCount = 1;
+        viewport->scissorCount = 1; 
+        viewport->pViewports = NULL;
+        viewport->pScissors = NULL; 
+        
+        VkFrontFace front_face = VK_FRONT_FACE_CLOCKWISE;
+        VkCullModeFlags cull_mode = VK_CULL_MODE_BACK_BIT;
+        
+        switch(desc.cull_mode) {
+            case OGA_CULL_NONE:
+                cull_mode = VK_CULL_MODE_NONE;
+                break;
+            case OGA_CULL_CLOCKWISE:
+                front_face = VK_FRONT_FACE_CLOCKWISE;
+                break;
+            case OGA_CULL_COUNTER_CLOCKWISE:
+                front_face = VK_FRONT_FACE_COUNTER_CLOCKWISE;
+                break;
+            
+            default: assert(false);
+        }
+        
+        VkBool32 depth_clamp_enable = (desc.flags & OGA_RENDER_PASS_DISABLE_DEPTH_CLAMP) == 0;
+
+        if (depth_clamp_enable && !(context->device.features & OGA_DEVICE_FEATURE_DEPTH_CLAMP)) {
+            depth_clamp_enable = false;
+            log(0, "Depth clamp was flagged as enabled, but device is missing feature flag OGA_RENDER_PASS_DISABLE_DEPTH_CLAMP");
+        }
+        
+        VkPipelineRasterizationStateCreateInfo *rasterization = New(get_temp(), VkPipelineRasterizationStateCreateInfo);
+        *rasterization = (VkPipelineRasterizationStateCreateInfo){0};
+        rasterization->sType = VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO;
+        rasterization->depthClampEnable = depth_clamp_enable;
+        rasterization->rasterizerDiscardEnable = VK_FALSE;
+        rasterization->polygonMode = VK_POLYGON_MODE_FILL;
+        rasterization->cullMode = cull_mode;
+        rasterization->frontFace = front_face;
+        rasterization->depthBiasEnable = VK_FALSE;
+        rasterization->lineWidth = desc.line_width;
+        
+        VkSampleCountFlagBits samples = (VkSampleCountFlagBits)OGA_SAMPLE_COUNT_1;
+        if (desc.rasterization_samples & OGA_SAMPLE_COUNT_1)  samples |= VK_SAMPLE_COUNT_1_BIT;
+        if (desc.rasterization_samples & OGA_SAMPLE_COUNT_2)  samples |= VK_SAMPLE_COUNT_2_BIT;
+        if (desc.rasterization_samples & OGA_SAMPLE_COUNT_4)  samples |= VK_SAMPLE_COUNT_4_BIT;
+        if (desc.rasterization_samples & OGA_SAMPLE_COUNT_8)  samples |= VK_SAMPLE_COUNT_8_BIT;
+        if (desc.rasterization_samples & OGA_SAMPLE_COUNT_16) samples |= VK_SAMPLE_COUNT_16_BIT;
+        if (desc.rasterization_samples & OGA_SAMPLE_COUNT_32) samples |= VK_SAMPLE_COUNT_32_BIT;
+        if (desc.rasterization_samples & OGA_SAMPLE_COUNT_64) samples |= VK_SAMPLE_COUNT_64_BIT;
+        
+        
+        VkPipelineMultisampleStateCreateInfo *multisample = New(get_temp(), VkPipelineMultisampleStateCreateInfo);
+        *multisample = (VkPipelineMultisampleStateCreateInfo){0};
+        multisample->sType = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO;
+        multisample->rasterizationSamples = samples;
+        
+        VkPipelineDepthStencilStateCreateInfo *depth_stencil = New(get_temp(), VkPipelineDepthStencilStateCreateInfo);
+        *depth_stencil = (VkPipelineDepthStencilStateCreateInfo){0};
+        depth_stencil->sType = VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO;
+        
+        VkPipelineColorBlendAttachmentState *blend_attachment = New(get_temp(), VkPipelineColorBlendAttachmentState);
+        *blend_attachment = (VkPipelineColorBlendAttachmentState){0};
+        blend_attachment->blendEnable = false;
+        
+        VkPipelineColorBlendStateCreateInfo *blend = New(get_temp(), VkPipelineColorBlendStateCreateInfo);
+        *blend = (VkPipelineColorBlendStateCreateInfo){0};
+        blend->sType = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO;
+        blend->attachmentCount = 1;
+        blend->pAttachments = blend_attachment;
+        
+        VkDynamicState dynamic_states[] = {
+            VK_DYNAMIC_STATE_VIEWPORT,
+            VK_DYNAMIC_STATE_SCISSOR
+        };
+        VkPipelineDynamicStateCreateInfo *dynamic = New(get_temp(), VkPipelineDynamicStateCreateInfo);
+        *dynamic = (VkPipelineDynamicStateCreateInfo){0};
+        dynamic->sType = VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO;
+        dynamic->dynamicStateCount = sizeof(dynamic_states)/sizeof(VkDynamicState);
+        dynamic->pDynamicStates = dynamic_states;
+        
+        VkPipelineLayout layout;
+        VkPipelineLayoutCreateInfo *layout_info = New(get_temp(), VkPipelineLayoutCreateInfo);
+        *layout_info = (VkPipelineLayoutCreateInfo){0};
+        layout_info->sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
+        
+        VkAllocationCallbacks vk_allocs = _vk_allocator(&context->state_allocator);
+        _vk_assert2(vkCreatePipelineLayout((VkDevice)context->id, layout_info, &vk_allocs, &layout));
+        
+        VkPipeline base_pipeline = 0;
+        if (desc.base) {
+            _Vk_Pipeline_State *state = (_Vk_Pipeline_State*)desc.base->id;
+            base_pipeline = state->pipeline;
+        }
+        
+        s32 base_index = (s32)desc.base_index;
+    
+        VkGraphicsPipelineCreateInfo info = (VkGraphicsPipelineCreateInfo) {0};
+        info.sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO;
+        info.pNext = rendering;
+        info.flags = pipeline_flags;
+        info.stageCount = 2;
+        info.pStages = stages;
+        info.pVertexInputState = vertex_input;
+        info.pInputAssemblyState = ia;
+        info.pTessellationState = tessellation;
+        info.pViewportState = viewport;
+        info.pRasterizationState = rasterization;
+        info.pMultisampleState = multisample;
+        info.pDepthStencilState = depth_stencil;
+        info.pColorBlendState = blend;
+        info.pDynamicState = dynamic;
+        info.layout = layout;
+        info.renderPass = 0; // #Portability dynamic rendering
+        info.subpass = 0;
+        info.basePipelineHandle = base_pipeline;
+        info.basePipelineIndex = base_index;
+        
+        infos[i] = info;
+    }
+    
+    VkPipeline *vk_pipelines = NewBuffer(get_temp(), VkPipeline, render_pass_count);
+    assert(vk_pipelines);
+    VkAllocationCallbacks vk_allocs = _vk_allocator(&context->state_allocator);
+    _vk_assert2(vkCreateGraphicsPipelines((VkDevice)context->id, 0, (u32)render_pass_count, infos, &vk_allocs, vk_pipelines));
+    
+    // These need to be allocated one by one because render passes needs to be able to be freed one by one
+    for (u64 i = 0; i < render_pass_count; i += 1) {
+        render_passes[i] = (Oga_Render_Pass*)allocate(context->state_allocator, sizeof(Oga_Render_Pass)+sizeof(_Vk_Pipeline_State));
+        render_passes[i]->context = context;
+        _Vk_Pipeline_State *state = (_Vk_Pipeline_State*)(render_passes[i]+1);
+        render_passes[i]->id = state;
+        
+        state->pipeline = vk_pipelines[i];
+        state->layout = infos[i].layout;
+    }
+    
+    return OGA_OK;
+}
+
+Oga_Result oga_init_render_pass(Oga_Context *context, Oga_Render_Pass_Desc desc, Oga_Render_Pass **render_pass) {
+    return oga_init_render_passes(context, &desc, render_pass, 1);
+} 
+void oga_uninit_render_pass(Oga_Render_Pass *render_pass) {
+    _Vk_Pipeline_State *state = (_Vk_Pipeline_State*)render_pass->id;
+    VkAllocationCallbacks vk_allocs = _vk_allocator(&render_pass->context->state_allocator);
+    
+    _vk_assert1(vkDeviceWaitIdle(render_pass->context->id));
+    vkDestroyPipeline((VkDevice)render_pass->context->id, state->pipeline, &vk_allocs);
+    vkDestroyPipelineLayout((VkDevice)render_pass->context->id, state->layout, &vk_allocs);
+    
+    Allocator a = render_pass->context->state_allocator;
+    *render_pass = (Oga_Render_Pass){0};
+    deallocate(a, render_pass);
+} 
+
+Oga_Result oga_init_gpu_latch(Oga_Context *context, Oga_Gpu_Latch **gpu_latch) {
+    *gpu_latch = allocate(context->state_allocator, sizeof(Oga_Gpu_Latch) + sizeof(VkSemaphore));
+    if (!*gpu_latch) {
+        return OGA_ERROR_STATE_ALLOCATION_FAILED;
+    }
+
+    **gpu_latch = (Oga_Gpu_Latch){0};
+    (*gpu_latch)->context = context;
+
+    VkSemaphoreCreateInfo create_info = {0};
+    create_info.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
+
+    VkAllocationCallbacks vk_allocs = _vk_allocator(&context->state_allocator);
+    _vk_assert2(vkCreateSemaphore((VkDevice)context->id, &create_info, &vk_allocs, (VkSemaphore*)&(*gpu_latch)->id));
+    
+    return OGA_OK;
+}
+
+void oga_uninit_gpu_latch(Oga_Gpu_Latch *gpu_latch) {
+    VkAllocationCallbacks vk_allocs = _vk_allocator(&gpu_latch->context->state_allocator);
+    _vk_assert1(vkDeviceWaitIdle(gpu_latch->context->id));
+    vkDestroySemaphore((VkDevice)gpu_latch->context->id, (VkSemaphore)gpu_latch->id, &vk_allocs);
+
+    Allocator a = gpu_latch->context->state_allocator;
+    *gpu_latch = (Oga_Gpu_Latch){0};
+    deallocate(a, gpu_latch);
+}
+
+// Cpu latch; for synchronizing CPU with GPU. Signalled on GPU, waited on CPU.
+Oga_Result oga_init_cpu_latch(Oga_Context *context, Oga_Cpu_Latch **cpu_latch) {
+    *cpu_latch = allocate(context->state_allocator, sizeof(Oga_Cpu_Latch) + sizeof(VkFence));
+    if (!*cpu_latch) {
+        return OGA_ERROR_STATE_ALLOCATION_FAILED;
+    }
+
+    **cpu_latch = (Oga_Cpu_Latch){0};
+    (*cpu_latch)->context = context;
+
+    VkFenceCreateInfo create_info = {0};
+    create_info.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
+    create_info.flags = 0;
+
+    VkAllocationCallbacks vk_allocs = _vk_allocator(&context->state_allocator);
+    _vk_assert2(vkCreateFence((VkDevice)context->id, &create_info, &vk_allocs, (VkFence*)&(*cpu_latch)->id));
+
+    return OGA_OK;
+}
+
+void oga_uninit_cpu_latch(Oga_Cpu_Latch *cpu_latch) {
+    VkAllocationCallbacks vk_allocs = _vk_allocator(&cpu_latch->context->state_allocator);
+    _vk_assert1(vkDeviceWaitIdle(cpu_latch->context->id));
+    vkDestroyFence((VkDevice)cpu_latch->context->id, (VkFence)cpu_latch->id, &vk_allocs);
+
+    Allocator a = cpu_latch->context->state_allocator;
+    *cpu_latch = (Oga_Cpu_Latch){0};
+    deallocate(a, cpu_latch);
+}
+
+Oga_Result oga_wait_latch(Oga_Cpu_Latch *cpu_latch) {
+    _vk_assert2(vkWaitForFences((VkDevice)cpu_latch->context->id, 1, (VkFence*)&cpu_latch->id, VK_TRUE, UINT64_MAX));
+    
+    return OGA_OK;
+}
+
+Oga_Result oga_reset_latch(Oga_Cpu_Latch *cpu_latch) {
+    _vk_assert2(vkResetFences((VkDevice)cpu_latch->context->id, 1, (VkFence*)&cpu_latch->id));
+
+    return OGA_OK;
+}
+
+Oga_Result oga_init_command_pool(Oga_Context *context, Oga_Command_Pool_Desc desc, Oga_Command_Pool **pool) {
+    *pool = allocate(context->state_allocator, sizeof(Oga_Command_Pool) + sizeof(VkCommandPool));
+    if (!*pool) {
+        return OGA_ERROR_STATE_ALLOCATION_FAILED;
+    }
+
+    **pool = (Oga_Command_Pool){0};
+    (*pool)->context = context;
+
+    VkCommandPoolCreateInfo create_info = {0};
+    create_info.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
+    create_info.flags = 0;
+
+    if (desc.flags & OGA_COMMAND_POOL_SHORT_LIVED) {
+        //create_info.flags |= VK_COMMAND_POOL_CREATE_TRANSIENT_BIT;
+    }
+
+    create_info.queueFamilyIndex = (u32)desc.queue_family_index;
+
+    VkAllocationCallbacks vk_allocs = _vk_allocator(&context->state_allocator);
+    _vk_assert2(vkCreateCommandPool((VkDevice)context->id, &create_info, &vk_allocs, (VkCommandPool *)&(*pool)->id));
+
+    return OGA_OK;
+}
+
+void oga_uninit_command_pool(Oga_Command_Pool *pool) {
+    VkAllocationCallbacks vk_allocs = _vk_allocator(&pool->context->state_allocator);
+
+    _vk_assert1(vkDeviceWaitIdle(pool->context->id));
+    vkDestroyCommandPool((VkDevice)pool->context->id, (VkCommandPool)pool->id, &vk_allocs);
+
+    Allocator a = pool->context->state_allocator;
+    *pool = (Oga_Command_Pool){0};
+    deallocate(a, pool);
+}
+
+Oga_Result oga_get_command_lists(Oga_Command_Pool *pool, Oga_Command_List *lists, u64 list_count) {
+    VkCommandBufferAllocateInfo allocate_info = {0};
+    allocate_info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
+    allocate_info.commandPool = (VkCommandPool)pool->id;
+    allocate_info.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
+    allocate_info.commandBufferCount = (u32)list_count;
+
+    VkCommandBuffer *vk_buffers = NewBuffer(get_temp(), VkCommandBuffer, list_count);
+    _vk_assert2(vkAllocateCommandBuffers((VkDevice)pool->context->id, &allocate_info, vk_buffers));
+
+
+    for (u64 i = 0; i < list_count; i += 1) {
+        lists[i] = (Oga_Command_List){0};
+        lists[i].id = vk_buffers[i];
+        lists[i].pool = pool;
+    }
+
+    return OGA_OK;
+}
+
+void oga_release_command_lists(Oga_Command_List *lists, u64 list_count) {
+    VkCommandBuffer *vk_buffers = NewBuffer(get_temp(), VkCommandBuffer, list_count);
+
+    Oga_Command_Pool *last_pool = 0;
+    
+    for (u64 i = 0; i < list_count; i += 1) {
+        if (last_pool) {
+            assertmsg(last_pool != lists[i].pool, "Command lists from different pools were passed to oga_release_command_lists. All command lists must be from the same pool to do a batched release.");
+        }
+        last_pool = lists[i].pool;
+    
+        vk_buffers[i] = (VkCommandBuffer)lists[i].id;
+        lists[i] = (Oga_Command_List){0};
+    }
+    
+    _vk_assert1(vkDeviceWaitIdle(last_pool->context->id));
+    vkFreeCommandBuffers((VkDevice)last_pool->context->id, (VkCommandPool)last_pool->id, (u32)list_count, vk_buffers);
 }
 

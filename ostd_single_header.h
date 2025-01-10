@@ -3938,7 +3938,7 @@ void* arena_allocator_proc(Allocator_Message msg, void *data, void *old, u64 old
         #define __crt_va_start(ap, x)  ((void)(__va_start(&ap, x)))
         #define __crt_va_arg(ap, t)                                               \
         ((sizeof(t) > sizeof(uintptr) || (sizeof(t) & (sizeof(t) - 1)) != 0) \
-            ? **(t**)((ap += sizeof(uintptr)) - sizeof(uintptr))             \
+            ? **(t**)(uintptr)((ap += sizeof(uintptr)) - sizeof(uintptr))             \
             :  *(t* )((ap += sizeof(uintptr)) - sizeof(uintptr)))
         #define __crt_va_end(ap)        ((void)(ap = (va_list)0))
 
@@ -4868,6 +4868,7 @@ typedef struct Oga_Device {
 } Oga_Device;
 
 typedef enum Oga_Device_Pick_Flag {
+    OGA_DEVICE_PICK_NONE = 0,
     OGA_DEVICE_PICK_PREFER_DISCRETE = 1 << 0,
     OGA_DEVICE_PICK_PREFER_INTEGRATED = 1 << 1,
     OGA_DEVICE_PICK_PREFER_CPU = 1 << 2,
@@ -5548,7 +5549,7 @@ unit_local inline VkInstance _vk_instance(void) {
 
 
 
-unit_local VkResult vkCreateSurfaceKHR(Surface_Handle h, VkSurfaceKHR *result) {
+unit_local VkResult vkCreateSurfaceKHR(Surface_Handle h, VkSurfaceKHR *result, VkAllocationCallbacks *) {
 #if OS_FLAGS & OS_FLAG_WINDOWS            
     VkWin32SurfaceCreateInfoKHR create_info = (VkWin32SurfaceCreateInfoKHR){0};
     create_info.sType = VK_STRUCTURE_TYPE_WIN32_SURFACE_CREATE_INFO_KHR;

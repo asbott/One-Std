@@ -8,18 +8,35 @@ typedef enum Oga_Result {
     // Trying to use device features that were not available.
     // Check Oga_Device::features flags for whether or not a feature is available.
     OGA_CONTEXT_INIT_ERROR_MISSING_DEVICE_FEATURES,
+    
+    OGA_CONTEXT_INIT_ERROR_BAD_STATE_ALLOCATOR,
+    
     // The given family index is not within the range 0 .. Oga_Device::logical_engine_family_count
     OGA_CREATE_LOGICAL_ENGINE_ERROR_FAMILY_INDEX_OUT_OF_RANGE,
     // The given logical_engine creation count overflows that of Oga_Logical_Engine_Family_Info::logical_engine_capacity
     OGA_CREATE_LOGICAL_ENGINE_ERROR_FAMILY_CAPACITY_OVERFLOW,
+    
+    OGA_INIT_SWAPCHAIN_ERROR_SURFACE_REJECTED,
+    OGA_INIT_SWAPCHAIN_ERROR_UNSUPPORTED_PRESENT_MODE,
+    
+    OGA_INIT_PROGRAM_ERROR_BAD_CODE,
+    
+    OGA_ERROR_STATE_ALLOCATION_FAILED,
+    OGA_ERROR_OUT_OF_DEVICE_MEMORY,
 } Oga_Result;
 
 unit_local inline string oga_get_result_name(Oga_Result r) {
     switch (r) {
         case OGA_OK: return STR("OGA_OK");
         case OGA_CONTEXT_INIT_ERROR_MISSING_DEVICE_FEATURES:   return STR("OGA_CONTEXT_INIT_ERROR_MISSING_DEVICE_FEATURES");
+        case OGA_CONTEXT_INIT_ERROR_BAD_STATE_ALLOCATOR:   return STR("OGA_CONTEXT_INIT_ERROR_BAD_STATE_ALLOCATOR");
         case OGA_CREATE_LOGICAL_ENGINE_ERROR_FAMILY_INDEX_OUT_OF_RANGE: return STR("OGA_CREATE_LOGICAL_ENGINE_ERROR_FAMILY_INDEX_OUT_OF_RANGE");
         case OGA_CREATE_LOGICAL_ENGINE_ERROR_FAMILY_CAPACITY_OVERFLOW:  return STR("OGA_CREATE_LOGICAL_ENGINE_ERROR_FAMILY_CAPACITY_OVERFLOW");
+        case OGA_INIT_SWAPCHAIN_ERROR_SURFACE_REJECTED:  return STR("OGA_INIT_SWAPCHAIN_ERROR_SURFACE_REJECTED");
+        case OGA_INIT_SWAPCHAIN_ERROR_UNSUPPORTED_PRESENT_MODE:  return STR("OGA_INIT_SWAPCHAIN_ERROR_UNSUPPORTED_PRESENT_MODE");
+        case OGA_INIT_PROGRAM_ERROR_BAD_CODE:  return STR("OGA_INIT_PROGRAM_ERROR_BAD_CODE");
+        case OGA_ERROR_STATE_ALLOCATION_FAILED:   return STR("OGA_ERROR_STATE_ALLOCATION_FAILED");
+        case OGA_ERROR_OUT_OF_DEVICE_MEMORY:   return STR("OGA_ERROR_OUT_OF_DEVICE_MEMORY");
         default: return STR("<>");
     }
     return STR("<>");
@@ -29,16 +46,28 @@ unit_local inline string oga_get_result_message(Oga_Result r) {
         case OGA_OK: return STR("No error");
         case OGA_CONTEXT_INIT_ERROR_MISSING_DEVICE_FEATURES:
             return STR("Trying to use device features that were not available. Check Oga_Device::features flags for whether or not a feature is available.");
+        case OGA_CONTEXT_INIT_ERROR_BAD_STATE_ALLOCATOR:
+            return STR("Passed a bad state allocator. allocator.proc is null.");
         case OGA_CREATE_LOGICAL_ENGINE_ERROR_FAMILY_INDEX_OUT_OF_RANGE:
             return STR("The given family index is not within the range 0 .. Oga_Device::logical_engine_family_count");
         case OGA_CREATE_LOGICAL_ENGINE_ERROR_FAMILY_CAPACITY_OVERFLOW:
             return STR("The given logical_engine creation count overflows that of Oga_Logical_Engine_Family_Info::logical_engine_capacity");
+        case OGA_INIT_SWAPCHAIN_ERROR_SURFACE_REJECTED:
+            return STR("The provided surface handle was rejected, possibly bad.");
+        case OGA_INIT_SWAPCHAIN_ERROR_UNSUPPORTED_PRESENT_MODE:
+            return STR("The provided present_mode was either unsupported or just an invalid value.");
+        case OGA_INIT_PROGRAM_ERROR_BAD_CODE:
+            return STR("The code passed was bad (or code_size) was incorrect.");
+        case OGA_ERROR_STATE_ALLOCATION_FAILED:
+            return STR("An allocation with the state_allocator passed in Oga_Context creation returned null upon allocation.");
+        case OGA_ERROR_OUT_OF_DEVICE_MEMORY:
+            return STR("Out of device memory");
         default: return STR("<>");
     }
     return STR("<>");
 }
 
-typedef enum Oga_Format_Kind {
+typedef enum Oga_Format {
     OGA_FORMAT_R8_UNORM,
     OGA_FORMAT_R8_SNORM,
     OGA_FORMAT_R8_UINT,
@@ -62,10 +91,12 @@ typedef enum Oga_Format_Kind {
     OGA_FORMAT_DEPTH32_SFLOAT,
     OGA_FORMAT_DEPTH32_SFLOAT_S8_UINT,
     OGA_FORMAT_DEPTH24_UNORM_S8_UINT,
-    OGA_FORMAT_DEPTH16_UNORM
-} Oga_Format_Kind;
+    OGA_FORMAT_DEPTH16_UNORM,
+    
+    OGA_FORMAT_ENUM_MAX,
+} Oga_Format;
 
-unit_local inline string oga_format_str(Oga_Format_Kind f) {
+unit_local inline string oga_format_str(Oga_Format f) {
     switch (f) {
         case OGA_FORMAT_R8_UNORM:               return RSTR(R8_UNORM);
         case OGA_FORMAT_R8_SNORM:               return RSTR(R8_SNORM);
@@ -91,6 +122,8 @@ unit_local inline string oga_format_str(Oga_Format_Kind f) {
         case OGA_FORMAT_DEPTH32_SFLOAT_S8_UINT: return RSTR(DEPTH32_SFLOAT_S8_UINT);
         case OGA_FORMAT_DEPTH24_UNORM_S8_UINT:  return RSTR(DEPTH24_UNORM_S8_UINT);
         case OGA_FORMAT_DEPTH16_UNORM:          return RSTR(DEPTH16_UNORM);
+        
+        case OGA_FORMAT_ENUM_MAX:
         default: return RSTR(<>);
     }
     return RSTR(<>);
@@ -152,7 +185,7 @@ typedef enum Oga_Device_Kind {
 
 // todo(charlie) populate this with an exhaustive list.
 typedef struct Oga_Device_Limits {
-    u64 max_shader_items_sets_per_stage;
+    u64 max_program_pointer_sets_per_stage;
 
     u64 max_fast_data_blocks_per_stage;
     u64 max_large_data_blocks_per_stage;
@@ -195,7 +228,7 @@ typedef struct Oga_Device_Limits {
 
     u64 min_memory_map_alignment;
 
-    Oga_Sample_Count_Flag supported_sample_counts_framebuffer;
+    Oga_Sample_Count_Flag supported_sample_counts_render_pass;
 
     Oga_Sample_Count_Flag supported_sample_counts_fast_image_float;
     Oga_Sample_Count_Flag supported_sample_counts_large_image_float;
@@ -208,7 +241,19 @@ typedef struct Oga_Device_Limits {
 typedef u64 Oga_Device_Feature_Flag;
 
 #define OGA_DEVICE_FEATURE_GRAPHICS_TIMESTAMP (1 << 0)
-#define OGA_DEVICE_FEATURE_COMPUTE_TIMESTAMP (1 << 1)
+#define OGA_DEVICE_FEATURE_COMPUTE_TIMESTAMP  (1 << 1)
+#define OGA_DEVICE_FEATURE_PRESENT_MAILBOX    (1 << 2)
+#define OGA_DEVICE_FEATURE_DEPTH_CLAMP    (1 << 3)
+
+unit_local inline string oga_device_feature_str(Oga_Device_Feature_Flag f) {
+    switch (f) {
+        case OGA_DEVICE_FEATURE_GRAPHICS_TIMESTAMP: return STR("Graphics Timestamps");
+        case OGA_DEVICE_FEATURE_COMPUTE_TIMESTAMP: return STR("Compute Timestamps");
+        case OGA_DEVICE_FEATURE_PRESENT_MAILBOX: return STR("Present mailbox");
+        default: return STR("<>");
+    }
+    return STR("<>");
+}
 
 #define OGA_MAX_DEVICE_LOGICAL_ENGINE_FAMILIES 32
 #define OGA_MAX_DEVICE_LOGICAL_ENGINES_PER_FAMILY 32
@@ -228,23 +273,32 @@ typedef struct Oga_Device {
     // string
     u8 driver_version_data[128];
     u64 driver_version_length;
-
+    
+    u32 api_version_raw;
+    // string
+    u8 api_version_data[128];
+    u64 api_version_length;
+    
     Oga_Device_Limits limits;
 
     Oga_Logical_Engine_Family_Info logical_engine_family_infos[OGA_MAX_DEVICE_LOGICAL_ENGINE_FAMILIES];
     u32 logical_engine_family_count;
 
-    Oga_Format_Kind depth_format;
+    Oga_Format depth_format;
 
     Oga_Memory_Heap memory_heaps[OGA_MAX_MEMORY_HEAPS_PER_DEVICE];
     u64 memory_heap_count;
     u64 total_gpu_local_memory;
 
     Oga_Device_Feature_Flag features;
+    
+    Oga_Format supported_surface_formats[OGA_FORMAT_ENUM_MAX];
+    u64 supported_surface_format_count;
 
 } Oga_Device;
 
 typedef enum Oga_Device_Pick_Flag {
+    OGA_DEVICE_PICK_NONE = 0,
     OGA_DEVICE_PICK_PREFER_DISCRETE = 1 << 0,
     OGA_DEVICE_PICK_PREFER_INTEGRATED = 1 << 1,
     OGA_DEVICE_PICK_PREFER_CPU = 1 << 2,
@@ -281,6 +335,7 @@ typedef struct Oga_Context_Desc {
     // Leave descs uninitialized to make no logical_engines in that family.
     Oga_Logical_Engines_Create_Desc logical_engine_create_descs[OGA_MAX_DEVICE_LOGICAL_ENGINE_FAMILIES];
     Oga_Device_Feature_Flag enabled_features;
+    Allocator state_allocator; // The allocator used to allocate state & handles in this context. Will only be used when creating/destroying things.
 } Oga_Context_Desc;
 
 // Some hardware expose their engines, some don't.
@@ -301,15 +356,170 @@ typedef struct Oga_Context {
     void *id;
     Oga_Device device;
     Oga_Logical_Engine_Group logical_engines_by_family[OGA_MAX_DEVICE_LOGICAL_ENGINE_FAMILIES];
+    Allocator state_allocator;
 } Oga_Context;
 
-Oga_Result oga_init_context(Oga_Device target_device, Oga_Context_Desc desc, Oga_Context *context);
+Oga_Result oga_init_context(Oga_Device target_device, Oga_Context_Desc desc, Oga_Context **context);
 void oga_uninit_context(Oga_Context *context);
+
+
+//////////
+/// Swap chain
+
+typedef enum Oga_Present_Mode {
+    // Present() will halt the thread until at least 1 image is ready to be queued,
+    // and then each image in the queue is presented and popped each vertical blank.
+    OGA_PRESENT_MODE_VSYNC,
+    // Present() Will submit the image to the queue, and if the queue is full, it will
+    //  abort the image currently being presented, which will very likely cause visual tearing.
+    // There may techically be devices that only support OGA_PRESENT_MODE_VSYNC, and in such
+    // rare cases this will fallback to that.
+    OGA_PRESENT_MODE_IMMEDIATE,
+    // Present() will submit the image to the queue, resetting the oldest pending image
+    //  if queue is full, and will NOT halt the thread. This won't cause tearing, but will
+    //  discard some submitted frames if submitted at a higher rate than vertical blank rate.
+    // Check device feature flag OGA_DEVICE_FEATURE_PRESENT_MAILBOX
+    OGA_PRESENT_MODE_VSYNC_MAILBOX 
+} Oga_Present_Mode;
+
+typedef struct Oga_Swapchain_Desc {
+    Surface_Handle surface;
+    u64 requested_image_count;
+    Oga_Format image_format;
+    u64 width;
+    u64 height;
+    u64 *queue_families_with_access; // The indices of the queue families that will be allowed to access the images
+    u64 queue_families_with_access_count;
+    Oga_Present_Mode present_mode;
+    
+} Oga_Swapchain_Desc;
+
+
+
+#define MAX_SWAPCHAIN_IMAGES 16
+
+typedef struct Oga_Swapchain {
+    void *id;
+    Oga_Context *context;
+    struct Oga_Image2D *images[MAX_SWAPCHAIN_IMAGES];
+    u64 current_image_index;
+    u64 image_count;
+    Oga_Format image_format;
+} Oga_Swapchain;
+
+Oga_Result oga_init_swapchain(Oga_Context *context, Oga_Swapchain_Desc desc, Oga_Swapchain **swapchain);
+void oga_uninit_swapchain(Oga_Swapchain *swapchain);
+
+//////////
+/// Render passes & Programs
+
+typedef enum Oga_Program_Kind {
+    OGA_PROGRAM_VERTEX,
+    OGA_PROGRAM_FRAGMENT,
+    OGA_PROGRAM_COMPUTE,
+} Oga_Program_Kind;
+
+typedef struct Oga_Program_Desc {
+    void *code; // Compiled code ready to send to drivers
+    u64 code_size;
+    Oga_Program_Kind kind;
+} Oga_Program_Desc;
+
+typedef struct Oga_Program {
+    void *id;
+    Oga_Context *context;
+    Oga_Program_Kind kind;
+} Oga_Program;
+
+// Goes through OSL to compile osl lang to target drivers
+// Oga_Result oga_compile_program_for_target
+
+Oga_Result oga_init_program(Oga_Context *context, Oga_Program_Desc desc, Oga_Program **program);
+void oga_uninit_program(Oga_Program *program);
+
+typedef u64 Oga_Render_Pass_Flag;
+unit_local Oga_Render_Pass_Flag OGA_RENDER_PASS_INHERITANCE_PARENT = 1 << 0;
+unit_local Oga_Render_Pass_Flag OGA_RENDER_PASS_INHERITANCE_CHILD = 1 << 1;
+unit_local Oga_Render_Pass_Flag OGA_RENDER_PASS_DISABLE_DEPTH_CLAMP = 1 << 2;
+
+// #Volatile values must map to same as vulkan equivalents
+typedef enum Oga_Primitive_Topology {
+    OGA_PRIMITIVE_TOPOLOGY_POINT_LIST = 0,
+    OGA_PRIMITIVE_TOPOLOGY_LINE_LIST = 1,
+    OGA_PRIMITIVE_TOPOLOGY_LINE_STRIP = 2,
+    OGA_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST = 3,
+    OGA_PRIMITIVE_TOPOLOGY_TRIANGLE_STRIP = 4
+} Oga_Primitive_Topology;
+
+typedef enum Oga_Cull_Mode {
+    OGA_CULL_NONE,
+    OGA_CULL_CLOCKWISE,
+    OGA_CULL_COUNTER_CLOCKWISE,
+} Oga_Cull_Mode;
+
+struct Oga_Render_Pass;
+typedef struct Oga_Render_Pass_Desc {
+    
+    Oga_Render_Pass_Flag flags;
+    struct Oga_Render_Pass *base;
+    u64 base_index; // Index into buffer of descs passed. Only used if base is null.
+    
+    Oga_Program *vertex_program;
+    string vertex_program_entry_point;
+    Oga_Program *fragment_program;
+    string fragment_program_entry_point;
+    
+    Oga_Format *color_attachment_formats;
+    u64 color_attachment_count;
+    
+    Oga_Primitive_Topology topology;
+    
+    Oga_Cull_Mode cull_mode;
+    
+    float32 line_width;
+    
+    // See Oga_Device::limits.supported_sample_counts_render_pass
+    Oga_Sample_Count_Flag rasterization_samples;
+    
+} Oga_Render_Pass_Desc;
+
+typedef struct Oga_Render_Pass {
+    void *id;
+    Oga_Context *context;
+} Oga_Render_Pass;
+
+Oga_Result oga_init_render_passes(Oga_Context *context, Oga_Render_Pass_Desc* descs, Oga_Render_Pass **render_passes, u64 render_pass_count);
+
+Oga_Result oga_init_render_pass(Oga_Context *context, Oga_Render_Pass_Desc desc, Oga_Render_Pass **render_pass);
+void oga_uninit_render_pass(Oga_Render_Pass *render_pass);
+
+//////////
+/// Synchronization
+
+// Gpu latch; for synchronizing on gpu. Signalled on gpu, waited on gpu.
+typedef struct Oga_Gpu_Latch {
+    void *id;
+    Oga_Context *context;
+} Oga_Gpu_Latch;
+
+Oga_Result oga_init_gpu_latch(Oga_Context *context, Oga_Gpu_Latch **gpu_latch);
+void oga_uninit_gpu_latch(Oga_Gpu_Latch *gpu_latch);
+
+// Cpu latch; for synchronizing cpu with gpu. Signalled on gpu, waited on cpu.
+typedef struct Oga_Cpu_Latch {
+    void *id;
+    Oga_Context *context;
+} Oga_Cpu_Latch;
+Oga_Result oga_init_cpu_latch(Oga_Context *context, Oga_Cpu_Latch **cpu_latch);
+void oga_uninit_cpu_latch(Oga_Cpu_Latch *cpu_latch);
+Oga_Result oga_wait_latch(Oga_Cpu_Latch *cpu_latch);
+Oga_Result oga_reset_latch(Oga_Cpu_Latch *cpu_latch);
 
 //////////
 /// Memory
 
 typedef void* Oga_Memory_Handle;
+#define OGA_INTERNALLY_MANAGED_MEMORY_HANDLE 0xFFFFFFFFFFFFFFFF
 
 typedef enum Oga_Allocator_Message {
     OGA_ALLOCATOR_ALLOCATE,
@@ -336,40 +546,43 @@ void oga_deallocate(Oga_Allocator a, Oga_Memory_Handle mem);
 
 Oga_Memory_Handle oga_default_allocator(Oga_Allocator_Message msg, Oga_Memory_Handle mem, u64 size, Oga_Memory_Property_Flag props, u64 flags);
 
-typedef enum Oga_Memory_View_Kind {
-    OGA_MEMORY_VIEW_KIND_SHADER_ITEM_DESCRIPTOR,
-    OGA_MEMORY_VIEW_KIND_VERTEX_LIST,
-    OGA_MEMORY_VIEW_KIND_INDEX_LIST,
-    OGA_MEMORY_VIEW_KIND_COPY_TASK,
-} Oga_Memory_View_Kind;
+//////////
+/// Pointers
 
-typedef enum Oga_Memory_View_Flag {
-    OGA_MEMORY_VIEW_FLAG_COPY_DST = 1 << 0,
-    OGA_MEMORY_VIEW_FLAG_COPY_SRC = 1 << 1,
-} Oga_Memory_View_Flag;
+typedef enum Oga_Pointer_Kind {
+    OGA_POINTER_KIND_PROGRAM_POINTER,
+    OGA_POINTER_KIND_VERTEX_LIST,
+    OGA_POINTER_KIND_INDEX_LIST,
+    OGA_POINTER_KIND_COPY_TASK,
+} Oga_Pointer_Kind;
 
-typedef enum Oga_Shader_Item_Descriptor_Kind {
-    OGA_SHADER_ITEM_DESCRIPTOR_KIND_DATA_BLOCK,
-    OGA_SHADER_ITEM_DESCRIPTOR_KIND_IMAGE1D,
-    OGA_SHADER_ITEM_DESCRIPTOR_KIND_IMAGE2D,
-    OGA_SHADER_ITEM_DESCRIPTOR_KIND_IMAGE3D,
-} Oga_Shader_Item_Descriptor_Kind;
+typedef enum Oga_Pointer_Flag {
+    OGA_POINTER_FLAG_COPY_DST = 1 << 0,
+    OGA_POINTER_FLAG_COPY_SRC = 1 << 1,
+} Oga_Pointer_Flag;
 
-typedef enum Oga_Shader_Item_Descriptor_Flag {
-    OGA_SHADER_ITEM_DESCRIPTOR_FLAG_READ,
-    OGA_SHADER_ITEM_DESCRIPTOR_FLAG_WRITE,
+typedef enum Oga_Program_Pointer_Kind {
+    OGA_PROGRAM_POINTER_KIND_DATA_BLOCK,
+    OGA_PROGRAM_POINTER_KIND_IMAGE1D,
+    OGA_PROGRAM_POINTER_KIND_IMAGE2D,
+    OGA_PROGRAM_POINTER_KIND_IMAGE3D,
+} Oga_Program_Pointer_Kind;
 
-    // When a shader item descriptor is flagged with large or write, it can have larger
+typedef enum Oga_Program_Pointer_Flag {
+    OGA_PROGRAM_POINTER_FLAG_READ,
+    OGA_PROGRAM_POINTER_FLAG_WRITE,
+
+    // When a program pointer is flagged with large or write, it can have larger
     // storage (or be written to) at the cost of memory access performance.
     // see limits max_fast_access_xxxxx_size
-    OGA_SHADER_ITEM_DESCRIPTOR_FLAG_LARGE,
-} Oga_Shader_Item_Descriptor_Flag;
+    OGA_PROGRAM_POINTER_FLAG_LARGE,
+} Oga_Program_Pointer_Flag;
 
-typedef struct Oga_Shader_Item_Descriptor_Desc {
-    Oga_Shader_Item_Descriptor_Kind kind;
-    Oga_Shader_Item_Descriptor_Flag flags;
+typedef struct Oga_Program_Pointer_Desc {
+    Oga_Program_Pointer_Kind kind;
+    Oga_Program_Pointer_Flag flags;
 
-} Oga_Shader_Item_Descriptor_Desc;
+} Oga_Program_Pointer_Desc;
 
 typedef struct Oga_Vertex_List_Desc  {
     int _;
@@ -385,21 +598,92 @@ typedef struct Oga_Copy_Task_Desc  {
 
 } Oga_Copy_Task_Desc;
 
-typedef struct Oga_Memory_View_Desc {
-    Oga_Memory_View_Kind kind;
-    Oga_Memory_View_Flag flags;
+typedef struct Oga_Pointer_Desc {
+    Oga_Pointer_Kind kind;
+    Oga_Pointer_Flag flags;
 
     Oga_Memory_Handle memory;
 
     union {
-        Oga_Shader_Item_Descriptor_Desc shader_item_descriptor;
+        Oga_Program_Pointer_Desc program_pointer;
         Oga_Vertex_List_Desc vertex_list;
         Oga_Index_List_Desc index_list;
         Oga_Copy_Task_Desc copy_task;
     } UNION;
-} Oga_Memory_View_Desc;
+} Oga_Pointer_Desc;
 
-//Oga_Result oga_make_memory_view(Oga_Context c, Oga_Memory_View_Desc desc);
+//Oga_Result oga_make_pointer(Oga_Context c, Oga_Pointer_Desc desc);
+
+// Program Pointers can be trivially casted
+// Oga_Image2D *my_image = ...;
+// Oga_Program_Pointer *some_pointer = (Oga_Program_Pointer *)my_image;
+// ...
+// if (some_pointer->kind == OGA_PROGRAM_POINTER_KIND_IMAGE2D) {
+//     Oga_Image2D *as_image = (Oga_Image2D*)some_pointer;
+// }
+
+typedef struct Oga_Program_Pointer {
+    void *id;
+    Oga_Program_Pointer_Kind kind;
+    Oga_Memory_Handle memory; // This will be set to 0xFFFFFFFFFFFFFFFF if memory is internally managed in drivers
+    
+} Oga_Program_Pointer;
+
+typedef struct Oga_Image1D {
+    Oga_Program_Pointer pointer;
+    u64 width;
+} Oga_Image1D;
+typedef struct Oga_Image2D {
+    Oga_Program_Pointer pointer;
+    u64 width;
+    u64 height;
+} Oga_Image2D;
+typedef struct Oga_Image3D {
+    Oga_Program_Pointer pointer;
+    u64 width;
+    u64 height;
+    u64 depth;
+} Oga_Image3D;
+
+// This is really only here to get validation/debug layer messages for leaked resources
+void oga_reset(void);
+
+
+//////////
+/// Commands
+
+// note(charlie)
+// If it was up to me, I would let you manage your own memory.
+// Unfortunately, graphics API designers decided that we can't be trusted.
+// So we need to use this really weird, intrusive, generalized mystical abstraction,
+// praying to the driver gods that it's good enough.
+
+typedef u64 Oga_Command_Pool_Flag;
+#define  OGA_COMMAND_POOL_NONE 0
+#define  OGA_COMMAND_POOL_SHORT_LIVED 1 << 0
+
+typedef struct Oga_Command_Pool_Desc {
+    Oga_Command_Pool_Flag flags;
+    u64 queue_family_index; // Pinky promise which queue family this will be submitted to
+} Oga_Command_Pool_Desc;
+
+typedef struct Oga_Command_Pool {
+    void *id;
+    Oga_Context *context;
+} Oga_Command_Pool;
+
+typedef struct Oga_Command_List {
+    void *id;
+    Oga_Command_Pool *pool;
+} Oga_Command_List;
+
+Oga_Result oga_init_command_pool(Oga_Context *context, Oga_Command_Pool_Desc desc, Oga_Command_Pool **pool);
+ // This will free all command lists, so you do not need to explicitly free each command list.
+void oga_uninit_command_pool(Oga_Command_Pool *pool);
+
+Oga_Result oga_get_command_lists(Oga_Command_Pool *pool, Oga_Command_List *lists, u64 list_count);
+void oga_release_command_lists(Oga_Command_List *lists, u64 list_count);
+
 
 
 #ifdef OGA_IMPL_AUTO
@@ -461,7 +745,12 @@ Oga_Pick_Device_Result oga_pick_device(Oga_Device_Pick_Flag pick_flags, Oga_Devi
             *pscore += 1000;
         if ((pick_flags & OGA_DEVICE_PICK_PREFER_CPU) && device.kind == OGA_DEVICE_CPU)
             *pscore += 1000;
-
+            
+        for (u64 j = 0; j < device.logical_engine_family_count; j += 1) {
+            Oga_Logical_Engine_Family_Info info = device.logical_engine_family_infos[j];
+            *pscore += info.logical_engine_capacity*10;
+        }
+        
         u64 preferred_features_count = 0;
         for (u64 f = 0; f < 64; f += 1) {
             // Feature flag is preferred ?
@@ -538,7 +827,7 @@ unit_local u64 _format_driver_version(u32 vendor_id, u32 driver_version, u8 *buf
     }
 }
 
-inline string oga_format_str(Oga_Format_Kind f);
+inline string oga_format_str(Oga_Format f);
 
 #ifdef OGA_IMPL_VULKAN
 

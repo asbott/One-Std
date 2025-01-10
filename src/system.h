@@ -48,6 +48,11 @@ u64 sys_query_monitors(Physical_Monitor *buffer, u64 max_count);
 //////
 
 typedef void* File_Handle;
+typedef u64 File_Open_Flags;
+#define FILE_OPEN_WRITE  (1 << 0)
+#define FILE_OPEN_READ   (1 << 1)
+#define FILE_OPEN_RESET  (1 << 2)
+#define FILE_OPEN_CREATE (1 << 3)
 
 File_Handle sys_get_stdout(void);
 File_Handle sys_get_stderr(void);
@@ -63,6 +68,11 @@ s64 sys_read(File_Handle h, void *buffer, u64 buffer_size);
 bool sys_make_pipe(File_Handle *read, File_Handle *write);
 
 void sys_close(File_Handle h);
+
+// Returns 0 on failure
+File_Handle sys_open_file(string path, File_Open_Flags flags);
+
+u64 sys_get_file_size(File_Handle f);
 
 //////
 // Surfaces (Window)
@@ -202,6 +212,7 @@ unit_local _Surface_State *_get_surface_state(Surface_Handle h) {
 #endif // (OS_FLAGS & OS_FLAG_HAS_WINDOW_SYSTEM)
 
 
+
 #if (OS_FLAGS & OS_FLAG_UNIX)
 
 /////////////////////////////////////////////////////
@@ -222,6 +233,7 @@ unit_local _Surface_State *_get_surface_state(Surface_Handle h) {
 #include <sys/stat.h>
 #include <errno.h>
 #include <execinfo.h>
+#include <fcntl.h>
 #undef bool
 
 typedef struct _Mapped_Region_Desc {
@@ -449,6 +461,43 @@ bool sys_make_pipe(File_Handle *read, File_Handle *write) {
 
 void sys_close(File_Handle h) {
     close((int)(u64)h);
+}
+
+File_Handle sys_open_file(string path, File_Open_Flags flags) {
+    char cpath[MAX_PATH_LENGTH];
+    u64 path_len = min(path.count, MAX_PATH_LENGTH - 1);
+    memcpy(cpath, path.data, path_len);
+    cpath[path_len] = 0;
+
+    int unix_flags = 0;
+
+    if (flags & FILE_OPEN_WRITE) {
+        unix_flags |= (flags & FILE_OPEN_READ) ? O_RDWR : O_WRONLY;
+    } else if (flags & FILE_OPEN_READ) {
+        unix_flags |= O_RDONLY;
+    }
+
+    if (flags & FILE_OPEN_CREATE) {
+        unix_flags |= O_CREAT;
+    }
+    if (flags & FILE_OPEN_RESET) {
+        unix_flags |= O_TRUNC;
+    } else {
+        unix_flags |= O_APPEND;
+    }
+
+    int fd = open(cpath, unix_flags, 0644);
+    if (fd < 0) return 0;
+
+    return (File_Handle)(u64)fd;
+}
+
+u64 sys_get_file_size(File_Handle f) {
+    struct stat file_stat;
+    if (fstat((int)(u64)f, &file_stat) == -1) {
+        return 0;
+    }
+    return (u64)file_stat.st_size; 
 }
 
 #endif // OS_FLAGS & OS_FLAG_UNIX
@@ -765,6 +814,53 @@ s64 sys_read(File_Handle h, void *buffer, u64 buffer_size) {
 
 void sys_close(File_Handle h) {
     CloseHandle((HANDLE)h);
+}
+
+File_Handle sys_open_file(string path, File_Open_Flags flags) {
+    u16 cpath[MAX_PATH_LENGTH*2];
+    _win_utf8_to_wide(path, cpath, MAX_PATH_LENGTH*2);
+
+    DWORD access_mode = 0;
+    DWORD creation_flags = 0;
+
+    if (flags & FILE_OPEN_WRITE) {
+        access_mode |= FILE_GENERIC_WRITE;
+    }
+    if (flags & FILE_OPEN_READ) {
+        access_mode |= FILE_GENERIC_READ;
+    }
+
+    if (flags & FILE_OPEN_RESET) {
+        creation_flags = CREATE_ALWAYS;
+    } else if (flags & FILE_OPEN_CREATE) {
+        creation_flags = OPEN_ALWAYS;
+    } else {
+        creation_flags = OPEN_EXISTING;
+    }
+
+    HANDLE handle = CreateFileW(
+        cpath,
+        access_mode,
+        FILE_SHARE_READ | FILE_SHARE_WRITE,
+        0,
+        creation_flags,
+        FILE_ATTRIBUTE_NORMAL,
+        0  
+    );
+
+    if (handle == INVALID_HANDLE_VALUE) {
+        return 0; 
+    }
+
+    return handle;
+}
+
+u64 sys_get_file_size(File_Handle f) {
+    LARGE_INTEGER size;
+    if (!GetFileSizeEx(f, &size)) {
+        return 0; // Indicate failure
+    }
+    return (u64)size.QuadPart;
 }
 
 Surface_Handle sys_make_surface(Surface_Desc desc) {
@@ -1279,7 +1375,7 @@ void sys_print_stack_trace(File_Handle handle) {
 
 u64 sys_query_monitors(Physical_Monitor *buffer, u64 max_count)
 {
-    Display *dpy = XOpenDisplay(NULL);
+    Display *dpy = XOpenDisplay(0);
     if (!dpy) {
         // Could not open X display
         return 0;
@@ -1374,7 +1470,7 @@ Surface_Handle sys_make_surface(Surface_Desc desc) {
             _x11_initted = true;
         }
 
-        Display *display = XOpenDisplay(NULL);
+        Display *display = XOpenDisplay(0);
         if (!display) {
             sys_write_string(sys_get_stdout(), STR("Failed to open X display\n"));
             return 0;

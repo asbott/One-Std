@@ -31,8 +31,8 @@
         #define __crt_va_start(ap, x)  ((void)(__va_start(&ap, x)))
         #define __crt_va_arg(ap, t)                                               \
         ((sizeof(t) > sizeof(uintptr) || (sizeof(t) & (sizeof(t) - 1)) != 0) \
-            ? **(t**)((ap += sizeof(uintptr)) - sizeof(uintptr))             \
-            :  *(t* )((ap += sizeof(uintptr)) - sizeof(uintptr)))
+            ? **(t**)(uintptr)((ap += sizeof(uintptr)) - sizeof(uintptr))             \
+            :  *(t* )(uintptr)((ap += sizeof(uintptr)) - sizeof(uintptr)))
         #define __crt_va_end(ap)        ((void)(ap = (va_list)0))
 
         #define va_start __crt_va_start
@@ -68,7 +68,7 @@ typedef struct Var_Arg {
     u64 size;
 } Var_Arg;
 
-#define _WRAP_VAR(x) &(Var_Arg) {sizeof(x) >= 8 ? *(u64*)&x : sizeof(x) >= 4 ? *(u32*)&x : sizeof(x) >= 2 ? *(u16*)&x : *(u8*)&x, sizeof(x) >= 8 ? *(float64*)&x : sizeof(x) >= 4 ? (float64)*(float32*)&x : 0, sizeof(x) >= sizeof(string) ? *(string*)&(x) : (string){0}, sizeof(x)}
+#define _WRAP_VAR(x) &(Var_Arg) {sizeof((x)) >= 8 ? *(u64*)(uintptr)&(x) : sizeof((x)) >= 4 ? *(u32*)(uintptr)&(x) : sizeof((x)) >= 2 ? *(u16*)(uintptr)&(x) : *(u8*)(uintptr)&(x), sizeof((x)) >= 8 ? *(float64*)(uintptr)&(x) : sizeof((x)) >= 4 ? (float64)*(float32*)(uintptr)&(x) : 0, sizeof((x)) >= sizeof(string) ? *(string*)(uintptr)&(x) : (string){0}, sizeof((x))}
 
 #include "var_args_macros.h"
 
