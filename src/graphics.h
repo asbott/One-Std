@@ -5,6 +5,10 @@
 typedef enum Oga_Result {
     OGA_OK,
 
+    OGA_SUBOPTIMAL,
+    OGA_NOT_READY,
+    OGA_TIMEOUT,
+
     // Trying to use device features that were not available.
     // Check Oga_Device::features flags for whether or not a feature is available.
     OGA_CONTEXT_INIT_ERROR_MISSING_DEVICE_FEATURES,
@@ -23,20 +27,28 @@ typedef enum Oga_Result {
     
     OGA_ERROR_STATE_ALLOCATION_FAILED,
     OGA_ERROR_OUT_OF_DEVICE_MEMORY,
+    OGA_ERROR_OUTDATED,
+    OGA_ERROR_SURFACE_LOST,
+    
 } Oga_Result;
 
 unit_local inline string oga_get_result_name(Oga_Result r) {
     switch (r) {
         case OGA_OK: return STR("OGA_OK");
-        case OGA_CONTEXT_INIT_ERROR_MISSING_DEVICE_FEATURES:   return STR("OGA_CONTEXT_INIT_ERROR_MISSING_DEVICE_FEATURES");
-        case OGA_CONTEXT_INIT_ERROR_BAD_STATE_ALLOCATOR:   return STR("OGA_CONTEXT_INIT_ERROR_BAD_STATE_ALLOCATOR");
+        case OGA_SUBOPTIMAL:                                            return STR("OGA_SUBOPTIMAL");
+        case OGA_NOT_READY:                                             return STR("OGA_NOT_READY");
+        case OGA_TIMEOUT:                                               return STR("OGA_TIMEOUT");
+        case OGA_CONTEXT_INIT_ERROR_MISSING_DEVICE_FEATURES:            return STR("OGA_CONTEXT_INIT_ERROR_MISSING_DEVICE_FEATURES");
+        case OGA_CONTEXT_INIT_ERROR_BAD_STATE_ALLOCATOR:                return STR("OGA_CONTEXT_INIT_ERROR_BAD_STATE_ALLOCATOR");
         case OGA_CREATE_LOGICAL_ENGINE_ERROR_FAMILY_INDEX_OUT_OF_RANGE: return STR("OGA_CREATE_LOGICAL_ENGINE_ERROR_FAMILY_INDEX_OUT_OF_RANGE");
         case OGA_CREATE_LOGICAL_ENGINE_ERROR_FAMILY_CAPACITY_OVERFLOW:  return STR("OGA_CREATE_LOGICAL_ENGINE_ERROR_FAMILY_CAPACITY_OVERFLOW");
-        case OGA_INIT_SWAPCHAIN_ERROR_SURFACE_REJECTED:  return STR("OGA_INIT_SWAPCHAIN_ERROR_SURFACE_REJECTED");
-        case OGA_INIT_SWAPCHAIN_ERROR_UNSUPPORTED_PRESENT_MODE:  return STR("OGA_INIT_SWAPCHAIN_ERROR_UNSUPPORTED_PRESENT_MODE");
-        case OGA_INIT_PROGRAM_ERROR_BAD_CODE:  return STR("OGA_INIT_PROGRAM_ERROR_BAD_CODE");
-        case OGA_ERROR_STATE_ALLOCATION_FAILED:   return STR("OGA_ERROR_STATE_ALLOCATION_FAILED");
-        case OGA_ERROR_OUT_OF_DEVICE_MEMORY:   return STR("OGA_ERROR_OUT_OF_DEVICE_MEMORY");
+        case OGA_INIT_SWAPCHAIN_ERROR_SURFACE_REJECTED:                 return STR("OGA_INIT_SWAPCHAIN_ERROR_SURFACE_REJECTED");
+        case OGA_INIT_SWAPCHAIN_ERROR_UNSUPPORTED_PRESENT_MODE:         return STR("OGA_INIT_SWAPCHAIN_ERROR_UNSUPPORTED_PRESENT_MODE");
+        case OGA_INIT_PROGRAM_ERROR_BAD_CODE:                           return STR("OGA_INIT_PROGRAM_ERROR_BAD_CODE");
+        case OGA_ERROR_STATE_ALLOCATION_FAILED:                         return STR("OGA_ERROR_STATE_ALLOCATION_FAILED");
+        case OGA_ERROR_OUT_OF_DEVICE_MEMORY:                            return STR("OGA_ERROR_OUT_OF_DEVICE_MEMORY");
+        case OGA_ERROR_OUTDATED:                                        return STR("OGA_ERROR_OUTDATED");
+        case OGA_ERROR_SURFACE_LOST:                                    return STR("OGA_ERROR_SURFACE_LOST");
         default: return STR("<>");
     }
     return STR("<>");
@@ -44,6 +56,12 @@ unit_local inline string oga_get_result_name(Oga_Result r) {
 unit_local inline string oga_get_result_message(Oga_Result r) {
     switch (r) {
         case OGA_OK: return STR("No error");
+        case OGA_SUBOPTIMAL: 
+            return STR("Swapchain is suboptimal and should be recreated, but can still be used.");
+        case OGA_NOT_READY: 
+            return STR("Swapchain has no ready images yet");
+        case OGA_TIMEOUT: 
+            return STR("A timeout expired");
         case OGA_CONTEXT_INIT_ERROR_MISSING_DEVICE_FEATURES:
             return STR("Trying to use device features that were not available. Check Oga_Device::features flags for whether or not a feature is available.");
         case OGA_CONTEXT_INIT_ERROR_BAD_STATE_ALLOCATOR:
@@ -62,6 +80,10 @@ unit_local inline string oga_get_result_message(Oga_Result r) {
             return STR("An allocation with the state_allocator passed in Oga_Context creation returned null upon allocation.");
         case OGA_ERROR_OUT_OF_DEVICE_MEMORY:
             return STR("Out of device memory");
+        case OGA_ERROR_OUTDATED:
+            return STR("A swapchain has become out of date and can no longer present");
+        case OGA_ERROR_SURFACE_LOST:
+            return STR("A surface was lost; closed or corrupt");
         default: return STR("<>");
     }
     return STR("<>");
@@ -224,7 +246,7 @@ typedef struct Oga_Device_Limits {
     u64 max_framebuffer_width;
     u64 max_framebuffer_height;
 
-    u64 max_color_attachments;
+    u64 max_render_attachments;
 
     u64 min_memory_map_alignment;
 
@@ -354,6 +376,7 @@ typedef struct Oga_Logical_Engine_Group {
 
 typedef struct Oga_Context {
     void *id;
+    void *internal;
     Oga_Device device;
     Oga_Logical_Engine_Group logical_engines_by_family[OGA_MAX_DEVICE_LOGICAL_ENGINE_FAMILIES];
     Allocator state_allocator;
@@ -401,7 +424,7 @@ typedef struct Oga_Swapchain_Desc {
 typedef struct Oga_Swapchain {
     void *id;
     Oga_Context *context;
-    struct Oga_Image2D *images[MAX_SWAPCHAIN_IMAGES];
+    struct Oga_Image *images[MAX_SWAPCHAIN_IMAGES];
     u64 current_image_index;
     u64 image_count;
     Oga_Format image_format;
@@ -409,6 +432,18 @@ typedef struct Oga_Swapchain {
 
 Oga_Result oga_init_swapchain(Oga_Context *context, Oga_Swapchain_Desc desc, Oga_Swapchain **swapchain);
 void oga_uninit_swapchain(Oga_Swapchain *swapchain);
+
+struct Oga_Gpu_Latch;
+struct Oga_Cpu_Latch;
+Oga_Result oga_get_next_swapchain_image(Oga_Swapchain *swapchain, u64 timeout, struct Oga_Gpu_Latch *signal_gpu_latch, struct Oga_Cpu_Latch *signal_cpu_latch, u64 *image_index); 
+
+typedef struct Oga_Present_Desc {
+    Oga_Logical_Engine engine;
+    u64 wait_gpu_latch_count;
+    struct Oga_Gpu_Latch **wait_gpu_latches;
+    u64 image_index;
+} Oga_Present_Desc;
+Oga_Result oga_submit_present(Oga_Swapchain *swapchain, Oga_Present_Desc desc);
 
 //////////
 /// Render passes & Programs
@@ -420,7 +455,7 @@ typedef enum Oga_Program_Kind {
 } Oga_Program_Kind;
 
 typedef struct Oga_Program_Desc {
-    void *code; // Compiled code ready to send to drivers
+    const void *code; // Compiled code ready to send to drivers
     u64 code_size;
     Oga_Program_Kind kind;
 } Oga_Program_Desc;
@@ -469,8 +504,8 @@ typedef struct Oga_Render_Pass_Desc {
     Oga_Program *fragment_program;
     string fragment_program_entry_point;
     
-    Oga_Format *color_attachment_formats;
-    u64 color_attachment_count;
+    Oga_Format *attachment_formats;
+    u64 attachment_count;
     
     Oga_Primitive_Topology topology;
     
@@ -510,7 +545,7 @@ typedef struct Oga_Cpu_Latch {
     void *id;
     Oga_Context *context;
 } Oga_Cpu_Latch;
-Oga_Result oga_init_cpu_latch(Oga_Context *context, Oga_Cpu_Latch **cpu_latch);
+Oga_Result oga_init_cpu_latch(Oga_Context *context, Oga_Cpu_Latch **cpu_latch, bool start_signaled);
 void oga_uninit_cpu_latch(Oga_Cpu_Latch *cpu_latch);
 Oga_Result oga_wait_latch(Oga_Cpu_Latch *cpu_latch);
 Oga_Result oga_reset_latch(Oga_Cpu_Latch *cpu_latch);
@@ -519,7 +554,7 @@ Oga_Result oga_reset_latch(Oga_Cpu_Latch *cpu_latch);
 /// Memory
 
 typedef void* Oga_Memory_Handle;
-#define OGA_INTERNALLY_MANAGED_MEMORY_HANDLE 0xFFFFFFFFFFFFFFFF
+#define OGA_INTERNALLY_MANAGED_MEMORY_HANDLE ((void*)0xFFFFFFFFFFFFFFFF)
 
 typedef enum Oga_Allocator_Message {
     OGA_ALLOCATOR_ALLOCATE,
@@ -535,19 +570,17 @@ typedef Oga_Memory_Handle (*Oga_Allocator_Proc_)(
     );
 typedef Oga_Allocator_Proc_ Oga_Allocator_Proc;
 
-// Allocator for video memory
-typedef struct Oga_Allocator {
-    void *data;
-    Oga_Allocator_Proc proc;
-} Oga_Allocator;
-
-Oga_Memory_Handle oga_allocate(Oga_Allocator a, u64 size, Oga_Memory_Property_Flag props, u64 flags);
-void oga_deallocate(Oga_Allocator a, Oga_Memory_Handle mem);
-
-Oga_Memory_Handle oga_default_allocator(Oga_Allocator_Message msg, Oga_Memory_Handle mem, u64 size, Oga_Memory_Property_Flag props, u64 flags);
-
 //////////
 /// Pointers
+
+typedef u64 Oga_Image_Optimization;
+#define OGA_IMAGE_OPTIMIZATION_UNDEFINED 0
+#define OGA_IMAGE_OPTIMIZATION_GENERAL 1
+#define OGA_IMAGE_OPTIMIZATION_RENDER_ATTACHMENT 2
+#define OGA_IMAGE_OPTIMIZATION_SHADER_READONLY 3
+#define OGA_IMAGE_OPTIMIZATION_TRANSFER_DST 4
+#define OGA_IMAGE_OPTIMIZATION_TRANSFER_SRC 5
+#define OGA_IMAGE_OPTIMIZATION_PRESENT 6
 
 typedef enum Oga_Pointer_Kind {
     OGA_POINTER_KIND_PROGRAM_POINTER,
@@ -603,7 +636,8 @@ typedef struct Oga_Pointer_Desc {
     Oga_Pointer_Flag flags;
 
     Oga_Memory_Handle memory;
-
+    u64 memory_offset;
+    
     union {
         Oga_Program_Pointer_Desc program_pointer;
         Oga_Vertex_List_Desc vertex_list;
@@ -616,34 +650,42 @@ typedef struct Oga_Pointer_Desc {
 
 // Program Pointers can be trivially casted
 // Oga_Image2D *my_image = ...;
-// Oga_Program_Pointer *some_pointer = (Oga_Program_Pointer *)my_image;
+// Oga_Pointer *some_pointer = (Oga_Pointer *)my_image;
 // ...
 // if (some_pointer->kind == OGA_PROGRAM_POINTER_KIND_IMAGE2D) {
 //     Oga_Image2D *as_image = (Oga_Image2D*)some_pointer;
 // }
 
-typedef struct Oga_Program_Pointer {
-    void *id;
-    Oga_Program_Pointer_Kind kind;
-    Oga_Memory_Handle memory; // This will be set to 0xFFFFFFFFFFFFFFFF if memory is internally managed in drivers
+
+typedef struct Oga_Pointer {
+#define OGA_POINTER_MEMBERS\
+    void *id;\
+    Oga_Memory_Handle memory; /* This will be set to 0xFFFFFFFFFFFFFFFF if memory is internally managed in drivers */ \
+    Oga_Pointer_Kind pointer_kind;
     
+    OGA_POINTER_MEMBERS
+} Oga_Pointer;
+
+typedef struct Oga_Program_Pointer {
+#define OGA_PROGRAM_POINTER_MEMBERS OGA_POINTER_MEMBERS\
+    Oga_Program_Pointer_Kind program_pointer_kind;
+    
+    OGA_PROGRAM_POINTER_MEMBERS
 } Oga_Program_Pointer;
 
-typedef struct Oga_Image1D {
-    Oga_Program_Pointer pointer;
-    u64 width;
-} Oga_Image1D;
-typedef struct Oga_Image2D {
-    Oga_Program_Pointer pointer;
-    u64 width;
-    u64 height;
-} Oga_Image2D;
-typedef struct Oga_Image3D {
-    Oga_Program_Pointer pointer;
-    u64 width;
-    u64 height;
-    u64 depth;
-} Oga_Image3D;
+typedef enum Oga_Image_Kind {
+    OGA_IMAGE_1D,
+    OGA_IMAGE_2D,
+    OGA_IMAGE_3D,
+} Oga_Image_Kind;
+
+typedef struct Oga_Image {
+    OGA_PROGRAM_POINTER_MEMBERS
+        
+    u64 width, height, depth;
+    Oga_Image_Kind image_kind;
+} Oga_Image;
+
 
 // This is really only here to get validation/debug layer messages for leaked resources
 void oga_reset(void);
@@ -660,7 +702,7 @@ void oga_reset(void);
 
 typedef u64 Oga_Command_Pool_Flag;
 #define  OGA_COMMAND_POOL_NONE 0
-#define  OGA_COMMAND_POOL_SHORT_LIVED 1 << 0
+#define  OGA_COMMAND_POOL_SHORT_LIVED (1 << 0)
 
 typedef struct Oga_Command_Pool_Desc {
     Oga_Command_Pool_Flag flags;
@@ -680,10 +722,79 @@ typedef struct Oga_Command_List {
 Oga_Result oga_init_command_pool(Oga_Context *context, Oga_Command_Pool_Desc desc, Oga_Command_Pool **pool);
  // This will free all command lists, so you do not need to explicitly free each command list.
 void oga_uninit_command_pool(Oga_Command_Pool *pool);
+void oga_reset_command_pool(Oga_Command_Pool *pool);
 
 Oga_Result oga_get_command_lists(Oga_Command_Pool *pool, Oga_Command_List *lists, u64 list_count);
 void oga_release_command_lists(Oga_Command_List *lists, u64 list_count);
 
+
+
+typedef u64 Oga_Command_List_Usage_Flag;
+#define OGA_COMMAND_LIST_USAGE_ONE_TIME_SUBMIT (1 << 0)
+
+Oga_Result oga_cmd_begin(Oga_Command_List cmd, Oga_Command_List_Usage_Flag flags);
+Oga_Result oga_cmd_end(Oga_Command_List cmd);
+
+typedef struct Oga_Submit_Command_List_Desc {
+    Oga_Logical_Engine engine; 
+    Oga_Gpu_Latch **wait_gpu_latches; 
+    u64 wait_gpu_latch_count; 
+    Oga_Gpu_Latch **signal_gpu_latches; 
+    u64 signal_gpu_latch_count; 
+    Oga_Cpu_Latch *signal_cpu_latch;
+} Oga_Submit_Command_List_Desc;
+Oga_Result oga_submit_command_list(Oga_Command_List cmd, Oga_Submit_Command_List_Desc desc);
+
+void oga_cmd_transition_image_optimization(Oga_Command_List cmd, Oga_Image *image, Oga_Image_Optimization src_optimization, Oga_Image_Optimization optimization);
+
+typedef u64 Oga_Msaa_Resolve_Mode_Flag;
+#define OGA_MSAA_RESOLVE_MODE_NONE    0
+#define OGA_MSAA_RESOLVE_MODE_ZERO    (1 << 0)
+#define OGA_MSAA_RESOLVE_MODE_AVERAGE (1 << 1)
+#define OGA_MSAA_RESOLVE_MODE_MIN     (1 << 2)
+#define OGA_MSAA_RESOLVE_MODE_MAX     (1 << 3)
+
+typedef enum Oga_Attachment_Load_Op {
+    OGA_ATTACHMENT_LOAD_OP_LOAD,
+    OGA_ATTACHMENT_LOAD_OP_CLEAR,
+    OGA_ATTACHMENT_LOAD_OP_NOTHING
+} Oga_Attachment_Load_Op;
+typedef enum Oga_Attachment_Store_Op {
+    OGA_ATTACHMENT_STORE_OP_STORE,
+    OGA_ATTACHMENT_STORE_OP_NOTHING
+} Oga_Attachment_Store_Op;
+
+typedef struct Oga_Render_Attachment_Desc {
+    Oga_Image *image;
+    Oga_Image_Optimization image_optimization;
+    
+    // If rendering with multisampling, we can resolve the multiple samples into single samples
+    // on another image.
+    Oga_Msaa_Resolve_Mode_Flag resolve_mode;
+    const Oga_Image *resolve_image;
+    Oga_Image_Optimization resolve_image_optimization;
+    
+    Oga_Attachment_Load_Op load_op;
+    Oga_Attachment_Store_Op store_op;
+    
+    float32 clear_color[4]; // In case of load_op CLEAR
+    
+} Oga_Render_Attachment_Desc;
+
+typedef struct Oga_Begin_Render_Pass_Desc {
+    Oga_Render_Pass *render_pass;
+    s64 render_area_offset_x;
+    s64 render_area_offset_y;
+    u64 render_area_width;
+    u64 render_area_height;
+    u64 attachment_count;
+    Oga_Render_Attachment_Desc *attachments;
+} Oga_Begin_Render_Pass_Desc;
+
+void oga_cmd_begin_render_pass(Oga_Command_List cmd, Oga_Begin_Render_Pass_Desc desc);
+void oga_cmd_end_render_pass(Oga_Command_List cmd);
+
+void oga_cmd_draw(Oga_Command_List cmd, u64 vertex_count, u64 vertex_start, u64 instance_count, u64 instance_start);
 
 
 #ifdef OGA_IMPL_AUTO

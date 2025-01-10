@@ -35,10 +35,10 @@
 #pragma clang diagnostic ignored "-Wunused-function"
 #endif // __clang__
 
-typedef struct _Vk_Image2D_State {
+typedef struct _Vk_Image_State {
     VkImage image;
     VkImageView view;
-} _Vk_Image2D_State;
+} _Vk_Image_State;
 
 typedef struct _Vk_Swapchain_State {
     VkSwapchainKHR vk_swapchain;
@@ -49,6 +49,25 @@ typedef struct _Vk_Pipeline_State {
     VkPipeline pipeline;
     VkPipelineLayout layout;
 } _Vk_Pipeline_State;
+
+typedef struct _Vk_Context_Internal {
+    u32 vk_version_major;
+    u32 vk_version_minor;
+    u32 vk_version_patch;
+    bool dynamic_rendering;
+    bool dynamic_rendering_is_extension;
+    
+    PFN_vkCmdBeginRenderingKHR vkCmdBeginRenderingKHR;
+    PFN_vkCmdEndRenderingKHR vkCmdEndRenderingKHR;
+} _Vk_Context_Internal;
+
+typedef struct _Vk_Memory_Block {
+    VkDeviceMemory memory;
+    u64 size;
+    VkAccessFlags access_state;
+    
+    VkBuffer access_buffer;
+} _Vk_Memory_Block;
 
 unit_local inline VkFormat _oga_to_vk_format(Oga_Format k) {
     switch (k) {
@@ -173,7 +192,7 @@ unit_local inline string _str_vk_result(VkResult result) {
 }
 
 #define _vk_assert1(expr) do { VkResult _res = expr; string _res_str = _str_vk_result(_res); assertmsgs(_res == VK_SUCCESS, tprint("Vulkan call %s failed: %s. If you see this, you're either doing something very wrong, or there is an internal error in Oga.", STR(#expr), _res_str)); } while(0)
-#define _vk_assert2(expr) do { VkResult _res = expr; if (_res == VK_ERROR_OUT_OF_DEVICE_MEMORY) return OGA_ERROR_OUT_OF_DEVICE_MEMORY; string _res_str = _str_vk_result(_res); assertmsgs(_res == VK_SUCCESS, tprint("Vulkan call %s failed: %s. If you see this, you're either doing something very wrong, or there is an internal error in Oga.", STR(#expr), _res_str)); } while(0)
+#define _vk_assert2(expr) do { VkResult _res = expr; if (_res == VK_ERROR_OUT_OF_DEVICE_MEMORY) return OGA_ERROR_OUT_OF_DEVICE_MEMORY; if (_res == VK_ERROR_OUT_OF_HOST_MEMORY) return OGA_ERROR_STATE_ALLOCATION_FAILED;  string _res_str = _str_vk_result(_res); assertmsgs(_res == VK_SUCCESS, tprint("Vulkan call %s failed: %s. If you see this, you're either doing something very wrong, or there is an internal error in Oga.", STR(#expr), _res_str)); } while(0)
 
 
 unit_local VkDebugUtilsMessengerEXT _vk_messenger;
@@ -184,10 +203,6 @@ unit_local VkBool32 _vk_debug_callback(
     VkDebugUtilsMessageTypeFlagsEXT                  messageTypes,
     const VkDebugUtilsMessengerCallbackDataEXT*      pCallbackData,
     void*                                            pUserData) {
-
-    // Ignoring dumb drivers
-    if (pCallbackData->messageIdNumber == (int)0x901f59ec) return 0;
-    if (pCallbackData->messageIdNumber == (int)0x1798d061) return 0;
 
     (void)messageTypes; (void)pUserData;
     string sev;
@@ -295,98 +310,83 @@ unit_local inline VkInstance _vk_instance(void) {
         app_info.applicationVersion = VK_MAKE_VERSION(0, 0, 1);
         app_info.pEngineName = "Oga";
         app_info.engineVersion = VK_MAKE_VERSION(1, 0, 0);
-        app_info.apiVersion = VK_API_VERSION_1_3;
+        
+        if (version_minor >= 3) {
+            app_info.apiVersion = VK_API_VERSION_1_3;
+        } else if (version_minor >= 2) {
+            app_info.apiVersion = VK_API_VERSION_1_2;
+        } else if (version_minor >= 1) {
+            app_info.apiVersion = VK_API_VERSION_1_1;
+        } else {
+            app_info.apiVersion = VK_API_VERSION_1_0;
+        }
 
         VkInstanceCreateInfo create_info = (VkInstanceCreateInfo){0};
         create_info.sType = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO;
         create_info.pApplicationInfo = &app_info;
 
 #if OS_FLAGS & OS_FLAG_WINDOWS
-        const char *minimum_extensions[] = {
+        const char *required_extensions[] = {
 
 #ifdef DEBUG
             VK_EXT_DEBUG_UTILS_EXTENSION_NAME,
 #endif // _DEBUG
             VK_KHR_SURFACE_EXTENSION_NAME,
-            VK_KHR_WIN32_SURFACE_EXTENSION_NAME
+            VK_KHR_WIN32_SURFACE_EXTENSION_NAME,
+            "VK_KHR_get_physical_device_properties2"
         };
 #elif OS_FLAGS & OS_FLAG_LINUX
     // Depending on your display server, pick one:
-    static const char* minimum_extensions[] = {
+    static const char* required_extensions[] = {
 #ifdef DEBUG
         VK_EXT_DEBUG_UTILS_EXTENSION_NAME,
 #endif
         VK_KHR_SURFACE_EXTENSION_NAME,
-        VK_KHR_XLIB_SURFACE_EXTENSION_NAME
+        VK_KHR_XLIB_SURFACE_EXTENSION_NAME,
+        "VK_KHR_get_physical_device_properties2"
     };
 #elif OS_FLAGS & OS_FLAG_MACOS
     // MoltenVK-specific extension for macOS
-    static const char* minimum_extensions[] = {
+    static const char* required_extensions[] = {
 #ifdef DEBUG
         VK_EXT_DEBUG_UTILS_EXTENSION_NAME,
 #endif
         VK_KHR_SURFACE_EXTENSION_NAME,
         "VK_MVK_macos_surface",
-        "VK_KHR_portability_enumeration"
+        "VK_KHR_portability_enumeration",
+        "VK_KHR_get_physical_device_properties2"
     };
     create_info.flags |= VK_INSTANCE_CREATE_ENUMERATE_PORTABILITY_BIT_KHR;
 #elif OS_FLAGS & OS_FLAG_IOS
     // MoltenVK-specific extension for iOS
-    static const char* minimum_extensions[] = {
+    static const char* required_extensions[] = {
 #ifdef DEBUG
         VK_EXT_DEBUG_UTILS_EXTENSION_NAME,
 #endif
         VK_KHR_SURFACE_EXTENSION_NAME,
         "VK_MVK_ios_surface",
-        "VK_KHR_portability_enumeration"
+        "VK_KHR_portability_enumeration",
+        "VK_KHR_get_physical_device_properties2"
     };
     create_info.flags |= VK_INSTANCE_CREATE_ENUMERATE_PORTABILITY_BIT_KHR;
 #elif OS_FLAGS & OS_FLAG_ANDROID
-    static const char* minimum_extensions[] = {
+    static const char* required_extensions[] = {
 #ifdef DEBUG
         VK_EXT_DEBUG_UTILS_EXTENSION_NAME,
 #endif
         VK_KHR_SURFACE_EXTENSION_NAME,
-        VK_KHR_ANDROID_SURFACE_EXTENSION_NAME
+        VK_KHR_ANDROID_SURFACE_EXTENSION_NAME,
+        "VK_KHR_get_physical_device_properties2"
     };
 
 #else
     #error VK __instance extension query not set up for this OS
 #endif
         
-        static const char* extra_extensions[4] = {0};
-        u64 extra_extension_count = 0;
-        u64 extra_start = sizeof(minimum_extensions) / sizeof(char*);
+        u64 num_required_extensions = sizeof(required_extensions) / sizeof(char*) ;
         
-        if (!_has_dynamic_rendering) {
-            if (version_minor == 0) {
-                extra_extensions[extra_extension_count++] = "VK_KHR_get_physical_device_properties2";
-                extra_extensions[extra_extension_count++] = "VK_KHR_depth_stencil_resolve";
-                extra_extensions[extra_extension_count++] = "VK_KHR_create_renderpass2";
-                extra_extensions[extra_extension_count++] = "VK_KHR_dynamic_rendering";
-            } else if (version_minor == 1) {
-                extra_extensions[extra_extension_count++] = "VK_KHR_depth_stencil_resolve";
-                extra_extensions[extra_extension_count++] = "VK_KHR_create_renderpass2";
-                extra_extensions[extra_extension_count++] = "VK_KHR_dynamic_rendering";
-            } else if (version_minor == 2) {
-                extra_extensions[extra_extension_count++] = "VK_KHR_dynamic_rendering";                
-            } else {
-                log(0, "Dynamic rendering should be standard after 1.3, but it isnt, something is wrong.");
-            }
-        } else {
-            // *Sometimes* the driver wants this extension enabled even though it's > 1.3 ???
-            extra_extensions[extra_extension_count++] = "VK_KHR_dynamic_rendering";
-        }
-
-        u64 num_required_extensions = sizeof(minimum_extensions) / sizeof(char*) + extra_extension_count;
-        
-        const char *required_extensions[sizeof(minimum_extensions)/sizeof(char*)+sizeof(extra_extensions)/sizeof(char*)];
-        
-        for (u64 i = 0; i < sizeof(minimum_extensions) / sizeof(char*); i += 1) {
-            required_extensions[i] = minimum_extensions[i];
-        }
-        for (u64 i = extra_start; i < num_required_extensions; i += 1) {
-            required_extensions[i] = extra_extensions[i-extra_start];
+        for (u64 i = 0; i < sizeof(required_extensions) / sizeof(char*); i += 1) {
+            required_extensions[i] = required_extensions[i];
         }
 
         log(0, "Looking for extensions:");
@@ -414,25 +414,13 @@ unit_local inline VkInstance _vk_instance(void) {
             }
 
             if (match == false) {
-                if (i < extra_start) {
-                    any_missing = true;
-                    log(0, "Missing required vulkan extension '%s'", STR(required));
-                    log(0, "List of available extensions:");
-                    for (u32 j = 0; j < num_available_extensions; j += 1) {
-                        const char *available = available_extensions[j].extensionName;
-                        log(0, "\t%s", STR(available));
-                    }
-                } else {
-                    log(0, "Missing optional vulkan extension '%s'", STR(required));
-                    
-                    extra_extension_count -= 1;
-                    num_required_extensions -= 1;
-                    if (extra_extension_count) {
-                        memmove(&required_extensions[i], &required_extensions[i+1], sizeof(char*)*num_required_extensions-i);
-                    }
-                    
+                any_missing = true;
+                log(0, "Missing required vulkan extension '%s'", STR(required));
+                log(0, "List of available extensions:");
+                for (u32 j = 0; j < num_available_extensions; j += 1) {
+                    const char *available = available_extensions[j].extensionName;
+                    log(0, "\t%s", STR(available));
                 }
-                
                     
             } else {
                 log(0, "Found '%s'..", STR(required));
@@ -661,7 +649,7 @@ u64 oga_query_devices(Oga_Device *buffer, u64 buffer_count) {
             device->driver_version_raw = props.driverVersion;
             device->driver_version_length = _format_driver_version(props.vendorID, props.driverVersion, device->driver_version_data, sizeof(device->driver_version_data));
             
-            _vk_assert1(vkEnumerateInstanceVersion(&device->api_version_raw));
+            device->api_version_raw = props.apiVersion;
             u32 major = VK_VERSION_MAJOR(device->api_version_raw);
             u32 minor = VK_VERSION_MINOR(device->api_version_raw);
             u32 patch = VK_VERSION_PATCH(device->api_version_raw);
@@ -790,7 +778,7 @@ u64 oga_query_devices(Oga_Device *buffer, u64 buffer_count) {
             device->limits.max_viewport_height = props.limits.maxViewportDimensions[1];
             device->limits.max_framebuffer_width = props.limits.maxFramebufferWidth;
             device->limits.max_framebuffer_height = props.limits.maxFramebufferHeight;
-            device->limits.max_color_attachments = props.limits.maxColorAttachments;
+            device->limits.max_render_attachments = props.limits.maxColorAttachments;
             device->limits.min_memory_map_alignment = props.limits.minMemoryMapAlignment;
             for (u64 f = 1; f < VK_SAMPLE_COUNT_FLAG_BITS_MAX_ENUM; f = f << 1)
                 if (props.limits.framebufferColorSampleCounts & f) device->limits.supported_sample_counts_render_pass |= f;
@@ -843,9 +831,7 @@ Oga_Device *oga_get_devices(Allocator a, u64 *count) {
 
 Oga_Result oga_init_context(Oga_Device target_device, Oga_Context_Desc desc, Oga_Context **context) {
 
-    const char *required_extensions[] = {
-        VK_KHR_SWAPCHAIN_EXTENSION_NAME
-    };
+    const char *swapchain_ext = VK_KHR_SWAPCHAIN_EXTENSION_NAME;
 
     if ((desc.enabled_features & target_device.features) != desc.enabled_features) {
         return OGA_CONTEXT_INIT_ERROR_MISSING_DEVICE_FEATURES;
@@ -854,13 +840,16 @@ Oga_Result oga_init_context(Oga_Device target_device, Oga_Context_Desc desc, Oga
     if (!desc.state_allocator.proc) {
         return OGA_CONTEXT_INIT_ERROR_BAD_STATE_ALLOCATOR;
     }
-    *context = New(desc.state_allocator, Oga_Context);
+    *context = (Oga_Context*)allocate(desc.state_allocator, sizeof(Oga_Context)+sizeof(_Vk_Context_Internal));
     if (!*context) {
         return OGA_ERROR_STATE_ALLOCATION_FAILED;
     }
     Oga_Context *c = *context;
     *c = (Oga_Context){0};
     c->state_allocator = desc.state_allocator;
+    c->internal = c+1;
+    
+    _Vk_Context_Internal *internal = (_Vk_Context_Internal*)c->internal;
 
     VkPhysicalDeviceFeatures enabled_features = (VkPhysicalDeviceFeatures){0};
     // if (desc.enabled_features & OGA_DEVICE_FEATURE_XXXX) enabled_features.xxxx = true;
@@ -899,21 +888,94 @@ Oga_Result oga_init_context(Oga_Device target_device, Oga_Context_Desc desc, Oga
     if (target_device.features & OGA_DEVICE_FEATURE_DEPTH_CLAMP) {
         enabled_features.depthClamp = true;
     }
+    
+    VkPhysicalDeviceProperties props;
+    vkGetPhysicalDeviceProperties(target_device.id, &props);
 
     VkDeviceCreateInfo info = (VkDeviceCreateInfo) {0};
     info.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
-    info.enabledExtensionCount = (u32)(sizeof(required_extensions)/sizeof(char*));
-    info.ppEnabledExtensionNames = required_extensions;
     info.pEnabledFeatures = &enabled_features;
     info.queueCreateInfoCount = (u32)logical_engines_desc_count;
     info.pQueueCreateInfos = logical_engine_infos;
-    // #Portability dynamic rendering
-    info.pNext = &dynamic_rendering; // Enable dynamic rendering
+    
+    
+    internal->vk_version_major = VK_VERSION_MAJOR(props.apiVersion);
+    internal->vk_version_minor = VK_VERSION_MINOR(props.apiVersion);
+    internal->vk_version_patch = VK_VERSION_PATCH(props.apiVersion);
+    
+    string name = (string){target_device.device_name_length, target_device.device_name_data};
+    string api = (string){target_device.api_version_length, target_device.api_version_data};
+    log(0, "Making context for device '%s', api version '%s'", name, api);
+    
+    if (internal->vk_version_major == 1 && internal->vk_version_minor < 3) {
+        
+        uint32_t existing_count = 0;
+        vkEnumerateDeviceExtensionProperties(target_device.id, 0, &existing_count, 0);
+        VkExtensionProperties *existing_exts = NewBuffer(get_temp(), VkExtensionProperties, existing_count);
+        vkEnumerateDeviceExtensionProperties(target_device.id, 0, &existing_count, existing_exts);
+        
+        bool ext_depth_stencil_resolve = false;
+        bool ext_create_renderpass2 = false;
+        bool ext_dynamic_rendering = false;
+        
+        for (u64 i = 0; i < existing_count; i += 1) {
+            string existing = STR(existing_exts[i].extensionName);
+            
+            if (strings_match(existing, STR("VK_KHR_depth_stencil_resolve")))
+                ext_depth_stencil_resolve = true;
+            if (strings_match(existing, STR("VK_KHR_create_renderpass2")))
+                ext_create_renderpass2 = true;
+            if (strings_match(existing, STR("VK_KHR_dynamic_rendering")))
+                ext_dynamic_rendering = true;
+        }
+        
+        char **names = NewBuffer(get_temp(), char*, 8);
+        
+        
+        info.enabledExtensionCount = 0;
+        internal->dynamic_rendering = ext_dynamic_rendering;
+        names[info.enabledExtensionCount++] = "VK_KHR_dynamic_rendering";
+        if (internal->vk_version_minor <= 1) {
+            internal->dynamic_rendering &= ext_depth_stencil_resolve;
+            names[info.enabledExtensionCount++] = "VK_KHR_depth_stencil_resolve";
+            internal->dynamic_rendering &= ext_create_renderpass2;
+            names[info.enabledExtensionCount++] = "VK_KHR_create_renderpass2";
+        }
+            
+        
+        names[info.enabledExtensionCount++] = VK_KHR_SWAPCHAIN_EXTENSION_NAME;
+        
+        info.ppEnabledExtensionNames = (const char*const*)names;
+        
+        internal->dynamic_rendering_is_extension = true;
+    } else {
+        internal->dynamic_rendering = true;
+        internal->dynamic_rendering_is_extension = false;
+        info.enabledExtensionCount = 1;
+        info.ppEnabledExtensionNames = &swapchain_ext;
+    }
+    
+    log(0, "Dynamic rendering: %b", internal->dynamic_rendering);
+    
+    if (internal->dynamic_rendering) {
+        if (internal->dynamic_rendering_is_extension) {
+            void (*untyped)(void) = vkGetInstanceProcAddr(__instance, "vkCmdBeginRenderingKHR");
+            internal->vkCmdBeginRenderingKHR  = (PFN_vkCmdBeginRenderingKHR)*(PFN_vkCmdBeginRenderingKHR*)(void**)&untyped;
+            untyped = vkGetInstanceProcAddr(__instance, "vkCmdEndRenderingKHR");
+            internal->vkCmdEndRenderingKHR  = (PFN_vkCmdEndRenderingKHR)*(PFN_vkCmdEndRenderingKHR*)(void**)&untyped;
+        } else {
+            void (*untyped)(void) = vkGetInstanceProcAddr(__instance, "vkCmdBeginRendering");
+            internal->vkCmdBeginRenderingKHR  = (PFN_vkCmdBeginRenderingKHR)*(PFN_vkCmdBeginRenderingKHR*)(void**)&untyped;
+            untyped = vkGetInstanceProcAddr(__instance, "vkCmdEndRendering");
+            internal->vkCmdEndRenderingKHR  = (PFN_vkCmdEndRenderingKHR)*(PFN_vkCmdEndRenderingKHR*)(void**)&untyped;
+        }
+        info.pNext = &dynamic_rendering;
+    }
 
     VkAllocationCallbacks vk_allocs = _vk_allocator(&c->state_allocator);
     _vk_assert2(vkCreateDevice(target_device.id, &info, &vk_allocs, (VkDevice*)&c->id));
     c->device = target_device;
-
+    
     for (u64 family_index = 0; family_index < OGA_MAX_DEVICE_LOGICAL_ENGINE_FAMILIES; family_index += 1) {
         Oga_Logical_Engines_Create_Desc logical_engines_desc = desc.logical_engine_create_descs[family_index];
         Oga_Logical_Engine_Group *group = &c->logical_engines_by_family[family_index];
@@ -1032,13 +1094,20 @@ Oga_Result oga_init_swapchain(Oga_Context *context, Oga_Swapchain_Desc desc, Oga
     
     (*swapchain)->image_format = desc.image_format;
     
-    u64 stride = sizeof(_Vk_Image2D_State)+sizeof(Oga_Image2D);
+    u64 stride = sizeof(_Vk_Image_State)+sizeof(Oga_Image);
     void *image_states_data = allocate(context->state_allocator, stride * (*swapchain)->image_count);
     for (u64 i = 0; i < (*swapchain)->image_count; i += 1) {
-        Oga_Image2D *image = (Oga_Image2D*)((u8*)image_states_data + i*stride);
-        _Vk_Image2D_State *image_state = (_Vk_Image2D_State*)(image+1);
+        Oga_Image *image = (Oga_Image*)((u8*)image_states_data + i*stride);
+        _Vk_Image_State *image_state = (_Vk_Image_State*)(image+1);
         
-        image->pointer.id = image_state;
+        
+        image->image_kind = OGA_IMAGE_2D;
+        image->id = image_state;
+        image->pointer_kind = OGA_POINTER_KIND_PROGRAM_POINTER;
+        image->memory = OGA_INTERNALLY_MANAGED_MEMORY_HANDLE;
+        image->program_pointer_kind = OGA_PROGRAM_POINTER_KIND_IMAGE2D;
+        image->width = desc.width;
+        image->height = desc.height;
         
         image_state->image = vk_images[i];
         
@@ -1059,6 +1128,8 @@ Oga_Result oga_init_swapchain(Oga_Context *context, Oga_Swapchain_Desc desc, Oga
         
         _vk_assert2(vkCreateImageView((VkDevice)context->id, &image_view_info, &vk_allocs, &image_state->view));
         
+        
+        
         (*swapchain)->images[i] = image;
     }
     
@@ -1073,7 +1144,7 @@ void oga_uninit_swapchain(Oga_Swapchain *swapchain) {
     _vk_assert1(vkDeviceWaitIdle(swapchain->context->id));
     
     for (u64 i = 0; i < swapchain->image_count; i += 1) {
-        _Vk_Image2D_State *image_state = (_Vk_Image2D_State*)(swapchain->images[i]->pointer.id);
+        _Vk_Image_State *image_state = (_Vk_Image_State*)(swapchain->images[i]->id);
         vkDestroyImageView((VkDevice)swapchain->context->id, image_state->view, &vk_allocs);
     }
     
@@ -1093,7 +1164,56 @@ void oga_uninit_swapchain(Oga_Swapchain *swapchain) {
     deallocate(a, swapchain);
 }
 
+Oga_Result oga_get_next_swapchain_image(Oga_Swapchain *swapchain, u64 timeout, struct Oga_Gpu_Latch *signal_gpu_latch, struct Oga_Cpu_Latch *signal_cpu_latch, u64 *image_index) {
 
+    _Vk_Swapchain_State *state = (_Vk_Swapchain_State*)swapchain->id;
+
+    u32 index;
+    VkResult result = vkAcquireNextImageKHR(swapchain->context->id, state->vk_swapchain, timeout, signal_gpu_latch ? signal_gpu_latch->id : 0, signal_cpu_latch ? signal_cpu_latch->id : 0, &index);
+    
+    *image_index = (u64)index;
+    
+    if (result == VK_SUBOPTIMAL_KHR)  return OGA_SUBOPTIMAL;
+    else if (result == VK_NOT_READY) return OGA_NOT_READY;
+    else if (result == VK_TIMEOUT) return OGA_TIMEOUT;
+    else if (result == VK_ERROR_OUT_OF_DATE_KHR) return OGA_ERROR_OUTDATED;
+    else if (result == VK_ERROR_SURFACE_LOST_KHR) return OGA_ERROR_SURFACE_LOST;
+    
+    _vk_assert2(result);
+    
+    return OGA_OK;
+}
+
+Oga_Result oga_submit_present(Oga_Swapchain *swapchain, Oga_Present_Desc desc) {
+    
+    _Vk_Swapchain_State *state = (_Vk_Swapchain_State*)swapchain->id;
+    
+    VkSemaphore vk_semaphores[256];
+    
+    for (u64 i = 0; i < desc.wait_gpu_latch_count; i += 1) {
+        vk_semaphores[i] = desc.wait_gpu_latches[i]->id;
+    }
+    
+    VkPresentInfoKHR info = (VkPresentInfoKHR){0};
+    info.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
+    info.waitSemaphoreCount = (u32)desc.wait_gpu_latch_count;
+    info.pWaitSemaphores = vk_semaphores;
+    info.swapchainCount = 1;
+    info.pSwapchains = &state->vk_swapchain;
+    info.pImageIndices = (u32*)&desc.image_index;
+    
+    VkResult result = vkQueuePresentKHR(desc.engine.id, &info);
+    
+    if (result == VK_SUBOPTIMAL_KHR)  return OGA_SUBOPTIMAL;
+    else if (result == VK_NOT_READY) return OGA_NOT_READY;
+    else if (result == VK_TIMEOUT) return OGA_TIMEOUT;
+    else if (result == VK_ERROR_OUT_OF_DATE_KHR) return OGA_ERROR_OUTDATED;
+    else if (result == VK_ERROR_SURFACE_LOST_KHR) return OGA_ERROR_SURFACE_LOST;
+    
+    _vk_assert2(result);
+    
+    return OGA_OK;
+}
 
 Oga_Result oga_init_program(Oga_Context *context, Oga_Program_Desc desc, Oga_Program **program) {
     *program = allocate(context->state_allocator, sizeof(Oga_Program));
@@ -1144,9 +1264,9 @@ Oga_Result oga_init_render_passes(Oga_Context *context, Oga_Render_Pass_Desc* de
     
         Oga_Render_Pass_Desc desc = descs[i];
         
-        VkFormat *vk_formats = NewBuffer(get_temp(), VkFormat, desc.color_attachment_count);
-        for (u64 j = 0; j < desc.color_attachment_count; j += 1) {
-            vk_formats[j] = _oga_to_vk_format(desc.color_attachment_formats[j]);
+        VkFormat *vk_formats = NewBuffer(get_temp(), VkFormat, desc.attachment_count);
+        for (u64 j = 0; j < desc.attachment_count; j += 1) {
+            vk_formats[j] = _oga_to_vk_format(desc.attachment_formats[j]);
         }
         
         VkPipelineRenderingCreateInfoKHR *rendering = New(get_temp(), VkPipelineRenderingCreateInfoKHR);
@@ -1154,7 +1274,7 @@ Oga_Result oga_init_render_passes(Oga_Context *context, Oga_Render_Pass_Desc* de
         rendering->sType = VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO_KHR;
         rendering->pNext = 0;
         rendering->viewMask = 0;
-        rendering->colorAttachmentCount = (u32)desc.color_attachment_count;
+        rendering->colorAttachmentCount = (u32)desc.attachment_count;
         rendering->pColorAttachmentFormats = vk_formats;
         
         VkPipelineCreateFlags pipeline_flags = (VkPipelineCreateFlags)(int)0;
@@ -1202,8 +1322,8 @@ Oga_Result oga_init_render_passes(Oga_Context *context, Oga_Render_Pass_Desc* de
         viewport->sType = VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO;
         viewport->viewportCount = 1;
         viewport->scissorCount = 1; 
-        viewport->pViewports = NULL;
-        viewport->pScissors = NULL; 
+        viewport->pViewports = 0;
+        viewport->pScissors = 0; 
         
         VkFrontFace front_face = VK_FRONT_FACE_CLOCKWISE;
         VkCullModeFlags cull_mode = VK_CULL_MODE_BACK_BIT;
@@ -1383,7 +1503,7 @@ void oga_uninit_gpu_latch(Oga_Gpu_Latch *gpu_latch) {
 }
 
 // Cpu latch; for synchronizing CPU with GPU. Signalled on GPU, waited on CPU.
-Oga_Result oga_init_cpu_latch(Oga_Context *context, Oga_Cpu_Latch **cpu_latch) {
+Oga_Result oga_init_cpu_latch(Oga_Context *context, Oga_Cpu_Latch **cpu_latch, bool start_signaled) {
     *cpu_latch = allocate(context->state_allocator, sizeof(Oga_Cpu_Latch) + sizeof(VkFence));
     if (!*cpu_latch) {
         return OGA_ERROR_STATE_ALLOCATION_FAILED;
@@ -1394,7 +1514,7 @@ Oga_Result oga_init_cpu_latch(Oga_Context *context, Oga_Cpu_Latch **cpu_latch) {
 
     VkFenceCreateInfo create_info = {0};
     create_info.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
-    create_info.flags = 0;
+    create_info.flags = start_signaled ? VK_FENCE_CREATE_SIGNALED_BIT : 0;
 
     VkAllocationCallbacks vk_allocs = _vk_allocator(&context->state_allocator);
     _vk_assert2(vkCreateFence((VkDevice)context->id, &create_info, &vk_allocs, (VkFence*)&(*cpu_latch)->id));
@@ -1459,6 +1579,9 @@ void oga_uninit_command_pool(Oga_Command_Pool *pool) {
     *pool = (Oga_Command_Pool){0};
     deallocate(a, pool);
 }
+void oga_reset_command_pool(Oga_Command_Pool *pool) {
+    _vk_assert1(vkResetCommandPool(pool->context->id, pool->id, 0));
+}
 
 Oga_Result oga_get_command_lists(Oga_Command_Pool *pool, Oga_Command_List *lists, u64 list_count) {
     VkCommandBufferAllocateInfo allocate_info = {0};
@@ -1499,3 +1622,210 @@ void oga_release_command_lists(Oga_Command_List *lists, u64 list_count) {
     vkFreeCommandBuffers((VkDevice)last_pool->context->id, (VkCommandPool)last_pool->id, (u32)list_count, vk_buffers);
 }
 
+
+Oga_Result oga_cmd_begin(Oga_Command_List cmd, Oga_Command_List_Usage_Flag flags) {
+    VkCommandBufferBeginInfo info = (VkCommandBufferBeginInfo){0};
+    info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+    if (flags & OGA_COMMAND_LIST_USAGE_ONE_TIME_SUBMIT) 
+        info.flags |= VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
+    _vk_assert2(vkBeginCommandBuffer(cmd.id, &info));
+    return OGA_OK;
+}
+Oga_Result oga_cmd_end(Oga_Command_List cmd) {
+    _vk_assert2(vkEndCommandBuffer(cmd.id));
+    return OGA_OK;
+}
+Oga_Result oga_submit_command_list(Oga_Command_List cmd, Oga_Submit_Command_List_Desc desc) {
+    
+    VkSemaphore *wait_semaphores = NewBuffer(get_temp(), VkSemaphore, desc.wait_gpu_latch_count);
+    VkPipelineStageFlags *wait_stages = NewBuffer(get_temp(), VkPipelineStageFlags, desc.wait_gpu_latch_count);
+    VkSemaphore *signal_semaphores = NewBuffer(get_temp(), VkSemaphore, desc.signal_gpu_latch_count);
+    
+    for (u64 i = 0; i < desc.wait_gpu_latch_count; i += 1) {
+        wait_semaphores[i] = desc.wait_gpu_latches[i]->id;
+        // note(charlie): it's a bit unfortunate to abstract this away from the programmer,
+        // because it's a pretty neat opportunity for optimization. Maybe we add this to the
+        // api but make it sure it only has an effect when targetting vulkan?
+        wait_stages[i] = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+    }
+    for (u64 i = 0; i < desc.signal_gpu_latch_count; i += 1) {
+        signal_semaphores[i] = desc.signal_gpu_latches[i]->id;
+    }
+
+    VkSubmitInfo info = (VkSubmitInfo){0};
+    info.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+    info.waitSemaphoreCount = (u32)desc.wait_gpu_latch_count;
+    info.pWaitSemaphores = wait_semaphores;
+    info.pWaitDstStageMask = wait_stages;
+    info.commandBufferCount = 1; // todo(charlie) api to submit multiple command buffers at a time?
+    info.pCommandBuffers = (VkCommandBuffer*)&cmd.id;
+    info.signalSemaphoreCount = (u32)desc.signal_gpu_latch_count;
+    info.pSignalSemaphores = signal_semaphores;
+    
+    _vk_assert2(vkQueueSubmit(desc.engine.id, 1, &info, desc.signal_cpu_latch->id));
+    
+    return OGA_OK;    
+}
+unit_local VkImageLayout _oga_to_vk_image_layout(Oga_Image_Optimization o) {
+    switch(o) {
+        case OGA_IMAGE_OPTIMIZATION_UNDEFINED:         return VK_IMAGE_LAYOUT_UNDEFINED;
+        case OGA_IMAGE_OPTIMIZATION_GENERAL:           return VK_IMAGE_LAYOUT_GENERAL;
+        case OGA_IMAGE_OPTIMIZATION_RENDER_ATTACHMENT: return VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+        case OGA_IMAGE_OPTIMIZATION_SHADER_READONLY:   return VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+        case OGA_IMAGE_OPTIMIZATION_TRANSFER_DST:      return VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
+        case OGA_IMAGE_OPTIMIZATION_TRANSFER_SRC:      return VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL;
+        case OGA_IMAGE_OPTIMIZATION_PRESENT:           return VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
+        default: return 0;
+    }
+    return 0;
+}
+unit_local void _vk_decide_stage_and_access_mask(VkImageLayout layout, VkPipelineStageFlags *stage, VkAccessFlags *access)  {
+        if (layout == VK_IMAGE_LAYOUT_UNDEFINED) {
+            *access = 0;
+            *stage = VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT;
+        } else if (layout == VK_IMAGE_LAYOUT_PRESENT_SRC_KHR) {
+            *access = VK_ACCESS_MEMORY_READ_BIT;
+            *stage = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+        } else if (layout == VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL) {
+            *access = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
+            *stage = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+        } else if (layout == VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL) {
+            *access = VK_ACCESS_SHADER_READ_BIT;
+            *stage = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
+        } else if (layout == VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL) {
+            *access = VK_ACCESS_TRANSFER_WRITE_BIT;
+            *stage = VK_PIPELINE_STAGE_TRANSFER_BIT;
+        } else if (layout == VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL) {
+            *access = VK_ACCESS_TRANSFER_READ_BIT;
+            *stage = VK_PIPELINE_STAGE_TRANSFER_BIT;
+        } else {
+            assertmsgs(false, tprint("Unhandled image layout '%u' for transitioning (internal error)\n", layout));
+        }
+    }
+void oga_cmd_transition_image_optimization(Oga_Command_List cmd, Oga_Image *image, Oga_Image_Optimization src_optimization, Oga_Image_Optimization dst_optimization) {
+    VkPipelineStageFlags src_stage, dst_stage;
+    VkAccessFlags src_access, dst_access;
+    
+    _vk_decide_stage_and_access_mask(_oga_to_vk_image_layout(src_optimization), &src_stage, &src_access);
+    _vk_decide_stage_and_access_mask(_oga_to_vk_image_layout(dst_optimization), &dst_stage, &dst_access);
+    
+    _Vk_Image_State *state = (_Vk_Image_State*)image->id;
+    
+    VkImageMemoryBarrier barrier = (VkImageMemoryBarrier){0};
+    barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
+    barrier.oldLayout = _oga_to_vk_image_layout(src_optimization);
+    barrier.newLayout = _oga_to_vk_image_layout(dst_optimization);
+    barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+    barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+    barrier.image = state->image;
+    barrier.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+    barrier.subresourceRange.baseMipLevel = 0;
+    barrier.subresourceRange.levelCount = 1;
+    barrier.subresourceRange.baseArrayLayer = 0;
+    barrier.subresourceRange.layerCount = 1;
+    barrier.pNext = 0;
+    barrier.srcAccessMask = src_access;
+    barrier.dstAccessMask = dst_access;
+    
+
+    vkCmdPipelineBarrier(cmd.id, src_stage, dst_stage, 0, 0, 0, 0, 0, 1, &barrier);
+}
+
+void oga_cmd_begin_render_pass(Oga_Command_List cmd, Oga_Begin_Render_Pass_Desc desc) {
+
+    VkRenderingAttachmentInfoKHR vk_attachments[128] = {0};
+
+    for (u64 i = 0; i < desc.attachment_count; i += 1) {
+        
+        Oga_Render_Attachment_Desc attach_desc = desc.attachments[i];
+        
+        _Vk_Image_State *state = (_Vk_Image_State*)attach_desc.image->id;
+    
+        vk_attachments[i].sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO_KHR;
+        vk_attachments[i].imageView = state->view;
+        vk_attachments[i].imageLayout = _oga_to_vk_image_layout(attach_desc.image_optimization);
+        
+        if (attach_desc.resolve_mode & OGA_MSAA_RESOLVE_MODE_ZERO)
+            vk_attachments[i].resolveMode |= VK_RESOLVE_MODE_SAMPLE_ZERO_BIT_KHR;
+        if (attach_desc.resolve_mode & OGA_MSAA_RESOLVE_MODE_AVERAGE)
+            vk_attachments[i].resolveMode |= VK_RESOLVE_MODE_AVERAGE_BIT_KHR;
+        if (attach_desc.resolve_mode & OGA_MSAA_RESOLVE_MODE_MIN)
+            vk_attachments[i].resolveMode |= VK_RESOLVE_MODE_MIN_BIT_KHR;
+        if (attach_desc.resolve_mode & OGA_MSAA_RESOLVE_MODE_MAX)
+            vk_attachments[i].resolveMode |= VK_RESOLVE_MODE_MAX_BIT_KHR;
+            
+        if (attach_desc.resolve_image) {
+            state = (_Vk_Image_State*)attach_desc.resolve_image->id;
+    
+            vk_attachments[i].resolveImageView = state->view;
+            vk_attachments[i].resolveImageLayout = _oga_to_vk_image_layout(attach_desc.resolve_image_optimization);
+        }
+        
+        switch (attach_desc.load_op) {
+            case OGA_ATTACHMENT_LOAD_OP_LOAD:
+                vk_attachments[i].loadOp = VK_ATTACHMENT_LOAD_OP_LOAD;
+                break;
+            case OGA_ATTACHMENT_LOAD_OP_CLEAR:
+                vk_attachments[i].loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
+                break;
+            case OGA_ATTACHMENT_LOAD_OP_NOTHING:
+                vk_attachments[i].loadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
+                break;
+            default:break;
+        }
+        switch (attach_desc.store_op) {
+            case OGA_ATTACHMENT_STORE_OP_STORE:
+                vk_attachments[i].storeOp = VK_ATTACHMENT_STORE_OP_STORE;
+                break;
+            case OGA_ATTACHMENT_STORE_OP_NOTHING:
+                vk_attachments[i].storeOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
+                break;
+            default:break;
+        }
+        
+        memcpy(vk_attachments[i].clearValue.color.float32, attach_desc.clear_color, sizeof(float32)*4);
+    }
+
+    VkRenderingInfoKHR info = (VkRenderingInfoKHR){0};
+    info.sType = VK_STRUCTURE_TYPE_RENDERING_INFO_KHR;
+    info.renderArea.offset.x = (s32)desc.render_area_offset_x;
+    info.renderArea.offset.y = (s32)desc.render_area_offset_y;
+    info.renderArea.extent.width = (u32)desc.render_area_width;
+    info.renderArea.extent.height = (u32)desc.render_area_height;
+    info.layerCount = 1;
+    info.colorAttachmentCount = (u32)desc.attachment_count;
+    info.pColorAttachments = vk_attachments;
+    
+    _Vk_Context_Internal *internal = (_Vk_Context_Internal*)cmd.pool->context->internal;
+    internal->vkCmdBeginRenderingKHR(cmd.id, &info);
+    
+    _Vk_Pipeline_State *state = (_Vk_Pipeline_State*)desc.render_pass->id;
+    
+    vkCmdBindPipeline(cmd.id, VK_PIPELINE_BIND_POINT_GRAPHICS, state->pipeline); 
+    
+    VkViewport vp = (VkViewport){0};
+    vp.x = 0;
+    vp.y = 0;
+    vp.width = (float)desc.render_area_width;
+    vp.height = (float)desc.render_area_height;
+    vp.minDepth = 0.0;
+    vp.maxDepth = 1.0;
+    
+    vkCmdSetViewport(cmd.id, 0, 1, &vp);
+    
+    VkRect2D scissor;
+    scissor.offset.x = 0;
+    scissor.offset.y = 0;
+    scissor.extent.width = info.renderArea.extent.width;
+    scissor.extent.height = info.renderArea.extent.height;
+    
+    vkCmdSetScissor(cmd.id, 0, 1, &scissor);
+}
+void oga_cmd_end_render_pass(Oga_Command_List cmd) {
+    _Vk_Context_Internal *internal = (_Vk_Context_Internal*)cmd.pool->context->internal;
+    internal->vkCmdEndRenderingKHR(cmd.id);
+}
+
+void oga_cmd_draw(Oga_Command_List cmd, u64 vertex_count, u64 vertex_start, u64 instance_count, u64 instance_start) {
+    vkCmdDraw(cmd.id, (u32)vertex_count, (u32)instance_count, (u32)vertex_start, (u32)instance_start);
+}
