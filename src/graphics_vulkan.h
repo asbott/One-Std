@@ -1,10 +1,22 @@
 
-#include <vulkan/vulkan.h>
+#define uint8_t u8
+#define int8_t  s8
+#define uint16_t u16
+#define int16_t  s16
+#define uint32_t u32
+#define int32_t  s32
+#define uint64_t u64
+#define int64_t  s64
+
+#define VK_NO_STDDEF_H
+#define VK_NO_STDINT_H
+// noconcat
+#include "vendors/vulkan/vulkan.h"
+
+
 
 // For syntax highligthing
 #if 0
-// noconcat
-#include "../vendors/vulkan/vulkan.h"
 #include "ostd.h"
 #endif
 
@@ -12,18 +24,24 @@
 
 // We manually include the vulkan-specific headers, otherwise vulkan.h will include windows.h
 #if OS_FLAGS & OS_FLAG_WINDOWS
-#include <vulkan/vulkan_win32.h>
+// noconcat
+#include "vendors/vulkan/vulkan_win32.h"
 #elif OS_FLAGS & OS_FLAG_LINUX
-#include <vulkan/vulkan_xlib.h>
+// noconcat
+#include "vendors/vulkan/vulkan_xlib.h"
 #elif OS_FLAGS & OS_FLAG_MACOS
-#include <vulkan/vulkan_macos.h>
+// noconcat
+#include "vendors/vulkan/vulkan_macos.h"
 #elif OS_FLAGS & OS_FLAG_IOS
-#include <vulkan/vulkan_ios.h>
+// noconcat
+#include "vendors/vulkan/vulkan_ios.h"
 #elif OS_FLAGS & OS_FLAG_ANDROID
-#include <vulkan/vulkan_android.h>
+// noconcat
+#include "vendors/vulkan/vulkan_android.h"
 #else
 #error Vulkan is not supported on target platform
 #endif
+
 
 #if defined(__GNUC__) || defined(__GNUG__)
 #pragma GCC diagnostic push
@@ -294,7 +312,7 @@ unit_local inline VkInstance _vk_instance(void) {
                 version_minor = max(VK_VERSION_MINOR(properties.apiVersion), version_minor);
                 version_patch = max(VK_VERSION_PATCH(properties.apiVersion), version_patch);
             }
-        
+
             vkDestroyInstance(query_instance, 0);
         }
     
@@ -576,12 +594,20 @@ unit_local void _vk_deallocate(void *ud, void *old) {
     allocator->proc(ALLOCATOR_FREE, allocator->data, old, 0, 0, 0, 0);
 }
 
+unit_local void _vk_internal_allocate(void *ud, size_t sz, VkInternalAllocationType t, VkSystemAllocationScope s) {
+    (void)ud; (void)sz; (void)t; (void)s;
+}
+unit_local void _vk_internal_deallocate(void *ud, size_t sz, VkInternalAllocationType t, VkSystemAllocationScope s) {
+    (void)ud; (void)sz; (void)t; (void)s;
+}
 unit_local inline VkAllocationCallbacks _vk_allocator(Allocator *a) {
     VkAllocationCallbacks c = (VkAllocationCallbacks){0};
     c.pUserData = a;
     c.pfnAllocation = _vk_allocate;
     c.pfnReallocation = _vk_reallocate;
     c.pfnFree = _vk_deallocate;
+    c.pfnInternalAllocation = _vk_internal_allocate;
+    c.pfnInternalFree = _vk_internal_deallocate;
     return c;
 }
 
@@ -629,7 +655,7 @@ u64 oga_query_devices(Oga_Device *buffer, u64 buffer_count) {
         _vk_assert1(vkEnumeratePhysicalDevices(_vk_instance(), &device_count,  vk_devices));
 
         // note(charlie) annoyingly, we need an existing surface to look for
-        // surface support in logical_engines. So, we just make a temporary invisible
+        // surface support in engines. So, we just make a temporary invisible
         // surface and then delete it when done.
 #if OS_FLAGS & OS_FLAG_HAS_WINDOW_SYSTEM
         Surface_Desc desc = DEFAULT(Surface_Desc);
@@ -663,10 +689,10 @@ u64 oga_query_devices(Oga_Device *buffer, u64 buffer_count) {
             VkExtensionProperties *ext_props = NewBuffer(get_temp(), VkExtensionProperties, ext_count);
             vkEnumerateDeviceExtensionProperties(vk_device, 0, &ext_count, ext_props);
 
-            u32 logical_engine_family_count;
-            vkGetPhysicalDeviceQueueFamilyProperties(vk_device, &logical_engine_family_count, 0);
-            VkQueueFamilyProperties *logical_engine_family_props = NewBuffer(get_temp(), VkQueueFamilyProperties, logical_engine_family_count);
-            vkGetPhysicalDeviceQueueFamilyProperties(vk_device, &logical_engine_family_count, logical_engine_family_props);
+            u32 engine_family_count;
+            vkGetPhysicalDeviceQueueFamilyProperties(vk_device, &engine_family_count, 0);
+            VkQueueFamilyProperties *engine_family_props = NewBuffer(get_temp(), VkQueueFamilyProperties, engine_family_count);
+            vkGetPhysicalDeviceQueueFamilyProperties(vk_device, &engine_family_count, engine_family_props);
 
 
             /////
@@ -698,16 +724,16 @@ u64 oga_query_devices(Oga_Device *buffer, u64 buffer_count) {
             // Logical Engine flags
 
 
-            device->logical_engine_family_count = logical_engine_family_count;
-            for (u32 j = 0; j < logical_engine_family_count; j += 1) {
-                Oga_Logical_Engine_Family_Info *info = &device->logical_engine_family_infos[j];
-                VkQueueFamilyProperties family_props = logical_engine_family_props[j];
+            device->engine_family_count = engine_family_count;
+            for (u32 j = 0; j < engine_family_count; j += 1) {
+                Oga_Logical_Engine_Family_Info *info = &device->engine_family_infos[j];
+                VkQueueFamilyProperties family_props = engine_family_props[j];
 
                 VkBool32 val;
                 _vk_assert1(vkGetPhysicalDeviceSurfaceSupportKHR(vk_device, j, temp_vk_surface, &val));
                 if (val) info->flags |= OGA_LOGICAL_ENGINE_PRESENT;
 
-                info->logical_engine_capacity = family_props.queueCount;
+                info->engine_capacity = family_props.queueCount;
 
                 if (family_props.queueFlags & VK_QUEUE_GRAPHICS_BIT)
                     info->flags |= OGA_LOGICAL_ENGINE_GRAPHICS;
@@ -835,6 +861,7 @@ u64 oga_query_devices(Oga_Device *buffer, u64 buffer_count) {
             // Surface formats
             
             u32 vk_formats_count = 512;
+            _vk_assert1(vkGetPhysicalDeviceSurfaceFormatsKHR(vk_device, temp_vk_surface, &vk_formats_count, 0));
             VkSurfaceFormatKHR vk_formats[512];
             _vk_assert1(vkGetPhysicalDeviceSurfaceFormatsKHR(vk_device, temp_vk_surface, &vk_formats_count, vk_formats));
             
@@ -897,36 +924,40 @@ Oga_Result oga_init_context(Oga_Device target_device, Oga_Context_Desc desc, Oga
     VkPhysicalDeviceFeatures enabled_features = (VkPhysicalDeviceFeatures){0};
     // if (desc.enabled_features & OGA_DEVICE_FEATURE_XXXX) enabled_features.xxxx = true;
 
-    VkDeviceQueueCreateInfo logical_engine_infos[OGA_MAX_DEVICE_LOGICAL_ENGINE_FAMILIES] = {0};
+    VkDeviceQueueCreateInfo engine_infos[OGA_MAX_DEVICE_LOGICAL_ENGINE_FAMILIES] = {0};
 
-    u64 logical_engines_desc_count = 0;
+    u64 engines_desc_count = 0;
     for (u64 family_index = 0; family_index < OGA_MAX_DEVICE_LOGICAL_ENGINE_FAMILIES; family_index += 1) {
-        Oga_Logical_Engines_Create_Desc logical_engines_desc = desc.logical_engine_create_descs[family_index];
-        if (logical_engines_desc.count > 0) {
+        Oga_Logical_Engines_Create_Desc engines_desc = desc.engine_create_descs[family_index];
+        if (engines_desc.count > 0) {
 
-            if (family_index >= target_device.logical_engine_family_count) {
+            if (family_index >= target_device.engine_family_count) {
                 return OGA_CREATE_LOGICAL_ENGINE_ERROR_FAMILY_INDEX_OUT_OF_RANGE;
             }
 
-            Oga_Logical_Engine_Family_Info family = target_device.logical_engine_family_infos[family_index];
-            if (logical_engines_desc.count > family.logical_engine_capacity) {
+            Oga_Logical_Engine_Family_Info family = target_device.engine_family_infos[family_index];
+            if (engines_desc.count > family.engine_capacity) {
                 return OGA_CREATE_LOGICAL_ENGINE_ERROR_FAMILY_CAPACITY_OVERFLOW;
             }
 
-            VkDeviceQueueCreateInfo *info = &logical_engine_infos[logical_engines_desc_count];
+            VkDeviceQueueCreateInfo *info = &engine_infos[engines_desc_count];
             info->sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
             info->queueFamilyIndex = (u32)family_index;
-            info->queueCount = (u32)logical_engines_desc.count;
-            info->pQueuePriorities = logical_engines_desc.priorities;
+            info->queueCount = (u32)engines_desc.count;
+            info->pQueuePriorities = engines_desc.priorities;
 
-            logical_engines_desc_count += 1;
+            engines_desc_count += 1;
         }
     }
 
     // #Portability dynamic rendering
-    VkPhysicalDeviceDynamicRenderingFeaturesKHR dynamic_rendering = (VkPhysicalDeviceDynamicRenderingFeaturesKHR){0};
-    dynamic_rendering.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DYNAMIC_RENDERING_FEATURES_KHR;
+    VkPhysicalDeviceDynamicRenderingFeatures dynamic_rendering = (VkPhysicalDeviceDynamicRenderingFeatures){0};
+    dynamic_rendering.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DYNAMIC_RENDERING_FEATURES;
     dynamic_rendering.dynamicRendering = true;
+    
+    VkPhysicalDeviceVulkan13Features vk13_features = (VkPhysicalDeviceVulkan13Features){0};
+    vk13_features.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_3_FEATURES;
+    vk13_features.dynamicRendering = true;
     
     if (target_device.features & OGA_DEVICE_FEATURE_DEPTH_CLAMP) {
         enabled_features.depthClamp = true;
@@ -938,8 +969,8 @@ Oga_Result oga_init_context(Oga_Device target_device, Oga_Context_Desc desc, Oga
     VkDeviceCreateInfo info = (VkDeviceCreateInfo) {0};
     info.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
     info.pEnabledFeatures = &enabled_features;
-    info.queueCreateInfoCount = (u32)logical_engines_desc_count;
-    info.pQueueCreateInfos = logical_engine_infos;
+    info.queueCreateInfoCount = (u32)engines_desc_count;
+    info.pQueueCreateInfos = engine_infos;
     
     
     internal->vk_version_major = VK_VERSION_MAJOR(props.apiVersion);
@@ -995,7 +1026,8 @@ Oga_Result oga_init_context(Oga_Device target_device, Oga_Context_Desc desc, Oga
         internal->dynamic_rendering = true;
         internal->dynamic_rendering_is_extension = false;
         info.enabledExtensionCount = 1;
-        info.ppEnabledExtensionNames = &swapchain_ext;
+        info.ppEnabledExtensionNames 
+            = &swapchain_ext;
     }
     
     log(0, "Dynamic rendering: %b", internal->dynamic_rendering);
@@ -1006,13 +1038,18 @@ Oga_Result oga_init_context(Oga_Device target_device, Oga_Context_Desc desc, Oga
             internal->vkCmdBeginRenderingKHR  = (PFN_vkCmdBeginRenderingKHR)*(PFN_vkCmdBeginRenderingKHR*)(void**)&untyped;
             untyped = vkGetInstanceProcAddr(__instance, "vkCmdEndRenderingKHR");
             internal->vkCmdEndRenderingKHR  = (PFN_vkCmdEndRenderingKHR)*(PFN_vkCmdEndRenderingKHR*)(void**)&untyped;
+            
+            info.pNext = &dynamic_rendering;
+            
         } else {
             void (*untyped)(void) = vkGetInstanceProcAddr(__instance, "vkCmdBeginRendering");
             internal->vkCmdBeginRenderingKHR  = (PFN_vkCmdBeginRenderingKHR)*(PFN_vkCmdBeginRenderingKHR*)(void**)&untyped;
             untyped = vkGetInstanceProcAddr(__instance, "vkCmdEndRendering");
             internal->vkCmdEndRenderingKHR  = (PFN_vkCmdEndRenderingKHR)*(PFN_vkCmdEndRenderingKHR*)(void**)&untyped;
+            
+            info.pNext = &vk13_features;
         }
-        info.pNext = &dynamic_rendering;
+        
     }
 
     VkAllocationCallbacks vk_allocs = _vk_allocator(&c->state_allocator);
@@ -1020,17 +1057,17 @@ Oga_Result oga_init_context(Oga_Device target_device, Oga_Context_Desc desc, Oga
     c->device = target_device;
     
     for (u64 family_index = 0; family_index < OGA_MAX_DEVICE_LOGICAL_ENGINE_FAMILIES; family_index += 1) {
-        Oga_Logical_Engines_Create_Desc logical_engines_desc = desc.logical_engine_create_descs[family_index];
-        Oga_Logical_Engine_Group *group = &c->logical_engines_by_family[family_index];
-        for (u64 logical_engine_index = 0; logical_engine_index < logical_engines_desc.count; logical_engine_index += 1) {
-            Oga_Logical_Engine *logical_engine = &group->logical_engines[logical_engine_index];
+        Oga_Logical_Engines_Create_Desc engines_desc = desc.engine_create_descs[family_index];
+        Oga_Logical_Engine_Group *group = &c->engines_by_family[family_index];
+        for (u64 engine_index = 0; engine_index < engines_desc.count; engine_index += 1) {
+            Oga_Logical_Engine *engine = &group->engines[engine_index];
             vkGetDeviceQueue(
                 c->id,
                 (u32)family_index,
-                (u32)logical_engine_index,
-                (VkQueue*)&logical_engine->id
+                (u32)engine_index,
+                (VkQueue*)&engine->id
             );
-            logical_engine->index = (u32)logical_engine_index;
+            engine->index = (u32)engine_index;
         }
     }
     
@@ -1094,21 +1131,31 @@ Oga_Result oga_init_swapchain(Oga_Context *context, Oga_Swapchain_Desc desc, Oga
         return OGA_INIT_SWAPCHAIN_ERROR_UNSUPPORTED_PRESENT_MODE;
     }
     
-    u32 *queue_families = 0;
-    u32 queue_families_count = 0;
-    if (desc.queue_families_with_access_count) {
-        queue_families = NewBuffer(get_temp(), u32, desc.queue_families_with_access_count);
-        for (u64 i = 0; i < desc.queue_families_with_access_count; i += 1) {
+    u32 *engine_families = 0;
+    u32 engine_families_count = 0;
+    if (desc.engine_families_with_access_count) {
+        engine_families = NewBuffer(get_temp(), u32, desc.engine_families_with_access_count);
+        for (u64 i = 0; i < desc.engine_families_with_access_count; i += 1) {
             bool contains = false;
-            for (u64 j = 0; j < queue_families_count; j += 1) {
-                if (queue_families[j] == desc.queue_families_with_access[i]) {
+            for (u64 j = 0; j < engine_families_count; j += 1) {
+                if (engine_families[j] == desc.engine_families_with_access[i]) {
                     contains = true;
                     break;
                 }
             }
-            if (!contains) queue_families[queue_families_count++] = (u32)desc.queue_families_with_access[i];
+            if (!contains) engine_families[engine_families_count++] = (u32)desc.engine_families_with_access[i];
         }
     }
+    
+    VkCompositeAlphaFlagBitsKHR composite_alpha = (VkCompositeAlphaFlagBitsKHR)0;
+    if (cap.supportedCompositeAlpha & VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR)
+        composite_alpha |= VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR;
+    else if (cap.supportedCompositeAlpha & VK_COMPOSITE_ALPHA_INHERIT_BIT_KHR )
+        composite_alpha |= VK_COMPOSITE_ALPHA_INHERIT_BIT_KHR ;
+    else if (cap.supportedCompositeAlpha & VK_COMPOSITE_ALPHA_PRE_MULTIPLIED_BIT_KHR )
+        composite_alpha |= VK_COMPOSITE_ALPHA_PRE_MULTIPLIED_BIT_KHR ;
+    else if (cap.supportedCompositeAlpha & VK_COMPOSITE_ALPHA_POST_MULTIPLIED_BIT_KHR )
+        composite_alpha |= VK_COMPOSITE_ALPHA_POST_MULTIPLIED_BIT_KHR ;
     
     VkSwapchainCreateInfoKHR info = (VkSwapchainCreateInfoKHR){0};
     info.sType = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR;
@@ -1121,11 +1168,11 @@ Oga_Result oga_init_swapchain(Oga_Context *context, Oga_Swapchain_Desc desc, Oga
     info.imageExtent.height = (u32)desc.height;
     info.imageArrayLayers = 0;
     info.imageUsage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
-    info.imageSharingMode = queue_families_count > 1 ? VK_SHARING_MODE_CONCURRENT : VK_SHARING_MODE_EXCLUSIVE;
-    info.queueFamilyIndexCount = queue_families_count;
-    info.pQueueFamilyIndices = queue_families;
+    info.imageSharingMode = engine_families_count > 1 ? VK_SHARING_MODE_CONCURRENT : VK_SHARING_MODE_EXCLUSIVE;
+    info.queueFamilyIndexCount = engine_families_count;
+    info.pQueueFamilyIndices = engine_families;
     info.preTransform = cap.currentTransform;
-    info.compositeAlpha = VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR;
+    info.compositeAlpha = composite_alpha;
     info.presentMode = vk_present_mode;
     info.clipped = VK_TRUE;
     info.oldSwapchain = 0;
@@ -1607,7 +1654,7 @@ Oga_Result oga_init_command_pool(Oga_Context *context, Oga_Command_Pool_Desc des
         create_info.flags |= VK_COMMAND_POOL_CREATE_TRANSIENT_BIT;
     }
 
-    create_info.queueFamilyIndex = (u32)desc.queue_family_index;
+    create_info.queueFamilyIndex = (u32)desc.engine_family_index;
 
     VkAllocationCallbacks vk_allocs = _vk_allocator(&context->state_allocator);
     _vk_assert2(vkCreateCommandPool((VkDevice)context->id, &create_info, &vk_allocs, (VkCommandPool *)&(*pool)->id));
@@ -1833,6 +1880,9 @@ void oga_cmd_begin_render_pass(Oga_Command_List cmd, Oga_Begin_Render_Pass_Desc 
         
         memcpy(vk_attachments[i].clearValue.color.float32, attach_desc.clear_color, sizeof(float32)*4);
     }
+    
+    VkRenderingAttachmentInfo dummy_attachment = (VkRenderingAttachmentInfo){0};
+    dummy_attachment.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO;
 
     VkRenderingInfoKHR info = (VkRenderingInfoKHR){0};
     info.sType = VK_STRUCTURE_TYPE_RENDERING_INFO_KHR;
@@ -1843,6 +1893,9 @@ void oga_cmd_begin_render_pass(Oga_Command_List cmd, Oga_Begin_Render_Pass_Desc 
     info.layerCount = 1;
     info.colorAttachmentCount = (u32)desc.attachment_count;
     info.pColorAttachments = vk_attachments;
+    info.pDepthAttachment = &dummy_attachment;
+    info.pStencilAttachment = &dummy_attachment;
+    
     
     _Vk_Context_Internal *internal = (_Vk_Context_Internal*)cmd.pool->context->internal;
     internal->vkCmdBeginRenderingKHR(cmd.id, &info);
@@ -1877,3 +1930,20 @@ void oga_cmd_end_render_pass(Oga_Command_List cmd) {
 void oga_cmd_draw(Oga_Command_List cmd, u64 vertex_count, u64 vertex_start, u64 instance_count, u64 instance_start) {
     vkCmdDraw(cmd.id, (u32)vertex_count, (u32)instance_count, (u32)vertex_start, (u32)instance_start);
 }
+
+
+
+
+
+
+
+
+
+#undef uint8_t
+#undef int8_t
+#undef uint16_t
+#undef int16_t
+#undef uint32_t
+#undef int32_t
+#undef uint64_t
+#undef int64_t

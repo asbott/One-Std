@@ -15,9 +15,9 @@ typedef enum Oga_Result {
     
     OGA_CONTEXT_INIT_ERROR_BAD_STATE_ALLOCATOR,
     
-    // The given family index is not within the range 0 .. Oga_Device::logical_engine_family_count
+    // The given family index is not within the range 0 .. Oga_Device::engine_family_count
     OGA_CREATE_LOGICAL_ENGINE_ERROR_FAMILY_INDEX_OUT_OF_RANGE,
-    // The given logical_engine creation count overflows that of Oga_Logical_Engine_Family_Info::logical_engine_capacity
+    // The given engine creation count overflows that of Oga_Logical_Engine_Family_Info::engine_capacity
     OGA_CREATE_LOGICAL_ENGINE_ERROR_FAMILY_CAPACITY_OVERFLOW,
     
     OGA_INIT_SWAPCHAIN_ERROR_SURFACE_REJECTED,
@@ -67,9 +67,9 @@ unit_local inline string oga_get_result_message(Oga_Result r) {
         case OGA_CONTEXT_INIT_ERROR_BAD_STATE_ALLOCATOR:
             return STR("Passed a bad state allocator. allocator.proc is null.");
         case OGA_CREATE_LOGICAL_ENGINE_ERROR_FAMILY_INDEX_OUT_OF_RANGE:
-            return STR("The given family index is not within the range 0 .. Oga_Device::logical_engine_family_count");
+            return STR("The given family index is not within the range 0 .. Oga_Device::engine_family_count");
         case OGA_CREATE_LOGICAL_ENGINE_ERROR_FAMILY_CAPACITY_OVERFLOW:
-            return STR("The given logical_engine creation count overflows that of Oga_Logical_Engine_Family_Info::logical_engine_capacity");
+            return STR("The given engine creation count overflows that of Oga_Logical_Engine_Family_Info::engine_capacity");
         case OGA_INIT_SWAPCHAIN_ERROR_SURFACE_REJECTED:
             return STR("The provided surface handle was rejected, possibly bad.");
         case OGA_INIT_SWAPCHAIN_ERROR_UNSUPPORTED_PRESENT_MODE:
@@ -190,7 +190,7 @@ typedef enum Oga_Logical_Engine_Family_Flags {
 
 typedef struct Oga_Logical_Engine_Family_Info {
     Oga_Logical_Engine_Family_Flags flags;
-    u32 logical_engine_capacity;
+    u32 engine_capacity;
 } Oga_Logical_Engine_Family_Info;
 
 typedef struct Oga_Memory_Heap {
@@ -303,8 +303,8 @@ typedef struct Oga_Device {
     
     Oga_Device_Limits limits;
 
-    Oga_Logical_Engine_Family_Info logical_engine_family_infos[OGA_MAX_DEVICE_LOGICAL_ENGINE_FAMILIES];
-    u32 logical_engine_family_count;
+    Oga_Logical_Engine_Family_Info engine_family_infos[OGA_MAX_DEVICE_LOGICAL_ENGINE_FAMILIES];
+    u32 engine_family_count;
 
     Oga_Format depth_format;
 
@@ -366,10 +366,10 @@ typedef struct Oga_State_Allocator_Data {
 } Oga_State_Allocator_Data;
 
 typedef struct Oga_Context_Desc {
-    // Indices match to that of Oga_Device::logical_engine_family_infos.
-    // So the create logical_engines of family 0, you set the desc in logical_engine_create_descs[0].
-    // Leave descs uninitialized to make no logical_engines in that family.
-    Oga_Logical_Engines_Create_Desc logical_engine_create_descs[OGA_MAX_DEVICE_LOGICAL_ENGINE_FAMILIES];
+    // Indices match to that of Oga_Device::engine_family_infos.
+    // So the create engines of family 0, you set the desc in engine_create_descs[0].
+    // Leave descs uninitialized to make no engines in that family.
+    Oga_Logical_Engines_Create_Desc engine_create_descs[OGA_MAX_DEVICE_LOGICAL_ENGINE_FAMILIES];
     Oga_Device_Feature_Flag enabled_features;
     Allocator state_allocator; // The allocator used to allocate state & handles in this context. Will only be used when creating/destroying things.
 } Oga_Context_Desc;
@@ -384,15 +384,15 @@ typedef struct Oga_Logical_Engine {
 } Oga_Logical_Engine;
 
 typedef struct Oga_Logical_Engine_Group {
-    Oga_Logical_Engine logical_engines[OGA_MAX_DEVICE_LOGICAL_ENGINES_PER_FAMILY];
-    u64 logical_engine_count;
+    Oga_Logical_Engine engines[OGA_MAX_DEVICE_LOGICAL_ENGINES_PER_FAMILY];
+    u64 engine_count;
 } Oga_Logical_Engine_Group;
 
 typedef struct Oga_Context {
     void *id;
     void *internal;
     Oga_Device device;
-    Oga_Logical_Engine_Group logical_engines_by_family[OGA_MAX_DEVICE_LOGICAL_ENGINE_FAMILIES];
+    Oga_Logical_Engine_Group engines_by_family[OGA_MAX_DEVICE_LOGICAL_ENGINE_FAMILIES];
     Allocator state_allocator;
     
     Oga_State_Allocator_Data default_allocator_data; // Backing for Allocator::data
@@ -427,8 +427,8 @@ typedef struct Oga_Swapchain_Desc {
     Oga_Format image_format;
     u64 width;
     u64 height;
-    u64 *queue_families_with_access; // The indices of the queue families that will be allowed to access the images
-    u64 queue_families_with_access_count;
+    u64 *engine_families_with_access; // The indices of the queue families that will be allowed to access the images
+    u64 engine_families_with_access_count;
     Oga_Present_Mode present_mode;
     
 } Oga_Swapchain_Desc;
@@ -445,6 +445,8 @@ typedef struct Oga_Swapchain {
     u64 image_count;
     Oga_Format image_format;
 } Oga_Swapchain;
+
+bool get_preferred_swapchain_format(Oga_Context *context, Oga_Format *wanted_formats, u64 count, Oga_Format *format);
 
 Oga_Result oga_init_swapchain(Oga_Context *context, Oga_Swapchain_Desc desc, Oga_Swapchain **swapchain);
 void oga_uninit_swapchain(Oga_Swapchain *swapchain);
@@ -708,7 +710,7 @@ typedef u64 Oga_Command_Pool_Flag;
 
 typedef struct Oga_Command_Pool_Desc {
     Oga_Command_Pool_Flag flags;
-    u64 queue_family_index; // Pinky promise which queue family this will be submitted to
+    u64 engine_family_index; // Pinky promise which queue family this will be submitted to
 } Oga_Command_Pool_Desc;
 
 typedef struct Oga_Command_Pool {
@@ -996,7 +998,7 @@ Oga_Pick_Device_Result oga_pick_device(Oga_Device_Pick_Flag pick_flags, Oga_Devi
         if ((pick_flags & OGA_DEVICE_PICK_PREFER_CPU) && device.kind == OGA_DEVICE_CPU)
             *pscore += 1000;
             
-        *pscore += device.logical_engine_family_count*10;
+        *pscore += device.engine_family_count*10;
         
         // Whatever these drivers are, they cause a LOT of trouble.
         string device_name = (string) {device.device_name_length, device.device_name_data};
@@ -1042,6 +1044,20 @@ Oga_Pick_Device_Result oga_pick_device(Oga_Device_Pick_Flag pick_flags, Oga_Devi
         }
     }
     return results[winner_index];
+}
+
+bool get_preferred_swapchain_format(Oga_Context *context, Oga_Format *wanted_formats, u64 count, Oga_Format *format) {
+    for (u64 i = 0; i < count; i += 1) {
+        for (u64 j = 0; j < context->device.supported_surface_format_count; j += 1) {
+            Oga_Format f = context->device.supported_surface_formats[j];
+            if (f == wanted_formats[i]) {
+                *format = f;
+                return true;
+            }
+        }
+    }
+    
+    return false;
 }
 
 #define VENDOR_ID_NVIDIA   0x10DE
@@ -1091,7 +1107,7 @@ inline string oga_format_str(Oga_Format f);
 /////////////////////////////////////////////////////
 
 #if COMPILER_FLAGS & COMPILER_FLAG_MSC
-    #pragma comment(lib, "vendors/vulkan-1.lib")
+    #pragma comment(lib, "src/vendors/vulkan-1.lib")
 #endif // COMPILER_FLAGS & COMPILER_FLAG_MSC
 
 #if (OS_FLAGS & (OS_FLAG_WINDOWS | OS_FLAG_LINUX | OS_FLAG_MACOS | OS_FLAG_IOS | OS_FLAG_ANDROID)) == 0

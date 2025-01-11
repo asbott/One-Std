@@ -7,8 +7,6 @@
 #define DECLSPEC_ALIGN(x) __declspec(align(x))
 #define DECLSPEC_NOINITALL
 
-//#include "basetsd.h"
-
 typedef void *HANDLE;
 typedef void* HWND;
 typedef unsigned long* PDWORD;

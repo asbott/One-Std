@@ -1,24 +1,30 @@
+#ifndef OSTD_SINGLE_HEADER
+#define OSTD_SINGLE_HEADER
+
 #ifndef OSTD_H_
 #define OSTD_H_
 
+#if defined(__GNUC__) || defined(__GNUG__)
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wattributes"
+#endif
+
+// I try to compile with -pedantic and -Weverything, but get really dumb warnings like these,
+// so I have to ignore them.
 #ifdef __clang__
 #pragma clang diagnostic push
-#pragma clang diagnostic ignored "-Wincompatible-library-redeclaration"
-#pragma clang diagnostic ignored "-Wgnu-zero-variadic-macro-arguments"
-#pragma clang diagnostic ignored "-Wnewline-eof"
-#pragma clang diagnostic ignored "-Wkeyword-macro"
+#pragma clang diagnostic ignored "-Wattributes"
 #pragma clang diagnostic ignored "-Wreserved-identifier"
 #pragma clang diagnostic ignored "-Wdeclaration-after-statement"
 #pragma clang diagnostic ignored "-Wcovered-switch-default"
 #pragma clang diagnostic ignored "-Wcast-align"
-#pragma clang diagnostic ignored "-Wunused-function"
+#ifdef __EMSCRIPTEN__
+#pragma clang diagnostic ignored "-Wpadded"
+#endif // __EMSCRIPTEN__
 #ifdef _MSC_VER
 #pragma clang diagnostic ignored "-Wunsafe-buffer-usage"
 #endif
-#ifdef __EMSCRIPTEN__
-#pragma clang diagnostic ignored "-Wpadded"
-#endif
-#endif
+#endif // __clang__
 
 
 /* Begin include: base.h */
@@ -121,10 +127,17 @@
 
 // make inline actually inline if supported by compiler
 
+#ifdef __clang__
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wkeyword-macro"
+#endif
 #if COMPILER_FLAGS & COMPILER_FLAG_GNU
     #define inline __attribute__((always_inline))
 #elif COMPILER_FLAGS & COMPILER_FLAG_MSC
     #define inline __forceinline
+#endif
+#ifdef __clang__
+#pragma clang diagnostic pop
 #endif
 
 #define CSTD_C90 1
@@ -237,7 +250,7 @@
     typedef __INT16_TYPE__  s16;
     typedef __UINT8_TYPE__  u8;
     typedef __INT8_TYPE__   s8;
-    
+
     typedef __UINTPTR_TYPE__  uintptr;
 
 #else
@@ -251,7 +264,7 @@
     typedef int32_t  s32;
     typedef uint64_t u64;
     typedef int64_t  s64;
-    
+
      typedef uintptr_t uintptr;
 
 #endif
@@ -300,6 +313,23 @@ typedef float128 f128;
 #define S64_MIN (-9223372036854775807LL - 1)
 #define S64_MAX 9223372036854775807LL
 
+#define UINT8_MIN 0
+#define UINT8_MAX 255U
+#define INT8_MIN (-128)
+#define INT8_MAX 127
+#define UINT16_MIN 0
+#define UINT16_MAX 65535U
+#define INT16_MIN (-32768)
+#define INT16_MAX 32767
+#define UINT32_MIN 0U
+#define UINT32_MAX 4294967295UL
+#define INT32_MIN (-2147483648L)
+#define INT32_MAX 2147483647L
+#define UINT64_MIN 0ULL
+#define UINT64_MAX 18446744073709551615ULL
+#define INT64_MIN (-9223372036854775807LL - 1)
+#define INT64_MAX 9223372036854775807LL
+
 #if defined(ARCH_X64) || defined (ARCH_ARM64)
 typedef s64 sys_int;
 typedef u64 sys_uint;
@@ -313,14 +343,16 @@ typedef u32 sys_uint;
 #endif
 
 #if !CSTD_C23
-    #pragma clang diagnostic push
 #if (COMPILER_FLAGS & COMPILER_FLAG_CLANG) && ((COMPILER_FLAGS & COMPILER_FLAG_MSC) || COMPILER_FLAGS & COMPILER_FLAG_EMSCRIPTEN)
+    #pragma clang diagnostic push
     #pragma clang diagnostic ignored "-Wc23-compat"
 #endif
     typedef s8 bool;
     #define true 1
     #define false 0
+#if (COMPILER_FLAGS & COMPILER_FLAG_CLANG) && ((COMPILER_FLAGS & COMPILER_FLAG_MSC) || COMPILER_FLAGS & COMPILER_FLAG_EMSCRIPTEN)
     #pragma clang diagnostic pop
+#endif
 #endif
 
 typedef union float32x2 {
@@ -419,10 +451,10 @@ u64 format_float(float64 x, int decimal_places, void *buffer, u64 buffer_size);
 
 
 
-#define PP_FIRST_ARG_HELPER(x, ...) x
-#define PP_FIRST_ARG(...) PP_FIRST_ARG_HELPER(__VA_ARGS__)
+#define PP_FIRST_ARG_HELPER(first, ...) first
+#define PP_FIRST_ARG(...) PP_FIRST_ARG_HELPER(__VA_ARGS__, 0)
 
-#define PP_EXCLUDE_FIRST_ARG_HELPER(x, ...) __VA_ARGS__
+#define PP_EXCLUDE_FIRST_ARG_HELPER(first, ...) __VA_ARGS__
 #define PP_EXCLUDE_FIRST_ARG(...) PP_EXCLUDE_FIRST_ARG_HELPER(__VA_ARGS__)
 
 
@@ -436,6 +468,7 @@ u64 format_float(float64 x, int decimal_places, void *buffer, u64 buffer_size);
 // Natural logarithm
 float32 ln32(float32 x);
 float64 ln64(float64 x);
+u64 powu(u64 x, u64 e);
 
 #ifdef OSTD_IMPL
 
@@ -457,7 +490,17 @@ float64 ln64(float64 x) {
     return -1.49278 + (2.11263 + (-0.729104 + 0.10969 * x) * x) * x + 0.6931471806 * t;
 }
 
+u64 powu(u64 x, u64 e) {
+    u64 result = x;
+    for (u64 i = 0; i < e; i += 1) {
+        result *= x;
+    }
+    return result;
+}
+
 #endif // OSTD_IMPL
+
+
 /* End include: math.h */
 
 
@@ -467,6 +510,8 @@ float64 ln64(float64 x) {
 
 #define min(a, b) ((a) < (b) ? (a) : (b))
 #define max(a, b) ((a) > (b) ? (a) : (b))
+
+#define clamp(x, a, b) (min(max((x), (a)), (b)))
 
 
 /* End include: utility.h */
@@ -492,6 +537,7 @@ unit_local inline u64 c_style_strlen(const char *s) {
 #define STRN(n, c) ((string){ n, (u8*)(uintptr)(const void*)(c) })
 #define RSTR(...) STR(#__VA_ARGS__)
 
+inline int memcmp(const void* a, const void* b, sys_uint n);
 unit_local inline bool strings_match(string a, string b) {
     if (a.count != b.count) return false;
 
@@ -502,6 +548,18 @@ unit_local inline bool strings_match(string a, string b) {
 
     return memcmp(a.data, b.data, (sys_uint)a.count) == 0;
 }
+
+unit_local inline bool string_contains(string s, string sub) {
+    if (sub.count > s.count) return false;
+    for (u64 i = 0; i < s.count-sub.count; i += 1) {
+        string ssub = s;
+        ssub.data += i;
+        ssub.count = sub.count;
+        if (strings_match(ssub, sub)) return true;
+    }
+    return false;
+}
+
 /* End include: string.h */
 
 
@@ -512,7 +570,7 @@ unit_local inline bool strings_match(string a, string b) {
 #define SYS_MEMORY_RESERVE (1 << 0)
 #define SYS_MEMORY_ALLOCATE (1 << 1)
 
-void *sys_map_pages(u64 action, void *virtual_base, u64 amount_in_bytes);
+void *sys_map_pages(u64 action, void *virtual_base, u64 number_of_pages, bool strict_base_address);
 bool sys_unmap_pages(void *address);
 // Deallocates, but keeps pages mapped & reserved
 bool sys_deallocate_pages(void *address, u64 number_of_pages);
@@ -522,6 +580,8 @@ typedef struct Mapped_Memory_Info {
     u64 page_count;
 } Mapped_Memory_Info;
 u64 sys_query_mapped_regions(void *start, void *end, Mapped_Memory_Info *result, u64 result_size);
+
+void *sys_find_mappable_range(u64 page_count);
 
 //////
 // System info
@@ -555,6 +615,11 @@ u64 sys_query_monitors(Physical_Monitor *buffer, u64 max_count);
 //////
 
 typedef void* File_Handle;
+typedef u64 File_Open_Flags;
+#define FILE_OPEN_WRITE  (1 << 0)
+#define FILE_OPEN_READ   (1 << 1)
+#define FILE_OPEN_RESET  (1 << 2)
+#define FILE_OPEN_CREATE (1 << 3)
 
 File_Handle sys_get_stdout(void);
 File_Handle sys_get_stderr(void);
@@ -570,6 +635,11 @@ s64 sys_read(File_Handle h, void *buffer, u64 buffer_size);
 bool sys_make_pipe(File_Handle *read, File_Handle *write);
 
 void sys_close(File_Handle h);
+
+// Returns 0 on failure
+File_Handle sys_open_file(string path, File_Open_Flags flags);
+
+u64 sys_get_file_size(File_Handle f);
 
 //////
 // Surfaces (Window)
@@ -650,6 +720,12 @@ bool surface_set_flags(Surface_Handle h, Surface_Flags flags);
 bool surface_unset_flags(Surface_Handle h, Surface_Flags flags);
 
 //////
+// Time
+//////
+
+float64 sys_get_seconds_monotonic(void);
+
+//////
 // Debug
 //////
 
@@ -671,8 +747,16 @@ void sys_print_stack_trace(File_Handle handle);
 
 #if (OS_FLAGS & OS_FLAG_HAS_WINDOW_SYSTEM)
 
+struct _XDisplay;
+typedef struct _XDisplay Display;
+struct wl_display;
+typedef struct wl_display wl_display;
+
 typedef struct _Surface_State {
     Surface_Handle handle;
+#if OS_FLAGS & OS_FLAG_LINUX
+    Display *xlib_display;
+#endif
     bool allocated;
     bool should_close;
 } _Surface_State;
@@ -701,6 +785,7 @@ unit_local _Surface_State *_get_surface_state(Surface_Handle h) {
 #endif // (OS_FLAGS & OS_FLAG_HAS_WINDOW_SYSTEM)
 
 
+
 #if (OS_FLAGS & OS_FLAG_UNIX)
 
 /////////////////////////////////////////////////////
@@ -709,6 +794,9 @@ unit_local _Surface_State *_get_surface_state(Surface_Handle h) {
 //////
 /////////////////////////////////////////////////////
 
+#if COMPILER_FLAGS & COMPILER_FLAG_GNU
+    #define _GNU_SOURCE
+#endif
 // todo(charlie) dynamically link & manually  define some stuff to minimize namespace bloat here
 #include <unistd.h>
 #include <sched.h>
@@ -717,6 +805,8 @@ unit_local _Surface_State *_get_surface_state(Surface_Handle h) {
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <errno.h>
+#include <execinfo.h>
+#include <fcntl.h>
 #undef bool
 
 typedef struct _Mapped_Region_Desc {
@@ -839,7 +929,7 @@ System_Info sys_get_info(void) {
     return info;
 }
 
-void *sys_map_pages(u64 action, void *virtual_base, u64 number_of_pages) {
+void *sys_map_pages(u64 action, void *virtual_base, u64 number_of_pages, bool strict_base_address) {
     System_Info info = sys_get_info();
     u64 amount_in_bytes = info.page_size * number_of_pages;
 
@@ -854,7 +944,7 @@ void *sys_map_pages(u64 action, void *virtual_base, u64 number_of_pages) {
     }
 
     if (virtual_base) {
-        flags |= MAP_FIXED;
+        if (strict_base_address) flags |= MAP_FIXED;
     }
 
     void *result = mmap(virtual_base, (sys_uint)amount_in_bytes, prot, flags, -1, 0);
@@ -922,8 +1012,88 @@ u64 sys_query_mapped_regions(void *start, void *end, Mapped_Memory_Info *result,
     return counter;
 }
 
+void *sys_find_mappable_range(u64 page_count) {
+    System_Info info = sys_get_info();
+    u64 amount_in_bytes = page_count * info.page_size;
+
+    File_Handle maps = sys_open_file(STR("/proc/self/maps"), FILE_OPEN_READ);
+    if (!maps) {
+        sys_write_string(sys_get_stdout(), STR("Could not open /proc/self/maps\n"));
+        return 0;
+    }
+
+    char buffer[256];
+    char line[256];
+    u64 last_end = 0x0000100000000000; 
+    u64 line_length = 0;
+
+    while (true) {
+        s64 bytes_read = sys_read(maps, buffer, sizeof(buffer));
+        if (bytes_read <= 0) {
+            break; 
+        }
+
+        for (s64 i = 0; i < bytes_read; ++i) {
+            if (buffer[i] == '\n' || line_length >= sizeof(line) - 1) {
+                line[line_length] = '\0'; 
+
+                u64 start = 0, end = 0;
+                bool parsing_failed = false;
+
+                char *p = line;
+                while (*p && *p != '-') {
+                    if (*p >= '0' && *p <= '9') {
+                        start = (start << 4) | (*p - '0');
+                    } else if (*p >= 'a' && *p <= 'f') {
+                        start = (start << 4) | (*p - 'a' + 10);
+                    } else {
+                        parsing_failed = true;
+                        break;
+                    }
+                    ++p;
+                }
+
+                if (!parsing_failed && *p == '-') {
+                    ++p; 
+                    while (*p && *p != ' ') {
+                        if (*p >= '0' && *p <= '9') {
+                            end = (end << 4) | (*p - '0');
+                        } else if (*p >= 'a' && *p <= 'f') {
+                            end = (end << 4) | (*p - 'a' + 10);
+                        } else {
+                            parsing_failed = true;
+                            break;
+                        }
+                        ++p;
+                    }
+                } else {
+                    parsing_failed = true;
+                }
+
+                if (!parsing_failed && start >= last_end + amount_in_bytes) {
+                    u64 aligned_base = (last_end + info.granularity - 1) & ~(info.granularity - 1);
+                    if (aligned_base + amount_in_bytes <= start) {
+                        sys_close(maps);
+                        return (void *)aligned_base;
+                    }
+                }
+
+                last_end = end;
+                line_length = 0; 
+            } else {
+                line[line_length++] = buffer[i];
+            }
+        }
+    }
+
+    sys_close(maps);
+    return 0; 
+}
+
 s64 sys_write(File_Handle f, void *data, u64 size) {
-    return (s64)write((int)(u64)f, data, (sys_uint)size);
+    s64 written = (s64)write((int)(u64)f, data, (sys_uint)size);
+    if (written < 0) written = 0;
+    return written;
 }
 
 s64 sys_write_string(File_Handle f, string s) {
@@ -931,7 +1101,8 @@ s64 sys_write_string(File_Handle f, string s) {
 }
 
 s64 sys_read(File_Handle h, void *buffer, u64 buffer_size) {
-    return (s64)read((int)(u64)h, buffer, (sys_uint)buffer_size);
+    s64 readeded = (s64)read((int)(u64)h, buffer, (sys_uint)buffer_size);
+    return readeded < 0 ? 0 : readeded;
 }
 
 bool sys_make_pipe(File_Handle *read, File_Handle *write) {
@@ -944,6 +1115,49 @@ bool sys_make_pipe(File_Handle *read, File_Handle *write) {
 
 void sys_close(File_Handle h) {
     close((int)(u64)h);
+}
+
+File_Handle sys_open_file(string path, File_Open_Flags flags) {
+    char cpath[MAX_PATH_LENGTH];
+    u64 path_len = min(path.count, MAX_PATH_LENGTH - 1);
+    memcpy(cpath, path.data, path_len);
+    cpath[path_len] = 0;
+
+    int unix_flags = 0;
+
+    if (flags & FILE_OPEN_WRITE) {
+        unix_flags |= (flags & FILE_OPEN_READ) ? O_RDWR : O_WRONLY;
+    } else if (flags & FILE_OPEN_READ) {
+        unix_flags |= O_RDONLY;
+    }
+
+    if (flags & FILE_OPEN_CREATE) {
+        unix_flags |= O_CREAT;
+    }
+    if (flags & FILE_OPEN_RESET) {
+        unix_flags |= O_TRUNC;
+    } else {
+        unix_flags |= O_APPEND;
+    }
+
+    int fd = open(cpath, unix_flags, 0644);
+    if (fd < 0) return 0;
+
+    return (File_Handle)(u64)fd;
+}
+
+u64 sys_get_file_size(File_Handle f) {
+    struct stat file_stat;
+    if (fstat((int)(u64)f, &file_stat) == -1) {
+        return 0;
+    }
+    return (u64)file_stat.st_size; 
+}
+
+double sys_get_seconds_monotonic(void) {
+    struct timespec ts;
+    clock_gettime(CLOCK_MONOTONIC, &ts);
+    return (double)ts.tv_sec + (double)ts.tv_nsec / 1e9;
 }
 
 #endif // OS_FLAGS & OS_FLAG_UNIX
@@ -995,8 +1209,6 @@ void sys_close(File_Handle h) {
 
 #define DECLSPEC_ALIGN(x) __declspec(align(x))
 #define DECLSPEC_NOINITALL
-
-//#include "basetsd.h"
 
 typedef void *HANDLE;
 typedef void* HWND;
@@ -1121,6 +1333,22 @@ typedef  WCHAR *PUNZWCH;
 typedef  const WCHAR *PCUNZWCH;
 
 typedef const WCHAR *LPCWCH;
+
+typedef long long LONGLONG;
+
+typedef union _LARGE_INTEGER {
+  struct {
+    DWORD LowPart;
+    LONG  HighPart;
+  } DUMMYSTRUCTNAME;
+  struct {
+    DWORD LowPart;
+    LONG  HighPart;
+  } u;
+  LONGLONG QuadPart;
+} LARGE_INTEGER, *PLARGE_INTEGER;
+
+typedef LARGE_INTEGER LARGE_INTEGER;
 
 typedef LRESULT (*WNDPROC)( HWND unnamedParam1, UINT unnamedParam2, WPARAM unnamedParam3, LPARAM unnamedParam4);
 
@@ -2578,6 +2806,155 @@ typedef struct tagTRACKMOUSEEVENT {
 #define SWP_ASYNCWINDOWPOS  0x4000 // same as SWP_CREATESPB
 #endif /* WINVER >= 0x0400 */
 
+#define FILE_READ_DATA            ( 0x0001 )    // file & pipe
+#define FILE_LIST_DIRECTORY       ( 0x0001 )    // directory
+
+#define FILE_WRITE_DATA           ( 0x0002 )    // file & pipe
+#define FILE_ADD_FILE             ( 0x0002 )    // directory
+
+#define FILE_APPEND_DATA          ( 0x0004 )    // file
+#define FILE_ADD_SUBDIRECTORY     ( 0x0004 )    // directory
+#define FILE_CREATE_PIPE_INSTANCE ( 0x0004 )    // named pipe
+
+
+#define FILE_READ_EA              ( 0x0008 )    // file & directory
+
+#define FILE_WRITE_EA             ( 0x0010 )    // file & directory
+
+#define FILE_EXECUTE              ( 0x0020 )    // file
+#define FILE_TRAVERSE             ( 0x0020 )    // directory
+
+#define FILE_DELETE_CHILD         ( 0x0040 )    // directory
+
+#define FILE_READ_ATTRIBUTES      ( 0x0080 )    // all
+
+#define FILE_WRITE_ATTRIBUTES     ( 0x0100 )    // all
+
+#define FILE_ALL_ACCESS (STANDARD_RIGHTS_REQUIRED | SYNCHRONIZE | 0x1FF)
+
+#define FILE_GENERIC_READ         (STANDARD_RIGHTS_READ     |\
+                                   FILE_READ_DATA           |\
+                                   FILE_READ_ATTRIBUTES     |\
+                                   FILE_READ_EA             |\
+                                   SYNCHRONIZE)
+
+
+#define FILE_GENERIC_WRITE        (STANDARD_RIGHTS_WRITE    |\
+                                   FILE_WRITE_DATA          |\
+                                   FILE_WRITE_ATTRIBUTES    |\
+                                   FILE_WRITE_EA            |\
+                                   FILE_APPEND_DATA         |\
+                                   SYNCHRONIZE)
+
+
+#define FILE_GENERIC_EXECUTE      (STANDARD_RIGHTS_EXECUTE  |\
+                                   FILE_READ_ATTRIBUTES     |\
+                                   FILE_EXECUTE             |\
+                                   SYNCHRONIZE)
+
+// end_access
+#define FILE_SHARE_READ                 0x00000001  
+#define FILE_SHARE_WRITE                0x00000002  
+#define FILE_SHARE_DELETE               0x00000004  
+#define FILE_ATTRIBUTE_READONLY             0x00000001  
+#define FILE_ATTRIBUTE_HIDDEN               0x00000002  
+#define FILE_ATTRIBUTE_SYSTEM               0x00000004  
+#define FILE_ATTRIBUTE_DIRECTORY            0x00000010  
+#define FILE_ATTRIBUTE_ARCHIVE              0x00000020  
+#define FILE_ATTRIBUTE_DEVICE               0x00000040  
+#define FILE_ATTRIBUTE_NORMAL               0x00000080  
+#define FILE_ATTRIBUTE_TEMPORARY            0x00000100  
+#define FILE_ATTRIBUTE_SPARSE_FILE          0x00000200  
+#define FILE_ATTRIBUTE_REPARSE_POINT        0x00000400  
+#define FILE_ATTRIBUTE_COMPRESSED           0x00000800  
+#define FILE_ATTRIBUTE_OFFLINE              0x00001000  
+#define FILE_ATTRIBUTE_NOT_CONTENT_INDEXED  0x00002000  
+#define FILE_ATTRIBUTE_ENCRYPTED            0x00004000  
+#define FILE_ATTRIBUTE_INTEGRITY_STREAM     0x00008000  
+#define FILE_ATTRIBUTE_VIRTUAL              0x00010000  
+#define FILE_ATTRIBUTE_NO_SCRUB_DATA        0x00020000  
+#define FILE_ATTRIBUTE_EA                   0x00040000  
+#define FILE_ATTRIBUTE_PINNED               0x00080000  
+#define FILE_ATTRIBUTE_UNPINNED             0x00100000  
+#define FILE_ATTRIBUTE_RECALL_ON_OPEN       0x00040000  
+#define FILE_ATTRIBUTE_RECALL_ON_DATA_ACCESS 0x00400000 
+#define TREE_CONNECT_ATTRIBUTE_PRIVACY      0x00004000  
+#define TREE_CONNECT_ATTRIBUTE_INTEGRITY    0x00008000  
+#define TREE_CONNECT_ATTRIBUTE_GLOBAL       0x00000004  
+#define TREE_CONNECT_ATTRIBUTE_PINNED       0x00000002  
+#define FILE_ATTRIBUTE_STRICTLY_SEQUENTIAL  0x20000000  
+#define FILE_NOTIFY_CHANGE_FILE_NAME    0x00000001   
+#define FILE_NOTIFY_CHANGE_DIR_NAME     0x00000002   
+#define FILE_NOTIFY_CHANGE_ATTRIBUTES   0x00000004   
+#define FILE_NOTIFY_CHANGE_SIZE         0x00000008   
+#define FILE_NOTIFY_CHANGE_LAST_WRITE   0x00000010   
+#define FILE_NOTIFY_CHANGE_LAST_ACCESS  0x00000020   
+#define FILE_NOTIFY_CHANGE_CREATION     0x00000040   
+#define FILE_NOTIFY_CHANGE_SECURITY     0x00000100   
+#define FILE_ACTION_ADDED                   0x00000001   
+#define FILE_ACTION_REMOVED                 0x00000002   
+#define FILE_ACTION_MODIFIED                0x00000003   
+#define FILE_ACTION_RENAMED_OLD_NAME        0x00000004   
+#define FILE_ACTION_RENAMED_NEW_NAME        0x00000005   
+#define MAILSLOT_NO_MESSAGE             ((DWORD)-1) 
+#define MAILSLOT_WAIT_FOREVER           ((DWORD)-1) 
+#define FILE_CASE_SENSITIVE_SEARCH          0x00000001  
+#define FILE_CASE_PRESERVED_NAMES           0x00000002  
+#define FILE_UNICODE_ON_DISK                0x00000004  
+#define FILE_PERSISTENT_ACLS                0x00000008  
+#define FILE_FILE_COMPRESSION               0x00000010  
+#define FILE_VOLUME_QUOTAS                  0x00000020  
+#define FILE_SUPPORTS_SPARSE_FILES          0x00000040  
+#define FILE_SUPPORTS_REPARSE_POINTS        0x00000080  
+#define FILE_SUPPORTS_REMOTE_STORAGE        0x00000100  
+#define FILE_RETURNS_CLEANUP_RESULT_INFO    0x00000200  
+#define FILE_SUPPORTS_POSIX_UNLINK_RENAME   0x00000400  
+
+
+
+
+#define FILE_VOLUME_IS_COMPRESSED           0x00008000  
+#define FILE_SUPPORTS_OBJECT_IDS            0x00010000  
+#define FILE_SUPPORTS_ENCRYPTION            0x00020000  
+#define FILE_NAMED_STREAMS                  0x00040000  
+#define FILE_READ_ONLY_VOLUME               0x00080000  
+#define FILE_SEQUENTIAL_WRITE_ONCE          0x00100000  
+#define FILE_SUPPORTS_TRANSACTIONS          0x00200000  
+#define FILE_SUPPORTS_HARD_LINKS            0x00400000  
+#define FILE_SUPPORTS_EXTENDED_ATTRIBUTES   0x00800000  
+#define FILE_SUPPORTS_OPEN_BY_FILE_ID       0x01000000  
+#define FILE_SUPPORTS_USN_JOURNAL           0x02000000  
+#define FILE_SUPPORTS_INTEGRITY_STREAMS     0x04000000  
+#define FILE_SUPPORTS_BLOCK_REFCOUNTING     0x08000000  
+#define FILE_SUPPORTS_SPARSE_VDL            0x10000000  
+#define FILE_DAX_VOLUME                     0x20000000  
+#define FILE_SUPPORTS_GHOSTING              0x40000000  
+
+#define FILE_INVALID_FILE_ID               ((LONGLONG)-1LL) 
+
+#define DELETE                           (0x00010000L)
+#define READ_CONTROL                     (0x00020000L)
+#define WRITE_DAC                        (0x00040000L)
+#define WRITE_OWNER                      (0x00080000L)
+#define SYNCHRONIZE                      (0x00100000L)
+
+#define STANDARD_RIGHTS_REQUIRED         (0x000F0000L)
+
+#define STANDARD_RIGHTS_READ             (READ_CONTROL)
+#define STANDARD_RIGHTS_WRITE            (READ_CONTROL)
+#define STANDARD_RIGHTS_EXECUTE          (READ_CONTROL)
+
+#define STANDARD_RIGHTS_ALL              (0x001F0000L)
+
+#define SPECIFIC_RIGHTS_ALL              (0x0000FFFFL)
+
+#define CREATE_ALWAYS 2
+#define CREATE_NEW 1
+#define OPEN_ALWAYS 4
+#define OPEN_EXISTING 3
+#define TRUNCATE_EXISTING 5
+
+#define INVALID_HANDLE_VALUE ((HANDLE)-1)
 
 WINDOWS_IMPORT void WINAPI GetSystemInfo(LPSYSTEM_INFO lpSystemInfo);
 
@@ -2667,6 +3044,12 @@ WINDOWS_IMPORT BOOL WINAPI CreatePipe( HANDLE* hReadPipe, HANDLE* hWritePipe, LP
 
 WINDOWS_IMPORT BOOL WINAPI CloseHandle(HANDLE hObject);
 
+WINDOWS_IMPORT HANDLE WINAPI CreateFileW( LPCWSTR lpFileName, DWORD dwDesiredAccess, DWORD dwShareMode, LPSECURITY_ATTRIBUTES lpSecurityAttributes, DWORD dwCreationDisposition, DWORD dwFlagsAndAttributes, HANDLE hTemplateFile);
+
+WINDOWS_IMPORT BOOL WINAPI GetFileSizeEx( HANDLE hFile, PLARGE_INTEGER lpFileSize);
+
+WINDOWS_IMPORT BOOL WINAPI QueryPerformanceFrequency(LARGE_INTEGER *lpFrequency);
+WINDOWS_IMPORT BOOL WINAPI QueryPerformanceCounter(LARGE_INTEGER *lpPerformanceCount);
 
 /* End include: windows_loader.h */
 #endif // _WINDOWS_
@@ -2725,8 +3108,8 @@ unit_local LRESULT window_proc ( HWND hwnd,  u32 message,  WPARAM wparam,  LPARA
 }
 
 
-void *sys_map_pages(u64 action, void *virtual_base, u64 number_of_pages) {
-
+void *sys_map_pages(u64 action, void *virtual_base, u64 number_of_pages, bool strict_base_address) {
+    (void)strict_base_address;
     // todo(charlie) attempt multiple times in case of failure.
 
     System_Info info = sys_get_info();
@@ -2746,7 +3129,6 @@ void *sys_map_pages(u64 action, void *virtual_base, u64 number_of_pages) {
     }
 
     void *result = VirtualAlloc(virtual_base, amount_in_bytes, flags, protection);
-
     // todo(charlie)
     // Some error reporting so user can see what went wrong if !result
 
@@ -2824,6 +3206,34 @@ u64 sys_query_mapped_regions(void *start, void *end, Mapped_Memory_Info *result,
     }
 
     return counter;
+}
+
+void *sys_find_mappable_range(u64 page_count) {
+
+    System_Info info = sys_get_info();
+
+    u64 amount_in_bytes = page_count*info.page_size;
+
+    MEMORY_BASIC_INFORMATION mbi;
+    void *address = (void *)0x0000100000000000; // Start at a high user-space address
+    while (address) {
+        size_t query_size = VirtualQuery(address, &mbi, sizeof(mbi));
+        if (query_size == 0) {
+            return 0;
+        }
+
+        if (mbi.State == 0x10000 /*MEM_FREE*/ && mbi.RegionSize >= amount_in_bytes) {
+            // Align the base address to the granularity
+            u64 aligned_base = ((u64)mbi.BaseAddress + info.granularity - 1) & ~(info.granularity - 1);
+            if (aligned_base + amount_in_bytes <= (u64)mbi.BaseAddress + mbi.RegionSize) {
+                return (void *)aligned_base;
+            }
+        }
+
+        address = (void *)((u64)mbi.BaseAddress + mbi.RegionSize);
+    }
+    
+    return 0;
 }
 
 System_Info sys_get_info(void) {
@@ -2905,11 +3315,6 @@ u64 sys_query_monitors(Physical_Monitor *buffer, u64 max_count) {
     return ctx.count;
 }
 
-typedef struct TotalRectContext {
-    RECT rect;
-} TotalRectContext;
-
-
 File_Handle sys_get_stdout(void) {
     return (File_Handle)GetStdHandle((u32)-11);
 }
@@ -2927,9 +3332,8 @@ bool sys_make_pipe(File_Handle *read, File_Handle *write) {
 }
 
 s64 sys_write(File_Handle f, void *data, u64 size) {
-    u32 written;
+    u32 written = 0;
     WriteFile(f, data, (DWORD)size, (unsigned long*)&written, 0);
-    if (written == 0 && size != 0) return -1;
     return (s64)written;
 }
 
@@ -2939,14 +3343,60 @@ s64 sys_write_string(File_Handle f, string s) {
 
 s64 sys_read(File_Handle h, void *buffer, u64 buffer_size) {
     DWORD read = 0;
-    BOOL ok = ReadFile(h, (LPVOID)buffer, (DWORD)buffer_size, &read, 0);
-    if (!ok) return -1;
+    ReadFile(h, (LPVOID)buffer, (DWORD)buffer_size, &read, 0);
 
     return (s64)read;
 }
 
 void sys_close(File_Handle h) {
     CloseHandle((HANDLE)h);
+}
+
+File_Handle sys_open_file(string path, File_Open_Flags flags) {
+    u16 cpath[MAX_PATH_LENGTH*2];
+    _win_utf8_to_wide(path, cpath, MAX_PATH_LENGTH*2);
+
+    DWORD access_mode = 0;
+    DWORD creation_flags = 0;
+
+    if (flags & FILE_OPEN_WRITE) {
+        access_mode |= FILE_GENERIC_WRITE;
+    }
+    if (flags & FILE_OPEN_READ) {
+        access_mode |= FILE_GENERIC_READ;
+    }
+
+    if (flags & FILE_OPEN_RESET) {
+        creation_flags = CREATE_ALWAYS;
+    } else if (flags & FILE_OPEN_CREATE) {
+        creation_flags = OPEN_ALWAYS;
+    } else {
+        creation_flags = OPEN_EXISTING;
+    }
+
+    HANDLE handle = CreateFileW(
+        cpath,
+        access_mode,
+        FILE_SHARE_READ | FILE_SHARE_WRITE,
+        0,
+        creation_flags,
+        FILE_ATTRIBUTE_NORMAL,
+        0  
+    );
+
+    if (handle == INVALID_HANDLE_VALUE) {
+        return 0; 
+    }
+
+    return handle;
+}
+
+u64 sys_get_file_size(File_Handle f) {
+    LARGE_INTEGER size;
+    if (!GetFileSizeEx(f, &size)) {
+        return 0; // Indicate failure
+    }
+    return (u64)size.QuadPart;
 }
 
 Surface_Handle sys_make_surface(Surface_Desc desc) {
@@ -2973,7 +3423,7 @@ Surface_Handle sys_make_surface(Surface_Desc desc) {
         wc.hIcon = 0;
         wc.lpszMenuName = 0;
         wc.hbrBackground = 0;
-    
+
     	ATOM res = RegisterClassExW(&wc);
     	assert(res);
     }
@@ -3001,14 +3451,14 @@ Surface_Handle sys_make_surface(Surface_Desc desc) {
     );
 
     if (!hwnd) return 0;
-    
+
     s->handle = hwnd;
-    
+
     UpdateWindow(hwnd);
-    
+
     surface_unset_flags(hwnd, ~desc.flags);
     surface_set_flags(hwnd, desc.flags);
-    
+
 
 
     return hwnd;
@@ -3042,43 +3492,43 @@ bool surface_should_close(Surface_Handle s) {
 bool surface_set_flags(Surface_Handle h, Surface_Flags flags) {
     int ex_style = GetWindowLongW((HWND)h, GWL_EXSTYLE);
     int style = GetWindowLongW((HWND)h, GWL_STYLE);
-    
+
     if (flags & SURFACE_FLAG_HIDDEN) {
         ex_style |= WS_EX_TOOLWINDOW;
     }
-    
+
     if (flags & SURFACE_FLAG_TOPMOST) {
         ex_style |= WS_EX_TOPMOST;
     }
-    
+
     SetWindowLongW((HWND)h, GWL_EXSTYLE, ex_style);
     SetWindowLongW((HWND)h, GWL_STYLE, style);
-    
+
     if (flags & SURFACE_FLAG_HIDDEN) {
         ShowWindow((HWND)h, SW_HIDE);
     }
-    
+
     if (flags & SURFACE_FLAG_TOPMOST) {
         SetWindowPos((HWND)h, HWND_TOPMOST, 0, 0, 0, 0, SWP_NOREPOSITION | SWP_NOSIZE | SWP_NOMOVE);
     }
-    
+
     return true;
 }
 bool surface_unset_flags(Surface_Handle h, Surface_Flags flags) {
     int ex_style = GetWindowLongW((HWND)h, GWL_EXSTYLE);
     int style = GetWindowLongW((HWND)h, GWL_STYLE);
-    
+
     if (flags & SURFACE_FLAG_HIDDEN) {
         ex_style &= ~(WS_EX_TOOLWINDOW);
     }
-    
+
     if (flags & SURFACE_FLAG_TOPMOST) {
         ex_style &= ~(WS_EX_TOPMOST);
     }
-    
+
     SetWindowLongW((HWND)h, GWL_EXSTYLE, ex_style);
     SetWindowLongW((HWND)h, GWL_STYLE, style);
-    
+
     if (flags & SURFACE_FLAG_HIDDEN) {
         ShowWindow((HWND)h, SW_SHOW);
     }
@@ -3086,6 +3536,13 @@ bool surface_unset_flags(Surface_Handle h, Surface_Flags flags) {
         SetWindowPos((HWND)h, HWND_NOTOPMOST, 0, 0, 0, 0, SWP_NOREPOSITION | SWP_NOSIZE | SWP_NOMOVE);
     }
     return true;
+}
+
+float64 sys_get_seconds_monotonic(void) {
+    LARGE_INTEGER freq, counter = (LARGE_INTEGER){0};
+	QueryPerformanceFrequency(&freq);
+	QueryPerformanceCounter(&counter);
+	return (float64)counter.QuadPart / (float64)freq.QuadPart;
 }
 
 void sys_print_stack_trace(File_Handle handle) {
@@ -3223,6 +3680,7 @@ static void _android_onWindowFocusChanged(ANativeActivity* activity, int focused
 
 static void _android_onNativeWindowCreated(ANativeActivity* activity, ANativeWindow* window) {
     _android_window = window;
+    __android_log_print(ANDROID_LOG_INFO, "android", "Set _android_window to %p", window);
 }
 
 static void _android_onNativeWindowDestroyed(ANativeActivity* activity, ANativeWindow* window) {
@@ -3425,7 +3883,7 @@ void sys_set_stderr(File_Handle h) {
     _android_user_stderr_handle = (int)(u64)h;
 }
 
-Surface_Handle sys_get_surface() {
+Surface_Handle sys_get_surface(void) {
     return (Surface_Handle)_android_window;
 }
 
@@ -3443,8 +3901,232 @@ bool surface_unset_flags(Surface_Handle h, Surface_Flags flags) {
     return false;
 }
 
+
 void sys_print_stack_trace(File_Handle handle) {
     sys_write_string(handle, STR("<Stack trace unimplemented>"));
+}
+
+#elif (OS_FLAGS & OS_FLAG_LINUX)
+
+/////////////////////////////////////////////////////
+//////
+// :Linux
+//////
+/////////////////////////////////////////////////////
+
+#include <X11/Xlib.h>
+#include <X11/extensions/Xrandr.h>
+
+u64 sys_query_monitors(Physical_Monitor *buffer, u64 max_count)
+{
+    Display *dpy = XOpenDisplay(0);
+    if (!dpy) {
+        // Could not open X display
+        return 0;
+    }
+
+    Window root = RootWindow(dpy, DefaultScreen(dpy));
+
+    XRRScreenResources *res = XRRGetScreenResources(dpy, root);
+    if (!res) {
+        XCloseDisplay(dpy);
+        return 0;
+    }
+
+    u64 total_found = 0;
+
+    for (int i = 0; i < res->noutput; i++) {
+        XRROutputInfo *output_info = XRRGetOutputInfo(dpy, res, res->outputs[i]);
+        if (!output_info) {
+            continue;
+        }
+
+        // Only count if it's connected and has an active CRTC
+        if (output_info->connection == RR_Connected && output_info->crtc) {
+            XRRCrtcInfo *crtc_info = XRRGetCrtcInfo(dpy, res, output_info->crtc);
+            if (crtc_info) {
+                if (buffer && total_found < max_count) {
+                    Physical_Monitor *pm = &buffer[total_found];
+                    memset(pm, 0, sizeof(*pm));
+
+                    memcpy(pm->name, output_info->name, sizeof(pm->name) - 1);
+                    pm->name[sizeof(pm->name) - 1] = '\0';
+                    pm->name_count = (u64)(c_style_strlen((char*)pm->name) + 1);
+
+                    pm->pos_x       = crtc_info->x;
+                    pm->pos_y       = crtc_info->y;
+                    pm->resolution_x = crtc_info->width;
+                    pm->resolution_y = crtc_info->height;
+
+                    // todo(charlie) this is a hacky approximation that might not work very well so
+                    // I will need to revisit it.
+                    double refresh = 0.0;
+                    for (int m = 0; m < res->nmode; m++) {
+                        if (res->modes[m].id == crtc_info->mode) {
+                            XRRModeInfo *mode_info = &res->modes[m];
+                            if (mode_info->hTotal && mode_info->vTotal) {
+                                refresh = (double)mode_info->dotClock /
+                                          (double)(mode_info->hTotal * mode_info->vTotal);
+                            }
+                            break;
+                        }
+                    }
+                    pm->refresh_rate = (u64)(refresh + 0.5);
+
+                    pm->scale = 1.0;
+
+                    pm->handle = (void*)(uintptr)res->outputs[i];
+                }
+                total_found++;
+                XRRFreeCrtcInfo(crtc_info);
+            }
+        }
+        XRRFreeOutputInfo(output_info);
+    }
+
+    XRRFreeScreenResources(res);
+    XCloseDisplay(dpy);
+
+    return total_found;
+}
+
+File_Handle sys_get_stdout(void) {
+    return (File_Handle)(u64)STDOUT_FILENO;
+}
+
+File_Handle sys_get_stderr(void) {
+    return (File_Handle)(u64)STDERR_FILENO;
+}
+
+void sys_set_stdout(File_Handle h) {
+    dup2((int)(u64)h, STDOUT_FILENO);
+}
+
+void sys_set_stderr(File_Handle h) {
+    dup2((int)(u64)h, STDERR_FILENO);
+}
+
+unit_local bool _x11_initted = false;
+
+Surface_Handle sys_make_surface(Surface_Desc desc) {
+        if (!_x11_initted) {
+            XInitThreads();
+            _x11_initted = true;
+        }
+
+        Display *display = XOpenDisplay(0);
+        if (!display) {
+            sys_write_string(sys_get_stdout(), STR("Failed to open X display\n"));
+            return 0;
+        }
+
+        int screen = DefaultScreen(display);
+        unsigned long white = WhitePixel(display, screen);
+
+        Window window = XCreateSimpleWindow(
+            display,
+            DefaultRootWindow(display),
+            0, 0,
+            desc.width, desc.height,
+            0,
+            0,
+            white
+        );
+
+
+        char ctitle[256];
+        memcpy(ctitle, desc.title.data, min(desc.title.count, 255));
+        ctitle[min(desc.title.count, 255)] = 0;
+        XStoreName(display, window, ctitle);
+
+        XSelectInput(display, window, ExposureMask | KeyPressMask | StructureNotifyMask);
+
+        if (!(desc.flags & SURFACE_FLAG_HIDDEN)) {
+            XMapWindow(display, window);
+        }
+
+        _Surface_State *surface = (_Surface_State *)_alloc_surface_state();
+        surface->xlib_display = display;
+        surface->handle = (Surface_Handle)window;
+        surface->should_close = false;
+        return (Surface_Handle)surface;
+}
+
+void surface_close(Surface_Handle s) {
+    if (!s) return;
+    _Surface_State *state = (_Surface_State *)s;
+
+    XDestroyWindow(state->xlib_display, (Window)state->handle);
+    XCloseDisplay(state->xlib_display);
+
+    state->allocated = false;
+}
+
+void surface_poll_events(Surface_Handle surface) {
+    if (!surface) return;
+    _Surface_State *state = (_Surface_State *)surface;
+
+    while (XPending(state->xlib_display)) {
+        XEvent evt;
+        XNextEvent(state->xlib_display, &evt);
+        switch (evt.type) {
+            case ClientMessage:
+            case DestroyNotify:
+                state->should_close = true;
+                break;
+            default:
+                break;
+        }
+    }
+}
+
+bool surface_should_close(Surface_Handle s) {
+    if (!s) return true;
+    _Surface_State *state = (_Surface_State *)s;
+    return state->should_close;
+}
+
+bool surface_set_flags(Surface_Handle h, Surface_Flags flags) {
+    if (!h) return false;
+    _Surface_State *state = (_Surface_State *)h;
+
+    if (flags & SURFACE_FLAG_HIDDEN) {
+        XUnmapWindow(state->xlib_display, (Window)state->handle);
+    }
+    if (flags & SURFACE_FLAG_TOPMOST) {
+
+    }
+    return true;
+}
+
+bool surface_unset_flags(Surface_Handle h, Surface_Flags flags) {
+    if (!h) return false;
+    _Surface_State *state = (_Surface_State *)h;
+
+    if (flags & SURFACE_FLAG_HIDDEN) {
+        XMapWindow(state->xlib_display, (Window)state->handle);
+    }
+
+    if (flags & SURFACE_FLAG_TOPMOST) {
+    }
+    return true;
+}
+
+void sys_print_stack_trace(File_Handle handle) {
+    void *stack[64];
+    int frames = backtrace(stack, 64);
+    char **symbols = backtrace_symbols(stack, frames);
+
+    if (symbols) {
+        for (int i = 0; i < frames; i++) {
+            sys_write_string(handle, STR(symbols[i]));
+            sys_write_string(handle, STR("\n"));
+        }
+        //free(symbols);
+        // #Leak
+    } else {
+        sys_write_string(handle, STR("<Stack trace unavailable>\n"));
+    }
 }
 
 #elif (OS_FLAGS & OS_FLAG_EMSCRIPTEN)
@@ -3528,6 +4210,8 @@ void sys_print_stack_trace(File_Handle handle) {
 #endif // OS_FLAGS & XXXXX
 
 #endif // OSTD_IMPL
+
+
 /* End include: system.h */
 
 
@@ -3642,6 +4326,8 @@ Utf8_To_Utf16_Result one_utf8_to_utf16(u8 *s, s64 source_length, bool strict) {
 }
 
 #endif //OSTD_IMPL
+
+
 /* End include: unicode.h */
 
 
@@ -3658,7 +4344,7 @@ typedef enum Allocator_Message {
     ALLOCATOR_REALLOCATE,
     ALLOCATOR_FREE
 } Allocator_Message;
-typedef void*(*Allocator_Proc)(Allocator_Message msg, void *data, void *old, u64 old_n, u64 n, u64 flags);
+typedef void*(*Allocator_Proc)(Allocator_Message msg, void *data, void *old, u64 old_n, u64 n, u64 alignment, u64 flags);
 
 typedef struct Allocator {
     void *data;
@@ -3696,7 +4382,7 @@ void arena_pop(Arena *arena, u64 size);
 void arena_reset(Arena *arena);
 void free_arena(Arena arena);
 
-void* arena_allocator_proc(Allocator_Message msg, void *data, void *old, u64 old_n, u64 n, u64);
+void* arena_allocator_proc(Allocator_Message msg, void *data, void *old, u64 old_n, u64 n, u64 alignment, u64 flags);
 unit_local inline Allocator arena_allocator(Arena *a) { return (Allocator) { a, arena_allocator_proc }; }
 
 /////
@@ -3714,23 +4400,23 @@ void *tallocate(size_t n);
 
 
 inline void *allocate(Allocator a, u64 n) {
-    return a.proc(ALLOCATOR_ALLOCATE, a.data, 0, 0, n, 0);
+    return a.proc(ALLOCATOR_ALLOCATE, a.data, 0, 0, n, 0, 0);
 }
 inline void *reallocate(Allocator a, void *p, u64 old_n, u64 n) {
-    return a.proc(ALLOCATOR_REALLOCATE, a.data, p, old_n, n, 0);
+    return a.proc(ALLOCATOR_REALLOCATE, a.data, p, old_n, n, 0, 0);
 }
 inline void deallocate(Allocator a, void *p) {
-    a.proc(ALLOCATOR_FREE, a.data, p, 0, 0, 0);
+    a.proc(ALLOCATOR_FREE, a.data, p, 0, 0, 0, 0);
 }
 
 inline void *allocatef(Allocator a, u64 n, u64 flags) {
-    return a.proc(ALLOCATOR_ALLOCATE, a.data, 0, 0, n, flags);
+    return a.proc(ALLOCATOR_ALLOCATE, a.data, 0, 0, n, flags, 0);
 }
 inline void *reallocatef(Allocator a, void *p, u64 old_n, u64 n, u64 flags) {
-    return a.proc(ALLOCATOR_REALLOCATE, a.data, p, old_n, n, flags);
+    return a.proc(ALLOCATOR_REALLOCATE, a.data, p, old_n, n, flags, 0);
 }
 inline void deallocatef(Allocator a, void *p, u64 flags) {
-    a.proc(ALLOCATOR_FREE, a.data, p, 0, 0, flags);
+    a.proc(ALLOCATOR_FREE, a.data, p, 0, 0, flags, 0);
 }
 
 inline string string_allocate(Allocator a, u64 n) {
@@ -3796,12 +4482,12 @@ Arena make_arena(u64 reserved_size, u64 initial_allocated_size) {
     Arena arena;
 
     if (reserved_size > initial_allocated_size) {
-        arena.start = sys_map_pages(SYS_MEMORY_RESERVE, 0, reserved_size/info.page_size);
+        arena.start = sys_map_pages(SYS_MEMORY_RESERVE, 0, reserved_size/info.page_size, false);
         assert(arena.start);
-        void *allocate_result = sys_map_pages(SYS_MEMORY_ALLOCATE, arena.start, initial_allocated_size/info.page_size);
+        void *allocate_result = sys_map_pages(SYS_MEMORY_ALLOCATE, arena.start, initial_allocated_size/info.page_size, true);
         assert(allocate_result == arena.start);
     } else {
-        arena.start = sys_map_pages(SYS_MEMORY_RESERVE | SYS_MEMORY_ALLOCATE, 0, reserved_size/info.page_size);
+        arena.start = sys_map_pages(SYS_MEMORY_RESERVE | SYS_MEMORY_ALLOCATE, 0, reserved_size/info.page_size, false);
     }
 
     arena.position = arena.start;
@@ -3822,7 +4508,7 @@ void free_arena(Arena arena) {
     u64 pointer_count = sys_query_mapped_regions(start, end, 0, 0);
 
     // todo(charlie)  use a temp scratch memory here
-    Mapped_Memory_Info pointers[4096];
+    Mapped_Memory_Info pointers[4096] = {0};
     sys_query_mapped_regions(start, end, pointers, pointer_count);
 
     u32 i;
@@ -3853,7 +4539,7 @@ void *arena_push(Arena *arena, u64 size) {
 
         u64 pages_to_allocate = amount_to_allocate / info.page_size;
 
-        void *allocate_result = sys_map_pages(SYS_MEMORY_ALLOCATE, allocated_tail, pages_to_allocate);
+        void *allocate_result = sys_map_pages(SYS_MEMORY_ALLOCATE, allocated_tail, pages_to_allocate, true);
         assertmsg(allocate_result == allocated_tail, "Failed allocating pages in arena");
 
         arena->allocated_size += amount_to_allocate;
@@ -3870,7 +4556,7 @@ void arena_pop(Arena *arena, u64 size) {
     if ((u64)arena->position < (u64)arena->start)  arena->position = arena->start;
 }
 
-void* arena_allocator_proc(Allocator_Message msg, void *data, void *old, u64 old_n, u64 n, u64 flags) {
+void* arena_allocator_proc(Allocator_Message msg, void *data, void *old, u64 old_n, u64 n, u64 alignment, u64 flags) {
     (void)flags;
     Arena *a = (Arena*)data;
     switch (msg) {
@@ -3880,7 +4566,9 @@ void* arena_allocator_proc(Allocator_Message msg, void *data, void *old, u64 old
         }
         case ALLOCATOR_REALLOCATE:
         {
-            void* p = arena_push(a, n);
+            u64 pad = (u64)a->start - ((u64)a->start+alignment-1) & ~(alignment-1);
+            void* p = (u8*)arena_push(a, n+pad) + pad;
+            assert((u64)p % alignment == 0);
             if (old && old_n) {
                 memcpy(p, old, (sys_uint)min(old_n, n));
             }
@@ -3902,6 +4590,8 @@ void* arena_allocator_proc(Allocator_Message msg, void *data, void *old, u64 old
 }
 
 #endif // OSTD_IMPL
+
+
 /* End include: memory.h */
 
 
@@ -3939,14 +4629,14 @@ void* arena_allocator_proc(Allocator_Message msg, void *data, void *old, u64 old
         #define __crt_va_arg(ap, t)                                               \
         ((sizeof(t) > sizeof(uintptr) || (sizeof(t) & (sizeof(t) - 1)) != 0) \
             ? **(t**)(uintptr)((ap += sizeof(uintptr)) - sizeof(uintptr))             \
-            :  *(t* )((ap += sizeof(uintptr)) - sizeof(uintptr)))
+            :  *(t* )(uintptr)((ap += sizeof(uintptr)) - sizeof(uintptr)))
         #define __crt_va_end(ap)        ((void)(ap = (va_list)0))
 
         #define va_start __crt_va_start
         #define va_arg   __crt_va_arg
         #define va_end   __crt_va_end
         #define va_copy(destination, source) ((destination) = (source))
-    #elif COMPILER_FLAGS & COMPILER_FLAG_CLANG_GNU
+    #elif COMPILER_FLAGS & COMPILER_FLAG_GNU
         #define va_start __builtin_va_start
         #define va_list  __builtin_va_list
         #define va_arg   __builtin_va_arg
@@ -3975,7 +4665,7 @@ typedef struct Var_Arg {
     u64 size;
 } Var_Arg;
 
-#define _WRAP_VAR(x) &(Var_Arg) {sizeof(x) >= 8 ? *(u64*)&x : sizeof(x) >= 4 ? *(u32*)&x : sizeof(x) >= 2 ? *(u16*)&x : *(u8*)&x, sizeof(x) >= 8 ? *(float64*)&x : sizeof(x) >= 4 ? (float64)*(float32*)&x : 0, sizeof(x) >= sizeof(string) ? *(string*)&(x) : (string){0}, sizeof(x)}
+#define _WRAP_VAR(x) &(Var_Arg) {sizeof((x)) >= 8 ? *(u64*)(uintptr)&(x) : sizeof((x)) >= 4 ? *(u32*)(uintptr)&(x) : sizeof((x)) >= 2 ? *(u16*)(uintptr)&(x) : *(u8*)(uintptr)&(x), sizeof((x)) >= 8 ? *(float64*)(uintptr)&(x) : sizeof((x)) >= 4 ? (float64)*(float32*)(uintptr)&(x) : 0, sizeof((x)) >= sizeof(string) ? *(string*)(uintptr)&(x) : (string){0}, sizeof((x))}
 
 
 /* Begin include: var_args_macros.h */
@@ -3983,7 +4673,7 @@ typedef struct Var_Arg {
 
 #define PP_NARG(...) PP_ARG_N(__VA_ARGS__, PP_RSEQ_N())
 
-#define PP_ARG_N(...) PP_ARG_N_(__VA_ARGS__, DUMMY)
+#define PP_ARG_N(...) PP_ARG_N_(__VA_ARGS__)
 
 #define PP_RSEQ_N() 140,139,138,137,136,135,134,133,132,131,130,129,128,127,126,125,124,123,122,121,120,119,118,117,116,115,114,113,112,111,110,109,108,107,106,105,104,103,102,101,100,99,98,97,96,95,94,93,92,91,90,89,88,87,86,85,84,83,82,81,80,79,78,77,76,75,74,73,72,71,70,69,68,67,66,65,64,63,62,61,60,59,58,57,56,55,54,53,52,51,50,49,48,47,46,45,44,43,42,41,40,39,38,37,36,35,34,33,32,31,30,29,28,27,26,25,24,23,22,21,20,19,18,17,16,15,14,13,12,11,10,9,8,7,6,5,4,3,2,1,0
 
@@ -4213,6 +4903,7 @@ typedef struct Var_Arg {
 
 /* End include: var_args_macros.h */
 
+
 /* End include: var_args.h */
 
 /* Begin include: print.h */
@@ -4249,9 +4940,8 @@ typedef struct Var_Arg {
 // Formatting
 //////
 
-// note(charlie) comma-swallowing is a hit on #Portability
-#define format_string(buffer, buffer_size, fmt, ...)  _format_string_ugly(buffer, buffer_size, STR(fmt), ##__VA_ARGS__)
-#define format_strings(buffer, buffer_size, fmt, ...)  _format_string_ugly(buffer, buffer_size, fmt, ##__VA_ARGS__)
+#define format_string(buffer, buffer_size, /*fmt, */...)  _format_string_ugly(buffer, buffer_size, __VA_ARGS__)
+#define format_strings(buffer, buffer_size, fmt, /*fmt, */...)  _format_strings_ugly(buffer, buffer_size, __VA_ARGS__)
 
 u64 format_string_args(void *buffer, u64 buffer_size, string fmt, u64 arg_count, Var_Arg *args, u64 *consumed_args);
 
@@ -4270,13 +4960,12 @@ typedef struct Source_Location {
 } Source_Location;
 #define HERE(...) (Source_Location) {__LINE__, STR(__FILE__), STR(__func__)}
 
-// note(charlie) comma-swallowing is a hit on #Portability
-#define sprint(allocator, fmt, ...)  _sprint_ugly(allocator,  STR(fmt), ##__VA_ARGS__)
-#define sprints(allocator, fmt, ...) _sprint_ugly(allocator,  fmt, ##__VA_ARGS__)
-#define tprint(fmt, ...)             _tprint_ugly(STR(fmt), ##__VA_ARGS__)
-#define tprints(fmt, ...)            _tprint_ugly(fmt, ##__VA_ARGS__)
-#define print(fmt, ...)              _print_ugly(STR(fmt), ##__VA_ARGS__)
-#define prints(fmt, ...)             _print_ugly(fmt, ##__VA_ARGS__)
+#define sprint(allocator, /*fmt, */...)  _sprint_ugly(allocator, __VA_ARGS__)
+#define sprints(allocator, /*fmt, */...) _sprints_ugly(allocator, __VA_ARGS__)
+#define tprint(/*fmt, */...)             _tprint_ugly(__VA_ARGS__)
+#define tprints(/*fmt, */...)            _tprints_ugly(__VA_ARGS__)
+#define print(/*fmt, */...)              _print_ugly(__VA_ARGS__)
+#define prints(/*fmt, */...)             _prints_ugly(__VA_ARGS__)
 
 string sprint_args(Allocator a, string fmt, u64 arg_count, Var_Arg *args);
 string tprint_args(string fmt, u64 arg_count, Var_Arg *args);
@@ -4287,8 +4976,9 @@ typedef void (*Logger_Proc)(string message, u64 flags, Source_Location location)
 extern Logger_Proc logger;
 
 void default_logger(string message, u64 flags, Source_Location location);
-#define log(flags, fmt, ...)              _log_ugly(flags, STR(fmt), ##__VA_ARGS__)
-#define logs(flags, fmt, ...)             _log_ugly(flags, fmt, ##__VA_ARGS__)
+
+#define log(flags, /*fmt, */...)              _log_ugly(flags, __VA_ARGS__)
+#define logs(flags, /*fmt, */ ...)             _logs_ugly(flags, __VA_ARGS__)
 
 //////
 // Internal
@@ -4297,17 +4987,29 @@ void default_logger(string message, u64 flags, Source_Location location);
 // note(charlie): These bloat the code and makes it less good at self-documenting,
 // so I made a prettier indirection for the readable part of the file.
 
-#define _format_string_ugly(buffer, buffer_size, fmt, ...)\
-    MAKE_WRAPPED_CALL(format_string_impl, _make_format_string_desc(buffer, buffer_size, fmt), ##__VA_ARGS__)
-#define _sprint_ugly(allocator, fmt, ...)\
-    MAKE_WRAPPED_CALL(sprint_impl, _make_print_desc(allocator, fmt), ##__VA_ARGS__)
-#define _tprint_ugly(fmt, ...)\
-    MAKE_WRAPPED_CALL(tprint_impl, _make_print_desc((Allocator){0}, fmt), ##__VA_ARGS__)
-#define _print_ugly(fmt, ...)\
-    MAKE_WRAPPED_CALL(print_impl, _make_print_desc((Allocator){0}, fmt), ##__VA_ARGS__)
+#define _format_string_ugly(buffer, buffer_size, ...)\
+    MAKE_WRAPPED_CALL(format_string_impl, _make_format_string_desc(buffer, buffer_size, STR(PP_FIRST_ARG(__VA_ARGS__))), PP_EXCLUDE_FIRST_ARG(__VA_ARGS__, (string){0}))
+#define _format_strings_ugly(buffer, buffer_size, ...)\
+    MAKE_WRAPPED_CALL(format_string_impl, _make_format_string_desc(buffer, buffer_size, PP_FIRST_ARG(__VA_ARGS__)), PP_EXCLUDE_FIRST_ARG(__VA_ARGS__, (string){0}))
 
-#define _log_ugly(flags, fmt, ...)\
-    MAKE_WRAPPED_CALL(log_impl, _make_log_desc((Allocator){0}, fmt, flags, HERE()), ##__VA_ARGS__)
+
+#define _sprint_ugly(allocator, ...)\
+    MAKE_WRAPPED_CALL(sprint_impl, _make_print_desc(allocator, STR(PP_FIRST_ARG(__VA_ARGS__))), PP_EXCLUDE_FIRST_ARG(__VA_ARGS__, (string){0}))
+#define _sprints_ugly(allocator, ...)\
+    MAKE_WRAPPED_CALL(sprint_impl, _make_print_desc(allocator, PP_FIRST_ARG(__VA_ARGS__)), PP_EXCLUDE_FIRST_ARG(__VA_ARGS__, (string){0}))
+#define _tprint_ugly(...)\
+    MAKE_WRAPPED_CALL(tprint_impl, _make_print_desc((Allocator){0}, STR(PP_FIRST_ARG(__VA_ARGS__))), PP_EXCLUDE_FIRST_ARG(__VA_ARGS__, (string){0}))
+#define _tprints_ugly(...)\
+    MAKE_WRAPPED_CALL(tprint_impl, _make_print_desc((Allocator){0}, PP_FIRST_ARG(__VA_ARGS__)), PP_EXCLUDE_FIRST_ARG(__VA_ARGS__, (string){0}))
+#define _print_ugly(...)\
+    MAKE_WRAPPED_CALL(print_impl, _make_print_desc((Allocator){0}, STR(PP_FIRST_ARG(__VA_ARGS__))), PP_EXCLUDE_FIRST_ARG(__VA_ARGS__, (string){0}))
+#define _prints_ugly(...)\
+    MAKE_WRAPPED_CALL(print_impl, _make_print_desc((Allocator){0}, PP_FIRST_ARG(__VA_ARGS__)), PP_EXCLUDE_FIRST_ARG(__VA_ARGS__, (string){0}))
+
+#define _log_ugly(flags, ...)\
+    MAKE_WRAPPED_CALL(log_impl, _make_log_desc((Allocator){0}, STR(PP_FIRST_ARG(__VA_ARGS__)), flags, HERE()), PP_EXCLUDE_FIRST_ARG(__VA_ARGS__, (string){0}))
+#define _logs_ugly(flags, ...)\
+    MAKE_WRAPPED_CALL(log_impl, _make_log_desc((Allocator){0}, PP_FIRST_ARG(__VA_ARGS__), flags, HERE()), PP_EXCLUDE_FIRST_ARG(__VA_ARGS__,  (string){0}))
 
 typedef struct _Format_String_Desc {
     void *buffer;
@@ -4493,7 +5195,7 @@ void print_args(string fmt, u64 arg_count, Var_Arg *args) {
 void log_args(u64 flags, Source_Location location, string fmt, u64 arg_count, Var_Arg *args) {
 
     string s = tprint_args(fmt, arg_count, args);
-    
+
     if (!logger) {
         default_logger(s, flags, location);
     } else {
@@ -4621,28 +5323,97 @@ Logger_Proc logger = 0;
 /* End include: print.h */
 
 
+/* Begin include: system2.h */
+
+
+bool sys_read_entire_file(Allocator a, string path, string *result);
+bool sys_write_entire_file(string path, string data);
+
+#ifdef OSTD_IMPL
+
+bool sys_read_entire_file(Allocator a, string path, string *result) {
+    File_Handle f = sys_open_file(path, FILE_OPEN_READ);
+    if (!f) return false;
+    
+    u64 size = sys_get_file_size(f);
+    assert(size > 0);
+    
+    *result = string_allocate(a, size);
+    s64 readeded =  sys_read(f, result->data, result->count);
+    
+    if (readeded != (s64)size) {
+        deallocate(a, result->data);
+        return false;
+    }
+    
+    return true;
+}
+bool sys_write_entire_file(string path, string data) {
+    File_Handle f = sys_open_file(path, FILE_OPEN_WRITE | FILE_OPEN_CREATE | FILE_OPEN_RESET);
+    if (!f) return false;
+    
+    s64 written = sys_write_string(f, data);
+    
+    return written == (s64)data.count;
+}
+
+#endif // OSTD_IMPL
+
+
+/* End include: system2.h */
+
+
 /* Begin include: graphics.h */
 #if 0
 #endif
 
 typedef enum Oga_Result {
     OGA_OK,
-    
+
+    OGA_SUBOPTIMAL,
+    OGA_NOT_READY,
+    OGA_TIMEOUT,
+
     // Trying to use device features that were not available.
     // Check Oga_Device::features flags for whether or not a feature is available.
     OGA_CONTEXT_INIT_ERROR_MISSING_DEVICE_FEATURES,
-    // The given family index is not within the range 0 .. Oga_Device::logical_engine_family_count
+    
+    OGA_CONTEXT_INIT_ERROR_BAD_STATE_ALLOCATOR,
+    
+    // The given family index is not within the range 0 .. Oga_Device::engine_family_count
     OGA_CREATE_LOGICAL_ENGINE_ERROR_FAMILY_INDEX_OUT_OF_RANGE,
-    // The given logical_engine creation count overflows that of Oga_Logical_Engine_Family_Info::logical_engine_capacity
+    // The given engine creation count overflows that of Oga_Logical_Engine_Family_Info::engine_capacity
     OGA_CREATE_LOGICAL_ENGINE_ERROR_FAMILY_CAPACITY_OVERFLOW,
+    
+    OGA_INIT_SWAPCHAIN_ERROR_SURFACE_REJECTED,
+    OGA_INIT_SWAPCHAIN_ERROR_UNSUPPORTED_PRESENT_MODE,
+    
+    OGA_INIT_PROGRAM_ERROR_BAD_CODE,
+    
+    OGA_ERROR_STATE_ALLOCATION_FAILED,
+    OGA_ERROR_OUT_OF_DEVICE_MEMORY,
+    OGA_ERROR_OUTDATED,
+    OGA_ERROR_SURFACE_LOST,
+    
 } Oga_Result;
 
 unit_local inline string oga_get_result_name(Oga_Result r) {
     switch (r) {
         case OGA_OK: return STR("OGA_OK");
-        case OGA_CONTEXT_INIT_ERROR_MISSING_DEVICE_FEATURES:   return STR("OGA_CONTEXT_INIT_ERROR_MISSING_DEVICE_FEATURES");
+        case OGA_SUBOPTIMAL:                                            return STR("OGA_SUBOPTIMAL");
+        case OGA_NOT_READY:                                             return STR("OGA_NOT_READY");
+        case OGA_TIMEOUT:                                               return STR("OGA_TIMEOUT");
+        case OGA_CONTEXT_INIT_ERROR_MISSING_DEVICE_FEATURES:            return STR("OGA_CONTEXT_INIT_ERROR_MISSING_DEVICE_FEATURES");
+        case OGA_CONTEXT_INIT_ERROR_BAD_STATE_ALLOCATOR:                return STR("OGA_CONTEXT_INIT_ERROR_BAD_STATE_ALLOCATOR");
         case OGA_CREATE_LOGICAL_ENGINE_ERROR_FAMILY_INDEX_OUT_OF_RANGE: return STR("OGA_CREATE_LOGICAL_ENGINE_ERROR_FAMILY_INDEX_OUT_OF_RANGE");
         case OGA_CREATE_LOGICAL_ENGINE_ERROR_FAMILY_CAPACITY_OVERFLOW:  return STR("OGA_CREATE_LOGICAL_ENGINE_ERROR_FAMILY_CAPACITY_OVERFLOW");
+        case OGA_INIT_SWAPCHAIN_ERROR_SURFACE_REJECTED:                 return STR("OGA_INIT_SWAPCHAIN_ERROR_SURFACE_REJECTED");
+        case OGA_INIT_SWAPCHAIN_ERROR_UNSUPPORTED_PRESENT_MODE:         return STR("OGA_INIT_SWAPCHAIN_ERROR_UNSUPPORTED_PRESENT_MODE");
+        case OGA_INIT_PROGRAM_ERROR_BAD_CODE:                           return STR("OGA_INIT_PROGRAM_ERROR_BAD_CODE");
+        case OGA_ERROR_STATE_ALLOCATION_FAILED:                         return STR("OGA_ERROR_STATE_ALLOCATION_FAILED");
+        case OGA_ERROR_OUT_OF_DEVICE_MEMORY:                            return STR("OGA_ERROR_OUT_OF_DEVICE_MEMORY");
+        case OGA_ERROR_OUTDATED:                                        return STR("OGA_ERROR_OUTDATED");
+        case OGA_ERROR_SURFACE_LOST:                                    return STR("OGA_ERROR_SURFACE_LOST");
         default: return STR("<>");
     }
     return STR("<>");
@@ -4650,18 +5421,40 @@ unit_local inline string oga_get_result_name(Oga_Result r) {
 unit_local inline string oga_get_result_message(Oga_Result r) {
     switch (r) {
         case OGA_OK: return STR("No error");
+        case OGA_SUBOPTIMAL: 
+            return STR("Swapchain is suboptimal and should be recreated, but can still be used.");
+        case OGA_NOT_READY: 
+            return STR("Swapchain has no ready images yet");
+        case OGA_TIMEOUT: 
+            return STR("A timeout expired");
         case OGA_CONTEXT_INIT_ERROR_MISSING_DEVICE_FEATURES:
             return STR("Trying to use device features that were not available. Check Oga_Device::features flags for whether or not a feature is available.");
+        case OGA_CONTEXT_INIT_ERROR_BAD_STATE_ALLOCATOR:
+            return STR("Passed a bad state allocator. allocator.proc is null.");
         case OGA_CREATE_LOGICAL_ENGINE_ERROR_FAMILY_INDEX_OUT_OF_RANGE:
-            return STR("The given family index is not within the range 0 .. Oga_Device::logical_engine_family_count");
+            return STR("The given family index is not within the range 0 .. Oga_Device::engine_family_count");
         case OGA_CREATE_LOGICAL_ENGINE_ERROR_FAMILY_CAPACITY_OVERFLOW:
-            return STR("The given logical_engine creation count overflows that of Oga_Logical_Engine_Family_Info::logical_engine_capacity");
+            return STR("The given engine creation count overflows that of Oga_Logical_Engine_Family_Info::engine_capacity");
+        case OGA_INIT_SWAPCHAIN_ERROR_SURFACE_REJECTED:
+            return STR("The provided surface handle was rejected, possibly bad.");
+        case OGA_INIT_SWAPCHAIN_ERROR_UNSUPPORTED_PRESENT_MODE:
+            return STR("The provided present_mode was either unsupported or just an invalid value.");
+        case OGA_INIT_PROGRAM_ERROR_BAD_CODE:
+            return STR("The code passed was bad (or code_size) was incorrect.");
+        case OGA_ERROR_STATE_ALLOCATION_FAILED:
+            return STR("An allocation with the state_allocator passed in Oga_Context creation returned null upon allocation.");
+        case OGA_ERROR_OUT_OF_DEVICE_MEMORY:
+            return STR("Out of device memory");
+        case OGA_ERROR_OUTDATED:
+            return STR("A swapchain has become out of date and can no longer present");
+        case OGA_ERROR_SURFACE_LOST:
+            return STR("A surface was lost; closed or corrupt");
         default: return STR("<>");
     }
     return STR("<>");
 }
 
-typedef enum Oga_Format_Kind {
+typedef enum Oga_Format {
     OGA_FORMAT_R8_UNORM,
     OGA_FORMAT_R8_SNORM,
     OGA_FORMAT_R8_UINT,
@@ -4685,10 +5478,12 @@ typedef enum Oga_Format_Kind {
     OGA_FORMAT_DEPTH32_SFLOAT,
     OGA_FORMAT_DEPTH32_SFLOAT_S8_UINT,
     OGA_FORMAT_DEPTH24_UNORM_S8_UINT,
-    OGA_FORMAT_DEPTH16_UNORM
-} Oga_Format_Kind;
+    OGA_FORMAT_DEPTH16_UNORM,
+    
+    OGA_FORMAT_ENUM_MAX,
+} Oga_Format;
 
-unit_local inline string oga_format_str(Oga_Format_Kind f) {
+unit_local inline string oga_format_str(Oga_Format f) {
     switch (f) {
         case OGA_FORMAT_R8_UNORM:               return RSTR(R8_UNORM);
         case OGA_FORMAT_R8_SNORM:               return RSTR(R8_SNORM);
@@ -4714,6 +5509,8 @@ unit_local inline string oga_format_str(Oga_Format_Kind f) {
         case OGA_FORMAT_DEPTH32_SFLOAT_S8_UINT: return RSTR(DEPTH32_SFLOAT_S8_UINT);
         case OGA_FORMAT_DEPTH24_UNORM_S8_UINT:  return RSTR(DEPTH24_UNORM_S8_UINT);
         case OGA_FORMAT_DEPTH16_UNORM:          return RSTR(DEPTH16_UNORM);
+        
+        case OGA_FORMAT_ENUM_MAX:
         default: return RSTR(<>);
     }
     return RSTR(<>);
@@ -4758,7 +5555,7 @@ typedef enum Oga_Logical_Engine_Family_Flags {
 
 typedef struct Oga_Logical_Engine_Family_Info {
     Oga_Logical_Engine_Family_Flags flags;
-    u32 logical_engine_capacity;
+    u32 engine_capacity;
 } Oga_Logical_Engine_Family_Info;
 
 typedef struct Oga_Memory_Heap {
@@ -4773,97 +5570,117 @@ typedef enum Oga_Device_Kind {
     OGA_DEVICE_OTHER,
 } Oga_Device_Kind;
 
-// todo(charlie) populate this with an exhaustive list. 
+// todo(charlie) populate this with an exhaustive list.
 typedef struct Oga_Device_Limits {
-    u64 max_shader_items_sets_per_stage;
-    
+    u64 max_program_pointer_sets_per_stage;
+
     u64 max_fast_data_blocks_per_stage;
     u64 max_large_data_blocks_per_stage;
     u64 max_fast_images_per_stage;
     u64 max_large_images_per_stage;
     u64 max_samplers_per_stage;
-    
+
     u64 max_fast_data_blocks_per_layout;
     u64 max_large_data_blocks_per_layout;
     u64 max_fast_images_per_layout;
     u64 max_large_images_per_layout;
     u64 max_samplers_per_layout;
-    
+
     u64 max_memory_allocations;
     u64 max_sampler_allocations;
-    
+
     u64 max_image_dimension_1d;
     u64 max_image_dimension_2d;
     u64 max_image_dimension_3d;
-    
+
     u64 max_fast_access_data_block_size;
-    
+
     u64 max_vertex_layout_attributes;
     u64 max_vertex_layout_bindings;
     u64 max_vertex_layout_attribute_offset;
     u64 max_vertex_layout_binding_stride;
-    
+
     u64 max_fragment_stage_output_attachments;
-    
+
     float32 max_sampler_anisotropy;
-    
+
     u64 max_viewports;
     u64 max_viewport_width;
     u64 max_viewport_height;
-    
+
     u64 max_framebuffer_width;
     u64 max_framebuffer_height;
-    
-    u64 max_color_attachments;
-    
+
+    u64 max_render_attachments;
+
     u64 min_memory_map_alignment;
-    
-    Oga_Sample_Count_Flag supported_sample_counts_framebuffer;
-    
+
+    Oga_Sample_Count_Flag supported_sample_counts_render_pass;
+
     Oga_Sample_Count_Flag supported_sample_counts_fast_image_float;
     Oga_Sample_Count_Flag supported_sample_counts_large_image_float;
     Oga_Sample_Count_Flag supported_sample_counts_fast_image_int;
     Oga_Sample_Count_Flag supported_sample_counts_large_image_int;
-    
-    
+
+
 } Oga_Device_Limits;
 
 typedef u64 Oga_Device_Feature_Flag;
 
 #define OGA_DEVICE_FEATURE_GRAPHICS_TIMESTAMP (1 << 0)
-#define OGA_DEVICE_FEATURE_COMPUTE_TIMESTAMP (1 << 1)
+#define OGA_DEVICE_FEATURE_COMPUTE_TIMESTAMP  (1 << 1)
+#define OGA_DEVICE_FEATURE_PRESENT_MAILBOX    (1 << 2)
+#define OGA_DEVICE_FEATURE_DEPTH_CLAMP    (1 << 3)
+
+unit_local inline string oga_device_feature_str(Oga_Device_Feature_Flag f) {
+    switch (f) {
+        case OGA_DEVICE_FEATURE_GRAPHICS_TIMESTAMP: return STR("Graphics Timestamps");
+        case OGA_DEVICE_FEATURE_COMPUTE_TIMESTAMP: return STR("Compute Timestamps");
+        case OGA_DEVICE_FEATURE_PRESENT_MAILBOX: return STR("Present mailbox");
+        default: return STR("<>");
+    }
+    return STR("<>");
+}
 
 #define OGA_MAX_DEVICE_LOGICAL_ENGINE_FAMILIES 32
 #define OGA_MAX_DEVICE_LOGICAL_ENGINES_PER_FAMILY 32
 #define OGA_MAX_MEMORY_HEAPS_PER_DEVICE 32
 typedef struct Oga_Device {
     void *id;
-    
+
     Oga_Device_Kind kind;
 
     // string
     u8 device_name_data[256];
     u64 device_name_length;
-    
+
     string vendor_name;
     u32 driver_version_raw;
-    
+
     // string
     u8 driver_version_data[128];
     u64 driver_version_length;
     
+    u32 api_version_raw;
+    // string
+    u8 api_version_data[128];
+    u64 api_version_length;
+    
     Oga_Device_Limits limits;
 
-    Oga_Logical_Engine_Family_Info logical_engine_family_infos[OGA_MAX_DEVICE_LOGICAL_ENGINE_FAMILIES];
-    u32 logical_engine_family_count;
-    
-    Oga_Format_Kind depth_format;
-    
+    Oga_Logical_Engine_Family_Info engine_family_infos[OGA_MAX_DEVICE_LOGICAL_ENGINE_FAMILIES];
+    u32 engine_family_count;
+
+    Oga_Format depth_format;
+
     Oga_Memory_Heap memory_heaps[OGA_MAX_MEMORY_HEAPS_PER_DEVICE];
     u64 memory_heap_count;
     u64 total_gpu_local_memory;
-    
+
     Oga_Device_Feature_Flag features;
+    
+    Oga_Format supported_surface_formats[OGA_FORMAT_ENUM_MAX];
+    u64 supported_surface_format_count;
 
 } Oga_Device;
 
@@ -4898,13 +5715,28 @@ typedef struct Oga_Logical_Engines_Create_Desc {
     float32 priorities[OGA_MAX_DEVICE_LOGICAL_ENGINES_PER_FAMILY]; // normalized 0.0-1.0.
 } Oga_Logical_Engines_Create_Desc;
 
+// Default allocator of non is specified in Oga_Context_Desc::state_allocator
+void* oga_state_allocator_proc(Allocator_Message msg, void *data, void *old, u64 old_n, u64 n, u64 alignment, u64 flags);
+
+
+typedef struct Oga_Allocator_Row {
+    void *start;
+    void *end;
+    u64 first_free_index;
+    u64 highest_allocated_index;
+} Oga_Allocator_Row;
+typedef struct Oga_State_Allocator_Data {
+    // 16, 32, 64, 128, 256, 512, 1024, 2048, 4096, 8196, 16384
+    Oga_Allocator_Row rows[11];
+} Oga_State_Allocator_Data;
 
 typedef struct Oga_Context_Desc {
-    // Indices match to that of Oga_Device::logical_engine_family_infos.
-    // So the create logical_engines of family 0, you set the desc in logical_engine_create_descs[0].
-    // Leave descs uninitialized to make no logical_engines in that family.
-    Oga_Logical_Engines_Create_Desc logical_engine_create_descs[OGA_MAX_DEVICE_LOGICAL_ENGINE_FAMILIES];    
+    // Indices match to that of Oga_Device::engine_family_infos.
+    // So the create engines of family 0, you set the desc in engine_create_descs[0].
+    // Leave descs uninitialized to make no engines in that family.
+    Oga_Logical_Engines_Create_Desc engine_create_descs[OGA_MAX_DEVICE_LOGICAL_ENGINE_FAMILIES];
     Oga_Device_Feature_Flag enabled_features;
+    Allocator state_allocator; // The allocator used to allocate state & handles in this context. Will only be used when creating/destroying things.
 } Oga_Context_Desc;
 
 // Some hardware expose their engines, some don't.
@@ -4917,113 +5749,421 @@ typedef struct Oga_Logical_Engine {
 } Oga_Logical_Engine;
 
 typedef struct Oga_Logical_Engine_Group {
-    Oga_Logical_Engine logical_engines[OGA_MAX_DEVICE_LOGICAL_ENGINES_PER_FAMILY];
-    u64 logical_engine_count;
+    Oga_Logical_Engine engines[OGA_MAX_DEVICE_LOGICAL_ENGINES_PER_FAMILY];
+    u64 engine_count;
 } Oga_Logical_Engine_Group;
 
 typedef struct Oga_Context {
     void *id;
+    void *internal;
     Oga_Device device;
-    Oga_Logical_Engine_Group logical_engines_by_family[OGA_MAX_DEVICE_LOGICAL_ENGINE_FAMILIES];
+    Oga_Logical_Engine_Group engines_by_family[OGA_MAX_DEVICE_LOGICAL_ENGINE_FAMILIES];
+    Allocator state_allocator;
+    
+    Oga_State_Allocator_Data default_allocator_data; // Backing for Allocator::data
 } Oga_Context;
 
-Oga_Result oga_init_context(Oga_Device target_device, Oga_Context_Desc desc, Oga_Context *context);
+Oga_Result oga_init_context(Oga_Device target_device, Oga_Context_Desc desc, Oga_Context **context);
 void oga_uninit_context(Oga_Context *context);
+
+
+//////////
+/// Swap chain
+
+typedef enum Oga_Present_Mode {
+    // Present() will halt the thread until at least 1 image is ready to be queued,
+    // and then each image in the queue is presented and popped each vertical blank.
+    OGA_PRESENT_MODE_VSYNC,
+    // Present() Will submit the image to the queue, and if the queue is full, it will
+    //  abort the image currently being presented, which will very likely cause visual tearing.
+    // There may techically be devices that only support OGA_PRESENT_MODE_VSYNC, and in such
+    // rare cases this will fallback to that.
+    OGA_PRESENT_MODE_IMMEDIATE,
+    // Present() will submit the image to the queue, resetting the oldest pending image
+    //  if queue is full, and will NOT halt the thread. This won't cause tearing, but will
+    //  discard some submitted frames if submitted at a higher rate than vertical blank rate.
+    // Check device feature flag OGA_DEVICE_FEATURE_PRESENT_MAILBOX
+    OGA_PRESENT_MODE_VSYNC_MAILBOX 
+} Oga_Present_Mode;
+
+typedef struct Oga_Swapchain_Desc {
+    Surface_Handle surface;
+    u64 requested_image_count;
+    Oga_Format image_format;
+    u64 width;
+    u64 height;
+    u64 *engine_families_with_access; // The indices of the queue families that will be allowed to access the images
+    u64 engine_families_with_access_count;
+    Oga_Present_Mode present_mode;
+    
+} Oga_Swapchain_Desc;
+
+
+
+#define MAX_SWAPCHAIN_IMAGES 16
+
+typedef struct Oga_Swapchain {
+    void *id;
+    Oga_Context *context;
+    struct Oga_Image *images[MAX_SWAPCHAIN_IMAGES];
+    u64 current_image_index;
+    u64 image_count;
+    Oga_Format image_format;
+} Oga_Swapchain;
+
+bool get_preferred_swapchain_format(Oga_Context *context, Oga_Format *wanted_formats, u64 count, Oga_Format *format);
+
+Oga_Result oga_init_swapchain(Oga_Context *context, Oga_Swapchain_Desc desc, Oga_Swapchain **swapchain);
+void oga_uninit_swapchain(Oga_Swapchain *swapchain);
+
+struct Oga_Gpu_Latch;
+struct Oga_Cpu_Latch;
+Oga_Result oga_get_next_swapchain_image(Oga_Swapchain *swapchain, u64 timeout, struct Oga_Gpu_Latch *signal_gpu_latch, struct Oga_Cpu_Latch *signal_cpu_latch, u64 *image_index); 
+
+typedef struct Oga_Present_Desc {
+    Oga_Logical_Engine engine;
+    u64 wait_gpu_latch_count;
+    struct Oga_Gpu_Latch **wait_gpu_latches;
+    u64 image_index;
+} Oga_Present_Desc;
+Oga_Result oga_submit_present(Oga_Swapchain *swapchain, Oga_Present_Desc desc);
+
+//////////
+/// Render passes & Programs
+
+typedef enum Oga_Program_Kind {
+    OGA_PROGRAM_VERTEX,
+    OGA_PROGRAM_FRAGMENT,
+    OGA_PROGRAM_COMPUTE,
+} Oga_Program_Kind;
+
+typedef struct Oga_Program_Desc {
+    const void *code; // Compiled code ready to send to drivers
+    u64 code_size;
+    Oga_Program_Kind kind;
+} Oga_Program_Desc;
+
+typedef struct Oga_Program {
+    void *id;
+    Oga_Context *context;
+    Oga_Program_Kind kind;
+} Oga_Program;
+
+// Goes through OSL to compile osl lang to target drivers
+// Oga_Result oga_compile_program_for_target
+
+Oga_Result oga_init_program(Oga_Context *context, Oga_Program_Desc desc, Oga_Program **program);
+void oga_uninit_program(Oga_Program *program);
+
+typedef u64 Oga_Render_Pass_Flag;
+unit_local Oga_Render_Pass_Flag OGA_RENDER_PASS_INHERITANCE_PARENT = 1 << 0;
+unit_local Oga_Render_Pass_Flag OGA_RENDER_PASS_INHERITANCE_CHILD = 1 << 1;
+unit_local Oga_Render_Pass_Flag OGA_RENDER_PASS_DISABLE_DEPTH_CLAMP = 1 << 2;
+
+// #Volatile values must map to same as vulkan equivalents
+typedef enum Oga_Primitive_Topology {
+    OGA_PRIMITIVE_TOPOLOGY_POINT_LIST = 0,
+    OGA_PRIMITIVE_TOPOLOGY_LINE_LIST = 1,
+    OGA_PRIMITIVE_TOPOLOGY_LINE_STRIP = 2,
+    OGA_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST = 3,
+    OGA_PRIMITIVE_TOPOLOGY_TRIANGLE_STRIP = 4
+} Oga_Primitive_Topology;
+
+typedef enum Oga_Cull_Mode {
+    OGA_CULL_NONE,
+    OGA_CULL_CLOCKWISE,
+    OGA_CULL_COUNTER_CLOCKWISE,
+} Oga_Cull_Mode;
+
+struct Oga_Render_Pass;
+typedef struct Oga_Render_Pass_Desc {
+    
+    Oga_Render_Pass_Flag flags;
+    struct Oga_Render_Pass *base;
+    u64 base_index; // Index into buffer of descs passed. Only used if base is null.
+    
+    Oga_Program *vertex_program;
+    string vertex_program_entry_point;
+    Oga_Program *fragment_program;
+    string fragment_program_entry_point;
+    
+    Oga_Format *attachment_formats;
+    u64 attachment_count;
+    
+    Oga_Primitive_Topology topology;
+    
+    Oga_Cull_Mode cull_mode;
+    
+    float32 line_width;
+    
+    // See Oga_Device::limits.supported_sample_counts_render_pass
+    Oga_Sample_Count_Flag rasterization_samples;
+    
+} Oga_Render_Pass_Desc;
+
+typedef struct Oga_Render_Pass {
+    void *id;
+    Oga_Context *context;
+} Oga_Render_Pass;
+
+Oga_Result oga_init_render_passes(Oga_Context *context, Oga_Render_Pass_Desc* descs, Oga_Render_Pass **render_passes, u64 render_pass_count);
+
+Oga_Result oga_init_render_pass(Oga_Context *context, Oga_Render_Pass_Desc desc, Oga_Render_Pass **render_pass);
+void oga_uninit_render_pass(Oga_Render_Pass *render_pass);
+
+//////////
+/// Synchronization
+
+// Gpu latch; for synchronizing on gpu. Signalled on gpu, waited on gpu.
+typedef struct Oga_Gpu_Latch {
+    void *id;
+    Oga_Context *context;
+} Oga_Gpu_Latch;
+
+Oga_Result oga_init_gpu_latch(Oga_Context *context, Oga_Gpu_Latch **gpu_latch);
+void oga_uninit_gpu_latch(Oga_Gpu_Latch *gpu_latch);
+
+// Cpu latch; for synchronizing cpu with gpu. Signalled on gpu, waited on cpu.
+typedef struct Oga_Cpu_Latch {
+    void *id;
+    Oga_Context *context;
+} Oga_Cpu_Latch;
+Oga_Result oga_init_cpu_latch(Oga_Context *context, Oga_Cpu_Latch **cpu_latch, bool start_signaled);
+void oga_uninit_cpu_latch(Oga_Cpu_Latch *cpu_latch);
+Oga_Result oga_wait_latch(Oga_Cpu_Latch *cpu_latch);
+Oga_Result oga_reset_latch(Oga_Cpu_Latch *cpu_latch);
 
 //////////
 /// Memory
 
 typedef void* Oga_Memory_Handle;
+#define OGA_INTERNALLY_MANAGED_MEMORY_HANDLE ((void*)0xFFFFFFFFFFFFFFFF)
 
-typedef enum Oga_Allocator_Message {
-    OGA_ALLOCATOR_ALLOCATE,
-    OGA_ALLOCATOR_DEALLOCATE
-} Oga_Allocator_Message;
+//////////
+/// Pointers
 
-typedef Oga_Memory_Handle (*Oga_Allocator_Proc_)(
-        Oga_Allocator_Message msg,
-        Oga_Memory_Handle mem,
-        u64 size,
-        Oga_Memory_Property_Flag props,
-        u64 flags
-    );
-typedef Oga_Allocator_Proc_ Oga_Allocator_Proc;
+typedef u64 Oga_Image_Optimization;
+#define OGA_IMAGE_OPTIMIZATION_UNDEFINED 0
+#define OGA_IMAGE_OPTIMIZATION_GENERAL 1
+#define OGA_IMAGE_OPTIMIZATION_RENDER_ATTACHMENT 2
+#define OGA_IMAGE_OPTIMIZATION_SHADER_READONLY 3
+#define OGA_IMAGE_OPTIMIZATION_TRANSFER_DST 4
+#define OGA_IMAGE_OPTIMIZATION_TRANSFER_SRC 5
+#define OGA_IMAGE_OPTIMIZATION_PRESENT 6
 
-// Allocator for video memory
-typedef struct Oga_Allocator {
-    void *data;
-    Oga_Allocator_Proc proc;
-} Oga_Allocator;
+typedef enum Oga_Pointer_Kind {
+    OGA_POINTER_KIND_PROGRAM_POINTER,
+    OGA_POINTER_KIND_VERTEX_LIST,
+    OGA_POINTER_KIND_INDEX_LIST,
+    OGA_POINTER_KIND_COPY_TASK,
+} Oga_Pointer_Kind;
 
-Oga_Memory_Handle oga_allocate(Oga_Allocator a, u64 size, Oga_Memory_Property_Flag props, u64 flags);
-void oga_deallocate(Oga_Allocator a, Oga_Memory_Handle mem);
+typedef enum Oga_Pointer_Flag {
+    OGA_POINTER_FLAG_COPY_DST = 1 << 0,
+    OGA_POINTER_FLAG_COPY_SRC = 1 << 1,
+} Oga_Pointer_Flag;
 
-Oga_Memory_Handle oga_default_allocator(Oga_Allocator_Message msg, Oga_Memory_Handle mem, u64 size, Oga_Memory_Property_Flag props, u64 flags);
+typedef enum Oga_Program_Pointer_Kind {
+    OGA_PROGRAM_POINTER_KIND_DATA_BLOCK,
+    OGA_PROGRAM_POINTER_KIND_IMAGE1D,
+    OGA_PROGRAM_POINTER_KIND_IMAGE2D,
+    OGA_PROGRAM_POINTER_KIND_IMAGE3D,
+} Oga_Program_Pointer_Kind;
 
-typedef enum Oga_Memory_View_Kind {
-    OGA_MEMORY_VIEW_KIND_SHADER_ITEM_DESCRIPTOR,
-    OGA_MEMORY_VIEW_KIND_VERTEX_LIST,
-    OGA_MEMORY_VIEW_KIND_INDEX_LIST,
-    OGA_MEMORY_VIEW_KIND_COPY_TASK,
-} Oga_Memory_View_Kind;
+typedef enum Oga_Program_Pointer_Flag {
+    OGA_PROGRAM_POINTER_FLAG_READ,
+    OGA_PROGRAM_POINTER_FLAG_WRITE,
 
-typedef enum Oga_Memory_View_Flag {
-    OGA_MEMORY_VIEW_FLAG_COPY_DST = 1 << 0,
-    OGA_MEMORY_VIEW_FLAG_COPY_SRC = 1 << 1,
-} Oga_Memory_View_Flag;
-
-typedef enum Oga_Shader_Item_Descriptor_Kind {
-    OGA_SHADER_ITEM_DESCRIPTOR_KIND_DATA_BLOCK,
-    OGA_SHADER_ITEM_DESCRIPTOR_KIND_IMAGE1D,
-    OGA_SHADER_ITEM_DESCRIPTOR_KIND_IMAGE2D,
-    OGA_SHADER_ITEM_DESCRIPTOR_KIND_IMAGE3D,
-} Oga_Shader_Item_Descriptor_Kind;
-
-typedef enum Oga_Shader_Item_Descriptor_Flag {
-    OGA_SHADER_ITEM_DESCRIPTOR_FLAG_READ,
-    OGA_SHADER_ITEM_DESCRIPTOR_FLAG_WRITE,
-    
-    // When a shader item descriptor is flagged with large or write, it can have larger
+    // When a program pointer is flagged with large or write, it can have larger
     // storage (or be written to) at the cost of memory access performance.
     // see limits max_fast_access_xxxxx_size
-    OGA_SHADER_ITEM_DESCRIPTOR_FLAG_LARGE,
-} Oga_Shader_Item_Descriptor_Flag;
+    OGA_PROGRAM_POINTER_FLAG_LARGE,
+} Oga_Program_Pointer_Flag;
 
-typedef struct Oga_Shader_Item_Descriptor_Desc {
-    Oga_Shader_Item_Descriptor_Kind kind;
-    Oga_Shader_Item_Descriptor_Flag flags;
-    
-} Oga_Shader_Item_Descriptor_Desc;
+typedef struct Oga_Program_Pointer_Desc {
+    Oga_Program_Pointer_Kind kind;
+    Oga_Program_Pointer_Flag flags;
+
+} Oga_Program_Pointer_Desc;
 
 typedef struct Oga_Vertex_List_Desc  {
-    int _;  
+    int _;
 } Oga_Vertex_List_Desc;
 
 typedef struct Oga_Index_List_Desc  {
-    int _;  
-    
+    int _;
+
 } Oga_Index_List_Desc;
 
 typedef struct Oga_Copy_Task_Desc  {
-    int _;  
-    
+    int _;
+
 } Oga_Copy_Task_Desc;
 
-typedef struct Oga_Memory_View_Desc {
-    Oga_Memory_View_Kind kind;
-    Oga_Memory_View_Flag flags;
-    
+typedef struct Oga_Pointer_Desc {
+    Oga_Pointer_Kind kind;
+    Oga_Pointer_Flag flags;
+
     Oga_Memory_Handle memory;
+    u64 memory_offset;
     
     union {
-        Oga_Shader_Item_Descriptor_Desc shader_item_descriptor;
+        Oga_Program_Pointer_Desc program_pointer;
         Oga_Vertex_List_Desc vertex_list;
         Oga_Index_List_Desc index_list;
         Oga_Copy_Task_Desc copy_task;
     } UNION;
-} Oga_Memory_View_Desc;
+} Oga_Pointer_Desc;
 
-//Oga_Result oga_make_memory_view(Oga_Context c, Oga_Memory_View_Desc desc);
+//Oga_Result oga_make_pointer(Oga_Context c, Oga_Pointer_Desc desc);
+
+// Program Pointers can be trivially casted
+// Oga_Image2D *my_image = ...;
+// Oga_Pointer *some_pointer = (Oga_Pointer *)my_image;
+// ...
+// if (some_pointer->kind == OGA_PROGRAM_POINTER_KIND_IMAGE2D) {
+//     Oga_Image2D *as_image = (Oga_Image2D*)some_pointer;
+// }
+
+
+typedef struct Oga_Pointer {
+#define OGA_POINTER_MEMBERS\
+    void *id;\
+    Oga_Memory_Handle memory; /* This will be set to 0xFFFFFFFFFFFFFFFF if memory is internally managed in drivers */ \
+    Oga_Pointer_Kind pointer_kind;
+    
+    OGA_POINTER_MEMBERS
+} Oga_Pointer;
+
+typedef struct Oga_Program_Pointer {
+#define OGA_PROGRAM_POINTER_MEMBERS OGA_POINTER_MEMBERS\
+    Oga_Program_Pointer_Kind program_pointer_kind;
+    
+    OGA_PROGRAM_POINTER_MEMBERS
+} Oga_Program_Pointer;
+
+typedef enum Oga_Image_Kind {
+    OGA_IMAGE_1D,
+    OGA_IMAGE_2D,
+    OGA_IMAGE_3D,
+} Oga_Image_Kind;
+
+typedef struct Oga_Image {
+    OGA_PROGRAM_POINTER_MEMBERS
+        
+    u64 width, height, depth;
+    Oga_Image_Kind image_kind;
+} Oga_Image;
+
+
+// This is really only here to get validation/debug layer messages for leaked resources
+void oga_reset(void);
+
+
+//////////
+/// Commands
+
+// note(charlie)
+// If it was up to me, I would let you manage your own memory.
+// Unfortunately, graphics API designers decided that we can't be trusted.
+// So we need to use this really weird, intrusive, generalized mystical abstraction,
+// praying to the driver gods that it's good enough.
+
+typedef u64 Oga_Command_Pool_Flag;
+#define  OGA_COMMAND_POOL_NONE 0
+#define  OGA_COMMAND_POOL_SHORT_LIVED (1 << 0)
+
+typedef struct Oga_Command_Pool_Desc {
+    Oga_Command_Pool_Flag flags;
+    u64 engine_family_index; // Pinky promise which queue family this will be submitted to
+} Oga_Command_Pool_Desc;
+
+typedef struct Oga_Command_Pool {
+    void *id;
+    Oga_Context *context;
+} Oga_Command_Pool;
+
+typedef struct Oga_Command_List {
+    void *id;
+    Oga_Command_Pool *pool;
+} Oga_Command_List;
+
+Oga_Result oga_init_command_pool(Oga_Context *context, Oga_Command_Pool_Desc desc, Oga_Command_Pool **pool);
+ // This will free all command lists, so you do not need to explicitly free each command list.
+void oga_uninit_command_pool(Oga_Command_Pool *pool);
+void oga_reset_command_pool(Oga_Command_Pool *pool);
+
+Oga_Result oga_get_command_lists(Oga_Command_Pool *pool, Oga_Command_List *lists, u64 list_count);
+void oga_release_command_lists(Oga_Command_List *lists, u64 list_count);
+
+
+
+typedef u64 Oga_Command_List_Usage_Flag;
+#define OGA_COMMAND_LIST_USAGE_ONE_TIME_SUBMIT (1 << 0)
+
+Oga_Result oga_cmd_begin(Oga_Command_List cmd, Oga_Command_List_Usage_Flag flags);
+Oga_Result oga_cmd_end(Oga_Command_List cmd);
+
+typedef struct Oga_Submit_Command_List_Desc {
+    Oga_Logical_Engine engine; 
+    Oga_Gpu_Latch **wait_gpu_latches; 
+    u64 wait_gpu_latch_count; 
+    Oga_Gpu_Latch **signal_gpu_latches; 
+    u64 signal_gpu_latch_count; 
+    Oga_Cpu_Latch *signal_cpu_latch;
+} Oga_Submit_Command_List_Desc;
+Oga_Result oga_submit_command_list(Oga_Command_List cmd, Oga_Submit_Command_List_Desc desc);
+
+void oga_cmd_transition_image_optimization(Oga_Command_List cmd, Oga_Image *image, Oga_Image_Optimization src_optimization, Oga_Image_Optimization optimization);
+
+typedef u64 Oga_Msaa_Resolve_Mode_Flag;
+#define OGA_MSAA_RESOLVE_MODE_NONE    0
+#define OGA_MSAA_RESOLVE_MODE_ZERO    (1 << 0)
+#define OGA_MSAA_RESOLVE_MODE_AVERAGE (1 << 1)
+#define OGA_MSAA_RESOLVE_MODE_MIN     (1 << 2)
+#define OGA_MSAA_RESOLVE_MODE_MAX     (1 << 3)
+
+typedef enum Oga_Attachment_Load_Op {
+    OGA_ATTACHMENT_LOAD_OP_LOAD,
+    OGA_ATTACHMENT_LOAD_OP_CLEAR,
+    OGA_ATTACHMENT_LOAD_OP_NOTHING
+} Oga_Attachment_Load_Op;
+typedef enum Oga_Attachment_Store_Op {
+    OGA_ATTACHMENT_STORE_OP_STORE,
+    OGA_ATTACHMENT_STORE_OP_NOTHING
+} Oga_Attachment_Store_Op;
+
+typedef struct Oga_Render_Attachment_Desc {
+    Oga_Image *image;
+    Oga_Image_Optimization image_optimization;
+    
+    // If rendering with multisampling, we can resolve the multiple samples into single samples
+    // on another image.
+    Oga_Msaa_Resolve_Mode_Flag resolve_mode;
+    const Oga_Image *resolve_image;
+    Oga_Image_Optimization resolve_image_optimization;
+    
+    Oga_Attachment_Load_Op load_op;
+    Oga_Attachment_Store_Op store_op;
+    
+    float32 clear_color[4]; // In case of load_op CLEAR
+    
+} Oga_Render_Attachment_Desc;
+
+typedef struct Oga_Begin_Render_Pass_Desc {
+    Oga_Render_Pass *render_pass;
+    s64 render_area_offset_x;
+    s64 render_area_offset_y;
+    u64 render_area_width;
+    u64 render_area_height;
+    u64 attachment_count;
+    Oga_Render_Attachment_Desc *attachments;
+} Oga_Begin_Render_Pass_Desc;
+
+void oga_cmd_begin_render_pass(Oga_Command_List cmd, Oga_Begin_Render_Pass_Desc desc);
+void oga_cmd_end_render_pass(Oga_Command_List cmd);
+
+void oga_cmd_draw(Oga_Command_List cmd, u64 vertex_count, u64 vertex_start, u64 instance_count, u64 instance_start);
 
 
 #ifdef OGA_IMPL_AUTO
@@ -5042,21 +6182,158 @@ typedef struct Oga_Memory_View_Desc {
 
 #ifdef OSTD_IMPL
 
-Oga_Pick_Device_Result oga_pick_device(Oga_Device_Pick_Flag pick_flags, Oga_Device_Feature_Flag required_features, Oga_Device_Feature_Flag preferred_features) {
+void* oga_state_allocator_proc(Allocator_Message msg, void *data, void *old, u64 old_n, u64 n, u64 alignment, u64 flags) {
+    (void)flags;
+    (void)old_n;
+    (void)alignment; // Since fitting into blocks, they will already be aligned
+    Oga_State_Allocator_Data *a = (Oga_State_Allocator_Data*)data;
     
+    System_Info info = sys_get_info();
+    
+    switch (msg) {
+        case ALLOCATOR_ALLOCATE:
+        {
+            if (n > 16384) {
+                // Just directly map pages for big allocations. This should be rare, or probably never happen.
+                void *p = sys_map_pages(SYS_MEMORY_RESERVE | SYS_MEMORY_ALLOCATE, 0, (n+info.page_size)/info.page_size, false);
+                return p;
+            }
+        
+            Oga_Allocator_Row *row = 0;
+            u64 stride = 0;
+            for (u64 i = 0; i < 11; i += 1) {
+                u64 row_stride = powu(2, i+3);
+                if (n <= row_stride) {
+                    stride = row_stride;
+                    row = &a->rows[i];
+                    break;
+                }
+            }
+            
+            assert(row);
+            
+            if (!row->start) {
+                // todo(charlie) #Portability
+                // Need to find a portable free address space, or provide a way to query for such.
+
+                void *reserved = sys_map_pages(SYS_MEMORY_RESERVE, 0, (1024*1024*1024)/info.page_size, false);
+                assert(reserved);
+                
+                row->start = sys_map_pages(SYS_MEMORY_ALLOCATE, reserved, max(info.granularity, 1024*32)/info.page_size, true);
+                
+                if (!row->start) return 0;
+                
+                row->end = (u8*)row->start + (max(info.granularity, 1024*32)/info.page_size)*info.page_size;
+                
+                row->first_free_index = 0;
+            }
+            
+            
+            void *next = (u8*)row->start + row->first_free_index*stride;
+            u64 allocated_index = ((u64)next-(u64)row->start)/stride;
+            
+            assert(row->first_free_index <= ((u64)row->end-(u64)row->start)/stride);
+            
+            if ((u8*)next == (u8*)row->end) {
+                u64 old_size = (u64)row->end - (u64)row->start;
+                u64 new_size = old_size*2;
+                
+                void *expansion = sys_map_pages(SYS_MEMORY_ALLOCATE, row->end, new_size/info.page_size, true);
+#if OS_FLAGS & OS_FLAG_WINDOWS
+                assert(expansion);
+#endif
+                if (!expansion) {  
+                    // todo(charlie) #Portability #Memory #Speed
+                    // If target system has poor mapping features, we might hit this often, which is kind of crazy.
+                    void *p = sys_map_pages(SYS_MEMORY_RESERVE | SYS_MEMORY_ALLOCATE, 0, (n+info.page_size)/info.page_size, false);
+                    return p;
+                }
+                
+                assert(expansion == row->end);
+                row->end = (u8*)row->start + new_size;
+            } else {
+                assertmsgs((u64)next < (u64)row->end, tprint("%u, %u", next, row->end));
+            }
+            
+            if (allocated_index >= row->highest_allocated_index) {
+                row->first_free_index = allocated_index+1;
+            } else {
+                row->first_free_index = *(u64*)next;
+            }
+            
+            assert(row->first_free_index <= ((u64)row->end-(u64)row->start)/stride);            assertmsgs((u64)((u8*)row->start + row->first_free_index*stride) <= (u64)row->end, tprint("%u, %u", next, row->end));
+            
+            row->highest_allocated_index = max(row->highest_allocated_index, allocated_index);
+            
+            assert(row->first_free_index <= row->highest_allocated_index+1);
+            
+            return next;
+        }
+        case ALLOCATOR_REALLOCATE:
+        {
+            void * pnew = oga_state_allocator_proc(ALLOCATOR_ALLOCATE, data, 0, 0, n, alignment, flags);
+            memcpy(pnew, old, min(n, old_n));
+            oga_state_allocator_proc(ALLOCATOR_FREE, data, old, 0, 0, alignment, flags);
+            return pnew;
+        }
+        case ALLOCATOR_FREE:
+        {
+            Oga_Allocator_Row *row = 0;
+            u64 stride = 16;
+            for (u64 i = 0; i < 11; i += 1) {
+                if ((u64)old >= (u64)a->rows[i].start && (u64)old < (u64)a->rows[i].end) {
+                    row = &a->rows[i];
+                    u64 exp = powu(2, i+3);
+                    assertmsgs(stride == exp, tprint("%u, %u", stride, exp));
+                    break;
+                }
+                stride *= 2;
+            }
+            
+            
+            if (!row) {
+                sys_unmap_pages(old);
+                return 0;
+            }
+            
+            u64 offset = (u64)old - (u64)row->start;
+            assert(offset % stride == 0);
+            u64 index = offset/stride;
+            
+            *(u64*)old = row->first_free_index;
+            row->first_free_index = index;
+            
+            assert(row->first_free_index <= ((u64)row->end-(u64)row->start)/stride);
+            assert((u64)((u8*)row->start + row->first_free_index*stride) <= (u64)row->end);
+            assert(row->first_free_index <= row->highest_allocated_index+1);
+            
+            break;
+        }
+
+        default:
+        {
+            break;
+        }
+    }
+
+    return 0;
+}
+
+Oga_Pick_Device_Result oga_pick_device(Oga_Device_Pick_Flag pick_flags, Oga_Device_Feature_Flag required_features, Oga_Device_Feature_Flag preferred_features) {
+
     Oga_Device devices[32];
     u64 device_count = oga_query_devices(devices, 32);
-    
+
     s64 device_scores[32] = {0};
-    
+
     Oga_Pick_Device_Result results[32] = {0};
-    
+
     for (u64 i = 0; i < device_count; i += 1) {
         Oga_Device device = devices[i];
         s64 *pscore = &device_scores[i];
-        
+
         results[i].device = device;
-        
+
         if ((pick_flags & OGA_DEVICE_PICK_REQUIRE_DISCRETE) && device.kind != OGA_DEVICE_DISCRETE)  {
             results[i].passed = false;
             results[i].failed_pick_flags |= OGA_DEVICE_PICK_REQUIRE_DISCRETE;
@@ -5072,20 +6349,28 @@ Oga_Pick_Device_Result oga_pick_device(Oga_Device_Pick_Flag pick_flags, Oga_Devi
             results[i].failed_pick_flags |= OGA_DEVICE_PICK_REQUIRE_CPU;
             continue;
         }
-        
+
         if ((required_features & device.features) != required_features) {
             results[i].passed = false;
-            results[i].failed_required_features |= ((required_features & device.features) & required_features); 
+            results[i].failed_required_features |= ((required_features & device.features) & required_features);
             continue;
         }
+
+        if ((pick_flags & OGA_DEVICE_PICK_PREFER_DISCRETE) && device.kind == OGA_DEVICE_DISCRETE)
+            *pscore += 1000;
+        if ((pick_flags & OGA_DEVICE_PICK_PREFER_INTEGRATED) && device.kind == OGA_DEVICE_INTEGRATED)
+            *pscore += 1000;
+        if ((pick_flags & OGA_DEVICE_PICK_PREFER_CPU) && device.kind == OGA_DEVICE_CPU)
+            *pscore += 1000;
             
-        if ((pick_flags & OGA_DEVICE_PICK_PREFER_DISCRETE) && device.kind == OGA_DEVICE_DISCRETE) 
-            *pscore += 1000;
-        if ((pick_flags & OGA_DEVICE_PICK_PREFER_INTEGRATED) && device.kind == OGA_DEVICE_INTEGRATED) 
-            *pscore += 1000;
-        if ((pick_flags & OGA_DEVICE_PICK_PREFER_CPU) && device.kind == OGA_DEVICE_CPU) 
-            *pscore += 1000;
+        *pscore += device.engine_family_count*10;
         
+        // Whatever these drivers are, they cause a LOT of trouble.
+        string device_name = (string) {device.device_name_length, device.device_name_data};
+        if (string_contains(device_name, STR("Microsoft")) || string_contains(device_name, STR("Direct3D12"))) {
+            *pscore -= 500;
+        }
+          
         u64 preferred_features_count = 0;
         for (u64 f = 0; f < 64; f += 1) {
             // Feature flag is preferred ?
@@ -5093,10 +6378,10 @@ Oga_Pick_Device_Result oga_pick_device(Oga_Device_Pick_Flag pick_flags, Oga_Devi
                 preferred_features_count += 1;
             }
         }
-        
+
         if (preferred_features_count) {
             s64 score_per_feature = 1000/preferred_features_count;
-            
+
             for (u64 f = 0; f < 64; f += 1) {
                 // Feature flag is preferred ?
                 if (preferred_features & (1 << f)) {
@@ -5106,15 +6391,15 @@ Oga_Pick_Device_Result oga_pick_device(Oga_Device_Pick_Flag pick_flags, Oga_Devi
                     } else {
                         results[i].failed_preferred_features |= (1 << f);
                     }
-                } 
+                }
             }
         } else {
             *pscore += 1;
         }
-        
+
         results[i].passed = *pscore > 0;
     }
-    
+
     s64 max_score = 0;
     u64 winner_index = 0;
     for (u64 i = 0; i < device_count; i += 1) {
@@ -5124,6 +6409,20 @@ Oga_Pick_Device_Result oga_pick_device(Oga_Device_Pick_Flag pick_flags, Oga_Devi
         }
     }
     return results[winner_index];
+}
+
+bool get_preferred_swapchain_format(Oga_Context *context, Oga_Format *wanted_formats, u64 count, Oga_Format *format) {
+    for (u64 i = 0; i < count; i += 1) {
+        for (u64 j = 0; j < context->device.supported_surface_format_count; j += 1) {
+            Oga_Format f = context->device.supported_surface_formats[j];
+            if (f == wanted_formats[i]) {
+                *format = f;
+                return true;
+            }
+        }
+    }
+    
+    return false;
 }
 
 #define VENDOR_ID_NVIDIA   0x10DE
@@ -5162,7 +6461,7 @@ unit_local u64 _format_driver_version(u32 vendor_id, u32 driver_version, u8 *buf
     }
 }
 
-inline string oga_format_str(Oga_Format_Kind f);
+inline string oga_format_str(Oga_Format f);
 
 #ifdef OGA_IMPL_VULKAN
 
@@ -5173,7 +6472,7 @@ inline string oga_format_str(Oga_Format_Kind f);
 /////////////////////////////////////////////////////
 
 #if COMPILER_FLAGS & COMPILER_FLAG_MSC
-    #pragma comment(lib, "vendors/vulkan-1.lib")
+    #pragma comment(lib, "src/vendors/vulkan-1.lib")
 #endif // COMPILER_FLAGS & COMPILER_FLAG_MSC
 
 #if (OS_FLAGS & (OS_FLAG_WINDOWS | OS_FLAG_LINUX | OS_FLAG_MACOS | OS_FLAG_IOS | OS_FLAG_ANDROID)) == 0
@@ -5182,32 +6481,94 @@ inline string oga_format_str(Oga_Format_Kind f);
 
 /* Begin include: graphics_vulkan.h */
 
-#include <vulkan/vulkan.h>
+#define uint8_t u8
+#define int8_t  s8
+#define uint16_t u16
+#define int16_t  s16
+#define uint32_t u32
+#define int32_t  s32
+#define uint64_t u64
+#define int64_t  s64
+
+#define VK_NO_STDDEF_H
+#define VK_NO_STDINT_H
+// noconcat
+#include "src/vendors/vulkan/vulkan.h"
+
+
 
 // For syntax highligthing
 #if 0
-// noconcat
-#include "../vendors/vulkan/vulkan.h"
 #endif
 
 
 
 // We manually include the vulkan-specific headers, otherwise vulkan.h will include windows.h
 #if OS_FLAGS & OS_FLAG_WINDOWS
-#include <vulkan/vulkan_win32.h>
+// noconcat
+#include "src/vendors/vulkan/vulkan_win32.h"
 #elif OS_FLAGS & OS_FLAG_LINUX
-#include <vulkan/vulkan_xlib.h>
+// noconcat
+#include "src/vendors/vulkan/vulkan_xlib.h"
 #elif OS_FLAGS & OS_FLAG_MACOS
-#include <vulkan/vulkan_macos.h>
+// noconcat
+#include "src/vendors/vulkan/vulkan_macos.h"
 #elif OS_FLAGS & OS_FLAG_IOS
-#include <vulkan/vulkan_ios.h>
+// noconcat
+#include "src/vendors/vulkan/vulkan_ios.h"
 #elif OS_FLAGS & OS_FLAG_ANDROID
-#include <vulkan/vulkan_android.h>
+// noconcat
+#include "src/vendors/vulkan/vulkan_android.h"
 #else
 #error Vulkan is not supported on target platform
 #endif
 
-unit_local inline VkFormat _oga_to_vk_format(Oga_Format_Kind k) {
+
+#if defined(__GNUC__) || defined(__GNUG__)
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wunused-function"
+#endif
+
+#ifdef __clang__
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wunused-function"
+#endif // __clang__
+
+typedef struct _Vk_Image_State {
+    VkImage image;
+    VkImageView view;
+} _Vk_Image_State;
+
+typedef struct _Vk_Swapchain_State {
+    VkSwapchainKHR vk_swapchain;
+    VkSurfaceKHR vk_surface;
+} _Vk_Swapchain_State;
+
+typedef struct _Vk_Pipeline_State {
+    VkPipeline pipeline;
+    VkPipelineLayout layout;
+} _Vk_Pipeline_State;
+
+typedef struct _Vk_Context_Internal {
+    u32 vk_version_major;
+    u32 vk_version_minor;
+    u32 vk_version_patch;
+    bool dynamic_rendering;
+    bool dynamic_rendering_is_extension;
+    
+    PFN_vkCmdBeginRenderingKHR vkCmdBeginRenderingKHR;
+    PFN_vkCmdEndRenderingKHR vkCmdEndRenderingKHR;
+} _Vk_Context_Internal;
+
+typedef struct _Vk_Memory_Block {
+    VkDeviceMemory memory;
+    u64 size;
+    VkAccessFlags access_state;
+    
+    VkBuffer access_buffer;
+} _Vk_Memory_Block;
+
+unit_local inline VkFormat _oga_to_vk_format(Oga_Format k) {
     switch (k) {
         case OGA_FORMAT_R8_UNORM:               return VK_FORMAT_R8_UNORM;
         case OGA_FORMAT_R8_SNORM:               return VK_FORMAT_R8_SNORM;
@@ -5233,13 +6594,14 @@ unit_local inline VkFormat _oga_to_vk_format(Oga_Format_Kind k) {
         case OGA_FORMAT_DEPTH32_SFLOAT_S8_UINT: return VK_FORMAT_D32_SFLOAT_S8_UINT;
         case OGA_FORMAT_DEPTH24_UNORM_S8_UINT:  return VK_FORMAT_D24_UNORM_S8_UINT;
         case OGA_FORMAT_DEPTH16_UNORM:          return VK_FORMAT_D16_UNORM;
-        
+
+        case OGA_FORMAT_ENUM_MAX:
         default:
         return (VkFormat)0;
     }
     return (VkFormat)0;
 }
-unit_local inline Oga_Format_Kind _vk_to_oga_format(VkFormat k) {
+unit_local inline Oga_Format _vk_to_oga_format(VkFormat k) {
     switch ((s64)k) {
         case VK_FORMAT_R8_UNORM:            return OGA_FORMAT_R8_UNORM;
         case VK_FORMAT_R8_SNORM:            return OGA_FORMAT_R8_SNORM;
@@ -5265,12 +6627,21 @@ unit_local inline Oga_Format_Kind _vk_to_oga_format(VkFormat k) {
         case VK_FORMAT_D32_SFLOAT_S8_UINT:  return OGA_FORMAT_DEPTH32_SFLOAT_S8_UINT;
         case VK_FORMAT_D24_UNORM_S8_UINT:   return OGA_FORMAT_DEPTH24_UNORM_S8_UINT;
         case VK_FORMAT_D16_UNORM:           return OGA_FORMAT_DEPTH16_UNORM;
-        
+
+        case OGA_FORMAT_ENUM_MAX:
         default:
-        return (Oga_Format_Kind)0;
+        return (Oga_Format)0;
     }
-    return (Oga_Format_Kind)0;
+    return (Oga_Format)0;
 }
+
+#if defined(__clang__)
+#pragma clang diagnostic pop
+#endif
+
+#if defined(__GNUC__) || defined(__GNUG__)
+#pragma GCC diagnostic pop
+#endif
 
 
 unit_local inline string _str_vk_result(VkResult result) {
@@ -5312,51 +6683,54 @@ unit_local inline string _str_vk_result(VkResult result) {
         case VK_THREAD_DONE_KHR:                                    return RSTR(VK_THREAD_DONE_KHR);
         case VK_OPERATION_DEFERRED_KHR:                             return RSTR(VK_OPERATION_DEFERRED_KHR);
         case VK_OPERATION_NOT_DEFERRED_KHR:                         return RSTR(VK_OPERATION_NOT_DEFERRED_KHR);
-        
+
         case VK_RESULT_MAX_ENUM:
         default: return STR("<>");
     }
     return STR("<>");
 }
 
-#define _vk_assert(expr) do { VkResult _res = expr; string _res_str = _str_vk_result(_res); assertmsgs(expr == VK_SUCCESS, tprint("Vulkan call %s failed: %s. If you see this, you're either doing something very wrong, or there is an internal error in Oga.", STR(#expr), _res_str)); } while(0)
+#define _vk_assert1(expr) do { VkResult _res = expr; string _res_str = _str_vk_result(_res); assertmsgs(_res == VK_SUCCESS, tprint("Vulkan call %s failed: %s. If you see this, you're either doing something very wrong, or there is an internal error in Oga.", STR(#expr), _res_str)); } while(0)
+#define _vk_assert2(expr) do { VkResult _res = expr; if (_res == VK_ERROR_OUT_OF_DEVICE_MEMORY) return OGA_ERROR_OUT_OF_DEVICE_MEMORY; if (_res == VK_ERROR_OUT_OF_HOST_MEMORY) return OGA_ERROR_STATE_ALLOCATION_FAILED;  string _res_str = _str_vk_result(_res); assertmsgs(_res == VK_SUCCESS, tprint("Vulkan call %s failed: %s. If you see this, you're either doing something very wrong, or there is an internal error in Oga.", STR(#expr), _res_str)); } while(0)
 
 
 unit_local VkDebugUtilsMessengerEXT _vk_messenger;
 
+#ifdef DEBUG
 unit_local VkBool32 _vk_debug_callback(
     VkDebugUtilsMessageSeverityFlagBitsEXT           messageSeverity,
     VkDebugUtilsMessageTypeFlagsEXT                  messageTypes,
     const VkDebugUtilsMessengerCallbackDataEXT*      pCallbackData,
     void*                                            pUserData) {
-    
+
     (void)messageTypes; (void)pUserData;
     string sev;
-    
+
     if (messageSeverity == VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT)
         sev = RSTR("WARNING");
     else if (messageSeverity == VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT)
         sev = RSTR("ERROR");
     else
         sev = RSTR("INFO");
-    
+
     log(0, "\n-----------------VK VALIDATION MESSAGE-----------------");
     log(0, "Severity: %s", sev);
     if (pCallbackData->pMessageIdName)
         log(0, "- Message ID: %s", STR(pCallbackData->pMessageIdName));
     if (pCallbackData->pMessage)
         log(0, "- Message: %s", STR(pCallbackData->pMessage));
-        
+
     return 0;
 }
+#endif
 
 unit_local inline bool _vk_select_format(VkFormat *formats, u32 num_formats, VkImageTiling tiling, VkFormatFeatureFlags features, VkPhysicalDevice vk_device, VkFormat *result) {
     for (u32 i = 0; i < num_formats; i += 1) {
         VkFormat format = formats[i];
-        
+
         VkFormatProperties props;
         vkGetPhysicalDeviceFormatProperties(vk_device, format, &props);
-        
+
         if (tiling == VK_IMAGE_TILING_LINEAR && (features & props.linearTilingFeatures) == features) {
             *result = format;
             return true;
@@ -5366,35 +6740,100 @@ unit_local inline bool _vk_select_format(VkFormat *formats, u32 num_formats, VkI
             return true;
         }
     }
-    
+
     return false;
 }
 
+unit_local u8 _context_mem[(sizeof(Oga_Context)+sizeof(_Vk_Context_Internal))*1024];
+unit_local u64 _allocated_contexts;
+unit_local bool _has_dynamic_rendering = false;
+unit_local VkInstance __instance = 0;
 unit_local inline VkInstance _vk_instance(void) {
-    local_persist VkInstance instance = 0;
+
+    if (!__instance) {
     
-    if (!instance) {
+        u32 version_major = 0;
+        u32 version_minor = 0;
+        u32 version_patch = 0;
+        {
+            VkApplicationInfo query_app_info = (VkApplicationInfo){0};
+            query_app_info.sType = VK_STRUCTURE_TYPE_APPLICATION_INFO;
+            query_app_info.pApplicationName = "Vulkan Version Check";
+            query_app_info.applicationVersion = VK_MAKE_VERSION(1, 0, 0);
+            query_app_info.pEngineName = "No Engine";
+            query_app_info.engineVersion = VK_MAKE_VERSION(1, 0, 0);
+            query_app_info.apiVersion = VK_API_VERSION_1_0; 
         
+            VkInstanceCreateInfo create_info = (VkInstanceCreateInfo){0};
+            create_info.sType = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO;
+            create_info.pApplicationInfo = &query_app_info;
+        
+            VkInstance query_instance;
+            VkResult result = vkCreateInstance(&create_info, 0, &query_instance);
+            if (result != VK_SUCCESS) {
+                print("Failed to create Vulkan query_instance.\n");
+                return 0;
+            }
+        
+            uint32_t device_count = 0;
+            vkEnumeratePhysicalDevices(query_instance, &device_count, 0);
+            if (device_count == 0) {
+                print("No Vulkan-compatible devices found.\n");
+                return 0;
+            }
+        
+            VkPhysicalDevice devices[256];
+            vkEnumeratePhysicalDevices(query_instance, &device_count, devices);
+        
+            for (uint32_t i = 0; i < device_count; i++) {
+                VkPhysicalDeviceProperties properties;
+                vkGetPhysicalDeviceProperties(devices[i], &properties);
+        
+                version_major = max(VK_VERSION_MAJOR(properties.apiVersion), version_major);
+                version_minor = max(VK_VERSION_MINOR(properties.apiVersion), version_minor);
+                version_patch = max(VK_VERSION_PATCH(properties.apiVersion), version_patch);
+            }
+
+            vkDestroyInstance(query_instance, 0);
+        }
+    
+        log(0, "Supported Vulkan Instance API version: %u.%u\n", version_major, version_minor);
+
+        if (version_major >= 1 && version_minor >= 3) {
+            _has_dynamic_rendering = true;
+            
+        }
+
         VkApplicationInfo app_info = (VkApplicationInfo){0};
         app_info.sType = VK_STRUCTURE_TYPE_APPLICATION_INFO;
         app_info.pApplicationName = "Ostd App";
-        app_info.applicationVersion = VK_MAKE_VERSION(1, 0, 0);
+        app_info.applicationVersion = VK_MAKE_VERSION(0, 0, 1);
         app_info.pEngineName = "Oga";
         app_info.engineVersion = VK_MAKE_VERSION(1, 0, 0);
-        app_info.apiVersion = VK_API_VERSION_1_0;
-    
+        
+        if (version_minor >= 3) {
+            app_info.apiVersion = VK_API_VERSION_1_3;
+        } else if (version_minor >= 2) {
+            app_info.apiVersion = VK_API_VERSION_1_2;
+        } else if (version_minor >= 1) {
+            app_info.apiVersion = VK_API_VERSION_1_1;
+        } else {
+            app_info.apiVersion = VK_API_VERSION_1_0;
+        }
+
         VkInstanceCreateInfo create_info = (VkInstanceCreateInfo){0};
         create_info.sType = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO;
         create_info.pApplicationInfo = &app_info;
-        
+
 #if OS_FLAGS & OS_FLAG_WINDOWS
         const char *required_extensions[] = {
-            
+
 #ifdef DEBUG
             VK_EXT_DEBUG_UTILS_EXTENSION_NAME,
 #endif // _DEBUG
             VK_KHR_SURFACE_EXTENSION_NAME,
-            VK_KHR_WIN32_SURFACE_EXTENSION_NAME
+            VK_KHR_WIN32_SURFACE_EXTENSION_NAME,
+            "VK_KHR_get_physical_device_properties2"
         };
 #elif OS_FLAGS & OS_FLAG_LINUX
     // Depending on your display server, pick one:
@@ -5403,7 +6842,8 @@ unit_local inline VkInstance _vk_instance(void) {
         VK_EXT_DEBUG_UTILS_EXTENSION_NAME,
 #endif
         VK_KHR_SURFACE_EXTENSION_NAME,
-        VK_KHR_XLIB_SURFACE_EXTENSION_NAME
+        VK_KHR_XLIB_SURFACE_EXTENSION_NAME,
+        "VK_KHR_get_physical_device_properties2"
     };
 #elif OS_FLAGS & OS_FLAG_MACOS
     // MoltenVK-specific extension for macOS
@@ -5413,7 +6853,8 @@ unit_local inline VkInstance _vk_instance(void) {
 #endif
         VK_KHR_SURFACE_EXTENSION_NAME,
         "VK_MVK_macos_surface",
-        "VK_KHR_portability_enumeration"
+        "VK_KHR_portability_enumeration",
+        "VK_KHR_get_physical_device_properties2"
     };
     create_info.flags |= VK_INSTANCE_CREATE_ENUMERATE_PORTABILITY_BIT_KHR;
 #elif OS_FLAGS & OS_FLAG_IOS
@@ -5424,7 +6865,8 @@ unit_local inline VkInstance _vk_instance(void) {
 #endif
         VK_KHR_SURFACE_EXTENSION_NAME,
         "VK_MVK_ios_surface",
-        "VK_KHR_portability_enumeration"
+        "VK_KHR_portability_enumeration",
+        "VK_KHR_get_physical_device_properties2"
     };
     create_info.flags |= VK_INSTANCE_CREATE_ENUMERATE_PORTABILITY_BIT_KHR;
 #elif OS_FLAGS & OS_FLAG_ANDROID
@@ -5433,28 +6875,35 @@ unit_local inline VkInstance _vk_instance(void) {
         VK_EXT_DEBUG_UTILS_EXTENSION_NAME,
 #endif
         VK_KHR_SURFACE_EXTENSION_NAME,
-        VK_KHR_ANDROID_SURFACE_EXTENSION_NAME
+        VK_KHR_ANDROID_SURFACE_EXTENSION_NAME,
+        "VK_KHR_get_physical_device_properties2"
     };
 
 #else
-    #error VK instance extension query not set up for this OS
+    #error VK __instance extension query not set up for this OS
 #endif
-        u64 num_required_extensions = sizeof(required_extensions) / sizeof(char*);
         
+        u64 num_required_extensions = sizeof(required_extensions) / sizeof(char*) ;
+        
+        for (u64 i = 0; i < sizeof(required_extensions) / sizeof(char*); i += 1) {
+            required_extensions[i] = required_extensions[i];
+        }
+
         log(0, "Looking for extensions:");
         for (u64 i = 0; i < num_required_extensions; i += 1) {
             log(0, "\t%s", STR(required_extensions[i]));
         }
-        
+
+        // #Portability dynamic rendering
         u32 num_available_extensions;
-        _vk_assert(vkEnumerateInstanceExtensionProperties(0, &num_available_extensions, 0));
+        _vk_assert1(vkEnumerateInstanceExtensionProperties(0, &num_available_extensions, 0));
         VkExtensionProperties *available_extensions = NewBuffer(get_temp(), VkExtensionProperties, num_available_extensions);
         memset(available_extensions, 0, num_available_extensions*sizeof(VkExtensionProperties));
-        _vk_assert(vkEnumerateInstanceExtensionProperties(0, &num_available_extensions, available_extensions));
+        _vk_assert1(vkEnumerateInstanceExtensionProperties(0, &num_available_extensions, available_extensions));
         bool any_missing = false;
         for (u64 i = 0; i < num_required_extensions; i += 1) {
             const char *required = required_extensions[i];
-            
+
             bool match = false;
             for (u64 j = 0; j < num_available_extensions; j += 1) {
                 const char *available = available_extensions[j].extensionName;
@@ -5463,37 +6912,43 @@ unit_local inline VkInstance _vk_instance(void) {
                     break;
                 }
             }
-            
+
             if (match == false) {
                 any_missing = true;
                 log(0, "Missing required vulkan extension '%s'", STR(required));
+                log(0, "List of available extensions:");
+                for (u32 j = 0; j < num_available_extensions; j += 1) {
+                    const char *available = available_extensions[j].extensionName;
+                    log(0, "\t%s", STR(available));
+                }
+                    
             } else {
                 log(0, "Found '%s'..", STR(required));
             }
         }
-        
+
         assertmsg(!any_missing, "Basic vulkan extensions were missing, cannot proceed. Make sure you have a proper vulkan SDK installed.");
-        
+
         create_info.ppEnabledExtensionNames = required_extensions;
         create_info.enabledExtensionCount = (u32)num_required_extensions;
-        
+
 #ifdef DEBUG
         const char *wanted_layers[] = {"VK_LAYER_KHRONOS_validation"};
         u32 num_wanted_layers = (u64)(sizeof(wanted_layers)/sizeof(char*));
-        
+
         u32 num_available_layers;
-        _vk_assert(vkEnumerateInstanceLayerProperties(&num_available_layers, 0));
-        
+        _vk_assert1(vkEnumerateInstanceLayerProperties(&num_available_layers, 0));
+
         VkLayerProperties *available_layers = NewBuffer(get_temp(), VkLayerProperties, num_available_layers);
-        _vk_assert(vkEnumerateInstanceLayerProperties(&num_available_layers, available_layers));
-        
+        _vk_assert1(vkEnumerateInstanceLayerProperties(&num_available_layers, available_layers));
+
         const char *final_layers[32];
         u32 num_final_layers = 0;
-        
+
         any_missing = false;
         for (u64 i = 0; i < num_wanted_layers; i += 1) {
             const char *wanted = wanted_layers[i];
-            
+
             bool match = false;
             for (u64 j = 0; j < num_available_layers; j += 1) {
                 const char *available = available_layers[j].layerName;
@@ -5502,55 +6957,144 @@ unit_local inline VkInstance _vk_instance(void) {
                     break;
                 }
             }
-            
+
             if (match == false) {
                 any_missing = true;
-                log(0, "Missing wanted vulkan debug layer '%s'", STR(wanted));
+                log(0, "Missing wanted vulkan validation layer '%s'", STR(wanted));
+                if (num_available_layers) {
+                    log(0, "List of available validation layers:");
+                    for (u32 j = 0; j < num_available_layers; j += 1) {
+                        const char *available = available_layers[j].layerName;
+                        log(0, "\t%s", STR(available));
+                    }
+                } else {
+                    log(0, "No validation layers available");
+                }
             } else {
                 final_layers[num_final_layers++] = wanted;
                 log(0, "Found validation layer %s", STR(wanted));
             }
         }
-    
+
         create_info.enabledLayerCount = num_final_layers;
         create_info.ppEnabledLayerNames = final_layers;
 #else
         create_info.enabledLayerCount = 0;
 #endif
-        
-        _vk_assert(vkCreateInstance(&create_info, 0, &instance));
-        
+
+        _vk_assert1(vkCreateInstance(&create_info, 0, &__instance));
+
 #if DEBUG
         VkDebugUtilsMessengerCreateInfoEXT debug_create_info = (VkDebugUtilsMessengerCreateInfoEXT){0};
         debug_create_info.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_MESSENGER_CREATE_INFO_EXT;
-        
-        debug_create_info.messageSeverity = 
+
+        debug_create_info.messageSeverity =
             VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT |
             VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT;
-        
-        debug_create_info.messageType = 
+
+        debug_create_info.messageType =
             VK_DEBUG_UTILS_MESSAGE_TYPE_GENERAL_BIT_EXT |
-            VK_DEBUG_UTILS_MESSAGE_TYPE_VALIDATION_BIT_EXT | 
+            VK_DEBUG_UTILS_MESSAGE_TYPE_VALIDATION_BIT_EXT |
             VK_DEBUG_UTILS_MESSAGE_TYPE_PERFORMANCE_BIT_EXT;
-            
+
         debug_create_info.pfnUserCallback = _vk_debug_callback;
-        
-        PFN_vkCreateDebugUtilsMessengerEXT _vkCreateDebugUtilsMessengerEXT  = (PFN_vkCreateDebugUtilsMessengerEXT)(void*)vkGetInstanceProcAddr(_vk_instance(), "vkCreateDebugUtilsMessengerEXT");
-        
-        if (_vkCreateDebugUtilsMessengerEXT(_vk_instance(), &debug_create_info, 0, &_vk_messenger) != VK_SUCCESS) {
+
+        void (*untyped)(void) = vkGetInstanceProcAddr(__instance, "vkCreateDebugUtilsMessengerEXT");
+        PFN_vkCreateDebugUtilsMessengerEXT _vkCreateDebugUtilsMessengerEXT  = (PFN_vkCreateDebugUtilsMessengerEXT)*(PFN_vkCreateDebugUtilsMessengerEXT*)(void**)&untyped;
+
+        if (_vkCreateDebugUtilsMessengerEXT(__instance, &debug_create_info, 0, &_vk_messenger) != VK_SUCCESS) {
             log(0, "Failed creating vulkan debug messenger");
         }
 #endif // DEBUG
     }
-    
-    
-    return instance;
+
+
+    return __instance;
+}
+
+void oga_reset(void) {
+    void (*untyped)(void) = vkGetInstanceProcAddr(__instance, "vkDestroyDebugUtilsMessengerEXT");
+    PFN_vkDestroyDebugUtilsMessengerEXT _vkDestroyDebugUtilsMessengerEXT  = (PFN_vkDestroyDebugUtilsMessengerEXT)*(PFN_vkDestroyDebugUtilsMessengerEXT*)(void**)&untyped;
+    _vkDestroyDebugUtilsMessengerEXT(_vk_instance(), _vk_messenger, 0);
+    vkDestroyInstance(_vk_instance(), 0);
+    __instance = 0;
+}
+
+unit_local void *_vk_allocate(void *ud, size_t size, size_t alignment, VkSystemAllocationScope scope) {
+    (void)scope;
+    Allocator *allocator = (Allocator *)ud;
+    void *p = allocator->proc(ALLOCATOR_ALLOCATE, allocator->data, 0, 0, size, alignment, 0);
+#ifdef LOG_VULKAN_ALLOCATIONS
+    string scope_str;
+    if (scope == VK_SYSTEM_ALLOCATION_SCOPE_COMMAND) {
+        scope_str = STR("Command");
+    } else if (scope == VK_SYSTEM_ALLOCATION_SCOPE_OBJECT) {
+        scope_str = STR("Scope");
+    } else if (scope == VK_SYSTEM_ALLOCATION_SCOPE_CACHE) {
+        scope_str = STR("Cache");
+    } else if (scope == VK_SYSTEM_ALLOCATION_SCOPE_DEVICE) {
+        scope_str = STR("Device");
+    } else if (scope == VK_SYSTEM_ALLOCATION_SCOPE_INSTANCE) {
+        scope_str = STR("Instance");
+    }
+    log(0, "VK Allocation '%s'  %u bytes, %u alignment %u", scope_str, size, alignment, p);
+    //sys_print_stack_trace(sys_get_stdout());
+    //log(0, "------------------------------------\n");
+#endif
+    return p;
+}
+
+unit_local void *_vk_reallocate(void *ud, void *old, size_t size, size_t alignment, VkSystemAllocationScope scope) {
+    (void)scope;
+#ifdef LOG_VULKAN_ALLOCATIONS
+    string scope_str;
+    if (scope == VK_SYSTEM_ALLOCATION_SCOPE_COMMAND) {
+        scope_str = STR("Command");
+    } else if (scope == VK_SYSTEM_ALLOCATION_SCOPE_OBJECT) {
+        scope_str = STR("Scope");
+    } else if (scope == VK_SYSTEM_ALLOCATION_SCOPE_CACHE) {
+        scope_str = STR("Cache");
+    } else if (scope == VK_SYSTEM_ALLOCATION_SCOPE_DEVICE) {
+        scope_str = STR("Device");
+    } else if (scope == VK_SYSTEM_ALLOCATION_SCOPE_INSTANCE) {
+        scope_str = STR("Instance");
+    }
+    log(0, "VK REallocation '%s'  %u bytes, %u alignment ", scope_str, size, alignment);
+    //sys_print_stack_trace(sys_get_stdout());
+    //log(0, "------------------------------------\n");
+#endif
+    Allocator *allocator = (Allocator *)ud;
+    return allocator->proc(ALLOCATOR_REALLOCATE, allocator->data, old, 0, size, alignment, 0);
+}
+
+unit_local void _vk_deallocate(void *ud, void *old) {
+#ifdef LOG_VULKAN_ALLOCATIONS
+    log(0, "VK FREE %u", old);
+#endif
+    Allocator *allocator = (Allocator *)ud;
+    allocator->proc(ALLOCATOR_FREE, allocator->data, old, 0, 0, 0, 0);
+}
+
+unit_local void _vk_internal_allocate(void *ud, size_t sz, VkInternalAllocationType t, VkSystemAllocationScope s) {
+    (void)ud; (void)sz; (void)t; (void)s;
+}
+unit_local void _vk_internal_deallocate(void *ud, size_t sz, VkInternalAllocationType t, VkSystemAllocationScope s) {
+    (void)ud; (void)sz; (void)t; (void)s;
+}
+unit_local inline VkAllocationCallbacks _vk_allocator(Allocator *a) {
+    VkAllocationCallbacks c = (VkAllocationCallbacks){0};
+    c.pUserData = a;
+    c.pfnAllocation = _vk_allocate;
+    c.pfnReallocation = _vk_reallocate;
+    c.pfnFree = _vk_deallocate;
+    c.pfnInternalAllocation = _vk_internal_allocate;
+    c.pfnInternalFree = _vk_internal_deallocate;
+    return c;
 }
 
 
-
-unit_local VkResult vkCreateSurfaceKHR(Surface_Handle h, VkSurfaceKHR *result, VkAllocationCallbacks *) {
-#if OS_FLAGS & OS_FLAG_WINDOWS            
+unit_local VkResult vkCreateSurfaceKHR(Surface_Handle h, VkSurfaceKHR *result) {
+#if OS_FLAGS & OS_FLAG_WINDOWS
     VkWin32SurfaceCreateInfoKHR create_info = (VkWin32SurfaceCreateInfoKHR){0};
     create_info.sType = VK_STRUCTURE_TYPE_WIN32_SURFACE_CREATE_INFO_KHR;
     create_info.hwnd = (HWND)h;
@@ -5559,8 +7103,8 @@ unit_local VkResult vkCreateSurfaceKHR(Surface_Handle h, VkSurfaceKHR *result, V
 #elif OS_FLAGS & OS_FLAG_LINUX
     VkXlibSurfaceCreateInfoKHR create_info = (VkXlibSurfaceCreateInfoKHR){0};
     create_info.sType = VK_STRUCTURE_TYPE_XLIB_SURFACE_CREATE_INFO_KHR;
-    create_info.window = (Window)h;
-    create_info.dpy = ???;
+    create_info.window = (Window)_get_surface_state(h)->handle;
+    create_info.dpy = _get_surface_state(h)->xlib_display;
     return vkCreateXlibSurfaceKHR(_vk_instance(), &create_info, 0, result);
 #elif OS_FLAGS & OS_FLAG_MACOS
     VkMacOSSurfaceCreateInfoMVK create_info = (VkMacOSSurfaceCreateInfoMVK){0};
@@ -5569,12 +7113,12 @@ unit_local VkResult vkCreateSurfaceKHR(Surface_Handle h, VkSurfaceKHR *result, V
     return vkCreateMacOSSurfaceMVK(_vk_instance(), &create_info, 0, result);
 #elif OS_FLAGS & OS_FLAG_IOS
     VkIOSSurfaceCreateInfoMVK create_info = (VkIOSSurfaceCreateInfoMVK){0};
-    create_info.sType = VK_STRUCTURE_TYPE_MACOS_SURFACE_CREATE_INFO_MVK;
+    create_info.sType = VK_STRUCTURE_TYPE_IOS_SURFACE_CREATE_INFO_MVK;
     create_info.pView = h;
     return vkCreateIOSSurfaceMVK(_vk_instance(), &create_info, 0, result);
 #elif OS_FLAGS & OS_FLAG_ANDROID
     VkAndroidSurfaceCreateInfoKHR create_info = (VkAndroidSurfaceCreateInfoKHR){0};
-    create_info.sType = VK_STRUCTURE_TYPE_MACOS_SURFACE_CREATE_INFO_MVK;
+    create_info.sType = VK_STRUCTURE_TYPE_ANDROID_SURFACE_CREATE_INFO_KHR;
     create_info.window = (ANativeWindow*)h;
     return vkCreateAndroidSurfaceKHR(_vk_instance(), &create_info, 0, result);
 #else
@@ -5584,43 +7128,57 @@ unit_local VkResult vkCreateSurfaceKHR(Surface_Handle h, VkSurfaceKHR *result, V
 
 u64 oga_query_devices(Oga_Device *buffer, u64 buffer_count) {
     u32 device_count;
-    _vk_assert(vkEnumeratePhysicalDevices(_vk_instance(), &device_count,  0));
-    
+    _vk_assert1(vkEnumeratePhysicalDevices(_vk_instance(), &device_count,  0));
+
     if (buffer) {
         memset(buffer, 0, buffer_count*sizeof(Oga_Device));
         VkPhysicalDevice vk_devices[256];
-        _vk_assert(vkEnumeratePhysicalDevices(_vk_instance(), &device_count,  vk_devices));
-        
+        _vk_assert1(vkEnumeratePhysicalDevices(_vk_instance(), &device_count,  vk_devices));
+
+        // note(charlie) annoyingly, we need an existing surface to look for
+        // surface support in engines. So, we just make a temporary invisible
+        // surface and then delete it when done.
+#if OS_FLAGS & OS_FLAG_HAS_WINDOW_SYSTEM
+        Surface_Desc desc = DEFAULT(Surface_Desc);
+        desc.width = 1;
+        desc.height = 1;
+        desc.flags = SURFACE_FLAG_HIDDEN;
+        Surface_Handle temp_sys_surface = sys_make_surface(desc);
+#else
+        Surface_Handle temp_sys_surface = sys_get_surface();
+#endif
+
+        VkSurfaceKHR temp_vk_surface;
+        _vk_assert1(vkCreateSurfaceKHR(temp_sys_surface, &temp_vk_surface));
         for (u32 i = 0; i < min(device_count, (u32)buffer_count); i += 1) {
             Oga_Device *device = buffer + i;
             VkPhysicalDevice vk_device = vk_devices[i];
-        
-        
+
             ////
             // Yoink info
-            
+
             VkPhysicalDeviceProperties props;
             VkPhysicalDeviceMemoryProperties mem_props;
             VkPhysicalDeviceFeatures features;
-        
+
             vkGetPhysicalDeviceProperties(vk_device, &props);
             vkGetPhysicalDeviceMemoryProperties(vk_device, &mem_props);
             vkGetPhysicalDeviceFeatures(vk_device, &features);
-            
+
             u32 ext_count;
             vkEnumerateDeviceExtensionProperties(vk_device, 0, &ext_count, 0);
             VkExtensionProperties *ext_props = NewBuffer(get_temp(), VkExtensionProperties, ext_count);
             vkEnumerateDeviceExtensionProperties(vk_device, 0, &ext_count, ext_props);
-            
-            u32 logical_engine_family_count;
-            vkGetPhysicalDeviceQueueFamilyProperties(vk_device, &logical_engine_family_count, 0);
-            VkQueueFamilyProperties *logical_engine_family_props = NewBuffer(get_temp(), VkQueueFamilyProperties, logical_engine_family_count);
-            vkGetPhysicalDeviceQueueFamilyProperties(vk_device, &logical_engine_family_count, logical_engine_family_props);
-            
-            
+
+            u32 engine_family_count;
+            vkGetPhysicalDeviceQueueFamilyProperties(vk_device, &engine_family_count, 0);
+            VkQueueFamilyProperties *engine_family_props = NewBuffer(get_temp(), VkQueueFamilyProperties, engine_family_count);
+            vkGetPhysicalDeviceQueueFamilyProperties(vk_device, &engine_family_count, engine_family_props);
+
+
             /////
             // Copy over info into our API
-            
+
             ///
             // Kind
             if (props.deviceType == VK_PHYSICAL_DEVICE_TYPE_INTEGRATED_GPU)
@@ -5636,38 +7194,28 @@ u64 oga_query_devices(Oga_Device *buffer, u64 buffer_count) {
             device->vendor_name = _str_vendor_id(props.vendorID);
             device->driver_version_raw = props.driverVersion;
             device->driver_version_length = _format_driver_version(props.vendorID, props.driverVersion, device->driver_version_data, sizeof(device->driver_version_data));
-           
             
+            device->api_version_raw = props.apiVersion;
+            u32 major = VK_VERSION_MAJOR(device->api_version_raw);
+            u32 minor = VK_VERSION_MINOR(device->api_version_raw);
+            u32 patch = VK_VERSION_PATCH(device->api_version_raw);
+            device->api_version_length = format_string(device->api_version_data, sizeof(device->api_version_data), "Vulkan %u.%u.%u", major, minor, patch);
+
             ///
             // Logical Engine flags
-            
-            // note(charlie) annoyingly, we need an existing surface to look for
-            // surface support in logical_engines. So, we just make a temporary invisible
-            // surface and then delete it when done.
-#if OS_FLAGS & OS_FLAG_HAS_WINDOW_SYSTEM
-            Surface_Desc desc = DEFAULT(Surface_Desc);
-            desc.width = 1;
-            desc.height = 1;
-            desc.flags = SURFACE_FLAG_HIDDEN;
-            Surface_Handle temp_sys_surface = sys_make_surface(desc);
-#else
-            Surface_Handle temp_sys_surface = sys_get_surface();
-#endif
-            
-            VkSurfaceKHR temp_vk_surface;
-            _vk_assert(vkCreateSurfaceKHR(temp_sys_surface, &temp_vk_surface));
-            
-            device->logical_engine_family_count = logical_engine_family_count;
-            for (u32 j = 0; j < logical_engine_family_count; j += 1) {
-                Oga_Logical_Engine_Family_Info *info = &device->logical_engine_family_infos[j];
-                VkQueueFamilyProperties family_props = logical_engine_family_props[j];
-            
+
+
+            device->engine_family_count = engine_family_count;
+            for (u32 j = 0; j < engine_family_count; j += 1) {
+                Oga_Logical_Engine_Family_Info *info = &device->engine_family_infos[j];
+                VkQueueFamilyProperties family_props = engine_family_props[j];
+
                 VkBool32 val;
-                _vk_assert(vkGetPhysicalDeviceSurfaceSupportKHR(vk_device, j, temp_vk_surface, &val));
+                _vk_assert1(vkGetPhysicalDeviceSurfaceSupportKHR(vk_device, j, temp_vk_surface, &val));
                 if (val) info->flags |= OGA_LOGICAL_ENGINE_PRESENT;
-                
-                info->logical_engine_capacity = family_props.queueCount;
-                
+
+                info->engine_capacity = family_props.queueCount;
+
                 if (family_props.queueFlags & VK_QUEUE_GRAPHICS_BIT)
                     info->flags |= OGA_LOGICAL_ENGINE_GRAPHICS;
                 if (family_props.queueFlags & VK_QUEUE_COMPUTE_BIT)
@@ -5675,47 +7223,41 @@ u64 oga_query_devices(Oga_Device *buffer, u64 buffer_count) {
                 if (family_props.queueFlags & VK_QUEUE_TRANSFER_BIT)
                     info->flags |= OGA_LOGICAL_ENGINE_TRANSFER;
             }
-            
-            vkDestroySurfaceKHR(_vk_instance(), temp_vk_surface, 0);
-
-#if OS_FLAGS & OS_FLAG_HAS_WINDOW_SYSTEM
-            surface_close(temp_sys_surface);
-#endif
 
             ///
             // Depth format
-        
+
             VkFormat depth_formats[] =  {
                 VK_FORMAT_D32_SFLOAT,
                 VK_FORMAT_D32_SFLOAT_S8_UINT,
                 VK_FORMAT_D24_UNORM_S8_UINT,
                 VK_FORMAT_D16_UNORM
             };
-            
+
             VkFormat vk_depth_format;
             bool ok = _vk_select_format(depth_formats, sizeof(depth_formats)/sizeof(VkFormat), VK_IMAGE_TILING_OPTIMAL, VK_FORMAT_FEATURE_DEPTH_STENCIL_ATTACHMENT_BIT, vk_device, &vk_depth_format);
-            
+
             if (!ok) {
                 log(0, ("WARNING: Could not find a supported depth format on this device."));
                 vk_depth_format = VK_FORMAT_D32_SFLOAT;
             }
-            
+
             device->depth_format = _vk_to_oga_format(vk_depth_format);
-            
+
             /////
             // Memory heaps
-            
+
             for (u32 j = 0; j < mem_props.memoryHeapCount; j += 1) {
                 device->memory_heaps[j].size = (u64)mem_props.memoryHeaps[j].size;
             }
             device->memory_heap_count = mem_props.memoryHeapCount;
-            
+
             for (u32 j = 0; j < mem_props.memoryTypeCount; j += 1) {
                 VkMemoryType type = mem_props.memoryTypes[j];
                 Oga_Memory_Heap *heap = &device->memory_heaps[type.heapIndex];
-                
-                
-                
+
+
+
                 if (type.propertyFlags & VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT)
                     heap->properties |= OGA_MEMORY_PROPERTY_GPU_LOCAL;
                 if (type.propertyFlags & VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT)
@@ -5725,19 +7267,36 @@ u64 oga_query_devices(Oga_Device *buffer, u64 buffer_count) {
                 if (type.propertyFlags & VK_MEMORY_PROPERTY_HOST_CACHED_BIT)
                     heap->properties |= OGA_MEMORY_PROPERTY_GPU_TO_CPU_CACHED;
             }
-            
+
             for (u32 j = 0; j < device->memory_heap_count; j += 1) {
                 if (device->memory_heaps[j].properties & OGA_MEMORY_PROPERTY_GPU_LOCAL)
                     device->total_gpu_local_memory += device->memory_heaps[j].size;
             }
+
+
             
-            
+            /////
+            // Feature flags
             if (props.limits.timestampComputeAndGraphics) {
                 device->features |= (OGA_DEVICE_FEATURE_GRAPHICS_TIMESTAMP |
                                      OGA_DEVICE_FEATURE_COMPUTE_TIMESTAMP);
             }
             
-            device->limits.max_shader_items_sets_per_stage = props.limits.maxPerStageResources;
+            VkPresentModeKHR present_modes[32];
+            u32 present_mode_count = 32;
+            _vk_assert1(vkGetPhysicalDeviceSurfacePresentModesKHR(vk_device, temp_vk_surface, &present_mode_count, present_modes));
+            for (u32 j = 0; j < present_mode_count; j += 1) {
+                if (present_modes[j] == VK_PRESENT_MODE_MAILBOX_KHR)
+                    device->features |= OGA_DEVICE_FEATURE_PRESENT_MAILBOX;
+            }
+            
+            if (features.depthClamp)
+                device->features |= OGA_DEVICE_FEATURE_DEPTH_CLAMP;
+                
+            /////
+            // Limits
+
+            device->limits.max_program_pointer_sets_per_stage = props.limits.maxPerStageResources;
             device->limits.max_fast_data_blocks_per_stage = props.limits.maxPerStageDescriptorUniformBuffers;
             device->limits.max_large_data_blocks_per_stage = props.limits.maxPerStageDescriptorStorageBuffers;
             device->limits.max_fast_images_per_stage = props.limits.maxPerStageDescriptorSampledImages;
@@ -5765,10 +7324,10 @@ u64 oga_query_devices(Oga_Device *buffer, u64 buffer_count) {
             device->limits.max_viewport_height = props.limits.maxViewportDimensions[1];
             device->limits.max_framebuffer_width = props.limits.maxFramebufferWidth;
             device->limits.max_framebuffer_height = props.limits.maxFramebufferHeight;
-            device->limits.max_color_attachments = props.limits.maxColorAttachments;
+            device->limits.max_render_attachments = props.limits.maxColorAttachments;
             device->limits.min_memory_map_alignment = props.limits.minMemoryMapAlignment;
             for (u64 f = 1; f < VK_SAMPLE_COUNT_FLAG_BITS_MAX_ENUM; f = f << 1)
-                if (props.limits.framebufferColorSampleCounts & f) device->limits.supported_sample_counts_framebuffer |= f;
+                if (props.limits.framebufferColorSampleCounts & f) device->limits.supported_sample_counts_render_pass |= f;
             for (u64 f = 1; f < VK_SAMPLE_COUNT_FLAG_BITS_MAX_ENUM; f = f << 1)
                 if (props.limits.sampledImageColorSampleCounts & f) device->limits.supported_sample_counts_fast_image_float |= f;
             for (u64 f = 1; f < VK_SAMPLE_COUNT_FLAG_BITS_MAX_ENUM; f = f << 1)
@@ -5777,98 +7336,1099 @@ u64 oga_query_devices(Oga_Device *buffer, u64 buffer_count) {
                 if (props.limits.sampledImageIntegerSampleCounts & f) device->limits.supported_sample_counts_fast_image_int |= f;
             for (u64 f = 1; f < VK_SAMPLE_COUNT_FLAG_BITS_MAX_ENUM; f = f << 1)
                 if (props.limits.storageImageSampleCounts & f) device->limits.supported_sample_counts_large_image_int |= f;
+
+
+            /////
+            // Surface formats
             
+            u32 vk_formats_count = 512;
+            _vk_assert1(vkGetPhysicalDeviceSurfaceFormatsKHR(vk_device, temp_vk_surface, &vk_formats_count, 0));
+            VkSurfaceFormatKHR vk_formats[512];
+            _vk_assert1(vkGetPhysicalDeviceSurfaceFormatsKHR(vk_device, temp_vk_surface, &vk_formats_count, vk_formats));
+            
+            for (u32 j = 0; j < vk_formats_count; j += 1) {
+                if (vk_formats[j].colorSpace != VK_COLOR_SPACE_SRGB_NONLINEAR_KHR) continue;
+                Oga_Format oga_format = _vk_to_oga_format(vk_formats[j].format);
+                if (oga_format != 0) {
+                    device->supported_surface_formats[device->supported_surface_format_count++] = oga_format;
+                }
+            }
+        
             device->id = vk_device;
         }
+        vkDestroySurfaceKHR(_vk_instance(), temp_vk_surface, 0);
+
+#if OS_FLAGS & OS_FLAG_HAS_WINDOW_SYSTEM
+        surface_close(temp_sys_surface);
+#endif
     }
-    
+
     return device_count;
 }
 
 Oga_Device *oga_get_devices(Allocator a, u64 *count) {
     *count = oga_query_devices(0, 0);
-    
+
     Oga_Device *devices = NewBuffer(a, Oga_Device, *count);
     oga_query_devices(devices, *count);
-    
+
     return devices;
 }
 
 
-Oga_Result oga_init_context(Oga_Device target_device, Oga_Context_Desc desc, Oga_Context *context) {
-    
-    const char *required_extensions[] = {
-        VK_KHR_SWAPCHAIN_EXTENSION_NAME
-    };
-    
+Oga_Result oga_init_context(Oga_Device target_device, Oga_Context_Desc desc, Oga_Context **context) {
+
+    const char *swapchain_ext = VK_KHR_SWAPCHAIN_EXTENSION_NAME;
+
     if ((desc.enabled_features & target_device.features) != desc.enabled_features) {
         return OGA_CONTEXT_INIT_ERROR_MISSING_DEVICE_FEATURES;
     }
+
+    *context = (Oga_Context*)&_context_mem[(sizeof(Oga_Context)+sizeof(_Vk_Context_Internal))*_allocated_contexts++];
+    if (!*context) {
+        return OGA_ERROR_STATE_ALLOCATION_FAILED;
+    }
+    Oga_Context *c = *context;
+    *c = (Oga_Context){0};
+    c->state_allocator = desc.state_allocator;
+    c->internal = c+1;
+    if (!c->state_allocator.proc) {
+        Allocator a;
+        a.proc = oga_state_allocator_proc;
+        c->default_allocator_data = (Oga_State_Allocator_Data) {0};
+        a.data = &c->default_allocator_data;
+        c->state_allocator = a;
+    }
     
+    _Vk_Context_Internal *internal = (_Vk_Context_Internal*)c->internal;
+
     VkPhysicalDeviceFeatures enabled_features = (VkPhysicalDeviceFeatures){0};
     // if (desc.enabled_features & OGA_DEVICE_FEATURE_XXXX) enabled_features.xxxx = true;
-    
-    VkDeviceQueueCreateInfo logical_engine_infos[OGA_MAX_DEVICE_LOGICAL_ENGINE_FAMILIES] = {0};
-    
-    u64 logical_engines_desc_count = 0;
+
+    VkDeviceQueueCreateInfo engine_infos[OGA_MAX_DEVICE_LOGICAL_ENGINE_FAMILIES] = {0};
+
+    u64 engines_desc_count = 0;
     for (u64 family_index = 0; family_index < OGA_MAX_DEVICE_LOGICAL_ENGINE_FAMILIES; family_index += 1) {
-        Oga_Logical_Engines_Create_Desc logical_engines_desc = desc.logical_engine_create_descs[family_index];
-        if (logical_engines_desc.count > 0) {
-            
-            if (family_index >= target_device.logical_engine_family_count) {
+        Oga_Logical_Engines_Create_Desc engines_desc = desc.engine_create_descs[family_index];
+        if (engines_desc.count > 0) {
+
+            if (family_index >= target_device.engine_family_count) {
                 return OGA_CREATE_LOGICAL_ENGINE_ERROR_FAMILY_INDEX_OUT_OF_RANGE;
             }
-            
-            Oga_Logical_Engine_Family_Info family = target_device.logical_engine_family_infos[family_index];
-            if (logical_engines_desc.count >= family.logical_engine_capacity) {
+
+            Oga_Logical_Engine_Family_Info family = target_device.engine_family_infos[family_index];
+            if (engines_desc.count > family.engine_capacity) {
                 return OGA_CREATE_LOGICAL_ENGINE_ERROR_FAMILY_CAPACITY_OVERFLOW;
             }
-            
-            VkDeviceQueueCreateInfo *info = &logical_engine_infos[logical_engines_desc_count];
+
+            VkDeviceQueueCreateInfo *info = &engine_infos[engines_desc_count];
             info->sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
             info->queueFamilyIndex = (u32)family_index;
-            info->queueCount = (u32)logical_engines_desc.count;
-            info->pQueuePriorities = logical_engines_desc.priorities;
+            info->queueCount = (u32)engines_desc.count;
+            info->pQueuePriorities = engines_desc.priorities;
+
+            engines_desc_count += 1;
+        }
+    }
+
+    // #Portability dynamic rendering
+    VkPhysicalDeviceDynamicRenderingFeatures dynamic_rendering = (VkPhysicalDeviceDynamicRenderingFeatures){0};
+    dynamic_rendering.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DYNAMIC_RENDERING_FEATURES;
+    dynamic_rendering.dynamicRendering = true;
+    
+    VkPhysicalDeviceVulkan13Features vk13_features = (VkPhysicalDeviceVulkan13Features){0};
+    vk13_features.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_3_FEATURES;
+    vk13_features.dynamicRendering = true;
+    
+    if (target_device.features & OGA_DEVICE_FEATURE_DEPTH_CLAMP) {
+        enabled_features.depthClamp = true;
+    }
+    
+    VkPhysicalDeviceProperties props;
+    vkGetPhysicalDeviceProperties(target_device.id, &props);
+
+    VkDeviceCreateInfo info = (VkDeviceCreateInfo) {0};
+    info.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
+    info.pEnabledFeatures = &enabled_features;
+    info.queueCreateInfoCount = (u32)engines_desc_count;
+    info.pQueueCreateInfos = engine_infos;
+    
+    
+    internal->vk_version_major = VK_VERSION_MAJOR(props.apiVersion);
+    internal->vk_version_minor = VK_VERSION_MINOR(props.apiVersion);
+    internal->vk_version_patch = VK_VERSION_PATCH(props.apiVersion);
+    
+    string name = (string){target_device.device_name_length, target_device.device_name_data};
+    string api = (string){target_device.api_version_length, target_device.api_version_data};
+    log(0, "Making context for device '%s', api version '%s'", name, api);
+    
+    if (internal->vk_version_major == 1 && internal->vk_version_minor < 3) {
+        
+        uint32_t existing_count = 0;
+        vkEnumerateDeviceExtensionProperties(target_device.id, 0, &existing_count, 0);
+        VkExtensionProperties *existing_exts = NewBuffer(get_temp(), VkExtensionProperties, existing_count);
+        vkEnumerateDeviceExtensionProperties(target_device.id, 0, &existing_count, existing_exts);
+        
+        bool ext_depth_stencil_resolve = false;
+        bool ext_create_renderpass2 = false;
+        bool ext_dynamic_rendering = false;
+        
+        for (u64 i = 0; i < existing_count; i += 1) {
+            string existing = STR(existing_exts[i].extensionName);
             
-            logical_engines_desc_count += 1;
+            if (strings_match(existing, STR("VK_KHR_depth_stencil_resolve")))
+                ext_depth_stencil_resolve = true;
+            if (strings_match(existing, STR("VK_KHR_create_renderpass2")))
+                ext_create_renderpass2 = true;
+            if (strings_match(existing, STR("VK_KHR_dynamic_rendering")))
+                ext_dynamic_rendering = true;
+        }
+        
+        char **names = NewBuffer(get_temp(), char*, 8);
+        
+        
+        info.enabledExtensionCount = 0;
+        internal->dynamic_rendering = ext_dynamic_rendering;
+        names[info.enabledExtensionCount++] = "VK_KHR_dynamic_rendering";
+        if (internal->vk_version_minor <= 1) {
+            internal->dynamic_rendering &= ext_depth_stencil_resolve;
+            names[info.enabledExtensionCount++] = "VK_KHR_depth_stencil_resolve";
+            internal->dynamic_rendering &= ext_create_renderpass2;
+            names[info.enabledExtensionCount++] = "VK_KHR_create_renderpass2";
+        }
+            
+        
+        names[info.enabledExtensionCount++] = VK_KHR_SWAPCHAIN_EXTENSION_NAME;
+        
+        info.ppEnabledExtensionNames = (const char*const*)names;
+        
+        internal->dynamic_rendering_is_extension = true;
+    } else {
+        internal->dynamic_rendering = true;
+        internal->dynamic_rendering_is_extension = false;
+        info.enabledExtensionCount = 1;
+        info.ppEnabledExtensionNames 
+            = &swapchain_ext;
+    }
+    
+    log(0, "Dynamic rendering: %b", internal->dynamic_rendering);
+    
+    if (internal->dynamic_rendering) {
+        if (internal->dynamic_rendering_is_extension) {
+            void (*untyped)(void) = vkGetInstanceProcAddr(__instance, "vkCmdBeginRenderingKHR");
+            internal->vkCmdBeginRenderingKHR  = (PFN_vkCmdBeginRenderingKHR)*(PFN_vkCmdBeginRenderingKHR*)(void**)&untyped;
+            untyped = vkGetInstanceProcAddr(__instance, "vkCmdEndRenderingKHR");
+            internal->vkCmdEndRenderingKHR  = (PFN_vkCmdEndRenderingKHR)*(PFN_vkCmdEndRenderingKHR*)(void**)&untyped;
+            
+            info.pNext = &dynamic_rendering;
+            
+        } else {
+            void (*untyped)(void) = vkGetInstanceProcAddr(__instance, "vkCmdBeginRendering");
+            internal->vkCmdBeginRenderingKHR  = (PFN_vkCmdBeginRenderingKHR)*(PFN_vkCmdBeginRenderingKHR*)(void**)&untyped;
+            untyped = vkGetInstanceProcAddr(__instance, "vkCmdEndRendering");
+            internal->vkCmdEndRenderingKHR  = (PFN_vkCmdEndRenderingKHR)*(PFN_vkCmdEndRenderingKHR*)(void**)&untyped;
+            
+            info.pNext = &vk13_features;
+        }
+        
+    }
+
+    VkAllocationCallbacks vk_allocs = _vk_allocator(&c->state_allocator);
+    _vk_assert2(vkCreateDevice(target_device.id, &info, &vk_allocs, (VkDevice*)&c->id));
+    c->device = target_device;
+    
+    for (u64 family_index = 0; family_index < OGA_MAX_DEVICE_LOGICAL_ENGINE_FAMILIES; family_index += 1) {
+        Oga_Logical_Engines_Create_Desc engines_desc = desc.engine_create_descs[family_index];
+        Oga_Logical_Engine_Group *group = &c->engines_by_family[family_index];
+        for (u64 engine_index = 0; engine_index < engines_desc.count; engine_index += 1) {
+            Oga_Logical_Engine *engine = &group->engines[engine_index];
+            vkGetDeviceQueue(
+                c->id,
+                (u32)family_index,
+                (u32)engine_index,
+                (VkQueue*)&engine->id
+            );
+            engine->index = (u32)engine_index;
         }
     }
     
     
-    VkDeviceCreateInfo info = (VkDeviceCreateInfo) {0};
-    info.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
-    info.enabledExtensionCount = (u32)(sizeof(required_extensions)/sizeof(char*));
-    info.ppEnabledExtensionNames = required_extensions;
-    info.pEnabledFeatures = &enabled_features;
-    info.queueCreateInfoCount = (u32)logical_engines_desc_count;
-    info.pQueueCreateInfos = logical_engine_infos;
+
+    return OGA_OK;
+}
+void oga_uninit_context(Oga_Context *context) {
+    VkAllocationCallbacks vk_allocs = _vk_allocator(&context->state_allocator);
+    _vk_assert1(vkDeviceWaitIdle(context->id));
+    vkDestroyDevice(context->id, &vk_allocs);
     
+    Allocator a = context->state_allocator;
     *context = (Oga_Context){0};
-    _vk_assert(vkCreateDevice(target_device.id, &info, 0, (VkDevice*)&context->id));
-    context->device = target_device;
+    deallocate(a, context);
+}
+
+Oga_Result oga_init_swapchain(Oga_Context *context, Oga_Swapchain_Desc desc, Oga_Swapchain **swapchain) {
+    *swapchain = allocate(context->state_allocator, sizeof(Oga_Swapchain) + sizeof(_Vk_Swapchain_State));
+    if (!*swapchain) {
+        return OGA_ERROR_STATE_ALLOCATION_FAILED;
+    }
+    **swapchain = (Oga_Swapchain){0};
     
-    for (u64 family_index = 0; family_index < OGA_MAX_DEVICE_LOGICAL_ENGINE_FAMILIES; family_index += 1) {
-        Oga_Logical_Engines_Create_Desc logical_engines_desc = desc.logical_engine_create_descs[family_index];
-        Oga_Logical_Engine_Group *group = &context->logical_engines_by_family[family_index];
-        for (u64 logical_engine_index = 0; logical_engine_index < logical_engines_desc.count; logical_engine_index += 1) {
-            Oga_Logical_Engine *logical_engine = &group->logical_engines[logical_engine_index];
-            vkGetDeviceQueue(
-                context->id, 
-                (u32)family_index, 
-                (u32)logical_engine_index, 
-                (VkQueue*)&logical_engine->id
-            );
-            logical_engine->index = (u32)logical_engine_index;
+    _Vk_Swapchain_State *state = (_Vk_Swapchain_State*)(*swapchain+1);
+    
+    VkAllocationCallbacks vk_allocs = _vk_allocator(&context->state_allocator);
+    
+    if (vkCreateSurfaceKHR(desc.surface, &state->vk_surface) != VK_SUCCESS) {
+        deallocate((*swapchain)->context->state_allocator, swapchain);
+        return OGA_INIT_SWAPCHAIN_ERROR_SURFACE_REJECTED;
+    }
+    
+    (*swapchain)->id = state;
+    
+    VkSurfaceCapabilitiesKHR cap;
+    _vk_assert2(vkGetPhysicalDeviceSurfaceCapabilitiesKHR((VkPhysicalDevice)context->device.id, state->vk_surface, &cap));
+    
+    u32 image_count = clamp((u32)desc.requested_image_count, cap.minImageCount, min(cap.maxImageCount, MAX_SWAPCHAIN_IMAGES));
+    (*swapchain)->image_count = (u64)image_count;
+    
+    
+    VkPresentModeKHR vk_present_mode = VK_PRESENT_MODE_FIFO_KHR;
+    if (desc.present_mode == OGA_PRESENT_MODE_IMMEDIATE) {
+        VkPresentModeKHR present_modes[32];
+        u32 present_mode_count = 32;
+        _vk_assert2(vkGetPhysicalDeviceSurfacePresentModesKHR((VkPhysicalDevice)context->device.id, state->vk_surface, &present_mode_count, present_modes));
+        for (u32 i = 0; i < present_mode_count; i += 1) {
+            if (present_modes[i] == VK_PRESENT_MODE_IMMEDIATE_KHR) {
+                vk_present_mode = VK_PRESENT_MODE_IMMEDIATE_KHR;
+                break;
+            }
         }
+    } else if (desc.present_mode == OGA_PRESENT_MODE_VSYNC) {
+        vk_present_mode = VK_PRESENT_MODE_FIFO_KHR;
+        
+    } else if (desc.present_mode == OGA_PRESENT_MODE_VSYNC_MAILBOX && context->device.features & OGA_DEVICE_FEATURE_PRESENT_MAILBOX) {
+        vk_present_mode = VK_PRESENT_MODE_MAILBOX_KHR;
+    } else {
+        deallocate((*swapchain)->context->state_allocator, swapchain);
+        return OGA_INIT_SWAPCHAIN_ERROR_UNSUPPORTED_PRESENT_MODE;
+    }
+    
+    u32 *engine_families = 0;
+    u32 engine_families_count = 0;
+    if (desc.engine_families_with_access_count) {
+        engine_families = NewBuffer(get_temp(), u32, desc.engine_families_with_access_count);
+        for (u64 i = 0; i < desc.engine_families_with_access_count; i += 1) {
+            bool contains = false;
+            for (u64 j = 0; j < engine_families_count; j += 1) {
+                if (engine_families[j] == desc.engine_families_with_access[i]) {
+                    contains = true;
+                    break;
+                }
+            }
+            if (!contains) engine_families[engine_families_count++] = (u32)desc.engine_families_with_access[i];
+        }
+    }
+    
+    VkCompositeAlphaFlagBitsKHR composite_alpha = (VkCompositeAlphaFlagBitsKHR)0;
+    if (cap.supportedCompositeAlpha & VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR)
+        composite_alpha |= VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR;
+    else if (cap.supportedCompositeAlpha & VK_COMPOSITE_ALPHA_INHERIT_BIT_KHR )
+        composite_alpha |= VK_COMPOSITE_ALPHA_INHERIT_BIT_KHR ;
+    else if (cap.supportedCompositeAlpha & VK_COMPOSITE_ALPHA_PRE_MULTIPLIED_BIT_KHR )
+        composite_alpha |= VK_COMPOSITE_ALPHA_PRE_MULTIPLIED_BIT_KHR ;
+    else if (cap.supportedCompositeAlpha & VK_COMPOSITE_ALPHA_POST_MULTIPLIED_BIT_KHR )
+        composite_alpha |= VK_COMPOSITE_ALPHA_POST_MULTIPLIED_BIT_KHR ;
+    
+    VkSwapchainCreateInfoKHR info = (VkSwapchainCreateInfoKHR){0};
+    info.sType = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR;
+    info.flags = 0;
+    info.surface = state->vk_surface;
+    info.minImageCount = image_count;
+    info.imageFormat = _oga_to_vk_format(desc.image_format);
+    info.imageColorSpace = VK_COLOR_SPACE_SRGB_NONLINEAR_KHR;
+    info.imageExtent.width = (u32)desc.width;
+    info.imageExtent.height = (u32)desc.height;
+    info.imageArrayLayers = 0;
+    info.imageUsage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
+    info.imageSharingMode = engine_families_count > 1 ? VK_SHARING_MODE_CONCURRENT : VK_SHARING_MODE_EXCLUSIVE;
+    info.queueFamilyIndexCount = engine_families_count;
+    info.pQueueFamilyIndices = engine_families;
+    info.preTransform = cap.currentTransform;
+    info.compositeAlpha = composite_alpha;
+    info.presentMode = vk_present_mode;
+    info.clipped = VK_TRUE;
+    info.oldSwapchain = 0;
+    info.imageArrayLayers = 1;
+    
+    _vk_assert2(vkCreateSwapchainKHR((VkDevice)context->id, &info, &vk_allocs, &state->vk_swapchain));
+    
+    VkImage vk_images[MAX_SWAPCHAIN_IMAGES];
+    
+    vkGetSwapchainImagesKHR((VkDevice)context->id, state->vk_swapchain, (u32*)&(*swapchain)->image_count, vk_images);
+    
+    (*swapchain)->image_format = desc.image_format;
+    
+    u64 stride = sizeof(_Vk_Image_State)+sizeof(Oga_Image);
+    void *image_states_data = allocate(context->state_allocator, stride * (*swapchain)->image_count);
+    for (u64 i = 0; i < (*swapchain)->image_count; i += 1) {
+        Oga_Image *image = (Oga_Image*)((u8*)image_states_data + i*stride);
+        _Vk_Image_State *image_state = (_Vk_Image_State*)(image+1);
+        
+        
+        image->image_kind = OGA_IMAGE_2D;
+        image->id = image_state;
+        image->pointer_kind = OGA_POINTER_KIND_PROGRAM_POINTER;
+        image->memory = OGA_INTERNALLY_MANAGED_MEMORY_HANDLE;
+        image->program_pointer_kind = OGA_PROGRAM_POINTER_KIND_IMAGE2D;
+        image->width = desc.width;
+        image->height = desc.height;
+        
+        image_state->image = vk_images[i];
+        
+        VkImageViewCreateInfo image_view_info = (VkImageViewCreateInfo){0};
+        image_view_info.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
+        image_view_info.image = image_state->image;
+        image_view_info.viewType = VK_IMAGE_VIEW_TYPE_2D;
+        image_view_info.format = _oga_to_vk_format((*swapchain)->image_format);
+        image_view_info.components.r = VK_COMPONENT_SWIZZLE_IDENTITY;
+        image_view_info.components.g = VK_COMPONENT_SWIZZLE_IDENTITY;
+        image_view_info.components.b = VK_COMPONENT_SWIZZLE_IDENTITY;
+        image_view_info.components.a = VK_COMPONENT_SWIZZLE_IDENTITY;
+        image_view_info.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+        image_view_info.subresourceRange.baseMipLevel = 0;
+        image_view_info.subresourceRange.levelCount = 1;
+        image_view_info.subresourceRange.baseArrayLayer = 0;
+        image_view_info.subresourceRange.layerCount = 1;
+        
+        _vk_assert2(vkCreateImageView((VkDevice)context->id, &image_view_info, &vk_allocs, &image_state->view));
+        
+        
+        
+        (*swapchain)->images[i] = image;
+    }
+    
+    (*swapchain)->context = context;
+    
+    return OGA_OK;
+}
+void oga_uninit_swapchain(Oga_Swapchain *swapchain) {
+    _Vk_Swapchain_State *state = (_Vk_Swapchain_State*)(swapchain->id);
+    VkAllocationCallbacks vk_allocs = _vk_allocator(&swapchain->context->state_allocator);
+    
+    _vk_assert1(vkDeviceWaitIdle(swapchain->context->id));
+    
+    for (u64 i = 0; i < swapchain->image_count; i += 1) {
+        _Vk_Image_State *image_state = (_Vk_Image_State*)(swapchain->images[i]->id);
+        vkDestroyImageView((VkDevice)swapchain->context->id, image_state->view, &vk_allocs);
+    }
+    
+    vkDestroySwapchainKHR((VkDevice)swapchain->context->id, state->vk_swapchain, &vk_allocs);
+    
+    
+    VkSurfaceKHR sur = state->vk_surface;
+    // Musnt use the vulkan allocation callbacks
+    
+    vkDestroySurfaceKHR(_vk_instance(), sur, 0);
+
+    Allocator a = swapchain->context->state_allocator;
+    
+    deallocate(a, swapchain->images[0]);
+    
+    *swapchain = (Oga_Swapchain){0};
+    deallocate(a, swapchain);
+}
+
+Oga_Result oga_get_next_swapchain_image(Oga_Swapchain *swapchain, u64 timeout, struct Oga_Gpu_Latch *signal_gpu_latch, struct Oga_Cpu_Latch *signal_cpu_latch, u64 *image_index) {
+
+    _Vk_Swapchain_State *state = (_Vk_Swapchain_State*)swapchain->id;
+
+    u32 index;
+    VkResult result = vkAcquireNextImageKHR(swapchain->context->id, state->vk_swapchain, timeout, signal_gpu_latch ? signal_gpu_latch->id : 0, signal_cpu_latch ? signal_cpu_latch->id : 0, &index);
+    
+    *image_index = (u64)index;
+    
+    if (result == VK_SUBOPTIMAL_KHR)  return OGA_SUBOPTIMAL;
+    else if (result == VK_NOT_READY) return OGA_NOT_READY;
+    else if (result == VK_TIMEOUT) return OGA_TIMEOUT;
+    else if (result == VK_ERROR_OUT_OF_DATE_KHR) return OGA_ERROR_OUTDATED;
+    else if (result == VK_ERROR_SURFACE_LOST_KHR) return OGA_ERROR_SURFACE_LOST;
+    
+    _vk_assert2(result);
+    
+    return OGA_OK;
+}
+
+Oga_Result oga_submit_present(Oga_Swapchain *swapchain, Oga_Present_Desc desc) {
+    
+    _Vk_Swapchain_State *state = (_Vk_Swapchain_State*)swapchain->id;
+    
+    VkSemaphore vk_semaphores[256];
+    
+    for (u64 i = 0; i < desc.wait_gpu_latch_count; i += 1) {
+        vk_semaphores[i] = desc.wait_gpu_latches[i]->id;
+    }
+    
+    VkPresentInfoKHR info = (VkPresentInfoKHR){0};
+    info.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
+    info.waitSemaphoreCount = (u32)desc.wait_gpu_latch_count;
+    info.pWaitSemaphores = vk_semaphores;
+    info.swapchainCount = 1;
+    info.pSwapchains = &state->vk_swapchain;
+    info.pImageIndices = (u32*)&desc.image_index;
+    
+    VkResult result = vkQueuePresentKHR(desc.engine.id, &info);
+    
+    if (result == VK_SUBOPTIMAL_KHR)  return OGA_SUBOPTIMAL;
+    else if (result == VK_NOT_READY) return OGA_NOT_READY;
+    else if (result == VK_TIMEOUT) return OGA_TIMEOUT;
+    else if (result == VK_ERROR_OUT_OF_DATE_KHR) return OGA_ERROR_OUTDATED;
+    else if (result == VK_ERROR_SURFACE_LOST_KHR) return OGA_ERROR_SURFACE_LOST;
+    
+    _vk_assert2(result);
+    
+    return OGA_OK;
+}
+
+Oga_Result oga_init_program(Oga_Context *context, Oga_Program_Desc desc, Oga_Program **program) {
+    *program = allocate(context->state_allocator, sizeof(Oga_Program));
+    if (!*program) {
+        return OGA_ERROR_STATE_ALLOCATION_FAILED;
+    }
+    **program = (Oga_Program){0};
+    
+    VkShaderModuleCreateInfo info = (VkShaderModuleCreateInfo){0};
+    
+    info.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
+    info.codeSize = (size_t)desc.code_size;
+    info.pCode = desc.code;
+    
+    VkAllocationCallbacks vk_allocs = _vk_allocator(&context->state_allocator);
+    VkResult result = vkCreateShaderModule((VkDevice)context->id, &info, &vk_allocs, (VkShaderModule*)&(*program)->id);
+    
+    if (result != VK_SUCCESS) {
+        if (result == VK_ERROR_INVALID_SHADER_NV) {
+            deallocate(context->state_allocator, *program);
+            return OGA_INIT_PROGRAM_ERROR_BAD_CODE;
+        }
+        _vk_assert2(result);
+    }
+    
+    (*program)->context = context;
+    
+    return OGA_OK;
+}
+void oga_uninit_program(Oga_Program *program) {
+    VkAllocationCallbacks vk_allocs = _vk_allocator(&program->context->state_allocator);
+    
+    _vk_assert1(vkDeviceWaitIdle(program->context->id));
+    vkDestroyShaderModule((VkDevice)program->context->id, (VkShaderModule)program->id, &vk_allocs);
+    
+    Allocator a = program->context->state_allocator;
+    *program = (Oga_Program){0};
+    deallocate(a, program);
+}
+
+Oga_Result oga_init_render_passes(Oga_Context *context, Oga_Render_Pass_Desc* descs, Oga_Render_Pass **render_passes, u64 render_pass_count) {
+    VkGraphicsPipelineCreateInfo *infos = NewBuffer(get_temp(), VkGraphicsPipelineCreateInfo, render_pass_count);
+    
+    // todo(charlie)
+    // We use a lot of temporary storage here, so we would probably want to reset it back to where it was before,
+    // once that's implemented ..
+    for (u64 i = 0; i < render_pass_count; i += 1) {
+    
+        Oga_Render_Pass_Desc desc = descs[i];
+        
+        VkFormat *vk_formats = NewBuffer(get_temp(), VkFormat, desc.attachment_count);
+        for (u64 j = 0; j < desc.attachment_count; j += 1) {
+            vk_formats[j] = _oga_to_vk_format(desc.attachment_formats[j]);
+        }
+        
+        VkPipelineRenderingCreateInfoKHR *rendering = New(get_temp(), VkPipelineRenderingCreateInfoKHR);
+        *rendering = (VkPipelineRenderingCreateInfoKHR){0};
+        rendering->sType = VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO_KHR;
+        rendering->pNext = 0;
+        rendering->viewMask = 0;
+        rendering->colorAttachmentCount = (u32)desc.attachment_count;
+        rendering->pColorAttachmentFormats = vk_formats;
+        
+        VkPipelineCreateFlags pipeline_flags = (VkPipelineCreateFlags)(int)0;
+        if (desc.flags & OGA_RENDER_PASS_INHERITANCE_PARENT) pipeline_flags |= VK_PIPELINE_CREATE_ALLOW_DERIVATIVES_BIT;
+        if (desc.flags & OGA_RENDER_PASS_INHERITANCE_CHILD)  pipeline_flags |= VK_PIPELINE_CREATE_DERIVATIVE_BIT;
+        
+        char *vert_entry = NewBuffer(get_temp(), char, desc.vertex_program_entry_point.count);
+        char *frag_entry = NewBuffer(get_temp(), char, desc.fragment_program_entry_point.count);
+        memcpy(vert_entry, desc.vertex_program_entry_point.data, desc.vertex_program_entry_point.count);
+        memcpy(frag_entry, desc.fragment_program_entry_point.data, desc.fragment_program_entry_point.count);
+        vert_entry[desc.vertex_program_entry_point.count] = 0;
+        frag_entry[desc.fragment_program_entry_point.count] = 0;
+        
+        VkPipelineShaderStageCreateInfo *stages = NewBuffer(get_temp(), VkPipelineShaderStageCreateInfo, 2);
+        stages[0] = (VkPipelineShaderStageCreateInfo){0};
+        stages[0].sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
+        stages[0].stage = VK_SHADER_STAGE_VERTEX_BIT;
+        stages[0].module = (VkShaderModule)desc.vertex_program->id;
+        stages[0].pName = vert_entry;
+        
+        stages[1] = (VkPipelineShaderStageCreateInfo){0};
+        stages[1].sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
+        stages[1].stage = VK_SHADER_STAGE_FRAGMENT_BIT;
+        stages[1].module = (VkShaderModule)desc.fragment_program->id;
+        stages[1].pName = frag_entry;
+        
+        VkPipelineVertexInputStateCreateInfo *vertex_input = New(get_temp(), VkPipelineVertexInputStateCreateInfo);
+        *vertex_input = (VkPipelineVertexInputStateCreateInfo){0};
+        vertex_input->sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
+        vertex_input->vertexBindingDescriptionCount = 0;
+        vertex_input->vertexAttributeDescriptionCount = 0;
+        
+        VkPipelineInputAssemblyStateCreateInfo *ia = New(get_temp(), VkPipelineInputAssemblyStateCreateInfo);
+        *ia = (VkPipelineInputAssemblyStateCreateInfo){0};
+        ia->sType = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO;
+        ia->topology = (VkPrimitiveTopology)desc.topology; // #Volatile values must map to same as vulkan equivalents
+        
+        VkPipelineTessellationStateCreateInfo *tessellation = New(get_temp(), VkPipelineTessellationStateCreateInfo);
+        *tessellation = (VkPipelineTessellationStateCreateInfo){0};
+        tessellation->sType = VK_STRUCTURE_TYPE_PIPELINE_TESSELLATION_STATE_CREATE_INFO;
+        tessellation->patchControlPoints = 0;
+        
+        VkPipelineViewportStateCreateInfo *viewport = New(get_temp(), VkPipelineViewportStateCreateInfo);
+        *viewport = (VkPipelineViewportStateCreateInfo){0};
+        viewport->sType = VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO;
+        viewport->viewportCount = 1;
+        viewport->scissorCount = 1; 
+        viewport->pViewports = 0;
+        viewport->pScissors = 0; 
+        
+        VkFrontFace front_face = VK_FRONT_FACE_CLOCKWISE;
+        VkCullModeFlags cull_mode = VK_CULL_MODE_BACK_BIT;
+        
+        switch(desc.cull_mode) {
+            case OGA_CULL_NONE:
+                cull_mode = VK_CULL_MODE_NONE;
+                break;
+            case OGA_CULL_CLOCKWISE:
+                front_face = VK_FRONT_FACE_CLOCKWISE;
+                break;
+            case OGA_CULL_COUNTER_CLOCKWISE:
+                front_face = VK_FRONT_FACE_COUNTER_CLOCKWISE;
+                break;
+            
+            default: assert(false);
+        }
+        
+        VkBool32 depth_clamp_enable = (desc.flags & OGA_RENDER_PASS_DISABLE_DEPTH_CLAMP) == 0;
+
+        if (depth_clamp_enable && !(context->device.features & OGA_DEVICE_FEATURE_DEPTH_CLAMP)) {
+            depth_clamp_enable = false;
+            log(0, "Depth clamp was flagged as enabled, but device is missing feature flag OGA_RENDER_PASS_DISABLE_DEPTH_CLAMP");
+        }
+        
+        VkPipelineRasterizationStateCreateInfo *rasterization = New(get_temp(), VkPipelineRasterizationStateCreateInfo);
+        *rasterization = (VkPipelineRasterizationStateCreateInfo){0};
+        rasterization->sType = VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO;
+        rasterization->depthClampEnable = depth_clamp_enable;
+        rasterization->rasterizerDiscardEnable = VK_FALSE;
+        rasterization->polygonMode = VK_POLYGON_MODE_FILL;
+        rasterization->cullMode = cull_mode;
+        rasterization->frontFace = front_face;
+        rasterization->depthBiasEnable = VK_FALSE;
+        rasterization->lineWidth = desc.line_width;
+        
+        VkSampleCountFlagBits samples = (VkSampleCountFlagBits)OGA_SAMPLE_COUNT_1;
+        if (desc.rasterization_samples & OGA_SAMPLE_COUNT_1)  samples |= VK_SAMPLE_COUNT_1_BIT;
+        if (desc.rasterization_samples & OGA_SAMPLE_COUNT_2)  samples |= VK_SAMPLE_COUNT_2_BIT;
+        if (desc.rasterization_samples & OGA_SAMPLE_COUNT_4)  samples |= VK_SAMPLE_COUNT_4_BIT;
+        if (desc.rasterization_samples & OGA_SAMPLE_COUNT_8)  samples |= VK_SAMPLE_COUNT_8_BIT;
+        if (desc.rasterization_samples & OGA_SAMPLE_COUNT_16) samples |= VK_SAMPLE_COUNT_16_BIT;
+        if (desc.rasterization_samples & OGA_SAMPLE_COUNT_32) samples |= VK_SAMPLE_COUNT_32_BIT;
+        if (desc.rasterization_samples & OGA_SAMPLE_COUNT_64) samples |= VK_SAMPLE_COUNT_64_BIT;
+        
+        
+        VkPipelineMultisampleStateCreateInfo *multisample = New(get_temp(), VkPipelineMultisampleStateCreateInfo);
+        *multisample = (VkPipelineMultisampleStateCreateInfo){0};
+        multisample->sType = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO;
+        multisample->rasterizationSamples = samples;
+        
+        VkPipelineDepthStencilStateCreateInfo *depth_stencil = New(get_temp(), VkPipelineDepthStencilStateCreateInfo);
+        *depth_stencil = (VkPipelineDepthStencilStateCreateInfo){0};
+        depth_stencil->sType = VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO;
+        
+        VkPipelineColorBlendAttachmentState *blend_attachment = New(get_temp(), VkPipelineColorBlendAttachmentState);
+        *blend_attachment = (VkPipelineColorBlendAttachmentState){0};
+        blend_attachment->blendEnable = false;
+        blend_attachment->colorWriteMask = VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT | VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT;
+        
+        VkPipelineColorBlendStateCreateInfo *blend = New(get_temp(), VkPipelineColorBlendStateCreateInfo);
+        *blend = (VkPipelineColorBlendStateCreateInfo){0};
+        blend->sType = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO;
+        blend->attachmentCount = 1;
+        blend->pAttachments = blend_attachment;
+        
+        VkDynamicState dynamic_states[] = {
+            VK_DYNAMIC_STATE_VIEWPORT,
+            VK_DYNAMIC_STATE_SCISSOR
+        };
+        VkPipelineDynamicStateCreateInfo *dynamic = New(get_temp(), VkPipelineDynamicStateCreateInfo);
+        *dynamic = (VkPipelineDynamicStateCreateInfo){0};
+        dynamic->sType = VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO;
+        dynamic->dynamicStateCount = sizeof(dynamic_states)/sizeof(VkDynamicState);
+        dynamic->pDynamicStates = dynamic_states;
+        
+        VkPipelineLayout layout;
+        VkPipelineLayoutCreateInfo *layout_info = New(get_temp(), VkPipelineLayoutCreateInfo);
+        *layout_info = (VkPipelineLayoutCreateInfo){0};
+        layout_info->sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
+        
+        VkAllocationCallbacks vk_allocs = _vk_allocator(&context->state_allocator);
+        _vk_assert2(vkCreatePipelineLayout((VkDevice)context->id, layout_info, &vk_allocs, &layout));
+        
+        VkPipeline base_pipeline = 0;
+        if (desc.base) {
+            _Vk_Pipeline_State *state = (_Vk_Pipeline_State*)desc.base->id;
+            base_pipeline = state->pipeline;
+        }
+        
+        s32 base_index = (s32)desc.base_index;
+    
+        VkGraphicsPipelineCreateInfo info = (VkGraphicsPipelineCreateInfo) {0};
+        info.sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO;
+        info.pNext = rendering;
+        info.flags = pipeline_flags;
+        info.stageCount = 2;
+        info.pStages = stages;
+        info.pVertexInputState = vertex_input;
+        info.pInputAssemblyState = ia;
+        info.pTessellationState = tessellation;
+        info.pViewportState = viewport;
+        info.pRasterizationState = rasterization;
+        info.pMultisampleState = multisample;
+        info.pDepthStencilState = depth_stencil;
+        info.pColorBlendState = blend;
+        info.pDynamicState = dynamic;
+        info.layout = layout;
+        info.renderPass = 0; // #Portability dynamic rendering
+        info.subpass = 0;
+        info.basePipelineHandle = base_pipeline;
+        info.basePipelineIndex = base_index;
+        
+        infos[i] = info;
+    }
+    
+    VkPipeline *vk_pipelines = NewBuffer(get_temp(), VkPipeline, render_pass_count);
+    assert(vk_pipelines);
+    VkAllocationCallbacks vk_allocs = _vk_allocator(&context->state_allocator);
+    _vk_assert2(vkCreateGraphicsPipelines((VkDevice)context->id, 0, (u32)render_pass_count, infos, &vk_allocs, vk_pipelines));
+    
+    // These need to be allocated one by one because render passes needs to be able to be freed one by one
+    for (u64 i = 0; i < render_pass_count; i += 1) {
+        render_passes[i] = (Oga_Render_Pass*)allocate(context->state_allocator, sizeof(Oga_Render_Pass)+sizeof(_Vk_Pipeline_State));
+        render_passes[i]->context = context;
+        _Vk_Pipeline_State *state = (_Vk_Pipeline_State*)(render_passes[i]+1);
+        render_passes[i]->id = state;
+        
+        state->pipeline = vk_pipelines[i];
+        state->layout = infos[i].layout;
     }
     
     return OGA_OK;
 }
-void oga_uninit_context(Oga_Context *context) {
-    vkDeviceWaitIdle(context->id);
+
+Oga_Result oga_init_render_pass(Oga_Context *context, Oga_Render_Pass_Desc desc, Oga_Render_Pass **render_pass) {
+    return oga_init_render_passes(context, &desc, render_pass, 1);
+} 
+void oga_uninit_render_pass(Oga_Render_Pass *render_pass) {
+    _Vk_Pipeline_State *state = (_Vk_Pipeline_State*)render_pass->id;
+    VkAllocationCallbacks vk_allocs = _vk_allocator(&render_pass->context->state_allocator);
     
-    vkDestroyDevice(context->id, 0);
+    _vk_assert1(vkDeviceWaitIdle(render_pass->context->id));
+    vkDestroyPipeline((VkDevice)render_pass->context->id, state->pipeline, &vk_allocs);
+    vkDestroyPipelineLayout((VkDevice)render_pass->context->id, state->layout, &vk_allocs);
+    
+    Allocator a = render_pass->context->state_allocator;
+    *render_pass = (Oga_Render_Pass){0};
+    deallocate(a, render_pass);
+} 
+
+Oga_Result oga_init_gpu_latch(Oga_Context *context, Oga_Gpu_Latch **gpu_latch) {
+    *gpu_latch = allocate(context->state_allocator, sizeof(Oga_Gpu_Latch) + sizeof(VkSemaphore));
+    if (!*gpu_latch) {
+        return OGA_ERROR_STATE_ALLOCATION_FAILED;
+    }
+
+    **gpu_latch = (Oga_Gpu_Latch){0};
+    (*gpu_latch)->context = context;
+
+    VkSemaphoreCreateInfo create_info = {0};
+    create_info.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
+
+    VkAllocationCallbacks vk_allocs = _vk_allocator(&context->state_allocator);
+    _vk_assert2(vkCreateSemaphore((VkDevice)context->id, &create_info, &vk_allocs, (VkSemaphore*)&(*gpu_latch)->id));
+    
+    return OGA_OK;
 }
+
+void oga_uninit_gpu_latch(Oga_Gpu_Latch *gpu_latch) {
+    VkAllocationCallbacks vk_allocs = _vk_allocator(&gpu_latch->context->state_allocator);
+    _vk_assert1(vkDeviceWaitIdle(gpu_latch->context->id));
+    vkDestroySemaphore((VkDevice)gpu_latch->context->id, (VkSemaphore)gpu_latch->id, &vk_allocs);
+
+    Allocator a = gpu_latch->context->state_allocator;
+    *gpu_latch = (Oga_Gpu_Latch){0};
+    deallocate(a, gpu_latch);
+}
+
+// Cpu latch; for synchronizing CPU with GPU. Signalled on GPU, waited on CPU.
+Oga_Result oga_init_cpu_latch(Oga_Context *context, Oga_Cpu_Latch **cpu_latch, bool start_signaled) {
+    *cpu_latch = allocate(context->state_allocator, sizeof(Oga_Cpu_Latch) + sizeof(VkFence));
+    if (!*cpu_latch) {
+        return OGA_ERROR_STATE_ALLOCATION_FAILED;
+    }
+
+    **cpu_latch = (Oga_Cpu_Latch){0};
+    (*cpu_latch)->context = context;
+
+    VkFenceCreateInfo create_info = {0};
+    create_info.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
+    create_info.flags = start_signaled ? VK_FENCE_CREATE_SIGNALED_BIT : 0;
+
+    VkAllocationCallbacks vk_allocs = _vk_allocator(&context->state_allocator);
+    _vk_assert2(vkCreateFence((VkDevice)context->id, &create_info, &vk_allocs, (VkFence*)&(*cpu_latch)->id));
+
+    return OGA_OK;
+}
+
+void oga_uninit_cpu_latch(Oga_Cpu_Latch *cpu_latch) {
+    VkAllocationCallbacks vk_allocs = _vk_allocator(&cpu_latch->context->state_allocator);
+    _vk_assert1(vkDeviceWaitIdle(cpu_latch->context->id));
+    vkDestroyFence((VkDevice)cpu_latch->context->id, (VkFence)cpu_latch->id, &vk_allocs);
+
+    Allocator a = cpu_latch->context->state_allocator;
+    *cpu_latch = (Oga_Cpu_Latch){0};
+    deallocate(a, cpu_latch);
+}
+
+Oga_Result oga_wait_latch(Oga_Cpu_Latch *cpu_latch) {
+    _vk_assert2(vkWaitForFences((VkDevice)cpu_latch->context->id, 1, (VkFence*)&cpu_latch->id, VK_TRUE, UINT64_MAX));
+    
+    return OGA_OK;
+}
+
+Oga_Result oga_reset_latch(Oga_Cpu_Latch *cpu_latch) {
+    _vk_assert2(vkResetFences((VkDevice)cpu_latch->context->id, 1, (VkFence*)&cpu_latch->id));
+
+    return OGA_OK;
+}
+
+Oga_Result oga_init_command_pool(Oga_Context *context, Oga_Command_Pool_Desc desc, Oga_Command_Pool **pool) {
+    *pool = allocate(context->state_allocator, sizeof(Oga_Command_Pool) + sizeof(VkCommandPool));
+    if (!*pool) {
+        return OGA_ERROR_STATE_ALLOCATION_FAILED;
+    }
+
+    **pool = (Oga_Command_Pool){0};
+    (*pool)->context = context;
+
+    VkCommandPoolCreateInfo create_info = {0};
+    create_info.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
+    create_info.flags = 0;
+
+    if (desc.flags & OGA_COMMAND_POOL_SHORT_LIVED) {
+        create_info.flags |= VK_COMMAND_POOL_CREATE_TRANSIENT_BIT;
+    }
+
+    create_info.queueFamilyIndex = (u32)desc.engine_family_index;
+
+    VkAllocationCallbacks vk_allocs = _vk_allocator(&context->state_allocator);
+    _vk_assert2(vkCreateCommandPool((VkDevice)context->id, &create_info, &vk_allocs, (VkCommandPool *)&(*pool)->id));
+
+    return OGA_OK;
+}
+
+void oga_uninit_command_pool(Oga_Command_Pool *pool) {
+    VkAllocationCallbacks vk_allocs = _vk_allocator(&pool->context->state_allocator);
+
+    _vk_assert1(vkDeviceWaitIdle(pool->context->id));
+    vkResetCommandPool(pool->context->id, pool->id, 0);
+    _vk_assert1(vkDeviceWaitIdle(pool->context->id));
+    vkDestroyCommandPool(pool->context->id, pool->id, &vk_allocs);
+
+    Allocator a = pool->context->state_allocator;
+    *pool = (Oga_Command_Pool){0};
+    deallocate(a, pool);
+}
+void oga_reset_command_pool(Oga_Command_Pool *pool) {
+    _vk_assert1(vkResetCommandPool(pool->context->id, pool->id, 0));
+}
+
+Oga_Result oga_get_command_lists(Oga_Command_Pool *pool, Oga_Command_List *lists, u64 list_count) {
+    VkCommandBufferAllocateInfo allocate_info = {0};
+    allocate_info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
+    allocate_info.commandPool = (VkCommandPool)pool->id;
+    allocate_info.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
+    allocate_info.commandBufferCount = (u32)list_count;
+
+    VkCommandBuffer *vk_buffers = NewBuffer(get_temp(), VkCommandBuffer, list_count);
+    _vk_assert2(vkAllocateCommandBuffers((VkDevice)pool->context->id, &allocate_info, vk_buffers));
+
+
+    for (u64 i = 0; i < list_count; i += 1) {
+        lists[i] = (Oga_Command_List){0};
+        lists[i].id = vk_buffers[i];
+        lists[i].pool = pool;
+    }
+
+    return OGA_OK;
+}
+
+void oga_release_command_lists(Oga_Command_List *lists, u64 list_count) {
+    VkCommandBuffer *vk_buffers = NewBuffer(get_temp(), VkCommandBuffer, list_count);
+
+    Oga_Command_Pool *last_pool = 0;
+    
+    for (u64 i = 0; i < list_count; i += 1) {
+        if (last_pool) {
+            assertmsg(last_pool != lists[i].pool, "Command lists from different pools were passed to oga_release_command_lists. All command lists must be from the same pool to do a batched release.");
+        }
+        last_pool = lists[i].pool;
+    
+        vk_buffers[i] = (VkCommandBuffer)lists[i].id;
+        lists[i] = (Oga_Command_List){0};
+    }
+    
+    _vk_assert1(vkDeviceWaitIdle(last_pool->context->id));
+    vkFreeCommandBuffers((VkDevice)last_pool->context->id, (VkCommandPool)last_pool->id, (u32)list_count, vk_buffers);
+}
+
+
+Oga_Result oga_cmd_begin(Oga_Command_List cmd, Oga_Command_List_Usage_Flag flags) {
+    VkCommandBufferBeginInfo info = (VkCommandBufferBeginInfo){0};
+    info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+    if (flags & OGA_COMMAND_LIST_USAGE_ONE_TIME_SUBMIT) 
+        info.flags |= VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
+    _vk_assert2(vkBeginCommandBuffer(cmd.id, &info));
+    return OGA_OK;
+}
+Oga_Result oga_cmd_end(Oga_Command_List cmd) {
+    _vk_assert2(vkEndCommandBuffer(cmd.id));
+    return OGA_OK;
+}
+Oga_Result oga_submit_command_list(Oga_Command_List cmd, Oga_Submit_Command_List_Desc desc) {
+    
+    VkSemaphore *wait_semaphores = NewBuffer(get_temp(), VkSemaphore, desc.wait_gpu_latch_count);
+    VkPipelineStageFlags *wait_stages = NewBuffer(get_temp(), VkPipelineStageFlags, desc.wait_gpu_latch_count);
+    VkSemaphore *signal_semaphores = NewBuffer(get_temp(), VkSemaphore, desc.signal_gpu_latch_count);
+    
+    for (u64 i = 0; i < desc.wait_gpu_latch_count; i += 1) {
+        wait_semaphores[i] = desc.wait_gpu_latches[i]->id;
+        // note(charlie): it's a bit unfortunate to abstract this away from the programmer,
+        // because it's a pretty neat opportunity for optimization. Maybe we add this to the
+        // api but make it sure it only has an effect when targetting vulkan?
+        wait_stages[i] = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+    }
+    for (u64 i = 0; i < desc.signal_gpu_latch_count; i += 1) {
+        signal_semaphores[i] = desc.signal_gpu_latches[i]->id;
+    }
+
+    VkSubmitInfo info = (VkSubmitInfo){0};
+    info.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+    info.waitSemaphoreCount = (u32)desc.wait_gpu_latch_count;
+    info.pWaitSemaphores = wait_semaphores;
+    info.pWaitDstStageMask = wait_stages;
+    info.commandBufferCount = 1; // todo(charlie) api to submit multiple command buffers at a time?
+    info.pCommandBuffers = (VkCommandBuffer*)&cmd.id;
+    info.signalSemaphoreCount = (u32)desc.signal_gpu_latch_count;
+    info.pSignalSemaphores = signal_semaphores;
+    
+    _vk_assert2(vkQueueSubmit(desc.engine.id, 1, &info, desc.signal_cpu_latch->id));
+    
+    return OGA_OK;    
+}
+unit_local VkImageLayout _oga_to_vk_image_layout(Oga_Image_Optimization o) {
+    switch(o) {
+        case OGA_IMAGE_OPTIMIZATION_UNDEFINED:         return VK_IMAGE_LAYOUT_UNDEFINED;
+        case OGA_IMAGE_OPTIMIZATION_GENERAL:           return VK_IMAGE_LAYOUT_GENERAL;
+        case OGA_IMAGE_OPTIMIZATION_RENDER_ATTACHMENT: return VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+        case OGA_IMAGE_OPTIMIZATION_SHADER_READONLY:   return VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+        case OGA_IMAGE_OPTIMIZATION_TRANSFER_DST:      return VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
+        case OGA_IMAGE_OPTIMIZATION_TRANSFER_SRC:      return VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL;
+        case OGA_IMAGE_OPTIMIZATION_PRESENT:           return VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
+        default: return 0;
+    }
+    return 0;
+}
+unit_local void _vk_decide_stage_and_access_mask(VkImageLayout layout, VkPipelineStageFlags *stage, VkAccessFlags *access)  {
+        if (layout == VK_IMAGE_LAYOUT_UNDEFINED) {
+            *access = 0;
+            *stage = VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT;
+        } else if (layout == VK_IMAGE_LAYOUT_PRESENT_SRC_KHR) {
+            *access = VK_ACCESS_MEMORY_READ_BIT;
+            *stage = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+        } else if (layout == VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL) {
+            *access = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
+            *stage = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+        } else if (layout == VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL) {
+            *access = VK_ACCESS_SHADER_READ_BIT;
+            *stage = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
+        } else if (layout == VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL) {
+            *access = VK_ACCESS_TRANSFER_WRITE_BIT;
+            *stage = VK_PIPELINE_STAGE_TRANSFER_BIT;
+        } else if (layout == VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL) {
+            *access = VK_ACCESS_TRANSFER_READ_BIT;
+            *stage = VK_PIPELINE_STAGE_TRANSFER_BIT;
+        } else {
+            assertmsgs(false, tprint("Unhandled image layout '%u' for transitioning (internal error)\n", layout));
+        }
+    }
+void oga_cmd_transition_image_optimization(Oga_Command_List cmd, Oga_Image *image, Oga_Image_Optimization src_optimization, Oga_Image_Optimization dst_optimization) {
+    VkPipelineStageFlags src_stage, dst_stage;
+    VkAccessFlags src_access, dst_access;
+    
+    _vk_decide_stage_and_access_mask(_oga_to_vk_image_layout(src_optimization), &src_stage, &src_access);
+    _vk_decide_stage_and_access_mask(_oga_to_vk_image_layout(dst_optimization), &dst_stage, &dst_access);
+    
+    _Vk_Image_State *state = (_Vk_Image_State*)image->id;
+    
+    VkImageMemoryBarrier barrier = (VkImageMemoryBarrier){0};
+    barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
+    barrier.oldLayout = _oga_to_vk_image_layout(src_optimization);
+    barrier.newLayout = _oga_to_vk_image_layout(dst_optimization);
+    barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+    barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+    barrier.image = state->image;
+    barrier.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+    barrier.subresourceRange.baseMipLevel = 0;
+    barrier.subresourceRange.levelCount = 1;
+    barrier.subresourceRange.baseArrayLayer = 0;
+    barrier.subresourceRange.layerCount = 1;
+    barrier.pNext = 0;
+    barrier.srcAccessMask = src_access;
+    barrier.dstAccessMask = dst_access;
+    
+
+    vkCmdPipelineBarrier(cmd.id, src_stage, dst_stage, 0, 0, 0, 0, 0, 1, &barrier);
+}
+
+void oga_cmd_begin_render_pass(Oga_Command_List cmd, Oga_Begin_Render_Pass_Desc desc) {
+
+    VkRenderingAttachmentInfoKHR vk_attachments[128] = {0};
+
+    for (u64 i = 0; i < desc.attachment_count; i += 1) {
+        
+        Oga_Render_Attachment_Desc attach_desc = desc.attachments[i];
+        
+        _Vk_Image_State *state = (_Vk_Image_State*)attach_desc.image->id;
+    
+        vk_attachments[i].sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO_KHR;
+        vk_attachments[i].imageView = state->view;
+        vk_attachments[i].imageLayout = _oga_to_vk_image_layout(attach_desc.image_optimization);
+        
+        if (attach_desc.resolve_mode & OGA_MSAA_RESOLVE_MODE_ZERO)
+            vk_attachments[i].resolveMode |= VK_RESOLVE_MODE_SAMPLE_ZERO_BIT_KHR;
+        if (attach_desc.resolve_mode & OGA_MSAA_RESOLVE_MODE_AVERAGE)
+            vk_attachments[i].resolveMode |= VK_RESOLVE_MODE_AVERAGE_BIT_KHR;
+        if (attach_desc.resolve_mode & OGA_MSAA_RESOLVE_MODE_MIN)
+            vk_attachments[i].resolveMode |= VK_RESOLVE_MODE_MIN_BIT_KHR;
+        if (attach_desc.resolve_mode & OGA_MSAA_RESOLVE_MODE_MAX)
+            vk_attachments[i].resolveMode |= VK_RESOLVE_MODE_MAX_BIT_KHR;
+            
+        if (attach_desc.resolve_image) {
+            state = (_Vk_Image_State*)attach_desc.resolve_image->id;
+    
+            vk_attachments[i].resolveImageView = state->view;
+            vk_attachments[i].resolveImageLayout = _oga_to_vk_image_layout(attach_desc.resolve_image_optimization);
+        }
+        
+        switch (attach_desc.load_op) {
+            case OGA_ATTACHMENT_LOAD_OP_LOAD:
+                vk_attachments[i].loadOp = VK_ATTACHMENT_LOAD_OP_LOAD;
+                break;
+            case OGA_ATTACHMENT_LOAD_OP_CLEAR:
+                vk_attachments[i].loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
+                break;
+            case OGA_ATTACHMENT_LOAD_OP_NOTHING:
+                vk_attachments[i].loadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
+                break;
+            default:break;
+        }
+        switch (attach_desc.store_op) {
+            case OGA_ATTACHMENT_STORE_OP_STORE:
+                vk_attachments[i].storeOp = VK_ATTACHMENT_STORE_OP_STORE;
+                break;
+            case OGA_ATTACHMENT_STORE_OP_NOTHING:
+                vk_attachments[i].storeOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
+                break;
+            default:break;
+        }
+        
+        memcpy(vk_attachments[i].clearValue.color.float32, attach_desc.clear_color, sizeof(float32)*4);
+    }
+    
+    VkRenderingAttachmentInfo dummy_attachment = (VkRenderingAttachmentInfo){0};
+    dummy_attachment.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO;
+
+    VkRenderingInfoKHR info = (VkRenderingInfoKHR){0};
+    info.sType = VK_STRUCTURE_TYPE_RENDERING_INFO_KHR;
+    info.renderArea.offset.x = (s32)desc.render_area_offset_x;
+    info.renderArea.offset.y = (s32)desc.render_area_offset_y;
+    info.renderArea.extent.width = (u32)desc.render_area_width;
+    info.renderArea.extent.height = (u32)desc.render_area_height;
+    info.layerCount = 1;
+    info.colorAttachmentCount = (u32)desc.attachment_count;
+    info.pColorAttachments = vk_attachments;
+    info.pDepthAttachment = &dummy_attachment;
+    info.pStencilAttachment = &dummy_attachment;
+    
+    
+    _Vk_Context_Internal *internal = (_Vk_Context_Internal*)cmd.pool->context->internal;
+    internal->vkCmdBeginRenderingKHR(cmd.id, &info);
+    
+    _Vk_Pipeline_State *state = (_Vk_Pipeline_State*)desc.render_pass->id;
+    
+    vkCmdBindPipeline(cmd.id, VK_PIPELINE_BIND_POINT_GRAPHICS, state->pipeline); 
+    
+    VkViewport vp = (VkViewport){0};
+    vp.x = 0;
+    vp.y = 0;
+    vp.width = (float)desc.render_area_width;
+    vp.height = (float)desc.render_area_height;
+    vp.minDepth = 0.0;
+    vp.maxDepth = 1.0;
+    
+    vkCmdSetViewport(cmd.id, 0, 1, &vp);
+    
+    VkRect2D scissor;
+    scissor.offset.x = 0;
+    scissor.offset.y = 0;
+    scissor.extent.width = info.renderArea.extent.width;
+    scissor.extent.height = info.renderArea.extent.height;
+    
+    vkCmdSetScissor(cmd.id, 0, 1, &scissor);
+}
+void oga_cmd_end_render_pass(Oga_Command_List cmd) {
+    _Vk_Context_Internal *internal = (_Vk_Context_Internal*)cmd.pool->context->internal;
+    internal->vkCmdEndRenderingKHR(cmd.id);
+}
+
+void oga_cmd_draw(Oga_Command_List cmd, u64 vertex_count, u64 vertex_start, u64 instance_count, u64 instance_start) {
+    vkCmdDraw(cmd.id, (u32)vertex_count, (u32)instance_count, (u32)vertex_start, (u32)instance_start);
+}
+
+
+
+
+
+
+
+
+
+#undef uint8_t
+#undef int8_t
+#undef uint16_t
+#undef int16_t
+#undef uint32_t
+#undef int32_t
+#undef uint64_t
+#undef int64_t
+
 /* End include: graphics_vulkan.h */
 #endif // (OS_FLAGS & (OS_FLAG_WINDOWS | OS_FLAG_LINUX | OS_FLAG_MACOS | OS_FLAG_IOS | OS_FLAG_ANDROID))
 
@@ -5948,8 +8508,14 @@ void oga_uninit_context(Oga_Context *context) {
 
 /* End include: graphics.h */
 
-#ifdef OSTD_NO_IGNORE_WARNINGS
+#if defined(__clang__)
 #pragma clang diagnostic pop
-#endif // OSTD_NO_IGNORE_WARNINGS
+#endif
+
+#if defined(__GNUC__) || defined(__GNUG__)
+#pragma GCC diagnostic pop
+#endif
 
 #endif // OSTD_H_
+
+#endif // OSTD_SINGLE_HEADER

@@ -58,7 +58,7 @@ def resolve_includes(file_path, base_dir, skip_next=False):
                     resolved_content.append(line)
         else:
             resolved_content.append(line)
-    return ''.join(resolved_content)
+    return ''.join(resolved_content).replace("#include \"vendors", "#include \"src/vendors")
 
 def main():
     if len(sys.argv) != 3:
@@ -74,7 +74,9 @@ def main():
     resolved = resolve_includes(input_filename, base_dir)
 
     with open(output_file, 'w') as f:
+        f.write("#ifndef OSTD_SINGLE_HEADER\n#define OSTD_SINGLE_HEADER\n\n");
         f.write(resolved)
+        f.write("#endif // OSTD_SINGLE_HEADER\n");
 
     print(f"Resolved includes written to {output_file}")
 
