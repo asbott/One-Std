@@ -551,7 +551,7 @@
       <SubSystem>Console</SubSystem>
       <GenerateDebugInformation>true</GenerateDebugInformation>
       <LibraryDependencies>vulkan;log;atomic;GLESv2;EGL;android;</LibraryDependencies>
-      <AdditionalLibraryDirectories>%(AdditionalLibraryDirectories);$(SysrootLink)\usr\lib</AdditionalLibraryDirectories>
+      <AdditionalLibraryDirectories>%(SolutionDir);%(AdditionalLibraryDirectories);$(SysrootLink)\usr\lib</AdditionalLibraryDirectories>
     </Link>
     <PostBuildEvent>
       <Command>

@@ -4,6 +4,8 @@
 #ifndef TEST_NO_IMPL
 #define OSTD_IMPL
 
+//#define LOG_VULKAN_ALLOCATIONS
+
 #define OGA_IMPL_VULKAN
 #endif // TEST_NO_IMPL
 #include "../src/ostd.h"
@@ -168,6 +170,7 @@ unit_local bool inline check_oga_result(Oga_Result result) {
         string err_name = oga_get_result_name(result);
         string err_msg = oga_get_result_message(result);
         print("oga call failed with error %s: '%s'\n", err_name, err_msg);
+        sys_print_stack_trace(sys_get_stdout());
         return false;
     }
     return true;
@@ -349,7 +352,7 @@ int main(void) {
     ///
     // Context desc
     Oga_Context_Desc context_desc = (Oga_Context_Desc){0};
-    context_desc.state_allocator = get_temp(); // todo(charlie) dont do this
+    context_desc.state_allocator = (Allocator){0}; // Use default state allocator, should be very good for many drivers
 
     Oga_Logical_Engines_Create_Desc *graphics_engine_desc = &context_desc.logical_engine_create_descs[family_index_graphics];
     Oga_Logical_Engines_Create_Desc *present_engine_desc = &context_desc.logical_engine_create_descs[family_index_present];
@@ -430,7 +433,7 @@ int main(void) {
     if (context->device.features & OGA_DEVICE_FEATURE_PRESENT_MAILBOX) {
         present_mode = OGA_PRESENT_MODE_VSYNC_MAILBOX;
     }
-    
+    present_mode = OGA_PRESENT_MODE_IMMEDIATE;
     Oga_Swapchain_Desc sc_desc = (Oga_Swapchain_Desc){0};
     sc_desc.surface = surface;
     sc_desc.requested_image_count = 3;
@@ -480,7 +483,7 @@ int main(void) {
         return 1;
     
     Oga_Command_Pool_Desc pool_desc = (Oga_Command_Pool_Desc){0};
-    pool_desc.flags = OGA_COMMAND_POOL_SHORT_LIVED;
+    pool_desc.flags = 0;
     pool_desc.queue_family_index = family_index_graphics;
     
     Oga_Command_Pool *pools[3];
@@ -527,8 +530,20 @@ int main(void) {
     u64 frame_index = 0;
     
     bool image_virgin_flags[3] = {1,1,1};
-
+    (void)image_virgin_flags;
+    float64 last_time = 0.0;
     while (running) {
+        reset_temporary_storage();
+        float64 now = sys_get_seconds_monotonic();
+        float64 delta = now-last_time;
+        if ((u64)now > (u64)last_time) {
+            float64 ms = delta*1000.0;
+            float64 fps = 1.0/delta;
+            print("%fms, %ffps\n", ms, fps);
+        }
+        last_time = now;
+        
+        
         surface_poll_events(surface);
 
         if (surface_should_close(surface)) {
@@ -541,7 +556,7 @@ int main(void) {
         oga_reset_command_pool(pools[frame_index]);
         
         u64 image_index;
-        Oga_Result image_get_result = oga_get_next_swapchain_image(swapchain, U64_MAX-1, image_ready_latches[frame_index], 0, &image_index);
+        Oga_Result image_get_result = oga_get_next_swapchain_image(swapchain, U64_MAX, image_ready_latches[frame_index], 0, &image_index);
         if (image_get_result == OGA_SUBOPTIMAL) {
             
         } else if (image_get_result != OGA_OK) {
@@ -581,7 +596,7 @@ int main(void) {
         oga_cmd_transition_image_optimization(cmd, swapchain->images[image_index], OGA_IMAGE_OPTIMIZATION_RENDER_ATTACHMENT, OGA_IMAGE_OPTIMIZATION_PRESENT);
         
         oga_cmd_end(cmd);
-
+        
         
         Oga_Submit_Command_List_Desc submit = (Oga_Submit_Command_List_Desc){0};
         submit.engine = graphics_engine;
@@ -600,8 +615,7 @@ int main(void) {
         
         oga_submit_present(swapchain, present_desc);
         
-        frame_index = (frame_index + 1) % frame_count;
-        
+        frame_index = (frame_index + 1) % frame_count;        
     }
 
     // System will free any resources when our program exits, this is to get sanity validation errors to make sure
@@ -654,7 +668,7 @@ void test_sys1(void) {
 
     System_Info info = sys_get_info();
     {
-        void *mem = sys_map_pages(SYS_MEMORY_RESERVE | SYS_MEMORY_ALLOCATE, 0, 4);
+        void *mem = sys_map_pages(SYS_MEMORY_RESERVE | SYS_MEMORY_ALLOCATE, 0, 4, false);
         assert(mem);
 
         memset(mem, (int)0xDEADBEEF, (sys_uint)info.page_size*4);
@@ -668,7 +682,7 @@ void test_sys1(void) {
         // win64, android arm64  0x0000007cccc00000ULL
         void* addr = (void*)((0x0000007cccc00000ULL + info.granularity - 1) & ~(info.granularity - 1));
 
-        void *mem = sys_map_pages(SYS_MEMORY_RESERVE | SYS_MEMORY_ALLOCATE, addr, 4);
+        void *mem = sys_map_pages(SYS_MEMORY_RESERVE | SYS_MEMORY_ALLOCATE, addr, 4, true);
         assert(mem);
         assert(mem == addr);
 
@@ -685,9 +699,9 @@ void test_sys1(void) {
         void *addr2 = (u8*)addr1 + page_count*info.page_size;
         void *end = (u8*)addr2 + page_count*info.page_size;
 
-        void *mem0 = sys_map_pages(SYS_MEMORY_RESERVE | SYS_MEMORY_ALLOCATE, addr0, 4);
-        void *mem1 = sys_map_pages(SYS_MEMORY_RESERVE | SYS_MEMORY_ALLOCATE, addr1, 4);
-        void *mem2 = sys_map_pages(SYS_MEMORY_RESERVE | SYS_MEMORY_ALLOCATE, addr2, 4);
+        void *mem0 = sys_map_pages(SYS_MEMORY_RESERVE | SYS_MEMORY_ALLOCATE, addr0, 4, true);
+        void *mem1 = sys_map_pages(SYS_MEMORY_RESERVE | SYS_MEMORY_ALLOCATE, addr1, 4, true);
+        void *mem2 = sys_map_pages(SYS_MEMORY_RESERVE | SYS_MEMORY_ALLOCATE, addr2, 4, true);
 
         assert(mem0);
         assert(mem1);
@@ -733,10 +747,10 @@ void test_sys1(void) {
         sys_close(hwrite);
 
         written = sys_write_string(hwrite, a);
-        assert(written == -1);
+        assert(written == 0);
 
         s64 read = sys_read(hread, buf, 128);
-        assert(read == -1);
+        assert(read == 0);
     }
 
     // todo(charlie) test rerouting stdout & stderr to a file

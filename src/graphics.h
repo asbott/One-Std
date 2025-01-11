@@ -350,6 +350,20 @@ typedef struct Oga_Logical_Engines_Create_Desc {
     float32 priorities[OGA_MAX_DEVICE_LOGICAL_ENGINES_PER_FAMILY]; // normalized 0.0-1.0.
 } Oga_Logical_Engines_Create_Desc;
 
+// Default allocator of non is specified in Oga_Context_Desc::state_allocator
+void* oga_state_allocator_proc(Allocator_Message msg, void *data, void *old, u64 old_n, u64 n, u64 alignment, u64 flags);
+
+
+typedef struct Oga_Allocator_Row {
+    void *start;
+    void *end;
+    u64 first_free_index;
+    u64 highest_allocated_index;
+} Oga_Allocator_Row;
+typedef struct Oga_State_Allocator_Data {
+    // 16, 32, 64, 128, 256, 512, 1024, 2048, 4096, 8196, 16384
+    Oga_Allocator_Row rows[11];
+} Oga_State_Allocator_Data;
 
 typedef struct Oga_Context_Desc {
     // Indices match to that of Oga_Device::logical_engine_family_infos.
@@ -380,6 +394,8 @@ typedef struct Oga_Context {
     Oga_Device device;
     Oga_Logical_Engine_Group logical_engines_by_family[OGA_MAX_DEVICE_LOGICAL_ENGINE_FAMILIES];
     Allocator state_allocator;
+    
+    Oga_State_Allocator_Data default_allocator_data; // Backing for Allocator::data
 } Oga_Context;
 
 Oga_Result oga_init_context(Oga_Device target_device, Oga_Context_Desc desc, Oga_Context **context);
@@ -555,20 +571,6 @@ Oga_Result oga_reset_latch(Oga_Cpu_Latch *cpu_latch);
 
 typedef void* Oga_Memory_Handle;
 #define OGA_INTERNALLY_MANAGED_MEMORY_HANDLE ((void*)0xFFFFFFFFFFFFFFFF)
-
-typedef enum Oga_Allocator_Message {
-    OGA_ALLOCATOR_ALLOCATE,
-    OGA_ALLOCATOR_DEALLOCATE
-} Oga_Allocator_Message;
-
-typedef Oga_Memory_Handle (*Oga_Allocator_Proc_)(
-        Oga_Allocator_Message msg,
-        Oga_Memory_Handle mem,
-        u64 size,
-        Oga_Memory_Property_Flag props,
-        u64 flags
-    );
-typedef Oga_Allocator_Proc_ Oga_Allocator_Proc;
 
 //////////
 /// Pointers
@@ -813,6 +815,143 @@ void oga_cmd_draw(Oga_Command_List cmd, u64 vertex_count, u64 vertex_start, u64 
 
 #ifdef OSTD_IMPL
 
+void* oga_state_allocator_proc(Allocator_Message msg, void *data, void *old, u64 old_n, u64 n, u64 alignment, u64 flags) {
+    (void)flags;
+    (void)old_n;
+    (void)alignment; // Since fitting into blocks, they will already be aligned
+    Oga_State_Allocator_Data *a = (Oga_State_Allocator_Data*)data;
+    
+    System_Info info = sys_get_info();
+    
+    switch (msg) {
+        case ALLOCATOR_ALLOCATE:
+        {
+            if (n > 16384) {
+                // Just directly map pages for big allocations. This should be rare, or probably never happen.
+                void *p = sys_map_pages(SYS_MEMORY_RESERVE | SYS_MEMORY_ALLOCATE, 0, (n+info.page_size)/info.page_size, false);
+                return p;
+            }
+        
+            Oga_Allocator_Row *row = 0;
+            u64 stride = 0;
+            for (u64 i = 0; i < 11; i += 1) {
+                u64 row_stride = powu(2, i+3);
+                if (n <= row_stride) {
+                    stride = row_stride;
+                    row = &a->rows[i];
+                    break;
+                }
+            }
+            
+            assert(row);
+            
+            if (!row->start) {
+                // todo(charlie) #Portability
+                // Need to find a portable free address space, or provide a way to query for such.
+
+                void *reserved = sys_map_pages(SYS_MEMORY_RESERVE, 0, (1024*1024*1024)/info.page_size, false);
+                assert(reserved);
+                
+                row->start = sys_map_pages(SYS_MEMORY_ALLOCATE, reserved, max(info.granularity, 1024*32)/info.page_size, true);
+                
+                if (!row->start) return 0;
+                
+                row->end = (u8*)row->start + (max(info.granularity, 1024*32)/info.page_size)*info.page_size;
+                
+                row->first_free_index = 0;
+            }
+            
+            
+            void *next = (u8*)row->start + row->first_free_index*stride;
+            u64 allocated_index = ((u64)next-(u64)row->start)/stride;
+            
+            assert(row->first_free_index <= ((u64)row->end-(u64)row->start)/stride);
+            
+            if ((u8*)next == (u8*)row->end) {
+                u64 old_size = (u64)row->end - (u64)row->start;
+                u64 new_size = old_size*2;
+                
+                void *expansion = sys_map_pages(SYS_MEMORY_ALLOCATE, row->end, new_size/info.page_size, true);
+#if OS_FLAGS & OS_FLAG_WINDOWS
+                assert(expansion);
+#endif
+                if (!expansion) {  
+                    // todo(charlie) #Portability #Memory #Speed
+                    // If target system has poor mapping features, we might hit this often, which is kind of crazy.
+                    void *p = sys_map_pages(SYS_MEMORY_RESERVE | SYS_MEMORY_ALLOCATE, 0, (n+info.page_size)/info.page_size, false);
+                    return p;
+                }
+                
+                assert(expansion == row->end);
+                row->end = (u8*)row->start + new_size;
+            } else {
+                assertmsgs((u64)next < (u64)row->end, tprint("%u, %u", next, row->end));
+            }
+            
+            if (allocated_index >= row->highest_allocated_index) {
+                row->first_free_index = allocated_index+1;
+            } else {
+                row->first_free_index = *(u64*)next;
+            }
+            
+            assert(row->first_free_index <= ((u64)row->end-(u64)row->start)/stride);            assertmsgs((u64)((u8*)row->start + row->first_free_index*stride) <= (u64)row->end, tprint("%u, %u", next, row->end));
+            
+            row->highest_allocated_index = max(row->highest_allocated_index, allocated_index);
+            
+            assert(row->first_free_index <= row->highest_allocated_index+1);
+            
+            return next;
+        }
+        case ALLOCATOR_REALLOCATE:
+        {
+            void * pnew = oga_state_allocator_proc(ALLOCATOR_ALLOCATE, data, 0, 0, n, alignment, flags);
+            memcpy(pnew, old, min(n, old_n));
+            oga_state_allocator_proc(ALLOCATOR_FREE, data, old, 0, 0, alignment, flags);
+            return pnew;
+        }
+        case ALLOCATOR_FREE:
+        {
+            Oga_Allocator_Row *row = 0;
+            u64 stride = 16;
+            for (u64 i = 0; i < 11; i += 1) {
+                if ((u64)old >= (u64)a->rows[i].start && (u64)old < (u64)a->rows[i].end) {
+                    row = &a->rows[i];
+                    u64 exp = powu(2, i+3);
+                    assertmsgs(stride == exp, tprint("%u, %u", stride, exp));
+                    break;
+                }
+                stride *= 2;
+            }
+            
+            
+            if (!row) {
+                sys_unmap_pages(old);
+                return 0;
+            }
+            
+            u64 offset = (u64)old - (u64)row->start;
+            assert(offset % stride == 0);
+            u64 index = offset/stride;
+            
+            *(u64*)old = row->first_free_index;
+            row->first_free_index = index;
+            
+            assert(row->first_free_index <= ((u64)row->end-(u64)row->start)/stride);
+            assert((u64)((u8*)row->start + row->first_free_index*stride) <= (u64)row->end);
+            assert(row->first_free_index <= row->highest_allocated_index+1);
+            
+            break;
+        }
+
+        default:
+        {
+            break;
+        }
+    }
+
+    return 0;
+}
+
 Oga_Pick_Device_Result oga_pick_device(Oga_Device_Pick_Flag pick_flags, Oga_Device_Feature_Flag required_features, Oga_Device_Feature_Flag preferred_features) {
 
     Oga_Device devices[32];
@@ -857,11 +996,14 @@ Oga_Pick_Device_Result oga_pick_device(Oga_Device_Pick_Flag pick_flags, Oga_Devi
         if ((pick_flags & OGA_DEVICE_PICK_PREFER_CPU) && device.kind == OGA_DEVICE_CPU)
             *pscore += 1000;
             
-        for (u64 j = 0; j < device.logical_engine_family_count; j += 1) {
-            Oga_Logical_Engine_Family_Info info = device.logical_engine_family_infos[j];
-            *pscore += info.logical_engine_capacity*10;
-        }
+        *pscore += device.logical_engine_family_count*10;
         
+        // Whatever these drivers are, they cause a LOT of trouble.
+        string device_name = (string) {device.device_name_length, device.device_name_data};
+        if (string_contains(device_name, STR("Microsoft")) || string_contains(device_name, STR("Direct3D12"))) {
+            *pscore -= 500;
+        }
+          
         u64 preferred_features_count = 0;
         for (u64 f = 0; f < 64; f += 1) {
             // Feature flag is preferred ?

@@ -5,7 +5,7 @@
 #define SYS_MEMORY_RESERVE (1 << 0)
 #define SYS_MEMORY_ALLOCATE (1 << 1)
 
-void *sys_map_pages(u64 action, void *virtual_base, u64 amount_in_bytes);
+void *sys_map_pages(u64 action, void *virtual_base, u64 number_of_pages, bool strict_base_address);
 bool sys_unmap_pages(void *address);
 // Deallocates, but keeps pages mapped & reserved
 bool sys_deallocate_pages(void *address, u64 number_of_pages);
@@ -15,6 +15,8 @@ typedef struct Mapped_Memory_Info {
     u64 page_count;
 } Mapped_Memory_Info;
 u64 sys_query_mapped_regions(void *start, void *end, Mapped_Memory_Info *result, u64 result_size);
+
+void *sys_find_mappable_range(u64 page_count);
 
 //////
 // System info
@@ -151,6 +153,12 @@ bool surface_should_close(Surface_Handle s);
 // Will return false on systems where the flag isn't implemented
 bool surface_set_flags(Surface_Handle h, Surface_Flags flags);
 bool surface_unset_flags(Surface_Handle h, Surface_Flags flags);
+
+//////
+// Time
+//////
+
+float64 sys_get_seconds_monotonic(void);
 
 //////
 // Debug
@@ -356,7 +364,7 @@ System_Info sys_get_info(void) {
     return info;
 }
 
-void *sys_map_pages(u64 action, void *virtual_base, u64 number_of_pages) {
+void *sys_map_pages(u64 action, void *virtual_base, u64 number_of_pages, bool strict_base_address) {
     System_Info info = sys_get_info();
     u64 amount_in_bytes = info.page_size * number_of_pages;
 
@@ -371,7 +379,7 @@ void *sys_map_pages(u64 action, void *virtual_base, u64 number_of_pages) {
     }
 
     if (virtual_base) {
-        flags |= MAP_FIXED;
+        if (strict_base_address) flags |= MAP_FIXED;
     }
 
     void *result = mmap(virtual_base, (sys_uint)amount_in_bytes, prot, flags, -1, 0);
@@ -439,8 +447,88 @@ u64 sys_query_mapped_regions(void *start, void *end, Mapped_Memory_Info *result,
     return counter;
 }
 
+void *sys_find_mappable_range(u64 page_count) {
+    System_Info info = sys_get_info();
+    u64 amount_in_bytes = page_count * info.page_size;
+
+    File_Handle maps = sys_open_file(STR("/proc/self/maps"), FILE_OPEN_READ);
+    if (!maps) {
+        sys_write_string(sys_get_stdout(), STR("Could not open /proc/self/maps\n"));
+        return 0;
+    }
+
+    char buffer[256];
+    char line[256];
+    u64 last_end = 0x0000100000000000; 
+    u64 line_length = 0;
+
+    while (true) {
+        s64 bytes_read = sys_read(maps, buffer, sizeof(buffer));
+        if (bytes_read <= 0) {
+            break; 
+        }
+
+        for (s64 i = 0; i < bytes_read; ++i) {
+            if (buffer[i] == '\n' || line_length >= sizeof(line) - 1) {
+                line[line_length] = '\0'; 
+
+                u64 start = 0, end = 0;
+                bool parsing_failed = false;
+
+                char *p = line;
+                while (*p && *p != '-') {
+                    if (*p >= '0' && *p <= '9') {
+                        start = (start << 4) | (*p - '0');
+                    } else if (*p >= 'a' && *p <= 'f') {
+                        start = (start << 4) | (*p - 'a' + 10);
+                    } else {
+                        parsing_failed = true;
+                        break;
+                    }
+                    ++p;
+                }
+
+                if (!parsing_failed && *p == '-') {
+                    ++p; 
+                    while (*p && *p != ' ') {
+                        if (*p >= '0' && *p <= '9') {
+                            end = (end << 4) | (*p - '0');
+                        } else if (*p >= 'a' && *p <= 'f') {
+                            end = (end << 4) | (*p - 'a' + 10);
+                        } else {
+                            parsing_failed = true;
+                            break;
+                        }
+                        ++p;
+                    }
+                } else {
+                    parsing_failed = true;
+                }
+
+                if (!parsing_failed && start >= last_end + amount_in_bytes) {
+                    u64 aligned_base = (last_end + info.granularity - 1) & ~(info.granularity - 1);
+                    if (aligned_base + amount_in_bytes <= start) {
+                        sys_close(maps);
+                        return (void *)aligned_base;
+                    }
+                }
+
+                last_end = end;
+                line_length = 0; 
+            } else {
+                line[line_length++] = buffer[i];
+            }
+        }
+    }
+
+    sys_close(maps);
+    return 0; 
+}
+
 s64 sys_write(File_Handle f, void *data, u64 size) {
-    return (s64)write((int)(u64)f, data, (sys_uint)size);
+    s64 written = (s64)write((int)(u64)f, data, (sys_uint)size);
+    if (written < 0) written = 0;
+    return written;
 }
 
 s64 sys_write_string(File_Handle f, string s) {
@@ -448,7 +536,8 @@ s64 sys_write_string(File_Handle f, string s) {
 }
 
 s64 sys_read(File_Handle h, void *buffer, u64 buffer_size) {
-    return (s64)read((int)(u64)h, buffer, (sys_uint)buffer_size);
+    s64 readeded = (s64)read((int)(u64)h, buffer, (sys_uint)buffer_size);
+    return readeded < 0 ? 0 : readeded;
 }
 
 bool sys_make_pipe(File_Handle *read, File_Handle *write) {
@@ -498,6 +587,12 @@ u64 sys_get_file_size(File_Handle f) {
         return 0;
     }
     return (u64)file_stat.st_size; 
+}
+
+double sys_get_seconds_monotonic(void) {
+    struct timespec ts;
+    clock_gettime(CLOCK_MONOTONIC, &ts);
+    return (double)ts.tv_sec + (double)ts.tv_nsec / 1e9;
 }
 
 #endif // OS_FLAGS & OS_FLAG_UNIX
@@ -597,8 +692,8 @@ unit_local LRESULT window_proc ( HWND hwnd,  u32 message,  WPARAM wparam,  LPARA
 }
 
 
-void *sys_map_pages(u64 action, void *virtual_base, u64 number_of_pages) {
-
+void *sys_map_pages(u64 action, void *virtual_base, u64 number_of_pages, bool strict_base_address) {
+    (void)strict_base_address;
     // todo(charlie) attempt multiple times in case of failure.
 
     System_Info info = sys_get_info();
@@ -618,7 +713,6 @@ void *sys_map_pages(u64 action, void *virtual_base, u64 number_of_pages) {
     }
 
     void *result = VirtualAlloc(virtual_base, amount_in_bytes, flags, protection);
-
     // todo(charlie)
     // Some error reporting so user can see what went wrong if !result
 
@@ -696,6 +790,34 @@ u64 sys_query_mapped_regions(void *start, void *end, Mapped_Memory_Info *result,
     }
 
     return counter;
+}
+
+void *sys_find_mappable_range(u64 page_count) {
+
+    System_Info info = sys_get_info();
+
+    u64 amount_in_bytes = page_count*info.page_size;
+
+    MEMORY_BASIC_INFORMATION mbi;
+    void *address = (void *)0x0000100000000000; // Start at a high user-space address
+    while (address) {
+        size_t query_size = VirtualQuery(address, &mbi, sizeof(mbi));
+        if (query_size == 0) {
+            return 0;
+        }
+
+        if (mbi.State == 0x10000 /*MEM_FREE*/ && mbi.RegionSize >= amount_in_bytes) {
+            // Align the base address to the granularity
+            u64 aligned_base = ((u64)mbi.BaseAddress + info.granularity - 1) & ~(info.granularity - 1);
+            if (aligned_base + amount_in_bytes <= (u64)mbi.BaseAddress + mbi.RegionSize) {
+                return (void *)aligned_base;
+            }
+        }
+
+        address = (void *)((u64)mbi.BaseAddress + mbi.RegionSize);
+    }
+    
+    return 0;
 }
 
 System_Info sys_get_info(void) {
@@ -794,9 +916,8 @@ bool sys_make_pipe(File_Handle *read, File_Handle *write) {
 }
 
 s64 sys_write(File_Handle f, void *data, u64 size) {
-    u32 written;
+    u32 written = 0;
     WriteFile(f, data, (DWORD)size, (unsigned long*)&written, 0);
-    if (written == 0 && size != 0) return -1;
     return (s64)written;
 }
 
@@ -806,8 +927,7 @@ s64 sys_write_string(File_Handle f, string s) {
 
 s64 sys_read(File_Handle h, void *buffer, u64 buffer_size) {
     DWORD read = 0;
-    BOOL ok = ReadFile(h, (LPVOID)buffer, (DWORD)buffer_size, &read, 0);
-    if (!ok) return -1;
+    ReadFile(h, (LPVOID)buffer, (DWORD)buffer_size, &read, 0);
 
     return (s64)read;
 }
@@ -1000,6 +1120,13 @@ bool surface_unset_flags(Surface_Handle h, Surface_Flags flags) {
         SetWindowPos((HWND)h, HWND_NOTOPMOST, 0, 0, 0, 0, SWP_NOREPOSITION | SWP_NOSIZE | SWP_NOMOVE);
     }
     return true;
+}
+
+float64 sys_get_seconds_monotonic(void) {
+    LARGE_INTEGER freq, counter = (LARGE_INTEGER){0};
+	QueryPerformanceFrequency(&freq);
+	QueryPerformanceCounter(&counter);
+	return (float64)counter.QuadPart / (float64)freq.QuadPart;
 }
 
 void sys_print_stack_trace(File_Handle handle) {
@@ -1357,6 +1484,7 @@ bool surface_set_flags(Surface_Handle h, Surface_Flags flags) {
 bool surface_unset_flags(Surface_Handle h, Surface_Flags flags) {
     return false;
 }
+
 
 void sys_print_stack_trace(File_Handle handle) {
     sys_write_string(handle, STR("<Stack trace unimplemented>"));

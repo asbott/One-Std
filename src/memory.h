@@ -11,7 +11,7 @@ typedef enum Allocator_Message {
     ALLOCATOR_REALLOCATE,
     ALLOCATOR_FREE
 } Allocator_Message;
-typedef void*(*Allocator_Proc)(Allocator_Message msg, void *data, void *old, u64 old_n, u64 n, u64 flags);
+typedef void*(*Allocator_Proc)(Allocator_Message msg, void *data, void *old, u64 old_n, u64 n, u64 alignment, u64 flags);
 
 typedef struct Allocator {
     void *data;
@@ -49,7 +49,7 @@ void arena_pop(Arena *arena, u64 size);
 void arena_reset(Arena *arena);
 void free_arena(Arena arena);
 
-void* arena_allocator_proc(Allocator_Message msg, void *data, void *old, u64 old_n, u64 n, u64);
+void* arena_allocator_proc(Allocator_Message msg, void *data, void *old, u64 old_n, u64 n, u64 alignment, u64 flags);
 unit_local inline Allocator arena_allocator(Arena *a) { return (Allocator) { a, arena_allocator_proc }; }
 
 /////
@@ -67,23 +67,23 @@ void *tallocate(size_t n);
 
 
 inline void *allocate(Allocator a, u64 n) {
-    return a.proc(ALLOCATOR_ALLOCATE, a.data, 0, 0, n, 0);
+    return a.proc(ALLOCATOR_ALLOCATE, a.data, 0, 0, n, 0, 0);
 }
 inline void *reallocate(Allocator a, void *p, u64 old_n, u64 n) {
-    return a.proc(ALLOCATOR_REALLOCATE, a.data, p, old_n, n, 0);
+    return a.proc(ALLOCATOR_REALLOCATE, a.data, p, old_n, n, 0, 0);
 }
 inline void deallocate(Allocator a, void *p) {
-    a.proc(ALLOCATOR_FREE, a.data, p, 0, 0, 0);
+    a.proc(ALLOCATOR_FREE, a.data, p, 0, 0, 0, 0);
 }
 
 inline void *allocatef(Allocator a, u64 n, u64 flags) {
-    return a.proc(ALLOCATOR_ALLOCATE, a.data, 0, 0, n, flags);
+    return a.proc(ALLOCATOR_ALLOCATE, a.data, 0, 0, n, flags, 0);
 }
 inline void *reallocatef(Allocator a, void *p, u64 old_n, u64 n, u64 flags) {
-    return a.proc(ALLOCATOR_REALLOCATE, a.data, p, old_n, n, flags);
+    return a.proc(ALLOCATOR_REALLOCATE, a.data, p, old_n, n, flags, 0);
 }
 inline void deallocatef(Allocator a, void *p, u64 flags) {
-    a.proc(ALLOCATOR_FREE, a.data, p, 0, 0, flags);
+    a.proc(ALLOCATOR_FREE, a.data, p, 0, 0, flags, 0);
 }
 
 inline string string_allocate(Allocator a, u64 n) {
@@ -149,12 +149,12 @@ Arena make_arena(u64 reserved_size, u64 initial_allocated_size) {
     Arena arena;
 
     if (reserved_size > initial_allocated_size) {
-        arena.start = sys_map_pages(SYS_MEMORY_RESERVE, 0, reserved_size/info.page_size);
+        arena.start = sys_map_pages(SYS_MEMORY_RESERVE, 0, reserved_size/info.page_size, false);
         assert(arena.start);
-        void *allocate_result = sys_map_pages(SYS_MEMORY_ALLOCATE, arena.start, initial_allocated_size/info.page_size);
+        void *allocate_result = sys_map_pages(SYS_MEMORY_ALLOCATE, arena.start, initial_allocated_size/info.page_size, true);
         assert(allocate_result == arena.start);
     } else {
-        arena.start = sys_map_pages(SYS_MEMORY_RESERVE | SYS_MEMORY_ALLOCATE, 0, reserved_size/info.page_size);
+        arena.start = sys_map_pages(SYS_MEMORY_RESERVE | SYS_MEMORY_ALLOCATE, 0, reserved_size/info.page_size, false);
     }
 
     arena.position = arena.start;
@@ -206,7 +206,7 @@ void *arena_push(Arena *arena, u64 size) {
 
         u64 pages_to_allocate = amount_to_allocate / info.page_size;
 
-        void *allocate_result = sys_map_pages(SYS_MEMORY_ALLOCATE, allocated_tail, pages_to_allocate);
+        void *allocate_result = sys_map_pages(SYS_MEMORY_ALLOCATE, allocated_tail, pages_to_allocate, true);
         assertmsg(allocate_result == allocated_tail, "Failed allocating pages in arena");
 
         arena->allocated_size += amount_to_allocate;
@@ -223,7 +223,7 @@ void arena_pop(Arena *arena, u64 size) {
     if ((u64)arena->position < (u64)arena->start)  arena->position = arena->start;
 }
 
-void* arena_allocator_proc(Allocator_Message msg, void *data, void *old, u64 old_n, u64 n, u64 flags) {
+void* arena_allocator_proc(Allocator_Message msg, void *data, void *old, u64 old_n, u64 n, u64 alignment, u64 flags) {
     (void)flags;
     Arena *a = (Arena*)data;
     switch (msg) {
@@ -233,7 +233,9 @@ void* arena_allocator_proc(Allocator_Message msg, void *data, void *old, u64 old
         }
         case ALLOCATOR_REALLOCATE:
         {
-            void* p = arena_push(a, n);
+            u64 pad = (u64)a->start - ((u64)a->start+alignment-1) & ~(alignment-1);
+            void* p = (u8*)arena_push(a, n+pad) + pad;
+            assert((u64)p % alignment == 0);
             if (old && old_n) {
                 memcpy(p, old, (sys_uint)min(old_n, n));
             }

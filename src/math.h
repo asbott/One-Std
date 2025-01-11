@@ -5,6 +5,7 @@
 // Natural logarithm
 float32 ln32(float32 x);
 float64 ln64(float64 x);
+u64 powu(u64 x, u64 e);
 
 #ifdef OSTD_IMPL
 
@@ -24,6 +25,14 @@ float64 ln64(float64 x) {
     bx = 4607182418800017408ULL | (bx & 4503599627370495ULL); // Normalize mantissa
     x = *(float64 *)(&bx);
     return -1.49278 + (2.11263 + (-0.729104 + 0.10969 * x) * x) * x + 0.6931471806 * t;
+}
+
+u64 powu(u64 x, u64 e) {
+    u64 result = x;
+    for (u64 i = 0; i < e; i += 1) {
+        result *= x;
+    }
+    return result;
 }
 
 #endif // OSTD_IMPL

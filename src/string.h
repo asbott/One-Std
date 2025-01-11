@@ -30,3 +30,13 @@ unit_local inline bool strings_match(string a, string b) {
     return memcmp(a.data, b.data, (sys_uint)a.count) == 0;
 }
 
+unit_local inline bool string_contains(string s, string sub) {
+    if (sub.count > s.count) return false;
+    for (u64 i = 0; i < s.count-sub.count; i += 1) {
+        string ssub = s;
+        ssub.data += i;
+        ssub.count = sub.count;
+        if (strings_match(ssub, sub)) return true;
+    }
+    return false;
+}

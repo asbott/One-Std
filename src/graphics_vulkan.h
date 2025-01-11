@@ -245,7 +245,8 @@ unit_local inline bool _vk_select_format(VkFormat *formats, u32 num_formats, VkI
     return false;
 }
 
-
+unit_local u8 _context_mem[(sizeof(Oga_Context)+sizeof(_Vk_Context_Internal))*1024];
+unit_local u64 _allocated_contexts;
 unit_local bool _has_dynamic_rendering = false;
 unit_local VkInstance __instance = 0;
 unit_local inline VkInstance _vk_instance(void) {
@@ -523,18 +524,56 @@ void oga_reset(void) {
 unit_local void *_vk_allocate(void *ud, size_t size, size_t alignment, VkSystemAllocationScope scope) {
     (void)scope;
     Allocator *allocator = (Allocator *)ud;
-    return allocator->proc(ALLOCATOR_ALLOCATE, allocator->data, 0, 0, size, alignment);
+    void *p = allocator->proc(ALLOCATOR_ALLOCATE, allocator->data, 0, 0, size, alignment, 0);
+#ifdef LOG_VULKAN_ALLOCATIONS
+    string scope_str;
+    if (scope == VK_SYSTEM_ALLOCATION_SCOPE_COMMAND) {
+        scope_str = STR("Command");
+    } else if (scope == VK_SYSTEM_ALLOCATION_SCOPE_OBJECT) {
+        scope_str = STR("Scope");
+    } else if (scope == VK_SYSTEM_ALLOCATION_SCOPE_CACHE) {
+        scope_str = STR("Cache");
+    } else if (scope == VK_SYSTEM_ALLOCATION_SCOPE_DEVICE) {
+        scope_str = STR("Device");
+    } else if (scope == VK_SYSTEM_ALLOCATION_SCOPE_INSTANCE) {
+        scope_str = STR("Instance");
+    }
+    log(0, "VK Allocation '%s'  %u bytes, %u alignment %u", scope_str, size, alignment, p);
+    //sys_print_stack_trace(sys_get_stdout());
+    //log(0, "------------------------------------\n");
+#endif
+    return p;
 }
 
 unit_local void *_vk_reallocate(void *ud, void *old, size_t size, size_t alignment, VkSystemAllocationScope scope) {
     (void)scope;
+#ifdef LOG_VULKAN_ALLOCATIONS
+    string scope_str;
+    if (scope == VK_SYSTEM_ALLOCATION_SCOPE_COMMAND) {
+        scope_str = STR("Command");
+    } else if (scope == VK_SYSTEM_ALLOCATION_SCOPE_OBJECT) {
+        scope_str = STR("Scope");
+    } else if (scope == VK_SYSTEM_ALLOCATION_SCOPE_CACHE) {
+        scope_str = STR("Cache");
+    } else if (scope == VK_SYSTEM_ALLOCATION_SCOPE_DEVICE) {
+        scope_str = STR("Device");
+    } else if (scope == VK_SYSTEM_ALLOCATION_SCOPE_INSTANCE) {
+        scope_str = STR("Instance");
+    }
+    log(0, "VK REallocation '%s'  %u bytes, %u alignment ", scope_str, size, alignment);
+    //sys_print_stack_trace(sys_get_stdout());
+    //log(0, "------------------------------------\n");
+#endif
     Allocator *allocator = (Allocator *)ud;
-    return allocator->proc(ALLOCATOR_REALLOCATE, allocator->data, old, 0, size, alignment);
+    return allocator->proc(ALLOCATOR_REALLOCATE, allocator->data, old, 0, size, alignment, 0);
 }
 
 unit_local void _vk_deallocate(void *ud, void *old) {
+#ifdef LOG_VULKAN_ALLOCATIONS
+    log(0, "VK FREE %u", old);
+#endif
     Allocator *allocator = (Allocator *)ud;
-    allocator->proc(ALLOCATOR_FREE, allocator->data, old, 0, 0, 0);
+    allocator->proc(ALLOCATOR_FREE, allocator->data, old, 0, 0, 0, 0);
 }
 
 unit_local inline VkAllocationCallbacks _vk_allocator(Allocator *a) {
@@ -837,10 +876,7 @@ Oga_Result oga_init_context(Oga_Device target_device, Oga_Context_Desc desc, Oga
         return OGA_CONTEXT_INIT_ERROR_MISSING_DEVICE_FEATURES;
     }
 
-    if (!desc.state_allocator.proc) {
-        return OGA_CONTEXT_INIT_ERROR_BAD_STATE_ALLOCATOR;
-    }
-    *context = (Oga_Context*)allocate(desc.state_allocator, sizeof(Oga_Context)+sizeof(_Vk_Context_Internal));
+    *context = (Oga_Context*)&_context_mem[(sizeof(Oga_Context)+sizeof(_Vk_Context_Internal))*_allocated_contexts++];
     if (!*context) {
         return OGA_ERROR_STATE_ALLOCATION_FAILED;
     }
@@ -848,6 +884,13 @@ Oga_Result oga_init_context(Oga_Device target_device, Oga_Context_Desc desc, Oga
     *c = (Oga_Context){0};
     c->state_allocator = desc.state_allocator;
     c->internal = c+1;
+    if (!c->state_allocator.proc) {
+        Allocator a;
+        a.proc = oga_state_allocator_proc;
+        c->default_allocator_data = (Oga_State_Allocator_Data) {0};
+        a.data = &c->default_allocator_data;
+        c->state_allocator = a;
+    }
     
     _Vk_Context_Internal *internal = (_Vk_Context_Internal*)c->internal;
 
@@ -990,6 +1033,8 @@ Oga_Result oga_init_context(Oga_Device target_device, Oga_Context_Desc desc, Oga
             logical_engine->index = (u32)logical_engine_index;
         }
     }
+    
+    
 
     return OGA_OK;
 }
@@ -1031,7 +1076,7 @@ Oga_Result oga_init_swapchain(Oga_Context *context, Oga_Swapchain_Desc desc, Oga
     VkPresentModeKHR vk_present_mode = VK_PRESENT_MODE_FIFO_KHR;
     if (desc.present_mode == OGA_PRESENT_MODE_IMMEDIATE) {
         VkPresentModeKHR present_modes[32];
-        u32 present_mode_count;
+        u32 present_mode_count = 32;
         _vk_assert2(vkGetPhysicalDeviceSurfacePresentModesKHR((VkPhysicalDevice)context->device.id, state->vk_surface, &present_mode_count, present_modes));
         for (u32 i = 0; i < present_mode_count; i += 1) {
             if (present_modes[i] == VK_PRESENT_MODE_IMMEDIATE_KHR) {
@@ -1382,6 +1427,7 @@ Oga_Result oga_init_render_passes(Oga_Context *context, Oga_Render_Pass_Desc* de
         VkPipelineColorBlendAttachmentState *blend_attachment = New(get_temp(), VkPipelineColorBlendAttachmentState);
         *blend_attachment = (VkPipelineColorBlendAttachmentState){0};
         blend_attachment->blendEnable = false;
+        blend_attachment->colorWriteMask = VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT | VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT;
         
         VkPipelineColorBlendStateCreateInfo *blend = New(get_temp(), VkPipelineColorBlendStateCreateInfo);
         *blend = (VkPipelineColorBlendStateCreateInfo){0};
@@ -1558,7 +1604,7 @@ Oga_Result oga_init_command_pool(Oga_Context *context, Oga_Command_Pool_Desc des
     create_info.flags = 0;
 
     if (desc.flags & OGA_COMMAND_POOL_SHORT_LIVED) {
-        //create_info.flags |= VK_COMMAND_POOL_CREATE_TRANSIENT_BIT;
+        create_info.flags |= VK_COMMAND_POOL_CREATE_TRANSIENT_BIT;
     }
 
     create_info.queueFamilyIndex = (u32)desc.queue_family_index;
@@ -1573,7 +1619,9 @@ void oga_uninit_command_pool(Oga_Command_Pool *pool) {
     VkAllocationCallbacks vk_allocs = _vk_allocator(&pool->context->state_allocator);
 
     _vk_assert1(vkDeviceWaitIdle(pool->context->id));
-    vkDestroyCommandPool((VkDevice)pool->context->id, (VkCommandPool)pool->id, &vk_allocs);
+    vkResetCommandPool(pool->context->id, pool->id, 0);
+    _vk_assert1(vkDeviceWaitIdle(pool->context->id));
+    vkDestroyCommandPool(pool->context->id, pool->id, &vk_allocs);
 
     Allocator a = pool->context->state_allocator;
     *pool = (Oga_Command_Pool){0};
