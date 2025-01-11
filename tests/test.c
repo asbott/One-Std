@@ -365,12 +365,18 @@ int main(void) {
     // Try creating separate logical_engines if logical_engines belong to same family and capacity allows.
 
     graphics_engine_desc->count = min(graphics_engine_desc->count+1, graphics_family.logical_engine_capacity);
+    for (u32 i = 0; i < graphics_engine_desc->count; i += 1)
+        graphics_engine_desc->priorities[i] = 0;
     u64 logical_engine_index_graphics = graphics_engine_desc->count-1;
 
     present_engine_desc->count = min(present_engine_desc->count+1, present_family.logical_engine_capacity);
+    for (u32 i = 0; i < present_engine_desc->count; i += 1)
+        present_engine_desc->priorities[i] = 0;
     u64 logical_engine_index_present = present_engine_desc->count-1;
 
     compute_engine_desc->count = min(compute_engine_desc->count+1, compute_family.logical_engine_capacity);
+    for (u32 i = 0; i < compute_engine_desc->count; i += 1)
+        compute_engine_desc->priorities[i] = 0;
     u64 logical_engine_index_compute = compute_engine_desc->count-1;
 
     Oga_Context *context = 0;
