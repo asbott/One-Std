@@ -11,7 +11,7 @@
 #define VK_NO_STDDEF_H
 #define VK_NO_STDINT_H
 // noconcat
-#include "vendors/vulkan/vulkan.h"
+#include <vulkan/vulkan.h>
 
 
 
@@ -25,19 +25,19 @@
 // We manually include the vulkan-specific headers, otherwise vulkan.h will include windows.h
 #if OS_FLAGS & OS_FLAG_WINDOWS
 // noconcat
-#include "vendors/vulkan/vulkan_win32.h"
+#include <vulkan/vulkan_win32.h>
 #elif OS_FLAGS & OS_FLAG_LINUX
 // noconcat
-#include "vendors/vulkan/vulkan_xlib.h"
+#include <vulkan/vulkan_xlib.h>
 #elif OS_FLAGS & OS_FLAG_MACOS
 // noconcat
-#include "vendors/vulkan/vulkan_macos.h"
+#include <vulkan/vulkan_macos.h>
 #elif OS_FLAGS & OS_FLAG_IOS
 // noconcat
-#include "vendors/vulkan/vulkan_ios.h"
+#include <vulkan/vulkan_ios.h>
 #elif OS_FLAGS & OS_FLAG_ANDROID
 // noconcat
-#include "vendors/vulkan/vulkan_android.h"
+#include <vulkan/vulkan_android.h>
 #else
 #error Vulkan is not supported on target platform
 #endif
@@ -81,7 +81,6 @@ typedef struct _Vk_Context_Internal {
 
 typedef struct _Vk_Memory_Block {
     VkDeviceMemory memory;
-    u64 size;
     VkAccessFlags access_state;
     
     VkBuffer access_buffer;
@@ -856,6 +855,7 @@ u64 oga_query_devices(Oga_Device *buffer, u64 buffer_count) {
             for (u64 f = 1; f < VK_SAMPLE_COUNT_FLAG_BITS_MAX_ENUM; f = f << 1)
                 if (props.limits.storageImageSampleCounts & f) device->limits.supported_sample_counts_large_image_int |= f;
 
+            device->limits.memory_granularity = (u64)props.limits.bufferImageGranularity;
 
             /////
             // Surface formats

@@ -31,7 +31,7 @@ android {
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         externalNativeBuild {
             experimentalProperties["ninja.abiFilters"] = ["x86_64", "arm64-v8a" ]
-            experimentalProperties["ninja.path"] = "../OstdTest.sln"
+            experimentalProperties["ninja.path"] = "../Teapot.sln"
             experimentalProperties["ninja.configure"] = "run-msbuild"
             experimentalProperties["ninja.arguments"] = [
                     "\${ndk.moduleMakeFile}",

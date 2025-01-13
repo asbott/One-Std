@@ -38,7 +38,7 @@ int main(void) {
     for (u32 family_index = 0; family_index < target_device.engine_family_count; family_index += 1) {
         Oga_Logical_Engine_Family_Info family = target_device.engine_family_infos[family_index];
 
-        if ((family.flags & OGA_LOGICAL_ENGINE_COMPUTE && family.flags & OGA_LOGICAL_ENGINE_PRESENT)) {
+        if ((family.flags & OGA_LOGICAL_ENGINE_GRAPHICS && family.flags & OGA_LOGICAL_ENGINE_PRESENT)) {
             engine_family_index = family_index;
             break;
         }

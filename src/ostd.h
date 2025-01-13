@@ -42,7 +42,10 @@
 
 #include "system2.h"
 
+#ifndef OSTD_NO_GRAPHICS
 #include "graphics.h"
+#endif // OSTD_NO_GRAPHICS
+
 
 #if defined(__clang__)
 #pragma clang diagnostic pop

@@ -15,5 +15,5 @@ dependencyResolutionManagement {
     }
 }
 
-include ':OstdTest'
+include ':GameApplication'
 

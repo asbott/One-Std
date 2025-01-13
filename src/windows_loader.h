@@ -19,6 +19,7 @@ typedef HANDLE HBRUSH;
 typedef HANDLE HCURSOR;
 typedef HANDLE HMODULE;
 typedef HANDLE HMENU;
+typedef HANDLE HBITMAP;
 
 
 typedef unsigned long ULONG;
@@ -607,6 +608,30 @@ typedef struct _GUID {
   unsigned short Data3;
   unsigned char  Data4[8];
 } GUID;
+typedef struct tagRGBQUAD {
+  BYTE rgbBlue;
+  BYTE rgbGreen;
+  BYTE rgbRed;
+  BYTE rgbReserved;
+} RGBQUAD;
+typedef struct tagBITMAPINFOHEADER {
+  DWORD biSize;
+  LONG  biWidth;
+  LONG  biHeight;
+  WORD  biPlanes;
+  WORD  biBitCount;
+  DWORD biCompression;
+  DWORD biSizeImage;
+  LONG  biXPelsPerMeter;
+  LONG  biYPelsPerMeter;
+  DWORD biClrUsed;
+  DWORD biClrImportant;
+} BITMAPINFOHEADER, *LPBITMAPINFOHEADER, *PBITMAPINFOHEADER;
+typedef struct tagBITMAPINFO {
+  BITMAPINFOHEADER bmiHeader;
+  RGBQUAD          bmiColors[1];
+} BITMAPINFO, *LPBITMAPINFO, *PBITMAPINFO;
+
 
 
 #define MEM_COMMIT 0x00001000
@@ -1753,6 +1778,32 @@ typedef struct tagTRACKMOUSEEVENT {
 
 #define INVALID_HANDLE_VALUE ((HANDLE)-1)
 
+#define BI_RGB        0L
+#define BI_RLE8       1L
+#define BI_RLE4       2L
+#define BI_BITFIELDS  3L
+#define BI_JPEG       4L
+#define BI_PNG        5L
+
+#define DIB_RGB_COLORS      0 /* color table in RGBs */
+#define DIB_PAL_COLORS      1 /* color table in palette indices */
+
+#define SRCCOPY             (DWORD)0x00CC0020 /* dest = source                   */
+#define SRCPAINT            (DWORD)0x00EE0086 /* dest = source OR dest           */
+#define SRCAND              (DWORD)0x008800C6 /* dest = source AND dest          */
+#define SRCINVERT           (DWORD)0x00660046 /* dest = source XOR dest          */
+#define SRCERASE            (DWORD)0x00440328 /* dest = source AND (NOT dest )   */
+#define NOTSRCCOPY          (DWORD)0x00330008 /* dest = (NOT source)             */
+#define NOTSRCERASE         (DWORD)0x001100A6 /* dest = (NOT src) AND (NOT dest) */
+#define MERGECOPY           (DWORD)0x00C000CA /* dest = (source AND pattern)     */
+#define MERGEPAINT          (DWORD)0x00BB0226 /* dest = (NOT source) OR dest     */
+#define PATCOPY             (DWORD)0x00F00021 /* dest = pattern                  */
+#define PATPAINT            (DWORD)0x00FB0A09 /* dest = DPSnoo                   */
+#define PATINVERT           (DWORD)0x005A0049 /* dest = pattern XOR dest         */
+#define DSTINVERT           (DWORD)0x00550009 /* dest = (NOT dest)               */
+#define BLACKNESS           (DWORD)0x00000042 /* dest = BLACK                    */
+#define WHITENESS           (DWORD)0x00FF0062 /* dest = WHITE                    */
+
 WINDOWS_IMPORT void WINAPI GetSystemInfo(LPSYSTEM_INFO lpSystemInfo);
 
 WINDOWS_IMPORT void* WINAPI VirtualAlloc(void *lpAddress, size_t dwSize, u32 flAllocationType, u32 flProtect);
@@ -1847,3 +1898,14 @@ WINDOWS_IMPORT BOOL WINAPI GetFileSizeEx( HANDLE hFile, PLARGE_INTEGER lpFileSiz
 
 WINDOWS_IMPORT BOOL WINAPI QueryPerformanceFrequency(LARGE_INTEGER *lpFrequency);
 WINDOWS_IMPORT BOOL WINAPI QueryPerformanceCounter(LARGE_INTEGER *lpPerformanceCount);
+
+WINDOWS_IMPORT DWORD_PTR WINAPI SetThreadAffinityMask( HANDLE hThread, DWORD_PTR dwThreadAffinityMask);
+
+WINDOWS_IMPORT BOOL WINAPI GetClientRect( HWND hWnd, LPRECT lpRect);
+
+WINDOWS_IMPORT HBITMAP WINAPI CreateDIBSection( HDC hdc, BITMAPINFO  *pbmi, UINT usage, void **ppvBits, HANDLE hSection, DWORD offset);
+
+WINDOWS_IMPORT HDC WINAPI GetDC(HWND hWnd);
+
+WINDOWS_IMPORT int WINAPI StretchDIBits( HDC hdc, int xDest, int yDest, int DestWidth, int DestHeight, int xSrc, int ySrc, int SrcWidth, int SrcHeight, PVOID lpBits, PBITMAPINFO lpbmi, UINT iUsage, DWORD rop);
+

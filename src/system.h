@@ -25,6 +25,7 @@ void *sys_find_mappable_range(u64 page_count);
 typedef struct System_Info {
     u64 page_size;
     u64 granularity;
+    u64 logical_cpu_count;
 } System_Info;
 
 System_Info sys_get_info(void);
@@ -154,11 +155,26 @@ bool surface_should_close(Surface_Handle s);
 bool surface_set_flags(Surface_Handle h, Surface_Flags flags);
 bool surface_unset_flags(Surface_Handle h, Surface_Flags flags);
 
+bool surface_get_framebuffer_size(Surface_Handle h, s64 *width, s64 *height);
+
+void* surface_map_pixels(Surface_Handle h);
+void surface_blit_pixels(Surface_Handle h);
+
+
 //////
 // Time
 //////
 
 float64 sys_get_seconds_monotonic(void);
+
+//////
+// Threading
+//////
+
+typedef void* Thread_Handle;
+
+Thread_Handle sys_get_current_thread(void);
+void sys_set_thread_affinity_mask(Thread_Handle thread, u64 bits);
 
 //////
 // Debug
@@ -180,7 +196,37 @@ void sys_print_stack_trace(File_Handle handle);
 
 #ifdef OSTD_IMPL
 
+
+
 #if (OS_FLAGS & OS_FLAG_HAS_WINDOW_SYSTEM)
+
+#if OS_FLAGS & OS_FLAG_WINDOWS
+    //#define WIN32_LEAN_AND_MEAN
+    //#include <Windows.h>
+    
+    #if defined(_WINDOWS_) // User included windows.h
+        #ifndef  WIN32_LEAN_AND_MEAN
+            #error For ostd to work with windows.h included, you need to #define WIN32_LEAN_AND_MEAN
+        #endif // WIN32_LEAN_AND_MEAN
+        #ifndef _DBGHELP_
+            #include <DbgHelp.h>
+        #endif // _DBGHELP_
+    #endif // defined(_WINDOWS_)
+    
+    // If user for some reason wants to include the full standard windows files,
+    // then he can define OSTD_INCLUDE_WINDOWS
+    #ifdef OSTD_INCLUDE_WINDOWS
+        #define WIN32_LEAN_AND_MEAN
+        #include <Windows.h>
+        #include <DbgHelp.h>
+    #endif // OSTD_INCLUDE_WINDOWS
+    
+    // We manually declare windows functions so we don't need to bloat compilation and
+    // namespace with windows.h
+    #ifndef _WINDOWS_ /* This is defined in windows.h */
+    #include "windows_loader.h"
+    #endif // _WINDOWS_
+#endif// OS_FLAGS & OS_FLAG_WINDOWS
 
 struct _XDisplay;
 typedef struct _XDisplay Display;
@@ -189,9 +235,12 @@ typedef struct wl_display wl_display;
 
 typedef struct _Surface_State {
     Surface_Handle handle;
-#if OS_FLAGS & OS_FLAG_LINUX
+#if OS_FLAGS & OS_FLAG_WINDOWS
+    BITMAPINFO bmp_info;
+#elif OS_FLAGS & OS_FLAG_LINUX
     Display *xlib_display;
 #endif
+    void *pixels;
     bool allocated;
     bool should_close;
 } _Surface_State;
@@ -357,6 +406,8 @@ System_Info sys_get_info(void) {
         } else {
             info.page_size = (u64)page_size;
         }
+        info.logical_cpu_count = (u64)sysconf(_SC_NPROCESSORS_ONLN);
+        
         // On Unix, allocation granularity is typically the same as page size
         info.granularity = info.page_size;
     }
@@ -595,6 +646,23 @@ double sys_get_seconds_monotonic(void) {
     return (double)ts.tv_sec + (double)ts.tv_nsec / 1e9;
 }
 
+void sys_set_thread_affinity_mask(Thread_Handle thread, u64 bits) {
+    cpu_set_t cpuset;
+    CPU_ZERO(&cpuset);
+
+    for (int i = 0; i < 64; i++) {
+        if (bits & (1ULL << i)) {
+            CPU_SET(i, &cpuset);
+        }
+    }
+
+    sched_setaffinity((pthread_t)thread, sizeof(cpu_set_t), &cpuset);
+}
+
+Thread_Handle sys_get_current_thread(void) {
+    return (Thread_Handle)pthread_self();
+}
+
 #endif // OS_FLAGS & OS_FLAG_UNIX
 
 #if (OS_FLAGS & OS_FLAG_WINDOWS)
@@ -610,33 +678,8 @@ double sys_get_seconds_monotonic(void) {
     #pragma comment(lib, "user32")
     #pragma comment(lib, "shcore")
     #pragma comment(lib, "dbghelp")
+    #pragma comment(lib, "gdi32")
 #endif // COMPILER_FLAGS & COMPILER_FLAG_MSC
-
-//#define WIN32_LEAN_AND_MEAN
-//#include <Windows.h>
-
-#if defined(_WINDOWS_) // User included windows.h
-    #ifndef  WIN32_LEAN_AND_MEAN
-        #error For ostd to work with windows.h included, you need to #define WIN32_LEAN_AND_MEAN
-    #endif // WIN32_LEAN_AND_MEAN
-    #ifndef _DBGHELP_
-        #include <DbgHelp.h>
-    #endif // _DBGHELP_
-#endif // defined(_WINDOWS_)
-
-// If user for some reason wants to include the full standard windows files,
-// then he can define OSTD_INCLUDE_WINDOWS
-#ifdef OSTD_INCLUDE_WINDOWS
-    #define WIN32_LEAN_AND_MEAN
-    #include <Windows.h>
-    #include <DbgHelp.h>
-#endif // OSTD_INCLUDE_WINDOWS
-
-// We manually declare windows functions so we don't need to bloat compilation and
-// namespace with windows.h
-#ifndef _WINDOWS_ /* This is defined in windows.h */
-#include "windows_loader.h"
-#endif // _WINDOWS_
 
 typedef enum MONITOR_DPI_TYPE {
   MDT_EFFECTIVE_DPI = 0,
@@ -832,6 +875,7 @@ System_Info sys_get_info(void) {
 
         info.page_size = (u64)win32_info.dwPageSize;
         info.granularity = win32_info.dwAllocationGranularity;
+        info.logical_cpu_count = (u64)win32_info.dwNumberOfProcessors;
     }
 
     return info;
@@ -1122,11 +1166,73 @@ bool surface_unset_flags(Surface_Handle h, Surface_Flags flags) {
     return true;
 }
 
+bool surface_get_framebuffer_size(Surface_Handle h, s64 *width, s64 *height) {
+    RECT r;
+    if (GetClientRect((HWND)h, &r)) {
+        *width = r.right - r.left;
+        *height = r.bottom - r.top;
+        return true;
+    } else {
+        return false;
+    }
+}
+
+void* surface_map_pixels(Surface_Handle h) {
+    _Surface_State *state = _get_surface_state(h);
+    if (!state) return 0;
+    
+    s64 width, height;
+    if (!surface_get_framebuffer_size(h, &width, &height)) {
+        return 0;
+    }
+    
+    if (!state->pixels) {
+        state->bmp_info.bmiHeader.biSize        = sizeof(state->bmp_info.bmiHeader);
+        state->bmp_info.bmiHeader.biWidth       = (LONG)width;
+        state->bmp_info.bmiHeader.biHeight      = (LONG)-height;
+        state->bmp_info.bmiHeader.biPlanes      = 1;
+        state->bmp_info.bmiHeader.biBitCount    = 32;
+        state->bmp_info.bmiHeader.biCompression = BI_RGB;
+        state->bmp_info.bmiHeader.biSizeImage   = 0;
+
+        CreateDIBSection(GetDC((HWND)h), &state->bmp_info, DIB_RGB_COLORS, &state->pixels, 0, 0);
+    }
+    
+    return state->pixels;
+}
+void surface_blit_pixels(Surface_Handle h) {
+    _Surface_State *state = _get_surface_state(h);
+    if (!state) return;
+    
+    s64 width, height;
+    if (!surface_get_framebuffer_size(h, &width, &height)) return;
+    
+    HDC hdc = GetDC((HWND)h);
+    
+    StretchDIBits(
+        hdc,
+        0, 0, (LONG)width, (LONG)height,
+        0, 0, (LONG)width, (LONG)height,
+        state->pixels,
+        &state->bmp_info,
+        DIB_RGB_COLORS,
+        SRCCOPY
+    );
+}
+
 float64 sys_get_seconds_monotonic(void) {
     LARGE_INTEGER freq, counter = (LARGE_INTEGER){0};
 	QueryPerformanceFrequency(&freq);
 	QueryPerformanceCounter(&counter);
 	return (float64)counter.QuadPart / (float64)freq.QuadPart;
+}
+
+void sys_set_thread_affinity_mask(Thread_Handle thread, u64 bits) {
+    SetThreadAffinityMask((HANDLE)thread, (DWORD_PTR)bits);
+}
+
+Thread_Handle sys_get_current_thread(void) {
+    return (Thread_Handle)GetCurrentThread();
 }
 
 void sys_print_stack_trace(File_Handle handle) {
@@ -1225,6 +1331,8 @@ bool _android_running = true;
 pthread_t _android_main_thread;
 s64 _android_previous_vsync_time = 0;
 f64 _android_refresh_rate = 0.0f;
+
+unit_local void *_android_mapped_pixels = 0;
 
 static void _android_onDestroy(ANativeActivity* activity) {
 
@@ -1485,6 +1593,43 @@ bool surface_unset_flags(Surface_Handle h, Surface_Flags flags) {
     return false;
 }
 
+bool surface_get_framebuffer_size(Surface_Handle h, s64 *width, s64 *height) {
+    *width = (s64)ANativeWindow_getWidth((ANativeWindow*)h);
+    *height = (s64)ANativeWindow_getHeight((ANativeWindow*)h);
+    
+    return true;
+}
+
+void* surface_map_pixels(Surface_Handle h) {
+    if (!_android_mapped_pixels) {
+        s64 width, height;
+        surface_get_framebuffer_size(h, &width, &height);
+        
+        _android_mapped_pixels = sys_map_pages(SYS_MEMORY_RESERVE | SYS_MEMORY_ALLOCATE, 0, (width * height * 4) / 4096, false);
+    }
+    return _android_mapped_pixels;
+}
+void surface_blit_pixels(Surface_Handle h) {
+    assertmsg(_android_mapped_pixels, "You must call surface_map_pixels() before blitting them. Otherwise there might not be any pixels to blit.");
+    s64 width, height;
+    surface_get_framebuffer_size(h, &width, &height);
+    
+    if (ANativeWindow_setBuffersGeometry((ANativeWindow*)h, width, height, WINDOW_FORMAT_RGBA_8888) != 0) {
+        return;
+    }
+
+    ANativeWindow_Buffer buffer;
+    if (ANativeWindow_lock((ANativeWindow*)h, &buffer, NULL) != 0) {
+        return;
+    }
+
+    assert(width == buffer.width);
+    assert(height == buffer.height);
+    
+    memcpy(buffer.bits, _android_mapped_pixels, width*height*4);
+
+    ANativeWindow_unlockAndPost((ANativeWindow*)h);
+}
 
 void sys_print_stack_trace(File_Handle handle) {
     sys_write_string(handle, STR("<Stack trace unimplemented>"));
@@ -1694,6 +1839,86 @@ bool surface_unset_flags(Surface_Handle h, Surface_Flags flags) {
     if (flags & SURFACE_FLAG_TOPMOST) {
     }
     return true;
+}
+
+bool surface_get_framebuffer_size(Surface_Handle h, s64 *width, s64 *height) {
+    _Surface_State *state = _get_surface_state(h);
+    if (!state) return false;
+
+    XWindowAttributes attrs;
+    if (!XGetWindowAttributes(state->display, (Window)h, &attrs)) {
+        return false;
+    }
+    *width  = (s64)attrs.width;
+    *height = (s64)attrs.height;
+    return true;
+}
+
+void* surface_map_pixels(Surface_Handle h) {
+    _Surface_State *state = _get_surface_state(h);
+    if (!state) return 0;
+
+    if (state->pixels) {
+        return state->pixels;
+    }
+
+    s64 width, height;
+    if (!surface_get_framebuffer_size(h, &width, &height)) return 0;
+
+    s64 bytes_needed = width * height * 4;
+    s64 pages        = (bytes_needed + 4095) / 4096;
+
+    state->pixels = sys_map_pages(SYS_MEMORY_RESERVE | SYS_MEMORY_ALLOCATE, 0, pages, false);
+    if (!state->pixels) {
+        return 0;
+    }
+
+    int screen = DefaultScreen(state->display);
+    int depth  = DefaultDepth(state->display, screen);
+
+    state->ximage = XCreateImage(
+        state->display,
+        DefaultVisual(state->display, screen),
+        (unsigned int)depth,
+        ZPixmap,
+        0, 
+        (char*)state->pixels,
+        (unsigned int)width,
+        (unsigned int)height,
+        32,
+        (int)(width * 4) 
+    );
+
+    state->gc = XCreateGC(state->display, (Drawable)h, 0, 0);
+
+    return state->pixels;
+}
+
+void surface_blit_pixels(Surface_Handle h) {
+    _Surface_State *state = _get_surface_state(h);
+    if (!state) return;
+
+    if (!state->pixels || !state->ximage) {
+        return;
+    }
+
+    s64 width, height;
+    if (!surface_get_framebuffer_size(h, &width, &height)) {
+        return;
+    }
+
+    XPutImage(
+        state->display,
+        (Drawable)h,
+        state->gc,
+        state->ximage,
+        0, 0,
+        0, 0,
+        (unsigned int)width,
+        (unsigned int)height
+    );
+
+    XFlush(state->display);
 }
 
 void sys_print_stack_trace(File_Handle handle) {

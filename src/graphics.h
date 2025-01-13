@@ -1,3 +1,6 @@
+#ifndef OGA_GRAPHICS
+#define OGA_GRAPHICS
+
 #if 0
 #include "ostd.h" // For syntax highlighting.
 #endif
@@ -256,7 +259,8 @@ typedef struct Oga_Device_Limits {
     Oga_Sample_Count_Flag supported_sample_counts_large_image_float;
     Oga_Sample_Count_Flag supported_sample_counts_fast_image_int;
     Oga_Sample_Count_Flag supported_sample_counts_large_image_int;
-
+    
+    u64 memory_granularity;
 
 } Oga_Device_Limits;
 
@@ -463,6 +467,22 @@ typedef struct Oga_Present_Desc {
 } Oga_Present_Desc;
 Oga_Result oga_submit_present(Oga_Swapchain *swapchain, Oga_Present_Desc desc);
 
+/**************************************************************************************/
+/**************************************************************************************/
+/**************************************************************************************/
+/********************************* SPIRV HEADER START *********************************/
+/**************************************************************************************/
+/**************************************************************************************/
+/**************************************************************************************/
+#include "./../vendors/spirv/spirv.h"
+/**************************************************************************************/
+/**************************************************************************************/
+/**************************************************************************************/
+/********************************* SPIRV HEADER END ***********************************/
+/**************************************************************************************/
+/**************************************************************************************/
+/**************************************************************************************/
+
 //////////
 /// Render passes & Programs
 
@@ -569,13 +589,18 @@ Oga_Result oga_wait_latch(Oga_Cpu_Latch *cpu_latch);
 Oga_Result oga_reset_latch(Oga_Cpu_Latch *cpu_latch);
 
 //////////
-/// Memory
+/// Memory & Pointers
 
-typedef void* Oga_Memory_Handle;
+typedef struct Oga_Memory {
+    u64 size;
+    Oga_Memory_Property_Flag usage;
+} Oga_Memory;
 #define OGA_INTERNALLY_MANAGED_MEMORY_HANDLE ((void*)0xFFFFFFFFFFFFFFFF)
 
-//////////
-/// Pointers
+Oga_Result oga_allocate_memory(Oga_Context *context, u64 size, Oga_Memory_Property_Flag usage_flags);
+void oga_deallocate_memory(Oga_Memory *mem);
+Oga_Result oga_map_memory(Oga_Memory *mem, u64 offset, u64 size, void *mapped_mem);
+Oga_Result oga_unmap_memory(Oga_Memory *mem);
 
 typedef u64 Oga_Image_Optimization;
 #define OGA_IMAGE_OPTIMIZATION_UNDEFINED 0
@@ -639,7 +664,7 @@ typedef struct Oga_Pointer_Desc {
     Oga_Pointer_Kind kind;
     Oga_Pointer_Flag flags;
 
-    Oga_Memory_Handle memory;
+    Oga_Memory *memory;
     u64 memory_offset;
     
     union {
@@ -664,7 +689,7 @@ typedef struct Oga_Pointer_Desc {
 typedef struct Oga_Pointer {
 #define OGA_POINTER_MEMBERS\
     void *id;\
-    Oga_Memory_Handle memory; /* This will be set to 0xFFFFFFFFFFFFFFFF if memory is internally managed in drivers */ \
+    Oga_Memory *memory; /* This will be set to 0xFFFFFFFFFFFFFFFF if memory is internally managed in drivers */ \
     Oga_Pointer_Kind pointer_kind;
     
     OGA_POINTER_MEMBERS
@@ -800,6 +825,7 @@ void oga_cmd_end_render_pass(Oga_Command_List cmd);
 
 void oga_cmd_draw(Oga_Command_List cmd, u64 vertex_count, u64 vertex_start, u64 instance_count, u64 instance_start);
 
+Oga_Result oga_cmd_copy_memory(Oga_Pointer *dst, Oga_Pointer *src, u64 offset, u64 size);
 
 #ifdef OGA_IMPL_AUTO
     #if (OS_FLAGS & OS_FLAG_WEB)
@@ -1107,7 +1133,7 @@ inline string oga_format_str(Oga_Format f);
 /////////////////////////////////////////////////////
 
 #if COMPILER_FLAGS & COMPILER_FLAG_MSC
-    #pragma comment(lib, "src/vendors/vulkan-1.lib")
+    #pragma comment(lib, "vendors/vulkan-1.lib")
 #endif // COMPILER_FLAGS & COMPILER_FLAG_MSC
 
 #if (OS_FLAGS & (OS_FLAG_WINDOWS | OS_FLAG_LINUX | OS_FLAG_MACOS | OS_FLAG_IOS | OS_FLAG_ANDROID)) == 0
@@ -1173,4 +1199,6 @@ inline string oga_format_str(Oga_Format f);
 #endif
 
 #endif // OSTD_IMPL
+
+#endif // OGA_GRAPHICS
 

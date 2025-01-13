@@ -81,13 +81,15 @@
       <Platform>x64</Platform>
     </ProjectConfiguration>
   </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="..\..\software_rectangle.c" />
+  </ItemGroup>
   <PropertyGroup Label="Globals">
     <VCProjectVersion>15.0</VCProjectVersion>
     <ProjectGuid>{BE094923-C345-468B-BF1A-293599BE75B4}</ProjectGuid>
     <Keyword>Win32Proj</Keyword>
-    <RootNamespace>OstdTest</RootNamespace>
+    <RootNamespace>GameApplication</RootNamespace>
     <WindowsTargetPlatformVersion>10.0</WindowsTargetPlatformVersion>
-    <ProjectName>OstdTest</ProjectName>
   </PropertyGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'" Label="Configuration">
@@ -112,8 +114,6 @@
     <LinkTimeOptimization>LinkTimeOptimization</LinkTimeOptimization>
     <NativeBuildBackend>Ninja</NativeBuildBackend>
     <AndroidMinSdkVersion>24</AndroidMinSdkVersion>
-    <CLanguageStandard>c99</CLanguageStandard>
-    <CppLanguageStandard>cpp98</CppLanguageStandard>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Asan|Win32'" Label="Configuration">
     <ConfigurationType>Application</ConfigurationType>
@@ -157,9 +157,6 @@
     <LinkTimeOptimization>LinkTimeOptimization</LinkTimeOptimization>
     <AddressSanitizer>asan</AddressSanitizer>
     <NativeBuildBackend>Ninja</NativeBuildBackend>
-    <AndroidMinSdkVersion>24</AndroidMinSdkVersion>
-    <CLanguageStandard>c99</CLanguageStandard>
-    <CppLanguageStandard>cpp98</CppLanguageStandard>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='HWAsan|Android-arm64-v8a'" Label="Configuration">
     <ConfigurationType>Application</ConfigurationType>
@@ -169,10 +166,8 @@
     <LinkTimeOptimization>LinkTimeOptimization</LinkTimeOptimization>
     <AddressSanitizer>hwasan</AddressSanitizer>
     <NativeBuildBackend>Ninja</NativeBuildBackend>
-    <AndroidMinSdkVersion>24</AndroidMinSdkVersion>
+    <AndroidMinSdkVersion>34</AndroidMinSdkVersion>
     <AndroidNdkVersion>26.3.11579264</AndroidNdkVersion>
-    <CLanguageStandard>c99</CLanguageStandard>
-    <CppLanguageStandard>cpp98</CppLanguageStandard>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'" Label="Configuration">
     <ConfigurationType>Application</ConfigurationType>
@@ -198,9 +193,6 @@
     <CharacterSet>Unicode</CharacterSet>
     <LinkTimeOptimization>LinkTimeOptimization</LinkTimeOptimization>
     <NativeBuildBackend>Ninja</NativeBuildBackend>
-    <AndroidMinSdkVersion>24</AndroidMinSdkVersion>
-    <CLanguageStandard>c99</CLanguageStandard>
-    <CppLanguageStandard>cpp98</CppLanguageStandard>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'" Label="Configuration">
     <ConfigurationType>Application</ConfigurationType>
@@ -422,6 +414,8 @@
       <SDLCheck>true</SDLCheck>
       <PreprocessorDefinitions>WIN32;_DEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
+      <PrecompiledHeaderFile>pch.h</PrecompiledHeaderFile>
+      <AdditionalIncludeDirectories>..\GameEngine</AdditionalIncludeDirectories>
     </ClCompile>
     <Link>
       <SubSystem>Console</SubSystem>
@@ -440,6 +434,8 @@
       <SDLCheck>true</SDLCheck>
       <PreprocessorDefinitions>WIN32;_DEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
+      <PrecompiledHeaderFile>pch.h</PrecompiledHeaderFile>
+      <AdditionalIncludeDirectories>..\GameEngine</AdditionalIncludeDirectories>
     </ClCompile>
     <Link>
       <SubSystem>Console</SubSystem>
@@ -458,6 +454,8 @@
       <SDLCheck>true</SDLCheck>
       <PreprocessorDefinitions>WIN32;_DEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
+      <PrecompiledHeaderFile>pch.h</PrecompiledHeaderFile>
+      <AdditionalIncludeDirectories>..\GameEngine</AdditionalIncludeDirectories>
     </ClCompile>
     <Link>
       <SubSystem>Console</SubSystem>
@@ -477,6 +475,8 @@
       <ConformanceMode>true</ConformanceMode>
       <WriteCompileCommandsJson>true</WriteCompileCommandsJson>
       <TreatWarningAsError>true</TreatWarningAsError>
+      <PrecompiledHeaderFile>pch.h</PrecompiledHeaderFile>
+      <AdditionalIncludeDirectories>..\GameEngine</AdditionalIncludeDirectories>
       <CppLanguageStandard>cpp11</CppLanguageStandard>
     </ClCompile>
     <Link>
@@ -499,6 +499,8 @@
       <ConformanceMode>true</ConformanceMode>
       <WriteCompileCommandsJson>true</WriteCompileCommandsJson>
       <TreatWarningAsError>true</TreatWarningAsError>
+      <PrecompiledHeaderFile>pch.h</PrecompiledHeaderFile>
+      <AdditionalIncludeDirectories>..\GameEngine</AdditionalIncludeDirectories>
       <CppLanguageStandard>cpp11</CppLanguageStandard>
     </ClCompile>
     <Link>
@@ -521,6 +523,8 @@
       <ConformanceMode>true</ConformanceMode>
       <WriteCompileCommandsJson>true</WriteCompileCommandsJson>
       <TreatWarningAsError>true</TreatWarningAsError>
+      <PrecompiledHeaderFile>pch.h</PrecompiledHeaderFile>
+      <AdditionalIncludeDirectories>..\GameEngine</AdditionalIncludeDirectories>
       <CppLanguageStandard>cpp11</CppLanguageStandard>
     </ClCompile>
     <Link>
@@ -536,43 +540,16 @@
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Android-arm64-v8a'">
     <ClCompile>
-      <PrecompiledHeader>NotUsing</PrecompiledHeader>
-      <Optimization>Disabled</Optimization>
-      <SDLCheck>true</SDLCheck>
-      <PreprocessorDefinitions>DEBUG;_DEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
-      <ConformanceMode>true</ConformanceMode>
-      <WriteCompileCommandsJson>true</WriteCompileCommandsJson>
-      <TreatWarningAsError>true</TreatWarningAsError>
-      <CppLanguageStandard>cpp98</CppLanguageStandard>
-      <CLanguageStandard>c99</CLanguageStandard>
-      <PrecompiledHeaderFile />
-    </ClCompile>
-    <Link>
-      <SubSystem>Console</SubSystem>
-      <GenerateDebugInformation>true</GenerateDebugInformation>
-      <LibraryDependencies>vulkan;log;atomic;GLESv2;EGL;android;</LibraryDependencies>
-      <AdditionalLibraryDirectories>%(SolutionDir);%(AdditionalLibraryDirectories);$(SysrootLink)\usr\lib</AdditionalLibraryDirectories>
-    </Link>
-    <PostBuildEvent>
-      <Command>
-      </Command>
-    </PostBuildEvent>
-    <PreBuildEvent>
-      <Command>if not exist $(SolutionDir)$(Configuration)\$(Platform) mkdir $(SolutionDir)$(Configuration)\$(Platform)</Command>
-    </PreBuildEvent>
-  </ItemDefinitionGroup>
-  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Asan|Android-arm64-v8a'">
-    <ClCompile>
-      <PrecompiledHeader>NotUsing</PrecompiledHeader>
+      <PrecompiledHeader>Use</PrecompiledHeader>
       <Optimization>Disabled</Optimization>
       <SDLCheck>true</SDLCheck>
       <PreprocessorDefinitions>_DEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
+      <PrecompiledHeaderFile>pch.h</PrecompiledHeaderFile>
+      <AdditionalIncludeDirectories>..\GameEngine</AdditionalIncludeDirectories>
       <WriteCompileCommandsJson>true</WriteCompileCommandsJson>
       <TreatWarningAsError>true</TreatWarningAsError>
-      <CppLanguageStandard>cpp98</CppLanguageStandard>
-      <CLanguageStandard>c99</CLanguageStandard>
-      <PrecompiledHeaderFile />
+      <CppLanguageStandard>cpp11</CppLanguageStandard>
     </ClCompile>
     <Link>
       <SubSystem>Console</SubSystem>
@@ -584,22 +561,43 @@
       <Command>
       </Command>
     </PostBuildEvent>
-    <PreBuildEvent>
-      <Command>if not exist $(SolutionDir)$(Configuration)\$(Platform) mkdir $(SolutionDir)$(Configuration)\$(Platform)</Command>
-    </PreBuildEvent>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Asan|Android-arm64-v8a'">
+    <ClCompile>
+      <PrecompiledHeader>Use</PrecompiledHeader>
+      <Optimization>Disabled</Optimization>
+      <SDLCheck>true</SDLCheck>
+      <PreprocessorDefinitions>_DEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <ConformanceMode>true</ConformanceMode>
+      <PrecompiledHeaderFile>pch.h</PrecompiledHeaderFile>
+      <AdditionalIncludeDirectories>..\GameEngine</AdditionalIncludeDirectories>
+      <WriteCompileCommandsJson>true</WriteCompileCommandsJson>
+      <TreatWarningAsError>true</TreatWarningAsError>
+      <CppLanguageStandard>cpp11</CppLanguageStandard>
+    </ClCompile>
+    <Link>
+      <SubSystem>Console</SubSystem>
+      <GenerateDebugInformation>true</GenerateDebugInformation>
+      <LibraryDependencies>vulkan;log;atomic;GLESv2;EGL;android;</LibraryDependencies>
+      <AdditionalLibraryDirectories>%(AdditionalLibraryDirectories);$(SysrootLink)\usr\lib</AdditionalLibraryDirectories>
+    </Link>
+    <PostBuildEvent>
+      <Command>
+      </Command>
+    </PostBuildEvent>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='HWAsan|Android-arm64-v8a'">
     <ClCompile>
-      <PrecompiledHeader>NotUsing</PrecompiledHeader>
+      <PrecompiledHeader>Use</PrecompiledHeader>
       <Optimization>MaxSpeed</Optimization>
       <SDLCheck>true</SDLCheck>
       <PreprocessorDefinitions>_DEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
+      <PrecompiledHeaderFile>pch.h</PrecompiledHeaderFile>
+      <AdditionalIncludeDirectories>..\GameEngine</AdditionalIncludeDirectories>
       <WriteCompileCommandsJson>true</WriteCompileCommandsJson>
       <TreatWarningAsError>true</TreatWarningAsError>
-      <CppLanguageStandard>cpp98</CppLanguageStandard>
-      <CLanguageStandard>c99</CLanguageStandard>
-      <PrecompiledHeaderFile />
+      <CppLanguageStandard>cpp11</CppLanguageStandard>
     </ClCompile>
     <Link>
       <SubSystem>Console</SubSystem>
@@ -611,9 +609,6 @@
       <Command>
       </Command>
     </PostBuildEvent>
-    <PreBuildEvent>
-      <Command>if not exist $(SolutionDir)$(Configuration)\$(Platform) mkdir $(SolutionDir)$(Configuration)\$(Platform)</Command>
-    </PreBuildEvent>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
     <ClCompile>
@@ -623,6 +618,8 @@
       <SDLCheck>true</SDLCheck>
       <PreprocessorDefinitions>_DEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
+      <AdditionalIncludeDirectories>..\GameEngine</AdditionalIncludeDirectories>
+      <PrecompiledHeaderFile>pch.h</PrecompiledHeaderFile>
     </ClCompile>
     <Link>
       <SubSystem>Console</SubSystem>
@@ -641,6 +638,8 @@
       <SDLCheck>true</SDLCheck>
       <PreprocessorDefinitions>_DEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
+      <AdditionalIncludeDirectories>..\GameEngine</AdditionalIncludeDirectories>
+      <PrecompiledHeaderFile>pch.h</PrecompiledHeaderFile>
     </ClCompile>
     <Link>
       <SubSystem>Console</SubSystem>
@@ -659,6 +658,8 @@
       <SDLCheck>true</SDLCheck>
       <PreprocessorDefinitions>_DEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
+      <AdditionalIncludeDirectories>..\GameEngine</AdditionalIncludeDirectories>
+      <PrecompiledHeaderFile>pch.h</PrecompiledHeaderFile>
     </ClCompile>
     <Link>
       <SubSystem>Console</SubSystem>
@@ -679,6 +680,8 @@
       <SDLCheck>true</SDLCheck>
       <PreprocessorDefinitions>WIN32;NDEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
+      <PrecompiledHeaderFile>pch.h</PrecompiledHeaderFile>
+      <AdditionalIncludeDirectories>..\GameEngine</AdditionalIncludeDirectories>
     </ClCompile>
     <Link>
       <SubSystem>Console</SubSystem>
@@ -700,6 +703,8 @@
       <SDLCheck>true</SDLCheck>
       <PreprocessorDefinitions>NDEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
+      <PrecompiledHeaderFile>pch.h</PrecompiledHeaderFile>
+      <AdditionalIncludeDirectories>..\GameEngine</AdditionalIncludeDirectories>
       <WriteCompileCommandsJson>true</WriteCompileCommandsJson>
       <TreatWarningAsError>true</TreatWarningAsError>
       <CppLanguageStandard>cpp11</CppLanguageStandard>
@@ -719,18 +724,18 @@
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|Android-arm64-v8a'">
     <ClCompile>
-      <PrecompiledHeader>NotUsing</PrecompiledHeader>
+      <PrecompiledHeader>Use</PrecompiledHeader>
       <Optimization>MaxSpeed</Optimization>
       <FunctionLevelLinking>true</FunctionLevelLinking>
       <IntrinsicFunctions>true</IntrinsicFunctions>
       <SDLCheck>true</SDLCheck>
       <PreprocessorDefinitions>NDEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
+      <PrecompiledHeaderFile>pch.h</PrecompiledHeaderFile>
+      <AdditionalIncludeDirectories>..\GameEngine</AdditionalIncludeDirectories>
       <WriteCompileCommandsJson>true</WriteCompileCommandsJson>
       <TreatWarningAsError>true</TreatWarningAsError>
-      <CppLanguageStandard>cpp98</CppLanguageStandard>
-      <CLanguageStandard>c99</CLanguageStandard>
-      <PrecompiledHeaderFile />
+      <CppLanguageStandard>cpp11</CppLanguageStandard>
     </ClCompile>
     <Link>
       <SubSystem>Console</SubSystem>
@@ -743,9 +748,6 @@
       <Command>
       </Command>
     </PostBuildEvent>
-    <PreBuildEvent>
-      <Command>if not exist $(SolutionDir)$(Configuration)\$(Platform) mkdir $(SolutionDir)$(Configuration)\$(Platform)</Command>
-    </PreBuildEvent>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
     <ClCompile>
@@ -757,6 +759,8 @@
       <SDLCheck>true</SDLCheck>
       <PreprocessorDefinitions>NDEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
+      <PrecompiledHeaderFile>pch.h</PrecompiledHeaderFile>
+      <AdditionalIncludeDirectories>..\GameEngine</AdditionalIncludeDirectories>
     </ClCompile>
     <Link>
       <SubSystem>Console</SubSystem>
@@ -769,12 +773,6 @@
       </Command>
     </PostBuildEvent>
   </ItemDefinitionGroup>
-  <ItemGroup>
-    <Xml Include="src\main\AndroidManifest.xml" />
-  </ItemGroup>
-  <ItemGroup>
-    <ClCompile Include="..\..\test.c" />
-  </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
   </ImportGroup>
