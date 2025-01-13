@@ -35,5 +35,11 @@ u64 powu(u64 x, u64 e) {
     return result;
 }
 
+typedef union float4x32 {
+    struct { f32 x; f32 y; f32 z; f32 w; } XXX;
+} float4x32;
+
+typedef float4x32 float4;
+
 #endif // OSTD_IMPL
 

@@ -1,3 +1,5 @@
+
+
 #define OSTD_IMPL
 #define OSTD_NO_GRAPHICS
 #include "../src/ostd.h"
@@ -10,6 +12,13 @@ int main(void) {
 #else
 	Surface_Handle surface = sys_get_surface();
 #endif
+
+    float4 verts[] = {
+        (float4){ -.5f, .5f, 0.f, 1.f },
+        (float4){  0.f, .5f, 0.f, 1.f },
+        (float4){  .5f, .5f, 0.f, 1.f },
+    }
+
 	while (!surface_should_close(surface)) {
 
 		s64 width, height;
@@ -20,11 +29,7 @@ int main(void) {
 
 		memset(pixels, 0x00, width*height*4);
 
-		for (s64 x = 100; x < 300; x += 1) {
-			for (s64 y = 50; y < 150; y += 1) {
-				pixels[y*width+x] = 0xffffffff;
-			}
-		}
+
 
 		surface_blit_pixels(surface);
 
