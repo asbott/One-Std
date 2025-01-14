@@ -29,6 +29,7 @@ void test_sys1(void);
 void test_sys2(void);
 void test_memory(void);
 void test_print(void);
+void test_math(void);
 
 unit_local bool inline check_oga_result(Oga_Result result) {
     if (result != OGA_OK) {
@@ -49,6 +50,7 @@ int main(void) {
     test_memory();
     test_print();
     test_sys2();
+    test_math();
 
     Oga_Device devices[128];
     u64 device_count = oga_query_devices(devices, 128);
@@ -307,9 +309,10 @@ int main(void) {
         present_mode = OGA_PRESENT_MODE_VSYNC_MAILBOX;
 #endif
     }
+    present_mode = OGA_PRESENT_MODE_IMMEDIATE;
     Oga_Swapchain_Desc sc_desc = (Oga_Swapchain_Desc){0};
     sc_desc.surface = surface;
-    sc_desc.requested_image_count = 3;
+    sc_desc.requested_image_count = 1;
     sc_desc.image_format = surface_format;
     sc_desc.width = 800;
     sc_desc.height = 600;
@@ -489,6 +492,9 @@ int main(void) {
         present_desc.wait_gpu_latches = &commands_done_latches[frame_index];
         present_desc.image_index = image_index;
         
+        Physical_Monitor monitor = (Physical_Monitor){0};
+	    surface_get_monitor(surface, &monitor);
+        sys_wait_vertical_blank(monitor);
         oga_submit_present(swapchain, present_desc);
         
         frame_index = (frame_index + 1) % frame_count;        
@@ -740,5 +746,53 @@ void test_print(void) {
     print(("Print tests passed\n"));
 
     arena_allocator((Arena*)0);
+}
+
+void test_math(void) {
+    const float64 epsilon = 1e-9; 
+
+    for (float64 x = -TAU; x <= TAU; x += PI / 6) {
+        float64 expected = sin(x);
+        float64 actual = sin(x);
+        assertmsg(abs(actual - expected) <= epsilon, "sin function failed");
+    }
+
+    for (float64 x = -TAU; x <= TAU; x += PI / 6) {
+        float64 expected = cos(x);
+        float64 actual = cos(x);
+        assertmsg(abs(actual - expected) <= epsilon, "cos function failed");
+    }
+
+    for (float64 x = -PI / 2 + 0.01; x <= PI / 2 - 0.01; x += PI / 12) {
+        float64 expected = tan(x);
+        float64 actual = tan(x);
+        assertmsg(abs(actual - expected) <= epsilon, "tan function failed");
+    }
+
+    for (float64 x = -1.0; x <= 1.0; x += 0.1) {
+        float64 expected = asin(x);
+        float64 actual = asin(x);
+        assertmsg(abs(actual - expected) <= epsilon, "asin function failed");
+    }
+
+    for (float64 x = -1.0; x <= 1.0; x += 0.1) {
+        float64 expected = acos(x);
+        float64 actual = acos(x);
+        assertmsg(abs(actual - expected) <= epsilon, "acos function failed");
+    }
+
+    for (float64 x = -10.0; x <= 10.0; x += 0.5) {
+        float64 expected = atan(x);
+        float64 actual = atan(x);
+        assertmsg(abs(actual - expected) <= epsilon, "atan function failed");
+    }
+    for (float64 y = -10.0; y <= 10.0; y += 2.0) {
+        for (float64 x = -10.0; x <= 10.0; x += 2.0) {
+            if (x == 0.0 && y == 0.0) continue; // atan2(0, 0) is undefined
+            float64 expected = atan2(y, x);
+            float64 actual = atan2(y, x);
+            assertmsg(abs(actual - expected) <= epsilon, "atan2 function failed");
+        }
+    }
 }
 

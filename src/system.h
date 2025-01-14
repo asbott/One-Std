@@ -46,6 +46,8 @@ typedef struct Physical_Monitor {
 
 u64 sys_query_monitors(Physical_Monitor *buffer, u64 max_count);
 
+bool sys_wait_vertical_blank(Physical_Monitor monitor);
+
 //////
 // IO
 //////
@@ -160,6 +162,7 @@ bool surface_get_framebuffer_size(Surface_Handle h, s64 *width, s64 *height);
 void* surface_map_pixels(Surface_Handle h);
 void surface_blit_pixels(Surface_Handle h);
 
+bool surface_get_monitor(Surface_Handle h, Physical_Monitor *monitor);
 
 //////
 // Time
@@ -246,6 +249,7 @@ typedef struct _Surface_State {
     Surface_Handle handle;
 #if OS_FLAGS & OS_FLAG_WINDOWS
     BITMAPINFO bmp_info;
+    HBITMAP bmp;
 #elif OS_FLAGS & OS_FLAG_LINUX
     Display *xlib_display;
     GC       gc;
@@ -658,6 +662,9 @@ double sys_get_seconds_monotonic(void) {
 }
 
 void sys_set_thread_affinity_mask(Thread_Handle thread, u64 bits) {
+#if OS_FLAGS & OS_FLAG_ANDROID
+    return;
+#else
     cpu_set_t cpuset;
     CPU_ZERO(&cpuset);
 
@@ -668,6 +675,7 @@ void sys_set_thread_affinity_mask(Thread_Handle thread, u64 bits) {
     }
 
     sched_setaffinity((pthread_t)thread, sizeof(cpu_set_t), &cpuset);
+#endif
 }
 
 Thread_Handle sys_get_current_thread(void) {
@@ -690,6 +698,8 @@ Thread_Handle sys_get_current_thread(void) {
     #pragma comment(lib, "shcore")
     #pragma comment(lib, "dbghelp")
     #pragma comment(lib, "gdi32")
+    #pragma comment(lib, "pdh")
+    #pragma comment(lib, "dxgi")
 #endif // COMPILER_FLAGS & COMPILER_FLAG_MSC
 
 typedef enum MONITOR_DPI_TYPE {
@@ -736,7 +746,10 @@ unit_local LRESULT window_proc ( HWND hwnd,  u32 message,  WPARAM wparam,  LPARA
         case WM_CLOSE:
             state->should_close = true;
             break;
-
+        case WM_SIZE:
+            state->pixels = 0;
+            if (state->bmp) DeleteObject(state->bmp);
+            break;
         default: {
             return DefWindowProcW(hwnd, message, wparam, lparam);
         }
@@ -952,6 +965,49 @@ u64 sys_query_monitors(Physical_Monitor *buffer, u64 max_count) {
     ctx.count = 0;
     EnumDisplayMonitors(0, 0, _win_query_monitors_callback, (LPARAM)&ctx);
     return ctx.count;
+}
+
+unit_local IDXGIOutput* _win_get_output_for_monitor(HMONITOR hMonitor)
+{
+    IDXGIFactory* factory = 0;
+    if (CreateDXGIFactory(&IID_IDXGIFactory, (void**)&factory) != 0)
+    {
+        return 0;
+    }
+
+    IDXGIAdapter* adapter = 0;
+    IDXGIOutput* output = 0;
+
+    for (UINT i = 0; factory->lpVtbl->EnumAdapters(factory, i, &adapter) != DXGI_ERROR_NOT_FOUND; ++i)
+    {
+        for (UINT j = 0; adapter->lpVtbl->EnumOutputs(adapter, j, &output) != DXGI_ERROR_NOT_FOUND; ++j)
+        {
+            DXGI_OUTPUT_DESC desc;
+            output->lpVtbl->GetDesc(output, &desc);
+
+            if (desc.Monitor == hMonitor)
+            {
+                adapter->lpVtbl->parent.Release(adapter);
+                factory->lpVtbl->parent.Release(factory);
+                return output; 
+            }
+
+            output->lpVtbl->parent.Release(output);
+        }
+        adapter->lpVtbl->parent.Release(adapter);
+    }
+
+    factory->lpVtbl->parent.Release(factory);
+    return 0;
+}
+bool sys_wait_vertical_blank(Physical_Monitor monitor) {
+    IDXGIOutput *output = _win_get_output_for_monitor(monitor.handle);
+    
+    if (output) {
+        output->lpVtbl->WaitForVBlank(output);
+        return true;
+    }
+    return false;
 }
 
 File_Handle sys_get_stdout(void) {
@@ -1206,7 +1262,7 @@ void* surface_map_pixels(Surface_Handle h) {
         state->bmp_info.bmiHeader.biCompression = BI_RGB;
         state->bmp_info.bmiHeader.biSizeImage   = 0;
 
-        CreateDIBSection(GetDC((HWND)h), &state->bmp_info, DIB_RGB_COLORS, &state->pixels, 0, 0);
+        state->bmp = CreateDIBSection(GetDC((HWND)h), &state->bmp_info, DIB_RGB_COLORS, &state->pixels, 0, 0);
     }
 
     return state->pixels;
@@ -1229,6 +1285,25 @@ void surface_blit_pixels(Surface_Handle h) {
         DIB_RGB_COLORS,
         SRCCOPY
     );
+}
+
+bool surface_get_monitor(Surface_Handle h, Physical_Monitor *monitor) {
+    HMONITOR hmon = MonitorFromWindow((HWND)h, MONITOR_DEFAULTTONEAREST);
+    if (!hmon) return false;
+    
+    Physical_Monitor mons[256];
+    
+    
+    u64 count = sys_query_monitors(mons, 256);
+
+    for (u64 i = 0; i < count; i += 1) {
+        if (mons[i].handle == hmon) {
+            *monitor = mons[i];
+            return true;
+        }
+    }
+
+    return false;
 }
 
 float64 sys_get_seconds_monotonic(void) {
@@ -1343,6 +1418,9 @@ pthread_t _android_main_thread;
 s64 _android_previous_vsync_time = 0;
 f64 _android_refresh_rate = 0.0f;
 
+pthread_cond_t _android_vsync_cond;
+pthread_mutex_t _android_vsync_mut;
+
 unit_local void *_android_mapped_pixels = 0;
 
 static void _android_onDestroy(ANativeActivity* activity) {
@@ -1403,11 +1481,16 @@ void _android_vsync_callback(s64 frame_time_nanos, void* data) {
         s64 delta_time_nanos = frame_time_nanos - _android_previous_vsync_time;
 
         if (delta_time_nanos > 0) {
-            _android_refresh_rate = 1.0 / (f64)(delta_time_nanos*1000000000);
+            _android_refresh_rate = 1.0 / ((f64)delta_time_nanos / 1000000000.0);
         }
     }
 
     _android_previous_vsync_time = frame_time_nanos;
+    
+    pthread_cond_broadcast(&_android_vsync_cond);
+    AChoreographer* choreographer = AChoreographer_getInstance();
+    assert(choreographer);
+    AChoreographer_postFrameCallback(choreographer, _android_vsync_callback, 0);
 }
 
 void* _android_main_thread_proc(void* arg) {
@@ -1451,6 +1534,8 @@ void ANativeActivity_onCreate(ANativeActivity* activity, void* savedState,
     AChoreographer_postFrameCallback(choreographer, _android_vsync_callback, 0);
 
     pthread_create(&_android_main_thread, 0, _android_main_thread_proc, 0);
+    pthread_cond_init(&_android_vsync_cond, 0);
+    pthread_mutex_init(&_android_vsync_mut, 0);
 }
 
 
@@ -1570,6 +1655,10 @@ u64 sys_query_monitors(Physical_Monitor *buffer, u64 max_count) {
     return 1;
 }
 
+bool sys_wait_vertical_blank(Physical_Monitor monitor) {
+    return pthread_cond_wait(&_android_vsync_cond, &_android_vsync_mut) == 0;
+}
+
 File_Handle sys_get_stdout(void) {
     if (_android_user_stdout_handle == -1) return (File_Handle)(u64)_android_stdout_pipe[1];
     else return (File_Handle)(u64)_android_user_stdout_handle;
@@ -1630,7 +1719,7 @@ void surface_blit_pixels(Surface_Handle h) {
     }
 
     ANativeWindow_Buffer buffer;
-    if (ANativeWindow_lock((ANativeWindow*)h, &buffer, NULL) != 0) {
+    if (ANativeWindow_lock((ANativeWindow*)h, &buffer, 0) != 0) {
         return;
     }
 
@@ -1640,6 +1729,11 @@ void surface_blit_pixels(Surface_Handle h) {
     memcpy(buffer.bits, _android_mapped_pixels, width*height*4);
 
     ANativeWindow_unlockAndPost((ANativeWindow*)h);
+}
+
+bool surface_get_monitor(Surface_Handle h, Physical_Monitor *monitor) {
+    sys_query_monitors(monitor, 1);
+    return true;
 }
 
 void sys_print_stack_trace(File_Handle handle) {

@@ -326,21 +326,6 @@ typedef u32 sys_uint;
 #endif
 #endif
 
-typedef union float32x2 {
-    struct {float32 x, y;} DUMMYSTRUCT;
-} float32x2;
-
-typedef union int32x2 {
-    struct {int32 x, y;} DUMMYSTRUCT;
-} int32x2;
-
-typedef union int32x4 {
-    struct {int32 x, y, z, w;} DUMMYSTRUCT;
-} int32x4;
-
-typedef float32x2 float2;
-typedef int32x2 int2;
-
 #if COMPILER_FLAGS & COMPILER_FLAG_MSC
 #define debug_break(...) __debugbreak()
 #elif COMPILER_FLAGS & COMPILER_FLAG_GNU

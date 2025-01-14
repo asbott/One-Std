@@ -20,7 +20,7 @@ typedef HANDLE HCURSOR;
 typedef HANDLE HMODULE;
 typedef HANDLE HMENU;
 typedef HANDLE HBITMAP;
-
+typedef HANDLE HGDIOBJ;
 
 typedef unsigned long ULONG;
 typedef ULONG *PULONG;
@@ -1804,6 +1804,10 @@ typedef struct tagTRACKMOUSEEVENT {
 #define BLACKNESS           (DWORD)0x00000042 /* dest = BLACK                    */
 #define WHITENESS           (DWORD)0x00FF0062 /* dest = WHITE                    */
 
+#define MONITOR_DEFAULTTONULL       0x00000000
+#define MONITOR_DEFAULTTOPRIMARY    0x00000001
+#define MONITOR_DEFAULTTONEAREST    0x00000002
+
 WINDOWS_IMPORT void WINAPI GetSystemInfo(LPSYSTEM_INFO lpSystemInfo);
 
 WINDOWS_IMPORT void* WINAPI VirtualAlloc(void *lpAddress, size_t dwSize, u32 flAllocationType, u32 flProtect);
@@ -1908,4 +1912,357 @@ WINDOWS_IMPORT HBITMAP WINAPI CreateDIBSection( HDC hdc, BITMAPINFO  *pbmi, UINT
 WINDOWS_IMPORT HDC WINAPI GetDC(HWND hWnd);
 
 WINDOWS_IMPORT int WINAPI StretchDIBits( HDC hdc, int xDest, int yDest, int DestWidth, int DestHeight, int xSrc, int ySrc, int SrcWidth, int SrcHeight, PVOID lpBits, PBITMAPINFO lpbmi, UINT iUsage, DWORD rop);
+
+WINDOWS_IMPORT BOOL WINAPI DeleteObject(HGDIOBJ ho);
+
+WINDOWS_IMPORT HMONITOR WINAPI MonitorFromWindow(HWND hwnd,DWORD dwFlags);
+
+WINDOWS_IMPORT HMODULE WINAPI LoadLibraryA(LPCSTR lpLibFileName);
+WINDOWS_IMPORT void* WINAPI GetProcAddress(HMODULE hModule,LPCSTR  lpProcName);
+
+typedef enum DXGI_FORMAT {
+  DXGI_FORMAT_UNKNOWN = 0,
+  DXGI_FORMAT_R32G32B32A32_TYPELESS = 1,
+  DXGI_FORMAT_R32G32B32A32_FLOAT = 2,
+  DXGI_FORMAT_R32G32B32A32_UINT = 3,
+  DXGI_FORMAT_R32G32B32A32_SINT = 4,
+  DXGI_FORMAT_R32G32B32_TYPELESS = 5,
+  DXGI_FORMAT_R32G32B32_FLOAT = 6,
+  DXGI_FORMAT_R32G32B32_UINT = 7,
+  DXGI_FORMAT_R32G32B32_SINT = 8,
+  DXGI_FORMAT_R16G16B16A16_TYPELESS = 9,
+  DXGI_FORMAT_R16G16B16A16_FLOAT = 10,
+  DXGI_FORMAT_R16G16B16A16_UNORM = 11,
+  DXGI_FORMAT_R16G16B16A16_UINT = 12,
+  DXGI_FORMAT_R16G16B16A16_SNORM = 13,
+  DXGI_FORMAT_R16G16B16A16_SINT = 14,
+  DXGI_FORMAT_R32G32_TYPELESS = 15,
+  DXGI_FORMAT_R32G32_FLOAT = 16,
+  DXGI_FORMAT_R32G32_UINT = 17,
+  DXGI_FORMAT_R32G32_SINT = 18,
+  DXGI_FORMAT_R32G8X24_TYPELESS = 19,
+  DXGI_FORMAT_D32_FLOAT_S8X24_UINT = 20,
+  DXGI_FORMAT_R32_FLOAT_X8X24_TYPELESS = 21,
+  DXGI_FORMAT_X32_TYPELESS_G8X24_UINT = 22,
+  DXGI_FORMAT_R10G10B10A2_TYPELESS = 23,
+  DXGI_FORMAT_R10G10B10A2_UNORM = 24,
+  DXGI_FORMAT_R10G10B10A2_UINT = 25,
+  DXGI_FORMAT_R11G11B10_FLOAT = 26,
+  DXGI_FORMAT_R8G8B8A8_TYPELESS = 27,
+  DXGI_FORMAT_R8G8B8A8_UNORM = 28,
+  DXGI_FORMAT_R8G8B8A8_UNORM_SRGB = 29,
+  DXGI_FORMAT_R8G8B8A8_UINT = 30,
+  DXGI_FORMAT_R8G8B8A8_SNORM = 31,
+  DXGI_FORMAT_R8G8B8A8_SINT = 32,
+  DXGI_FORMAT_R16G16_TYPELESS = 33,
+  DXGI_FORMAT_R16G16_FLOAT = 34,
+  DXGI_FORMAT_R16G16_UNORM = 35,
+  DXGI_FORMAT_R16G16_UINT = 36,
+  DXGI_FORMAT_R16G16_SNORM = 37,
+  DXGI_FORMAT_R16G16_SINT = 38,
+  DXGI_FORMAT_R32_TYPELESS = 39,
+  DXGI_FORMAT_D32_FLOAT = 40,
+  DXGI_FORMAT_R32_FLOAT = 41,
+  DXGI_FORMAT_R32_UINT = 42,
+  DXGI_FORMAT_R32_SINT = 43,
+  DXGI_FORMAT_R24G8_TYPELESS = 44,
+  DXGI_FORMAT_D24_UNORM_S8_UINT = 45,
+  DXGI_FORMAT_R24_UNORM_X8_TYPELESS = 46,
+  DXGI_FORMAT_X24_TYPELESS_G8_UINT = 47,
+  DXGI_FORMAT_R8G8_TYPELESS = 48,
+  DXGI_FORMAT_R8G8_UNORM = 49,
+  DXGI_FORMAT_R8G8_UINT = 50,
+  DXGI_FORMAT_R8G8_SNORM = 51,
+  DXGI_FORMAT_R8G8_SINT = 52,
+  DXGI_FORMAT_R16_TYPELESS = 53,
+  DXGI_FORMAT_R16_FLOAT = 54,
+  DXGI_FORMAT_D16_UNORM = 55,
+  DXGI_FORMAT_R16_UNORM = 56,
+  DXGI_FORMAT_R16_UINT = 57,
+  DXGI_FORMAT_R16_SNORM = 58,
+  DXGI_FORMAT_R16_SINT = 59,
+  DXGI_FORMAT_R8_TYPELESS = 60,
+  DXGI_FORMAT_R8_UNORM = 61,
+  DXGI_FORMAT_R8_UINT = 62,
+  DXGI_FORMAT_R8_SNORM = 63,
+  DXGI_FORMAT_R8_SINT = 64,
+  DXGI_FORMAT_A8_UNORM = 65,
+  DXGI_FORMAT_R1_UNORM = 66,
+  DXGI_FORMAT_R9G9B9E5_SHAREDEXP = 67,
+  DXGI_FORMAT_R8G8_B8G8_UNORM = 68,
+  DXGI_FORMAT_G8R8_G8B8_UNORM = 69,
+  DXGI_FORMAT_BC1_TYPELESS = 70,
+  DXGI_FORMAT_BC1_UNORM = 71,
+  DXGI_FORMAT_BC1_UNORM_SRGB = 72,
+  DXGI_FORMAT_BC2_TYPELESS = 73,
+  DXGI_FORMAT_BC2_UNORM = 74,
+  DXGI_FORMAT_BC2_UNORM_SRGB = 75,
+  DXGI_FORMAT_BC3_TYPELESS = 76,
+  DXGI_FORMAT_BC3_UNORM = 77,
+  DXGI_FORMAT_BC3_UNORM_SRGB = 78,
+  DXGI_FORMAT_BC4_TYPELESS = 79,
+  DXGI_FORMAT_BC4_UNORM = 80,
+  DXGI_FORMAT_BC4_SNORM = 81,
+  DXGI_FORMAT_BC5_TYPELESS = 82,
+  DXGI_FORMAT_BC5_UNORM = 83,
+  DXGI_FORMAT_BC5_SNORM = 84,
+  DXGI_FORMAT_B5G6R5_UNORM = 85,
+  DXGI_FORMAT_B5G5R5A1_UNORM = 86,
+  DXGI_FORMAT_B8G8R8A8_UNORM = 87,
+  DXGI_FORMAT_B8G8R8X8_UNORM = 88,
+  DXGI_FORMAT_R10G10B10_XR_BIAS_A2_UNORM = 89,
+  DXGI_FORMAT_B8G8R8A8_TYPELESS = 90,
+  DXGI_FORMAT_B8G8R8A8_UNORM_SRGB = 91,
+  DXGI_FORMAT_B8G8R8X8_TYPELESS = 92,
+  DXGI_FORMAT_B8G8R8X8_UNORM_SRGB = 93,
+  DXGI_FORMAT_BC6H_TYPELESS = 94,
+  DXGI_FORMAT_BC6H_UF16 = 95,
+  DXGI_FORMAT_BC6H_SF16 = 96,
+  DXGI_FORMAT_BC7_TYPELESS = 97,
+  DXGI_FORMAT_BC7_UNORM = 98,
+  DXGI_FORMAT_BC7_UNORM_SRGB = 99,
+  DXGI_FORMAT_AYUV = 100,
+  DXGI_FORMAT_Y410 = 101,
+  DXGI_FORMAT_Y416 = 102,
+  DXGI_FORMAT_NV12 = 103,
+  DXGI_FORMAT_P010 = 104,
+  DXGI_FORMAT_P016 = 105,
+  DXGI_FORMAT_420_OPAQUE = 106,
+  DXGI_FORMAT_YUY2 = 107,
+  DXGI_FORMAT_Y210 = 108,
+  DXGI_FORMAT_Y216 = 109,
+  DXGI_FORMAT_NV11 = 110,
+  DXGI_FORMAT_AI44 = 111,
+  DXGI_FORMAT_IA44 = 112,
+  DXGI_FORMAT_P8 = 113,
+  DXGI_FORMAT_A8P8 = 114,
+  DXGI_FORMAT_B4G4R4A4_UNORM = 115,
+  DXGI_FORMAT_P208 = 130,
+  DXGI_FORMAT_V208 = 131,
+  DXGI_FORMAT_V408 = 132,
+  DXGI_FORMAT_SAMPLER_FEEDBACK_MIN_MIP_OPAQUE,
+  DXGI_FORMAT_SAMPLER_FEEDBACK_MIP_REGION_USED_OPAQUE,
+ 
+} DXGI_FORMAT ;
+#define  DXGI_FORMAT_FORCE_UINT 0xffffffff
+
+typedef enum DXGI_MODE_ROTATION { 
+  DXGI_MODE_ROTATION_UNSPECIFIED  = 0,
+  DXGI_MODE_ROTATION_IDENTITY     = 1,
+  DXGI_MODE_ROTATION_ROTATE90     = 2,
+  DXGI_MODE_ROTATION_ROTATE180    = 3,
+  DXGI_MODE_ROTATION_ROTATE270    = 4
+} DXGI_MODE_ROTATION;
+
+typedef struct DXGI_OUTPUT_DESC
+    {
+    WCHAR DeviceName[ 32 ];
+    RECT DesktopCoordinates;
+    BOOL AttachedToDesktop;
+    DXGI_MODE_ROTATION Rotation;
+    HMONITOR Monitor;
+    } 	DXGI_OUTPUT_DESC;
+
+typedef struct DXGI_RATIONAL
+{
+    UINT Numerator;
+    UINT Denominator;
+} DXGI_RATIONAL;
+
+typedef enum DXGI_MODE_SCANLINE_ORDER { 
+  DXGI_MODE_SCANLINE_ORDER_UNSPECIFIED        = 0,
+  DXGI_MODE_SCANLINE_ORDER_PROGRESSIVE        = 1,
+  DXGI_MODE_SCANLINE_ORDER_UPPER_FIELD_FIRST  = 2,
+  DXGI_MODE_SCANLINE_ORDER_LOWER_FIELD_FIRST  = 3
+} DXGI_MODE_SCANLINE_ORDER;
+
+typedef enum DXGI_MODE_SCALING { 
+  DXGI_MODE_SCALING_UNSPECIFIED  = 0,
+  DXGI_MODE_SCALING_CENTERED     = 1,
+  DXGI_MODE_SCALING_STRETCHED    = 2
+} DXGI_MODE_SCALING;
+typedef struct DXGI_MODE_DESC
+{
+    UINT Width;
+    UINT Height;
+    DXGI_RATIONAL RefreshRate;
+    DXGI_FORMAT Format;
+    DXGI_MODE_SCANLINE_ORDER ScanlineOrdering;
+    DXGI_MODE_SCALING Scaling;
+} DXGI_MODE_DESC;
+
+
+typedef struct DXGI_GAMMA_CONTROL_CAPABILITIES
+{
+    BOOL ScaleAndOffsetSupported;
+    float MaxConvertedValue;
+    float MinConvertedValue;
+    UINT NumGammaControlPoints;
+    float ControlPointPositions[1025];
+} DXGI_GAMMA_CONTROL_CAPABILITIES;
+
+
+typedef struct DXGI_RGB {
+    float Red;
+    float Green;
+    float Blue;
+} DXGI_RGB;
+typedef struct DXGI_GAMMA_CONTROL
+{
+    DXGI_RGB Scale;
+    DXGI_RGB Offset;
+    DXGI_RGB GammaCurve[ 1025 ];
+} DXGI_GAMMA_CONTROL;
+
+typedef struct DXGI_FRAME_STATISTICS
+    {
+    UINT PresentCount;
+    UINT PresentRefreshCount;
+    UINT SyncRefreshCount;
+    LARGE_INTEGER SyncQPCTime;
+    LARGE_INTEGER SyncGPUTime;
+    } 	DXGI_FRAME_STATISTICS;
+
+typedef struct LUID {
+    DWORD LowPart;
+    LONG HighPart;
+} LUID;
+typedef struct DXGI_ADAPTER_DESC
+    {
+    WCHAR Description[ 128 ];
+    UINT VendorId;
+    UINT DeviceId;
+    UINT SubSysId;
+    UINT Revision;
+    size_t DedicatedVideoMemory;
+    size_t DedicatedSystemMemory;
+    size_t SharedSystemMemory;
+    LUID AdapterLuid;
+    } 	DXGI_ADAPTER_DESC;
+
+typedef struct DXGI_SAMPLE_DESC {
+  UINT Count;
+  UINT Quality;
+} DXGI_SAMPLE_DESC;
+typedef enum DXGI_SWAP_EFFECT {
+  DXGI_SWAP_EFFECT_DISCARD = 0,
+  DXGI_SWAP_EFFECT_SEQUENTIAL = 1,
+  DXGI_SWAP_EFFECT_FLIP_SEQUENTIAL = 3,
+  DXGI_SWAP_EFFECT_FLIP_DISCARD = 4
+} DXGI_SWAP_EFFECT;
+#define DXGI_CPU_ACCESS_NONE    ( 0 )
+#define DXGI_CPU_ACCESS_DYNAMIC    ( 1 )
+#define DXGI_CPU_ACCESS_READ_WRITE    ( 2 )
+#define DXGI_CPU_ACCESS_SCRATCH    ( 3 )
+#define DXGI_CPU_ACCESS_FIELD        15
+#define DXGI_USAGE_SHADER_INPUT             ( 1L << (0 + 4) )
+#define DXGI_USAGE_RENDER_TARGET_OUTPUT     ( 1L << (1 + 4) )
+#define DXGI_USAGE_BACK_BUFFER              ( 1L << (2 + 4) )
+#define DXGI_USAGE_SHARED                   ( 1L << (3 + 4) )
+#define DXGI_USAGE_READ_ONLY                ( 1L << (4 + 4) )
+#define DXGI_USAGE_DISCARD_ON_PRESENT       ( 1L << (5 + 4) )
+#define DXGI_USAGE_UNORDERED_ACCESS         ( 1L << (6 + 4) )
+typedef UINT DXGI_USAGE;
+typedef struct DXGI_SWAP_CHAIN_DESC {
+  DXGI_MODE_DESC   BufferDesc;
+  DXGI_SAMPLE_DESC SampleDesc;
+  DXGI_USAGE       BufferUsage;
+  UINT             BufferCount;
+  HWND             OutputWindow;
+  BOOL             Windowed;
+  DXGI_SWAP_EFFECT SwapEffect;
+  UINT             Flags;
+} DXGI_SWAP_CHAIN_DESC;
+
+typedef struct IUnknownVtbl {
+    HRESULT (*QueryInterface)(void *This, const GUID *riid, void **ppvObject);
+    ULONG (*AddRef)(void *This);
+    ULONG (*Release)(void *This);
+} IUnknownVtbl;
+typedef struct IDXGIObjectVtbl {
+    IUnknownVtbl parent; // Inherits from IUnknown
+
+    HRESULT (*SetPrivateData)(void *This, const GUID *Name, UINT DataSize, const void *pData);
+    HRESULT (*SetPrivateDataInterface)(void *This, const GUID *Name, const void *pUnknown);
+    HRESULT (*GetPrivateData)(void *This, const GUID *Name, UINT *pDataSize, void *pData);
+    HRESULT (*GetParent)(void *This, const GUID *riid, void **ppParent);
+} IDXGIObjectVtbl;
+
+typedef struct IDXGIObject {
+    const IDXGIObjectVtbl *lpVtbl;
+} IDXGIObject;
+
+
+typedef struct IDXGIOutputVtbl {
+    IUnknownVtbl parent; // Inherits from IUnknown
+
+    HRESULT (*SetPrivateData)(void *This, const GUID *Name, UINT DataSize, const void *pData);
+    HRESULT (*SetPrivateDataInterface)(void *This, const GUID *Name, const void *pUnknown);
+    HRESULT (*GetPrivateData)(void *This, const GUID *Name, UINT *pDataSize, void *pData);
+    HRESULT (*GetParent)(void *This, const GUID *riid, void **ppParent);
+
+    HRESULT (*GetDesc)(void *This, DXGI_OUTPUT_DESC *pDesc);
+    HRESULT (*GetDisplayModeList)(void *This, DXGI_FORMAT EnumFormat, UINT Flags, UINT *pNumModes, DXGI_MODE_DESC *pDesc);
+    HRESULT (*FindClosestMatchingMode)(void *This, const DXGI_MODE_DESC *pModeToMatch, DXGI_MODE_DESC *pClosestMatch, void *pConcernedDevice);
+    HRESULT (*WaitForVBlank)(void *This);
+    HRESULT (*TakeOwnership)(void *This, void *pDevice, BOOL Exclusive);
+    void (*ReleaseOwnership)(void *This);
+    HRESULT (*GetGammaControlCapabilities)(void *This, DXGI_GAMMA_CONTROL_CAPABILITIES *pGammaCaps);
+    HRESULT (*SetGammaControl)(void *This, const DXGI_GAMMA_CONTROL *pArray);
+    HRESULT (*GetGammaControl)(void *This, DXGI_GAMMA_CONTROL *pArray);
+    HRESULT (*SetDisplaySurface)(void *This, void *pScanoutSurface);
+    HRESULT (*GetDisplaySurfaceData)(void *This, void *pDestination);
+    HRESULT (*GetFrameStatistics)(void *This, DXGI_FRAME_STATISTICS *pStats);
+} IDXGIOutputVtbl;
+
+typedef struct IDXGIOutput {
+    const IDXGIOutputVtbl *lpVtbl;
+} IDXGIOutput;
+
+typedef struct IDXGIAdapterVtbl {
+    IUnknownVtbl parent; // Inherits from IUnknown
+
+    HRESULT (*SetPrivateData)(void *This, const GUID *Name, UINT DataSize, const void *pData);
+    HRESULT (*SetPrivateDataInterface)(void *This, const GUID *Name, const void *pUnknown);
+    HRESULT (*GetPrivateData)(void *This, const GUID *Name, UINT *pDataSize, void *pData);
+    HRESULT (*GetParent)(void *This, const GUID *riid, void **ppParent);
+
+    HRESULT (*EnumOutputs)(void *This, UINT Output, IDXGIOutput **ppOutput);
+    HRESULT (*GetDesc)(void *This, DXGI_ADAPTER_DESC *pDesc);
+    HRESULT (*CheckInterfaceSupport)(void *This, const GUID *InterfaceName, LARGE_INTEGER *pUMDVersion);
+} IDXGIAdapterVtbl;
+
+typedef struct IDXGIAdapter {
+    const IDXGIAdapterVtbl *lpVtbl;
+} IDXGIAdapter;
+
+struct IDXGISwapChain;
+typedef struct IDXGIFactoryVtbl {
+    IUnknownVtbl parent; // Inherits from IUnknown
+
+    HRESULT (*SetPrivateData)(void *This, const GUID *Name, UINT DataSize, const void *pData);
+    HRESULT (*SetPrivateDataInterface)(void *This, const GUID *Name, const void *pUnknown);
+    HRESULT (*GetPrivateData)(void *This, const GUID *Name, UINT *pDataSize, void *pData);
+    HRESULT (*GetParent)(void *This, const GUID *riid, void **ppParent);
+
+    HRESULT (*EnumAdapters)(void *This, UINT Adapter, IDXGIAdapter **ppAdapter);
+    HRESULT (*MakeWindowAssociation)(void *This, HWND WindowHandle, UINT Flags);
+    HRESULT (*GetWindowAssociation)(void *This, HWND *pWindowHandle);
+    HRESULT (*CreateSwapChain)(void *This, void *pDevice, const DXGI_SWAP_CHAIN_DESC *pDesc, struct IDXGISwapChain **ppSwapChain);
+    HRESULT (*CreateSoftwareAdapter)(void *This, HMODULE Module, IDXGIAdapter **ppAdapter);
+} IDXGIFactoryVtbl;
+
+typedef struct IDXGIFactory {
+    const IDXGIFactoryVtbl *lpVtbl;
+} IDXGIFactory;
+
+typedef GUID IID;
+extern const IID IID_IDXGIFactory;
+#define DEFINE_GUID(name, l, w1, w2, b1, b2, b3, b4, b5, b6, b7, b8) \
+    const GUID name = { l, w1, w2, { b1, b2, b3, b4, b5, b6, b7, b8 } }
+DEFINE_GUID(IID_IDXGIFactory,0x7b7166ec,0x21c7,0x44ae,0xb2,0x1a,0xc9,0xae,0x32,0x1a,0xe3,0x69);
+unit_local const HRESULT DXGI_ERROR_NOT_FOUND = 0x887A0002;
+
+
+WINDOWS_IMPORT HRESULT WINAPI CreateDXGIFactory(const GUID *riid, void **ppFactory);
 
