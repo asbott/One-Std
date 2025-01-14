@@ -112,7 +112,7 @@ int main(void) {
             string fstr = oga_format_str(f);
             print("\t\t%s\n", fstr);
         }
-        
+
         print("\tFeatures:\n\t\t");
         for (u64 f = 0; f < 64; f += 1) {
             if (device->features & (1ULL << f)) {
@@ -123,7 +123,7 @@ int main(void) {
         print("\n");
     }
     print("\n");
-    
+
     //////
     // Test device picking helper
     /////
@@ -182,7 +182,7 @@ int main(void) {
     ///
     // Select queues
     // note(charlie) In a real-world scenario you would probably want to spread out queues across families.
-    // You'd especially want to make sure, if possible, that compute is on another family, or at least 
+    // You'd especially want to make sure, if possible, that compute is on another family, or at least
     // a separate queue index from graphics.
     u64 family_index_graphics = U64_MAX;
     u64 family_index_present = U64_MAX;
@@ -214,8 +214,8 @@ int main(void) {
         print("Error: no compute engines.\n");
         return 1;
     }
-    
-    
+
+
     ///
     // Context desc
     Oga_Context_Desc context_desc = (Oga_Context_Desc){0};
@@ -259,7 +259,7 @@ int main(void) {
     print("Graphics engine family %u, index %u\n", family_index_graphics, graphics_engine.index);
     print("Present engine family %u, index %u\n", family_index_present, present_engine.index);
     print("Compute engine family %u, index %u\n", family_index_compute, compute_engine.index);
-    
+
     //////
     // Surface & swap chain
     /////
@@ -272,7 +272,7 @@ int main(void) {
 #endif
 
 
-    
+
     Oga_Format wanted_formats[] = {
         OGA_FORMAT_B8G8R8A8_SRGB,
         OGA_FORMAT_R8G8B8A8_SRGB,
@@ -280,7 +280,7 @@ int main(void) {
         OGA_FORMAT_R8G8B8A8_UNORM
     };
     bool found_flags[sizeof(wanted_formats)/sizeof(Oga_Format)] = {0};
-    
+
     for (u64 i = 0; i < sizeof(wanted_formats)/sizeof(Oga_Format); i += 1) {
         for (u64 j = 0; j < context->device.supported_surface_format_count; j += 1) {
             Oga_Format f = context->device.supported_surface_formats[j];
@@ -290,18 +290,18 @@ int main(void) {
             }
         }
     }
-    
+
     Oga_Format surface_format = context->device.supported_surface_formats[0];
     for (u64 i = 0; i < sizeof(wanted_formats)/sizeof(Oga_Format); i += 1) {
         if (found_flags[i]) {
             surface_format = wanted_formats[i];
         }
     }
-    
-    
-    
+
+
+
     u64 engine_families_with_access[] = { family_index_graphics, family_index_present };
-    
+
     Oga_Present_Mode present_mode = OGA_PRESENT_MODE_VSYNC;
     if (context->device.features & OGA_DEVICE_FEATURE_PRESENT_MAILBOX) {
         // It just breaks on android for some reason todo(charlie) fix
@@ -319,34 +319,34 @@ int main(void) {
     sc_desc.engine_families_with_access = engine_families_with_access;
     sc_desc.engine_families_with_access_count = sizeof(engine_families_with_access)/sizeof(u64);
     sc_desc.present_mode = present_mode;
-    
+
     Oga_Swapchain *swapchain;
     if (!check_oga_result(oga_init_swapchain(context, sc_desc, &swapchain)))
         return 1;
-    
+
     //////
     // GPU Programs
     /////
-    
+
     Oga_Program *vert_program, *frag_program;
-    
+
     Oga_Program_Desc vert_desc, frag_desc;
-    
+
     vert_desc.code = triangle_vert_code;
     vert_desc.code_size = sizeof(triangle_vert_code);
-    
+
     frag_desc.code = triangle_frag_code;
     frag_desc.code_size = sizeof(triangle_frag_code);
-    
+
     if (!check_oga_result(oga_init_program(context, vert_desc, &vert_program)))
         return 1;
     if (!check_oga_result(oga_init_program(context, frag_desc, &frag_program)))
         return 1;
-    
+
     //////
     // Render pass
     /////
-    
+
     Oga_Render_Pass_Desc render_desc = (Oga_Render_Pass_Desc){0};
     render_desc.vertex_program = vert_program;
     render_desc.vertex_program_entry_point = STR("main");
@@ -357,15 +357,15 @@ int main(void) {
     render_desc.topology = OGA_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
     render_desc.cull_mode = OGA_CULL_NONE;
     render_desc.line_width = 1.0;
-    
+
     Oga_Render_Pass *render_pass;
     if (!check_oga_result(oga_init_render_pass(context, render_desc, &render_pass)))
         return 1;
-    
+
     Oga_Command_Pool_Desc pool_desc = (Oga_Command_Pool_Desc){0};
     pool_desc.flags = 0;
     pool_desc.engine_family_index = family_index_graphics;
-    
+
     Oga_Command_Pool *pools[3];
     if (!check_oga_result(oga_init_command_pool(context, pool_desc, &pools[0])))
         return 1;
@@ -373,7 +373,7 @@ int main(void) {
         return 1;
     if (!check_oga_result(oga_init_command_pool(context, pool_desc, &pools[2])))
         return 1;
-    
+
     Oga_Command_List cmds[3];
     if (!check_oga_result(oga_get_command_lists(pools[0], &cmds[0], 1)))
         return 1;
@@ -381,7 +381,7 @@ int main(void) {
         return 1;
     if (!check_oga_result(oga_get_command_lists(pools[2], &cmds[2], 1)))
         return 1;
-        
+
     Oga_Gpu_Latch *image_ready_latches[3];
     if (!check_oga_result(oga_init_gpu_latch(context, &image_ready_latches[0])))
         return 1;
@@ -403,12 +403,12 @@ int main(void) {
         return 1;
     if (!check_oga_result(oga_init_cpu_latch(context, &present_latches[2], true)))
         return 1;
-    
+
     bool running = true;
-    
+
     u64 frame_count = 3;
     u64 frame_index = 0;
-    
+
     bool image_virgin_flags[3] = {1,1,1};
     float64 last_time = 0.0;
     while (running) {
@@ -421,62 +421,62 @@ int main(void) {
             print("%fms, %ffps\n", ms, fps);
         }
         last_time = now;
-        
-        
+
+
         surface_poll_events(surface);
 
         if (surface_should_close(surface)) {
             running = false;
             break;
         }
-        
+
         oga_wait_latch(present_latches[frame_index]);
         oga_reset_latch(present_latches[frame_index]);
         oga_reset_command_pool(pools[frame_index]);
-        
+
         u64 image_index;
         Oga_Result image_get_result = oga_get_next_swapchain_image(swapchain, U64_MAX, image_ready_latches[frame_index], 0, &image_index);
         if (image_get_result == OGA_SUBOPTIMAL) {
-            
+
         } else if (image_get_result != OGA_OK) {
             if (!check_oga_result(image_get_result))
                 return 1;
         }
-        
+
         Oga_Command_List cmd = cmds[frame_index];
-        
+
         oga_cmd_begin(cmd, 0);
-        
+
         Oga_Image_Optimization src_opt = OGA_IMAGE_OPTIMIZATION_PRESENT;
         if (image_virgin_flags[image_index]) src_opt = OGA_IMAGE_OPTIMIZATION_UNDEFINED;
-        image_virgin_flags[image_index] = false; 
+        image_virgin_flags[image_index] = false;
         oga_cmd_transition_image_optimization(cmd, swapchain->images[image_index], src_opt, OGA_IMAGE_OPTIMIZATION_RENDER_ATTACHMENT);
-        
+
         Oga_Render_Attachment_Desc attachment = (Oga_Render_Attachment_Desc){0};
         attachment.image = swapchain->images[image_index];
         attachment.load_op = OGA_ATTACHMENT_LOAD_OP_CLEAR;
         attachment.store_op = OGA_ATTACHMENT_STORE_OP_STORE;
         attachment.image_optimization = OGA_IMAGE_OPTIMIZATION_RENDER_ATTACHMENT;
         memcpy(attachment.clear_color, &(float32[4]){1.f, 0.f, 0.f, 1.f}, 16);
-        
+
         Oga_Begin_Render_Pass_Desc begin_desc = (Oga_Begin_Render_Pass_Desc){0};
         begin_desc.render_pass = render_pass;
         begin_desc.render_area_width = 800;
         begin_desc.render_area_height = 600;
         begin_desc.attachment_count = 1;
         begin_desc.attachments = &attachment;
-        
+
         oga_cmd_begin_render_pass(cmd, begin_desc);
-        
+
         oga_cmd_draw(cmd, 3, 0, 1, 0);
-        
+
         oga_cmd_end_render_pass(cmd);
-        
+
         oga_cmd_transition_image_optimization(cmd, swapchain->images[image_index], OGA_IMAGE_OPTIMIZATION_RENDER_ATTACHMENT, OGA_IMAGE_OPTIMIZATION_PRESENT);
-        
+
         oga_cmd_end(cmd);
-        
-        
+
+
         Oga_Submit_Command_List_Desc submit = (Oga_Submit_Command_List_Desc){0};
         submit.engine = graphics_engine;
         submit.signal_cpu_latch = present_latches[frame_index];
@@ -485,19 +485,19 @@ int main(void) {
         submit.signal_gpu_latches = &commands_done_latches[frame_index];
         submit.signal_gpu_latch_count = 1;
         oga_submit_command_list(cmd, submit);
-        
+
         Oga_Present_Desc present_desc = (Oga_Present_Desc){0};
         present_desc.engine = present_engine;
         present_desc.wait_gpu_latch_count = 1;
         present_desc.wait_gpu_latches = &commands_done_latches[frame_index];
         present_desc.image_index = image_index;
-        
+
         Physical_Monitor monitor = (Physical_Monitor){0};
 	    surface_get_monitor(surface, &monitor);
         sys_wait_vertical_blank(monitor);
         oga_submit_present(swapchain, present_desc);
-        
-        frame_index = (frame_index + 1) % frame_count;        
+
+        frame_index = (frame_index + 1) % frame_count;
     }
 
     // System will free any resources when our program exits, this is to get sanity validation errors to make sure
@@ -749,7 +749,7 @@ void test_print(void) {
 }
 
 void test_math(void) {
-    const float64 epsilon = 1e-9; 
+    const float64 epsilon = 1e-9;
 
     for (float64 x = -TAU; x <= TAU; x += PI / 6) {
         float64 expected = sin(x);

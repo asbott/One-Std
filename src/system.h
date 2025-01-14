@@ -238,6 +238,9 @@ void sys_print_stack_trace(File_Handle handle);
 #include <X11/Xlib.h>
 #include <X11/Xutil.h>
 #include <X11/extensions/Xrandr.h>
+// For waiting for vblank. Unfortunately.
+#include <GL/gl.h>
+#include <GL/glx.h>
 #endif // OS_FLAGS & OS_FLAG_LINUX
 
 struct _XDisplay;
@@ -251,7 +254,6 @@ typedef struct _Surface_State {
     BITMAPINFO bmp_info;
     HBITMAP bmp;
 #elif OS_FLAGS & OS_FLAG_LINUX
-    Display *xlib_display;
     GC       gc;
     XImage*  ximage;
 #endif
@@ -989,7 +991,7 @@ unit_local IDXGIOutput* _win_get_output_for_monitor(HMONITOR hMonitor)
             {
                 adapter->lpVtbl->parent.Release(adapter);
                 factory->lpVtbl->parent.Release(factory);
-                return output; 
+                return output;
             }
 
             output->lpVtbl->parent.Release(output);
@@ -1002,7 +1004,7 @@ unit_local IDXGIOutput* _win_get_output_for_monitor(HMONITOR hMonitor)
 }
 bool sys_wait_vertical_blank(Physical_Monitor monitor) {
     IDXGIOutput *output = _win_get_output_for_monitor(monitor.handle);
-    
+
     if (output) {
         output->lpVtbl->WaitForVBlank(output);
         return true;
@@ -1290,10 +1292,10 @@ void surface_blit_pixels(Surface_Handle h) {
 bool surface_get_monitor(Surface_Handle h, Physical_Monitor *monitor) {
     HMONITOR hmon = MonitorFromWindow((HWND)h, MONITOR_DEFAULTTONEAREST);
     if (!hmon) return false;
-    
+
     Physical_Monitor mons[256];
-    
-    
+
+
     u64 count = sys_query_monitors(mons, 256);
 
     for (u64 i = 0; i < count; i += 1) {
@@ -1486,7 +1488,7 @@ void _android_vsync_callback(s64 frame_time_nanos, void* data) {
     }
 
     _android_previous_vsync_time = frame_time_nanos;
-    
+
     pthread_cond_broadcast(&_android_vsync_cond);
     AChoreographer* choreographer = AChoreographer_getInstance();
     assert(choreographer);
@@ -1748,7 +1750,7 @@ void sys_print_stack_trace(File_Handle handle) {
 //////
 /////////////////////////////////////////////////////
 
-
+Display *xdisplay = 0;
 
 u64 sys_query_monitors(Physical_Monitor *buffer, u64 max_count)
 {
@@ -1808,7 +1810,7 @@ u64 sys_query_monitors(Physical_Monitor *buffer, u64 max_count)
 
                     pm->scale = 1.0;
 
-                    pm->handle = (void*)(uintptr)res->outputs[i];
+                    pm->handle = dpy;
                 }
                 total_found++;
                 XRRFreeCrtcInfo(crtc_info);
@@ -1821,6 +1823,147 @@ u64 sys_query_monitors(Physical_Monitor *buffer, u64 max_count)
     XCloseDisplay(dpy);
 
     return total_found;
+}
+
+bool sys_wait_vertical_blank(Physical_Monitor monitor) {
+    // Linux sucks for this. All I can really do is open an invisible window, make
+    // a dummy glx context, and swap buffers.
+    (void)monitor;
+    local_persist GLXContext glx = 0;
+    local_persist Window wnd = 0;
+    local_persist Display *dsp = 0;
+
+    if (!glx) {
+        dsp = XOpenDisplay(0);
+        assert(dsp);
+        if (!dsp) {
+            return false;
+        }
+
+        int screen = DefaultScreen(dsp);
+
+        // Define the visual attributes
+        int attribs[] = {
+            GLX_RGBA,
+            GLX_DEPTH_SIZE, 24,
+            GLX_DOUBLEBUFFER,
+            None
+        };
+
+        XVisualInfo *visual_info = glXChooseVisual(dsp, screen, attribs);
+        if (!visual_info) {
+            XCloseDisplay(dsp);
+            dsp = 0;
+            return false;
+        }
+
+        // Create a simple window
+        wnd = XCreateSimpleWindow(
+            dsp,
+            DefaultRootWindow(dsp),
+            -10000, -10000,  /* x, y: move window off-screen */
+            1, 1,           /* width, height: 1x1 so it's tiny */
+            0,
+            BlackPixel(dsp, screen),
+            BlackPixel(dsp, screen)
+        );
+
+        assert(wnd);
+
+        // Make the window invisible
+        XSetWindowAttributes attrs;
+        attrs.override_redirect = True;
+        XChangeWindowAttributes(dsp, wnd, CWOverrideRedirect, &attrs);
+
+        // Map the window to make it a valid drawable
+        XMapWindow(dsp, wnd);
+
+        // Wait window mapped.
+        XEvent event;
+        for (;;) {
+            if (XCheckTypedWindowEvent(dsp, wnd, MapNotify, &event)) {
+                break;
+            }
+        }
+
+        // Create a GLX context
+        glx = glXCreateContext(dsp, visual_info, 0, GL_TRUE);
+        XFree(visual_info);
+
+        assert(glx);
+
+        assert(glXMakeCurrent(dsp, wnd, glx));
+
+        // Enable v-sync
+        typedef int (*glXSwapIntervalProc)(int);
+        glXSwapIntervalProc glXSwapIntervalSGI = (glXSwapIntervalProc)glXGetProcAddressARB((const GLubyte *)"glXSwapIntervalSGI");
+        if (glXSwapIntervalSGI) {
+            glXSwapIntervalSGI(1);
+        }
+    }
+
+    if (dsp && glx && wnd) {
+        glXMakeCurrent(dsp, wnd, glx);
+        glXSwapBuffers(dsp, wnd);
+        return true;
+    }
+
+    return false;
+}
+
+bool surface_get_monitor(Surface_Handle h, Physical_Monitor *monitor) {
+    _Surface_State *state = _get_surface_state(h);
+
+    Physical_Monitor monitors[128];
+    u64 monitor_count = sys_query_monitors(monitors, 128);
+
+    if (monitor_count == 0) {
+        return false;
+    }
+
+    if (!xdisplay) xdisplay = XOpenDisplay(0);
+
+    XWindowAttributes win_attr;
+    if (!XGetWindowAttributes(xdisplay, (Window)state->handle, &win_attr)) {
+        return false;
+    }
+
+    int win_x = win_attr.x;
+    int win_y = win_attr.y;
+    int win_width = win_attr.width;
+    int win_height = win_attr.height;
+
+    int max_intersection_area = 0;
+
+    Physical_Monitor *max_monitor = 0;
+
+    for (u64 i = 0; i < monitor_count; i++) {
+        Physical_Monitor *m = &monitors[i];
+
+        int mon_x = m->pos_x;
+        int mon_y = m->pos_y;
+        int mon_width = m->resolution_x;
+        int mon_height = m->resolution_y;
+
+        int inter_x = max(win_x, mon_x);
+        int inter_y = max(win_y, mon_y);
+        int inter_width = min(win_x + win_width, mon_x + mon_width) - inter_x;
+        int inter_height = min(win_y + win_height, mon_y + mon_height) - inter_y;
+
+        if (inter_width > 0 && inter_height > 0) {
+            int intersection_area = inter_width * inter_height;
+            if (intersection_area > max_intersection_area) {
+                max_intersection_area = intersection_area;
+                max_monitor = m;
+            }
+        }
+    }
+
+    if (max_monitor) {
+        *monitor = *max_monitor;
+        return true;
+    }
+    return false;
 }
 
 File_Handle sys_get_stdout(void) {
@@ -1847,18 +1990,18 @@ Surface_Handle sys_make_surface(Surface_Desc desc) {
             _x11_initted = true;
         }
 
-        Display *display = XOpenDisplay(0);
-        if (!display) {
-            sys_write_string(sys_get_stdout(), STR("Failed to open X display\n"));
+        if (!xdisplay) xdisplay = XOpenDisplay(0);
+        if (!xdisplay) {
+            sys_write_string(sys_get_stdout(), STR("Failed to open X xdisplay\n"));
             return 0;
         }
 
-        int screen = DefaultScreen(display);
-        unsigned long white = WhitePixel(display, screen);
+        int screen = DefaultScreen(xdisplay);
+        unsigned long white = WhitePixel(xdisplay, screen);
 
         Window window = XCreateSimpleWindow(
-            display,
-            DefaultRootWindow(display),
+            xdisplay,
+            DefaultRootWindow(xdisplay),
             0, 0,
             desc.width, desc.height,
             0,
@@ -1870,19 +2013,17 @@ Surface_Handle sys_make_surface(Surface_Desc desc) {
         char ctitle[256];
         memcpy(ctitle, desc.title.data, min(desc.title.count, 255));
         ctitle[min(desc.title.count, 255)] = 0;
-        XStoreName(display, window, ctitle);
+        XStoreName(xdisplay, window, ctitle);
 
-        XSelectInput(display, window, ExposureMask | KeyPressMask | StructureNotifyMask);
+        XSelectInput(xdisplay, window, ExposureMask | KeyPressMask | StructureNotifyMask);
 
         if (!(desc.flags & SURFACE_FLAG_HIDDEN)) {
-            XMapWindow(display, window);
+            XMapWindow(xdisplay, window);
         }
 
         _Surface_State *surface = (_Surface_State *)_alloc_surface_state();
-        surface->xlib_display = display;
         surface->handle = (Surface_Handle)window;
         surface->should_close = false;
-
         return (Surface_Handle)window;
 }
 
@@ -1890,8 +2031,8 @@ void surface_close(Surface_Handle s) {
     if (!s) return;
     _Surface_State *state = _get_surface_state(s);
 
-    XDestroyWindow(state->xlib_display, (Window)state->handle);
-    XCloseDisplay(state->xlib_display);
+    XDestroyWindow(xdisplay, (Window)state->handle);
+    XCloseDisplay(xdisplay);
 
     state->allocated = false;
 }
@@ -1900,9 +2041,9 @@ void surface_poll_events(Surface_Handle surface) {
     if (!surface) return;
     _Surface_State *state = _get_surface_state(surface);
 
-    while (XPending(state->xlib_display)) {
+    while (XPending(xdisplay)) {
         XEvent evt;
-        XNextEvent(state->xlib_display, &evt);
+        XNextEvent(xdisplay, &evt);
         switch (evt.type) {
             case ClientMessage:
             case DestroyNotify:
@@ -1925,7 +2066,7 @@ bool surface_set_flags(Surface_Handle h, Surface_Flags flags) {
     _Surface_State *state = _get_surface_state(h);
 
     if (flags & SURFACE_FLAG_HIDDEN) {
-        XUnmapWindow(state->xlib_display, (Window)state->handle);
+        XUnmapWindow(xdisplay, (Window)state->handle);
     }
     if (flags & SURFACE_FLAG_TOPMOST) {
 
@@ -1938,7 +2079,7 @@ bool surface_unset_flags(Surface_Handle h, Surface_Flags flags) {
     _Surface_State *state = _get_surface_state(h);
 
     if (flags & SURFACE_FLAG_HIDDEN) {
-        XMapWindow(state->xlib_display, (Window)state->handle);
+        XMapWindow(xdisplay, (Window)state->handle);
     }
 
     if (flags & SURFACE_FLAG_TOPMOST) {
@@ -1951,7 +2092,7 @@ bool surface_get_framebuffer_size(Surface_Handle h, s64 *width, s64 *height) {
     if (!state) return false;
 
     XWindowAttributes attrs;
-    if (!XGetWindowAttributes(state->xlib_display, (Window)h, &attrs)) {
+    if (!XGetWindowAttributes(xdisplay, (Window)h, &attrs)) {
         return false;
     }
     *width  = (s64)attrs.width;
@@ -1959,72 +2100,74 @@ bool surface_get_framebuffer_size(Surface_Handle h, s64 *width, s64 *height) {
     return true;
 }
 
-void* surface_map_pixels(Surface_Handle h) {
-    _Surface_State *state = _get_surface_state(h);
-    if (!state) return 0;
+    void* surface_map_pixels(Surface_Handle h) {
+        _Surface_State *state = _get_surface_state(h);
+        if (!state) return 0;
 
-    if (state->pixels) {
+        if (state->pixels) {
+            return state->pixels;
+        }
+
+        s64 width, height;
+        if (!surface_get_framebuffer_size(h, &width, &height)) return 0;
+
+        s64 bytes_needed = width * height * 4;
+        s64 pages        = (bytes_needed + 4095) / 4096;
+
+        state->pixels = sys_map_pages(SYS_MEMORY_RESERVE | SYS_MEMORY_ALLOCATE, 0, pages, false);
+        if (!state->pixels) {
+            return 0;
+        }
+
+        int screen = DefaultScreen(xdisplay);
+        int depth  = DefaultDepth(xdisplay, screen);
+
+        state->ximage = XCreateImage(
+            xdisplay,
+            DefaultVisual(xdisplay, screen),
+            (unsigned int)depth,
+            ZPixmap,
+            0,
+            (char*)state->pixels,
+            (unsigned int)width,
+            (unsigned int)height,
+            32,
+            (int)(width * 4)
+        );
+
+        state->gc = XCreateGC(xdisplay, (Drawable)h, 0, 0);
+
         return state->pixels;
     }
 
-    s64 width, height;
-    if (!surface_get_framebuffer_size(h, &width, &height)) return 0;
+    void surface_blit_pixels(Surface_Handle h) {
+        _Surface_State *state = _get_surface_state(h);
+        if (!state) return;
 
-    s64 bytes_needed = width * height * 4;
-    s64 pages        = (bytes_needed + 4095) / 4096;
+        if (!state->pixels || !state->ximage) {
+            return;
+        }
 
-    state->pixels = sys_map_pages(SYS_MEMORY_RESERVE | SYS_MEMORY_ALLOCATE, 0, pages, false);
-    if (!state->pixels) {
-        return 0;
+        s64 width, height;
+        if (!surface_get_framebuffer_size(h, &width, &height)) {
+            return;
+        }
+
+        Window window = (Window)state->handle;
+        glXMakeCurrent(0, 0, 0);
+        XPutImage(
+            xdisplay,
+            (Drawable)window,
+            state->gc,
+            state->ximage,
+            0, 0,
+            0, 0,
+            (unsigned int)width,
+            (unsigned int)height
+        );
+
+        XFlush(xdisplay);
     }
-
-    int screen = DefaultScreen(state->xlib_display);
-    int depth  = DefaultDepth(state->xlib_display, screen);
-
-    state->ximage = XCreateImage(
-        state->xlib_display,
-        DefaultVisual(state->xlib_display, screen),
-        (unsigned int)depth,
-        ZPixmap,
-        0,
-        (char*)state->pixels,
-        (unsigned int)width,
-        (unsigned int)height,
-        32,
-        (int)(width * 4)
-    );
-
-    state->gc = XCreateGC(state->xlib_display, (Drawable)h, 0, 0);
-
-    return state->pixels;
-}
-
-void surface_blit_pixels(Surface_Handle h) {
-    _Surface_State *state = _get_surface_state(h);
-    if (!state) return;
-
-    if (!state->pixels || !state->ximage) {
-        return;
-    }
-
-    s64 width, height;
-    if (!surface_get_framebuffer_size(h, &width, &height)) {
-        return;
-    }
-
-    XPutImage(
-        state->xlib_display,
-        (Drawable)h,
-        state->gc,
-        state->ximage,
-        0, 0,
-        0, 0,
-        (unsigned int)width,
-        (unsigned int)height
-    );
-
-    XFlush(state->xlib_display);
-}
 
 void sys_print_stack_trace(File_Handle handle) {
     void *stack[64];
