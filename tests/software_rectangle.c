@@ -1,6 +1,6 @@
 #define OSTD_IMPL
 #define OSTD_NO_GRAPHICS
-#include "../src/ostd.h"
+#include "../ostd_single_header.h"
 
 int main(void) {
 

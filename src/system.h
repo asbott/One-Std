@@ -48,6 +48,8 @@ u64 sys_query_monitors(Physical_Monitor *buffer, u64 max_count);
 
 bool sys_wait_vertical_blank(Physical_Monitor monitor);
 
+
+
 //////
 // IO
 //////
@@ -78,6 +80,12 @@ void sys_close(File_Handle h);
 File_Handle sys_open_file(string path, File_Open_Flags flags);
 
 u64 sys_get_file_size(File_Handle f);
+
+typedef struct Easy_Command_Result {
+    s64 exit_code;
+    bool process_start_success;
+} Easy_Command_Result;
+Easy_Command_Result sys_run_command_easy(string command_line);
 
 //////
 // Surfaces (Window)
@@ -171,13 +179,26 @@ bool surface_get_monitor(Surface_Handle h, Physical_Monitor *monitor);
 float64 sys_get_seconds_monotonic(void);
 
 //////
-// Threading
+// Process & Thread
 //////
 
 typedef void* Thread_Handle;
 
 Thread_Handle sys_get_current_thread(void);
 void sys_set_thread_affinity_mask(Thread_Handle thread, u64 bits);
+
+typedef enum Priority_Level {
+    SYS_PRIORITY_LOW,
+    SYS_PRIORITY_MEDIUM,
+    SYS_PRIORITY_HIGH,
+} Priority_Level;
+
+void sys_set_local_process_priority_level(Priority_Level level);
+void sys_set_thread_priority_level(Thread_Handle thread, Priority_Level level);
+
+void *sys_load_library(string s);
+void sys_close_library(void *lib);
+void* sys_get_library_symbol(void *lib, string symbol);
 
 //////
 // Debug
@@ -655,6 +676,8 @@ u64 sys_get_file_size(File_Handle f) {
         return 0;
     }
     return (u64)file_stat.st_size;
+
+    long int a = sizeof(long);
 }
 
 double sys_get_seconds_monotonic(void) {
@@ -702,6 +725,7 @@ Thread_Handle sys_get_current_thread(void) {
     #pragma comment(lib, "gdi32")
     #pragma comment(lib, "pdh")
     #pragma comment(lib, "dxgi")
+    #pragma comment(lib, "winmm")
 #endif // COMPILER_FLAGS & COMPILER_FLAG_MSC
 
 typedef enum MONITOR_DPI_TYPE {
@@ -1096,6 +1120,39 @@ u64 sys_get_file_size(File_Handle f) {
     return (u64)size.QuadPart;
 }
 
+Easy_Command_Result sys_run_command_easy(string command_line) {
+    Easy_Command_Result res = (Easy_Command_Result){0};
+    
+    STARTUPINFOA si = (STARTUPINFOA){0};
+	si.cb = sizeof(STARTUPINFOA);
+    PROCESS_INFORMATION pi = (PROCESS_INFORMATION){ 0 };
+    
+    char cmd[1024];
+    
+    memcpy(cmd, command_line.data, command_line.count);
+    cmd[command_line.count] = 0;
+    
+    sys_write_string(sys_get_stdout(), STR(cmd));
+    sys_write_string(sys_get_stdout(), STR("\n"));
+    
+    bool ok = (bool)CreateProcessA(0, cmd, 0, 0, false, 0, 0, 0, &si, &pi);
+    
+    if (!ok) {
+        res.process_start_success = false;
+        return res;
+    }
+    
+    WaitForSingleObject(pi.hProcess, S32_MAX);
+    
+    DWORD exit_code;
+    GetExitCodeProcess(pi.hProcess, &exit_code);
+    
+    res.exit_code = (s64)exit_code;
+    res.process_start_success = true;
+    
+    return res;
+}
+
 Surface_Handle sys_make_surface(Surface_Desc desc) {
     _Surface_State *s = _alloc_surface_state();
     if (!s) {
@@ -1317,6 +1374,54 @@ float64 sys_get_seconds_monotonic(void) {
 
 void sys_set_thread_affinity_mask(Thread_Handle thread, u64 bits) {
     SetThreadAffinityMask((HANDLE)thread, (DWORD_PTR)bits);
+}
+
+void sys_set_local_process_priority_level(Priority_Level level) {
+    switch(level) {
+        case SYS_PRIORITY_LOW:
+            SetPriorityClass(GetCurrentProcess(), 0x00000040 /*IDLE_PRIORITY_CLASS*/);
+            break;
+        case SYS_PRIORITY_MEDIUM:
+            SetPriorityClass(GetCurrentProcess(), 0x00000020 /*NORMAL_PRIORITY_CLASS*/);
+            break;
+        case SYS_PRIORITY_HIGH:
+            SetPriorityClass(GetCurrentProcess(), 0x00000080 /*HIGH_PRIORITY_CLASS*/);
+            break;
+
+        default: break;
+    }
+}
+void sys_set_thread_priority_level(Thread_Handle thread, Priority_Level level) {
+    switch(level) {
+        case SYS_PRIORITY_LOW:
+            SetThreadPriority(thread, -2 /*THREAD_PRIORITY_LOWEST*/);
+            break;
+        case SYS_PRIORITY_MEDIUM:
+            SetThreadPriority(thread, 0 /*THREAD_PRIORITY_NORMAL*/);
+            break;
+        case SYS_PRIORITY_HIGH:
+            SetThreadPriority(thread, 15 /*THREAD_PRIORITY_TIME_CRITICAL*/);
+            break;
+
+        default: break;
+    }
+}
+
+void *sys_load_library(string s) {
+    char cs[1024];
+    memcpy(cs, s.data, s.count);
+    cs[s.count] = 0;
+    return LoadLibraryA(cs);
+}
+void sys_close_library(void *lib) {
+    (void)lib;
+}
+void* sys_get_library_symbol(void *lib, string symbol) {
+    char cs[1024];
+    memcpy(cs, symbol.data, symbol.count);
+    cs[symbol.count] = 0;
+    
+    return GetProcAddress(lib, cs);
 }
 
 Thread_Handle sys_get_current_thread(void) {

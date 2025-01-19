@@ -9718,7 +9718,6 @@ typedef struct VkVideoDecodeH264DpbSlotInfoKHR {
 } VkVideoDecodeH264DpbSlotInfoKHR;
 
 
-
 // VK_KHR_dynamic_rendering is a preprocessor guard. Do not pass it to API calls.
 #define VK_KHR_dynamic_rendering 1
 #define VK_KHR_DYNAMIC_RENDERING_SPEC_VERSION 1

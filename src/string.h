@@ -40,3 +40,9 @@ unit_local inline bool string_contains(string s, string sub) {
     }
     return false;
 }
+
+unit_local inline bool string_starts_with(string s, string sub) {
+    if (sub.count > s.count) return false;
+    
+    return memcmp(s.data, sub.data, sub.count) == 0;
+}

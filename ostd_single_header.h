@@ -7,6 +7,7 @@
 #if defined(__GNUC__) || defined(__GNUG__)
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wattributes"
+#pragma GCC diagnostic ignored "-Wunused-function"
 #endif
 
 // I try to compile with -pedantic and -Weverything, but get really dumb warnings like these,
@@ -18,6 +19,7 @@
 #pragma clang diagnostic ignored "-Wdeclaration-after-statement"
 #pragma clang diagnostic ignored "-Wcovered-switch-default"
 #pragma clang diagnostic ignored "-Wcast-align"
+#pragma clang diagnostic ignored "-Wunused-function"
 #ifdef __EMSCRIPTEN__
 #pragma clang diagnostic ignored "-Wpadded"
 #endif // __EMSCRIPTEN__
@@ -441,6 +443,8 @@ u64 format_float(float64 x, int decimal_places, void *buffer, u64 buffer_size);
 
 #define PP_EXCLUDE_FIRST_ARG_HELPER(first, ...) __VA_ARGS__
 #define PP_EXCLUDE_FIRST_ARG(...) PP_EXCLUDE_FIRST_ARG_HELPER(__VA_ARGS__)
+
+#define Swap(a, b) do {  u8 tmp__[sizeof(a)]; memcpy(tmp__, &a, sizeof(a)); a = b; memcpy(&b, tmp__, sizeof(b)); } while (0)
 
 
 /* End include: base.h */
@@ -1334,6 +1338,12 @@ unit_local inline bool string_contains(string s, string sub) {
     return false;
 }
 
+unit_local inline bool string_starts_with(string s, string sub) {
+    if (sub.count > s.count) return false;
+    
+    return memcmp(s.data, sub.data, sub.count) == 0;
+}
+
 /* End include: string.h */
 
 
@@ -1387,6 +1397,8 @@ u64 sys_query_monitors(Physical_Monitor *buffer, u64 max_count);
 
 bool sys_wait_vertical_blank(Physical_Monitor monitor);
 
+
+
 //////
 // IO
 //////
@@ -1417,6 +1429,12 @@ void sys_close(File_Handle h);
 File_Handle sys_open_file(string path, File_Open_Flags flags);
 
 u64 sys_get_file_size(File_Handle f);
+
+typedef struct Easy_Command_Result {
+    s64 exit_code;
+    bool process_start_success;
+} Easy_Command_Result;
+Easy_Command_Result sys_run_command_easy(string command_line);
 
 //////
 // Surfaces (Window)
@@ -1510,13 +1528,26 @@ bool surface_get_monitor(Surface_Handle h, Physical_Monitor *monitor);
 float64 sys_get_seconds_monotonic(void);
 
 //////
-// Threading
+// Process & Thread
 //////
 
 typedef void* Thread_Handle;
 
 Thread_Handle sys_get_current_thread(void);
 void sys_set_thread_affinity_mask(Thread_Handle thread, u64 bits);
+
+typedef enum Priority_Level {
+    SYS_PRIORITY_LOW,
+    SYS_PRIORITY_MEDIUM,
+    SYS_PRIORITY_HIGH,
+} Priority_Level;
+
+void sys_set_local_process_priority_level(Priority_Level level);
+void sys_set_thread_priority_level(Thread_Handle thread, Priority_Level level);
+
+void *sys_load_library(string s);
+void sys_close_library(void *lib);
+void* sys_get_library_symbol(void *lib, string symbol);
 
 //////
 // Debug
@@ -2201,7 +2232,33 @@ typedef struct tagBITMAPINFO {
   RGBQUAD          bmiColors[1];
 } BITMAPINFO, *LPBITMAPINFO, *PBITMAPINFO;
 
+typedef struct _STARTUPINFOA {
+  DWORD  cb;
+  LPSTR  lpReserved;
+  LPSTR  lpDesktop;
+  LPSTR  lpTitle;
+  DWORD  dwX;
+  DWORD  dwY;
+  DWORD  dwXSize;
+  DWORD  dwYSize;
+  DWORD  dwXCountChars;
+  DWORD  dwYCountChars;
+  DWORD  dwFillAttribute;
+  DWORD  dwFlags;
+  WORD   wShowWindow;
+  WORD   cbReserved2;
+  LPBYTE lpReserved2;
+  HANDLE hStdInput;
+  HANDLE hStdOutput;
+  HANDLE hStdError;
+} STARTUPINFOA, *LPSTARTUPINFOA;
 
+typedef struct _PROCESS_INFORMATION {
+  HANDLE hProcess;
+  HANDLE hThread;
+  DWORD  dwProcessId;
+  DWORD  dwThreadId;
+} PROCESS_INFORMATION, *PPROCESS_INFORMATION, *LPPROCESS_INFORMATION;
 
 #define MEM_COMMIT 0x00001000
 #define MEM_RESERVE 0x00002000
@@ -3427,6 +3484,7 @@ WINDOWS_IMPORT ATOM WINAPI RegisterClassExW(const WNDCLASSEXW *unnamedParam1);
 WINDOWS_IMPORT BOOL WINAPI AdjustWindowRectEx( LPRECT lpRect, DWORD  dwStyle, BOOL   bMenu, DWORD  dwExStyle);
 
 WINDOWS_IMPORT DWORD WINAPI GetLastError(void);
+WINDOWS_IMPORT void WINAPI SetLastError(DWORD);
 
 WINDOWS_IMPORT HWND WINAPI CreateWindowExW(
     DWORD     dwExStyle,
@@ -3488,6 +3546,20 @@ WINDOWS_IMPORT HMONITOR WINAPI MonitorFromWindow(HWND hwnd,DWORD dwFlags);
 
 WINDOWS_IMPORT HMODULE WINAPI LoadLibraryA(LPCSTR lpLibFileName);
 WINDOWS_IMPORT void* WINAPI GetProcAddress(HMODULE hModule,LPCSTR  lpProcName);
+
+WINDOWS_IMPORT u32 WINAPI timeBeginPeriod(UINT uPeriod);
+
+WINDOWS_IMPORT BOOL WINAPI SetPriorityClass(HANDLE hProcess,DWORD  dwPriorityClass);
+
+WINDOWS_IMPORT BOOL WINAPI SetThreadPriority(HANDLE hThread,int    nPriority);
+
+WINDOWS_IMPORT HMODULE WINAPI LoadLibraryA(LPCSTR lpLibFileName);
+
+WINDOWS_IMPORT BOOL WINAPI CreateProcessA( LPCSTR lpApplicationName, LPSTR lpCommandLine, LPSECURITY_ATTRIBUTES lpProcessAttributes, LPSECURITY_ATTRIBUTES lpThreadAttributes, BOOL bInheritHandles, DWORD dwCreationFlags, LPVOID lpEnvironment, LPCSTR lpCurrentDirectory, LPSTARTUPINFOA lpStartupInfo, LPPROCESS_INFORMATION lpProcessInformation);
+
+WINDOWS_IMPORT DWORD WINAPI WaitForSingleObject(HANDLE hHandle,DWORD  dwMilliseconds);
+
+WINDOWS_IMPORT BOOL WINAPI GetExitCodeProcess(HANDLE  hProcess,LPDWORD lpExitCode);
 
 typedef enum DXGI_FORMAT {
   DXGI_FORMAT_UNKNOWN = 0,
@@ -3847,6 +3919,9 @@ WINDOWS_IMPORT HRESULT WINAPI CreateDXGIFactory(const GUID *riid, void **ppFacto
 #include <X11/Xlib.h>
 #include <X11/Xutil.h>
 #include <X11/extensions/Xrandr.h>
+// For waiting for vblank. Unfortunately.
+#include <GL/gl.h>
+#include <GL/glx.h>
 #endif // OS_FLAGS & OS_FLAG_LINUX
 
 struct _XDisplay;
@@ -3860,7 +3935,6 @@ typedef struct _Surface_State {
     BITMAPINFO bmp_info;
     HBITMAP bmp;
 #elif OS_FLAGS & OS_FLAG_LINUX
-    Display *xlib_display;
     GC       gc;
     XImage*  ximage;
 #endif
@@ -4262,6 +4336,8 @@ u64 sys_get_file_size(File_Handle f) {
         return 0;
     }
     return (u64)file_stat.st_size;
+
+    long int a = sizeof(long);
 }
 
 double sys_get_seconds_monotonic(void) {
@@ -4309,6 +4385,7 @@ Thread_Handle sys_get_current_thread(void) {
     #pragma comment(lib, "gdi32")
     #pragma comment(lib, "pdh")
     #pragma comment(lib, "dxgi")
+    #pragma comment(lib, "winmm")
 #endif // COMPILER_FLAGS & COMPILER_FLAG_MSC
 
 typedef enum MONITOR_DPI_TYPE {
@@ -4598,7 +4675,7 @@ unit_local IDXGIOutput* _win_get_output_for_monitor(HMONITOR hMonitor)
             {
                 adapter->lpVtbl->parent.Release(adapter);
                 factory->lpVtbl->parent.Release(factory);
-                return output; 
+                return output;
             }
 
             output->lpVtbl->parent.Release(output);
@@ -4611,7 +4688,7 @@ unit_local IDXGIOutput* _win_get_output_for_monitor(HMONITOR hMonitor)
 }
 bool sys_wait_vertical_blank(Physical_Monitor monitor) {
     IDXGIOutput *output = _win_get_output_for_monitor(monitor.handle);
-    
+
     if (output) {
         output->lpVtbl->WaitForVBlank(output);
         return true;
@@ -4701,6 +4778,39 @@ u64 sys_get_file_size(File_Handle f) {
         return 0; // Indicate failure
     }
     return (u64)size.QuadPart;
+}
+
+Easy_Command_Result sys_run_command_easy(string command_line) {
+    Easy_Command_Result res = (Easy_Command_Result){0};
+    
+    STARTUPINFOA si = (STARTUPINFOA){0};
+	si.cb = sizeof(STARTUPINFOA);
+    PROCESS_INFORMATION pi = (PROCESS_INFORMATION){ 0 };
+    
+    char cmd[1024];
+    
+    memcpy(cmd, command_line.data, command_line.count);
+    cmd[command_line.count] = 0;
+    
+    sys_write_string(sys_get_stdout(), STR(cmd));
+    sys_write_string(sys_get_stdout(), STR("\n"));
+    
+    bool ok = (bool)CreateProcessA(0, cmd, 0, 0, false, 0, 0, 0, &si, &pi);
+    
+    if (!ok) {
+        res.process_start_success = false;
+        return res;
+    }
+    
+    WaitForSingleObject(pi.hProcess, S32_MAX);
+    
+    DWORD exit_code;
+    GetExitCodeProcess(pi.hProcess, &exit_code);
+    
+    res.exit_code = (s64)exit_code;
+    res.process_start_success = true;
+    
+    return res;
 }
 
 Surface_Handle sys_make_surface(Surface_Desc desc) {
@@ -4899,10 +5009,10 @@ void surface_blit_pixels(Surface_Handle h) {
 bool surface_get_monitor(Surface_Handle h, Physical_Monitor *monitor) {
     HMONITOR hmon = MonitorFromWindow((HWND)h, MONITOR_DEFAULTTONEAREST);
     if (!hmon) return false;
-    
+
     Physical_Monitor mons[256];
-    
-    
+
+
     u64 count = sys_query_monitors(mons, 256);
 
     for (u64 i = 0; i < count; i += 1) {
@@ -4924,6 +5034,54 @@ float64 sys_get_seconds_monotonic(void) {
 
 void sys_set_thread_affinity_mask(Thread_Handle thread, u64 bits) {
     SetThreadAffinityMask((HANDLE)thread, (DWORD_PTR)bits);
+}
+
+void sys_set_local_process_priority_level(Priority_Level level) {
+    switch(level) {
+        case SYS_PRIORITY_LOW:
+            SetPriorityClass(GetCurrentProcess(), 0x00000040 /*IDLE_PRIORITY_CLASS*/);
+            break;
+        case SYS_PRIORITY_MEDIUM:
+            SetPriorityClass(GetCurrentProcess(), 0x00000020 /*NORMAL_PRIORITY_CLASS*/);
+            break;
+        case SYS_PRIORITY_HIGH:
+            SetPriorityClass(GetCurrentProcess(), 0x00000080 /*HIGH_PRIORITY_CLASS*/);
+            break;
+
+        default: break;
+    }
+}
+void sys_set_thread_priority_level(Thread_Handle thread, Priority_Level level) {
+    switch(level) {
+        case SYS_PRIORITY_LOW:
+            SetThreadPriority(thread, -2 /*THREAD_PRIORITY_LOWEST*/);
+            break;
+        case SYS_PRIORITY_MEDIUM:
+            SetThreadPriority(thread, 0 /*THREAD_PRIORITY_NORMAL*/);
+            break;
+        case SYS_PRIORITY_HIGH:
+            SetThreadPriority(thread, 15 /*THREAD_PRIORITY_TIME_CRITICAL*/);
+            break;
+
+        default: break;
+    }
+}
+
+void *sys_load_library(string s) {
+    char cs[1024];
+    memcpy(cs, s.data, s.count);
+    cs[s.count] = 0;
+    return LoadLibraryA(cs);
+}
+void sys_close_library(void *lib) {
+    (void)lib;
+}
+void* sys_get_library_symbol(void *lib, string symbol) {
+    char cs[1024];
+    memcpy(cs, symbol.data, symbol.count);
+    cs[symbol.count] = 0;
+    
+    return GetProcAddress(lib, cs);
 }
 
 Thread_Handle sys_get_current_thread(void) {
@@ -5095,7 +5253,7 @@ void _android_vsync_callback(s64 frame_time_nanos, void* data) {
     }
 
     _android_previous_vsync_time = frame_time_nanos;
-    
+
     pthread_cond_broadcast(&_android_vsync_cond);
     AChoreographer* choreographer = AChoreographer_getInstance();
     assert(choreographer);
@@ -5357,7 +5515,7 @@ void sys_print_stack_trace(File_Handle handle) {
 //////
 /////////////////////////////////////////////////////
 
-
+Display *xdisplay = 0;
 
 u64 sys_query_monitors(Physical_Monitor *buffer, u64 max_count)
 {
@@ -5417,7 +5575,7 @@ u64 sys_query_monitors(Physical_Monitor *buffer, u64 max_count)
 
                     pm->scale = 1.0;
 
-                    pm->handle = (void*)(uintptr)res->outputs[i];
+                    pm->handle = dpy;
                 }
                 total_found++;
                 XRRFreeCrtcInfo(crtc_info);
@@ -5430,6 +5588,147 @@ u64 sys_query_monitors(Physical_Monitor *buffer, u64 max_count)
     XCloseDisplay(dpy);
 
     return total_found;
+}
+
+bool sys_wait_vertical_blank(Physical_Monitor monitor) {
+    // Linux sucks for this. All I can really do is open an invisible window, make
+    // a dummy glx context, and swap buffers.
+    (void)monitor;
+    local_persist GLXContext glx = 0;
+    local_persist Window wnd = 0;
+    local_persist Display *dsp = 0;
+
+    if (!glx) {
+        dsp = XOpenDisplay(0);
+        assert(dsp);
+        if (!dsp) {
+            return false;
+        }
+
+        int screen = DefaultScreen(dsp);
+
+        // Define the visual attributes
+        int attribs[] = {
+            GLX_RGBA,
+            GLX_DEPTH_SIZE, 24,
+            GLX_DOUBLEBUFFER,
+            None
+        };
+
+        XVisualInfo *visual_info = glXChooseVisual(dsp, screen, attribs);
+        if (!visual_info) {
+            XCloseDisplay(dsp);
+            dsp = 0;
+            return false;
+        }
+
+        // Create a simple window
+        wnd = XCreateSimpleWindow(
+            dsp,
+            DefaultRootWindow(dsp),
+            -10000, -10000,  /* x, y: move window off-screen */
+            1, 1,           /* width, height: 1x1 so it's tiny */
+            0,
+            BlackPixel(dsp, screen),
+            BlackPixel(dsp, screen)
+        );
+
+        assert(wnd);
+
+        // Make the window invisible
+        XSetWindowAttributes attrs;
+        attrs.override_redirect = True;
+        XChangeWindowAttributes(dsp, wnd, CWOverrideRedirect, &attrs);
+
+        // Map the window to make it a valid drawable
+        XMapWindow(dsp, wnd);
+
+        // Wait window mapped.
+        XEvent event;
+        for (;;) {
+            if (XCheckTypedWindowEvent(dsp, wnd, MapNotify, &event)) {
+                break;
+            }
+        }
+
+        // Create a GLX context
+        glx = glXCreateContext(dsp, visual_info, 0, GL_TRUE);
+        XFree(visual_info);
+
+        assert(glx);
+
+        assert(glXMakeCurrent(dsp, wnd, glx));
+
+        // Enable v-sync
+        typedef int (*glXSwapIntervalProc)(int);
+        glXSwapIntervalProc glXSwapIntervalSGI = (glXSwapIntervalProc)glXGetProcAddressARB((const GLubyte *)"glXSwapIntervalSGI");
+        if (glXSwapIntervalSGI) {
+            glXSwapIntervalSGI(1);
+        }
+    }
+
+    if (dsp && glx && wnd) {
+        glXMakeCurrent(dsp, wnd, glx);
+        glXSwapBuffers(dsp, wnd);
+        return true;
+    }
+
+    return false;
+}
+
+bool surface_get_monitor(Surface_Handle h, Physical_Monitor *monitor) {
+    _Surface_State *state = _get_surface_state(h);
+
+    Physical_Monitor monitors[128];
+    u64 monitor_count = sys_query_monitors(monitors, 128);
+
+    if (monitor_count == 0) {
+        return false;
+    }
+
+    if (!xdisplay) xdisplay = XOpenDisplay(0);
+
+    XWindowAttributes win_attr;
+    if (!XGetWindowAttributes(xdisplay, (Window)state->handle, &win_attr)) {
+        return false;
+    }
+
+    int win_x = win_attr.x;
+    int win_y = win_attr.y;
+    int win_width = win_attr.width;
+    int win_height = win_attr.height;
+
+    int max_intersection_area = 0;
+
+    Physical_Monitor *max_monitor = 0;
+
+    for (u64 i = 0; i < monitor_count; i++) {
+        Physical_Monitor *m = &monitors[i];
+
+        int mon_x = m->pos_x;
+        int mon_y = m->pos_y;
+        int mon_width = m->resolution_x;
+        int mon_height = m->resolution_y;
+
+        int inter_x = max(win_x, mon_x);
+        int inter_y = max(win_y, mon_y);
+        int inter_width = min(win_x + win_width, mon_x + mon_width) - inter_x;
+        int inter_height = min(win_y + win_height, mon_y + mon_height) - inter_y;
+
+        if (inter_width > 0 && inter_height > 0) {
+            int intersection_area = inter_width * inter_height;
+            if (intersection_area > max_intersection_area) {
+                max_intersection_area = intersection_area;
+                max_monitor = m;
+            }
+        }
+    }
+
+    if (max_monitor) {
+        *monitor = *max_monitor;
+        return true;
+    }
+    return false;
 }
 
 File_Handle sys_get_stdout(void) {
@@ -5456,18 +5755,18 @@ Surface_Handle sys_make_surface(Surface_Desc desc) {
             _x11_initted = true;
         }
 
-        Display *display = XOpenDisplay(0);
-        if (!display) {
-            sys_write_string(sys_get_stdout(), STR("Failed to open X display\n"));
+        if (!xdisplay) xdisplay = XOpenDisplay(0);
+        if (!xdisplay) {
+            sys_write_string(sys_get_stdout(), STR("Failed to open X xdisplay\n"));
             return 0;
         }
 
-        int screen = DefaultScreen(display);
-        unsigned long white = WhitePixel(display, screen);
+        int screen = DefaultScreen(xdisplay);
+        unsigned long white = WhitePixel(xdisplay, screen);
 
         Window window = XCreateSimpleWindow(
-            display,
-            DefaultRootWindow(display),
+            xdisplay,
+            DefaultRootWindow(xdisplay),
             0, 0,
             desc.width, desc.height,
             0,
@@ -5479,19 +5778,17 @@ Surface_Handle sys_make_surface(Surface_Desc desc) {
         char ctitle[256];
         memcpy(ctitle, desc.title.data, min(desc.title.count, 255));
         ctitle[min(desc.title.count, 255)] = 0;
-        XStoreName(display, window, ctitle);
+        XStoreName(xdisplay, window, ctitle);
 
-        XSelectInput(display, window, ExposureMask | KeyPressMask | StructureNotifyMask);
+        XSelectInput(xdisplay, window, ExposureMask | KeyPressMask | StructureNotifyMask);
 
         if (!(desc.flags & SURFACE_FLAG_HIDDEN)) {
-            XMapWindow(display, window);
+            XMapWindow(xdisplay, window);
         }
 
         _Surface_State *surface = (_Surface_State *)_alloc_surface_state();
-        surface->xlib_display = display;
         surface->handle = (Surface_Handle)window;
         surface->should_close = false;
-
         return (Surface_Handle)window;
 }
 
@@ -5499,8 +5796,8 @@ void surface_close(Surface_Handle s) {
     if (!s) return;
     _Surface_State *state = _get_surface_state(s);
 
-    XDestroyWindow(state->xlib_display, (Window)state->handle);
-    XCloseDisplay(state->xlib_display);
+    XDestroyWindow(xdisplay, (Window)state->handle);
+    XCloseDisplay(xdisplay);
 
     state->allocated = false;
 }
@@ -5509,9 +5806,9 @@ void surface_poll_events(Surface_Handle surface) {
     if (!surface) return;
     _Surface_State *state = _get_surface_state(surface);
 
-    while (XPending(state->xlib_display)) {
+    while (XPending(xdisplay)) {
         XEvent evt;
-        XNextEvent(state->xlib_display, &evt);
+        XNextEvent(xdisplay, &evt);
         switch (evt.type) {
             case ClientMessage:
             case DestroyNotify:
@@ -5534,7 +5831,7 @@ bool surface_set_flags(Surface_Handle h, Surface_Flags flags) {
     _Surface_State *state = _get_surface_state(h);
 
     if (flags & SURFACE_FLAG_HIDDEN) {
-        XUnmapWindow(state->xlib_display, (Window)state->handle);
+        XUnmapWindow(xdisplay, (Window)state->handle);
     }
     if (flags & SURFACE_FLAG_TOPMOST) {
 
@@ -5547,7 +5844,7 @@ bool surface_unset_flags(Surface_Handle h, Surface_Flags flags) {
     _Surface_State *state = _get_surface_state(h);
 
     if (flags & SURFACE_FLAG_HIDDEN) {
-        XMapWindow(state->xlib_display, (Window)state->handle);
+        XMapWindow(xdisplay, (Window)state->handle);
     }
 
     if (flags & SURFACE_FLAG_TOPMOST) {
@@ -5560,7 +5857,7 @@ bool surface_get_framebuffer_size(Surface_Handle h, s64 *width, s64 *height) {
     if (!state) return false;
 
     XWindowAttributes attrs;
-    if (!XGetWindowAttributes(state->xlib_display, (Window)h, &attrs)) {
+    if (!XGetWindowAttributes(xdisplay, (Window)h, &attrs)) {
         return false;
     }
     *width  = (s64)attrs.width;
@@ -5568,72 +5865,74 @@ bool surface_get_framebuffer_size(Surface_Handle h, s64 *width, s64 *height) {
     return true;
 }
 
-void* surface_map_pixels(Surface_Handle h) {
-    _Surface_State *state = _get_surface_state(h);
-    if (!state) return 0;
+    void* surface_map_pixels(Surface_Handle h) {
+        _Surface_State *state = _get_surface_state(h);
+        if (!state) return 0;
 
-    if (state->pixels) {
+        if (state->pixels) {
+            return state->pixels;
+        }
+
+        s64 width, height;
+        if (!surface_get_framebuffer_size(h, &width, &height)) return 0;
+
+        s64 bytes_needed = width * height * 4;
+        s64 pages        = (bytes_needed + 4095) / 4096;
+
+        state->pixels = sys_map_pages(SYS_MEMORY_RESERVE | SYS_MEMORY_ALLOCATE, 0, pages, false);
+        if (!state->pixels) {
+            return 0;
+        }
+
+        int screen = DefaultScreen(xdisplay);
+        int depth  = DefaultDepth(xdisplay, screen);
+
+        state->ximage = XCreateImage(
+            xdisplay,
+            DefaultVisual(xdisplay, screen),
+            (unsigned int)depth,
+            ZPixmap,
+            0,
+            (char*)state->pixels,
+            (unsigned int)width,
+            (unsigned int)height,
+            32,
+            (int)(width * 4)
+        );
+
+        state->gc = XCreateGC(xdisplay, (Drawable)h, 0, 0);
+
         return state->pixels;
     }
 
-    s64 width, height;
-    if (!surface_get_framebuffer_size(h, &width, &height)) return 0;
+    void surface_blit_pixels(Surface_Handle h) {
+        _Surface_State *state = _get_surface_state(h);
+        if (!state) return;
 
-    s64 bytes_needed = width * height * 4;
-    s64 pages        = (bytes_needed + 4095) / 4096;
+        if (!state->pixels || !state->ximage) {
+            return;
+        }
 
-    state->pixels = sys_map_pages(SYS_MEMORY_RESERVE | SYS_MEMORY_ALLOCATE, 0, pages, false);
-    if (!state->pixels) {
-        return 0;
+        s64 width, height;
+        if (!surface_get_framebuffer_size(h, &width, &height)) {
+            return;
+        }
+
+        Window window = (Window)state->handle;
+        glXMakeCurrent(0, 0, 0);
+        XPutImage(
+            xdisplay,
+            (Drawable)window,
+            state->gc,
+            state->ximage,
+            0, 0,
+            0, 0,
+            (unsigned int)width,
+            (unsigned int)height
+        );
+
+        XFlush(xdisplay);
     }
-
-    int screen = DefaultScreen(state->xlib_display);
-    int depth  = DefaultDepth(state->xlib_display, screen);
-
-    state->ximage = XCreateImage(
-        state->xlib_display,
-        DefaultVisual(state->xlib_display, screen),
-        (unsigned int)depth,
-        ZPixmap,
-        0,
-        (char*)state->pixels,
-        (unsigned int)width,
-        (unsigned int)height,
-        32,
-        (int)(width * 4)
-    );
-
-    state->gc = XCreateGC(state->xlib_display, (Drawable)h, 0, 0);
-
-    return state->pixels;
-}
-
-void surface_blit_pixels(Surface_Handle h) {
-    _Surface_State *state = _get_surface_state(h);
-    if (!state) return;
-
-    if (!state->pixels || !state->ximage) {
-        return;
-    }
-
-    s64 width, height;
-    if (!surface_get_framebuffer_size(h, &width, &height)) {
-        return;
-    }
-
-    XPutImage(
-        state->xlib_display,
-        (Drawable)h,
-        state->gc,
-        state->ximage,
-        0, 0,
-        0, 0,
-        (unsigned int)width,
-        (unsigned int)height
-    );
-
-    XFlush(state->xlib_display);
-}
 
 void sys_print_stack_trace(File_Handle handle) {
     void *stack[64];
@@ -6472,6 +6771,10 @@ u64 format_signed_int(s64 x, int base, void *buffer, u64 buffer_size);
 u64 format_unsigned_int(u64 x, int base, void *buffer, u64 buffer_size);
 u64 format_float(float64 x, int decimal_places, void *buffer, u64 buffer_size);
 
+unit_local u64 string_to_unsigned_int(string str, int base, bool *success);
+unit_local s64 string_to_signed_int(string str, int base, bool *success);
+unit_local float64 string_to_float(string str, bool *success);
+
 //////
 // Printing
 //////
@@ -6489,10 +6792,13 @@ typedef struct Source_Location {
 #define tprints(/*fmt, */...)            _tprints_ugly(__VA_ARGS__)
 #define print(/*fmt, */...)              _print_ugly(__VA_ARGS__)
 #define prints(/*fmt, */...)             _prints_ugly(__VA_ARGS__)
+#define fprint(file, /*fmt, */...)       _fprint_ugly(file, __VA_ARGS__)
+#define fprints(file, /*fmt, */...)      _fprints_ugly(file, __VA_ARGS__)
 
 string sprint_args(Allocator a, string fmt, u64 arg_count, Var_Arg *args);
 string tprint_args(string fmt, u64 arg_count, Var_Arg *args);
 void   print_args(string fmt, u64 arg_count, Var_Arg *args);
+void   fprint_args(File_Handle f, string fmt, u64 arg_count, Var_Arg *args);
 void   log_args(u64 flags, Source_Location location, string fmt, u64 arg_count, Var_Arg *args);
 
 typedef void (*Logger_Proc)(string message, u64 flags, Source_Location location);
@@ -6517,17 +6823,21 @@ void default_logger(string message, u64 flags, Source_Location location);
 
 
 #define _sprint_ugly(allocator, ...)\
-    MAKE_WRAPPED_CALL(sprint_impl, _make_print_desc(allocator, STR(PP_FIRST_ARG(__VA_ARGS__))), PP_EXCLUDE_FIRST_ARG(__VA_ARGS__, (string){0}))
+    MAKE_WRAPPED_CALL(sprint_impl, _make_print_desc(allocator, STR(PP_FIRST_ARG(__VA_ARGS__)), 0), PP_EXCLUDE_FIRST_ARG(__VA_ARGS__, (string){0}))
 #define _sprints_ugly(allocator, ...)\
-    MAKE_WRAPPED_CALL(sprint_impl, _make_print_desc(allocator, PP_FIRST_ARG(__VA_ARGS__)), PP_EXCLUDE_FIRST_ARG(__VA_ARGS__, (string){0}))
+    MAKE_WRAPPED_CALL(sprint_impl, _make_print_desc(allocator, PP_FIRST_ARG(__VA_ARGS__), 0), PP_EXCLUDE_FIRST_ARG(__VA_ARGS__, (string){0}))
 #define _tprint_ugly(...)\
-    MAKE_WRAPPED_CALL(tprint_impl, _make_print_desc((Allocator){0}, STR(PP_FIRST_ARG(__VA_ARGS__))), PP_EXCLUDE_FIRST_ARG(__VA_ARGS__, (string){0}))
+    MAKE_WRAPPED_CALL(tprint_impl, _make_print_desc((Allocator){0}, STR(PP_FIRST_ARG(__VA_ARGS__)), 0), PP_EXCLUDE_FIRST_ARG(__VA_ARGS__, (string){0}))
 #define _tprints_ugly(...)\
-    MAKE_WRAPPED_CALL(tprint_impl, _make_print_desc((Allocator){0}, PP_FIRST_ARG(__VA_ARGS__)), PP_EXCLUDE_FIRST_ARG(__VA_ARGS__, (string){0}))
+    MAKE_WRAPPED_CALL(tprint_impl, _make_print_desc((Allocator){0}, PP_FIRST_ARG(__VA_ARGS__), 0), PP_EXCLUDE_FIRST_ARG(__VA_ARGS__, (string){0}))
 #define _print_ugly(...)\
-    MAKE_WRAPPED_CALL(print_impl, _make_print_desc((Allocator){0}, STR(PP_FIRST_ARG(__VA_ARGS__))), PP_EXCLUDE_FIRST_ARG(__VA_ARGS__, (string){0}))
+    MAKE_WRAPPED_CALL(print_impl, _make_print_desc((Allocator){0}, STR(PP_FIRST_ARG(__VA_ARGS__)), 0), PP_EXCLUDE_FIRST_ARG(__VA_ARGS__, (string){0}))
 #define _prints_ugly(...)\
-    MAKE_WRAPPED_CALL(print_impl, _make_print_desc((Allocator){0}, PP_FIRST_ARG(__VA_ARGS__)), PP_EXCLUDE_FIRST_ARG(__VA_ARGS__, (string){0}))
+    MAKE_WRAPPED_CALL(print_impl, _make_print_desc((Allocator){0}, PP_FIRST_ARG(__VA_ARGS__), 0), PP_EXCLUDE_FIRST_ARG(__VA_ARGS__, (string){0}))
+#define _fprint_ugly(file, ...)\
+    MAKE_WRAPPED_CALL(fprint_impl, _make_print_desc((Allocator){0}, STR(PP_FIRST_ARG(__VA_ARGS__)), file), PP_EXCLUDE_FIRST_ARG(__VA_ARGS__, (string){0}))
+#define _fprints_ugly(file, ...)\
+    MAKE_WRAPPED_CALL(fprint_impl, _make_print_desc((Allocator){0}, PP_FIRST_ARG(__VA_ARGS__), file), PP_EXCLUDE_FIRST_ARG(__VA_ARGS__, (string){0}))
 
 #define _log_ugly(flags, ...)\
     MAKE_WRAPPED_CALL(log_impl, _make_log_desc((Allocator){0}, STR(PP_FIRST_ARG(__VA_ARGS__)), flags, HERE()), PP_EXCLUDE_FIRST_ARG(__VA_ARGS__, (string){0}))
@@ -6546,9 +6856,10 @@ unit_local inline _Format_String_Desc _make_format_string_desc(void *buffer, u64
 typedef struct _Print_Desc {
     Allocator a;
     string fmt;
+    File_Handle file;
 } _Print_Desc;
-unit_local inline _Print_Desc _make_print_desc(Allocator a, string fmt) {
-    return (_Print_Desc) {a, fmt};
+unit_local inline _Print_Desc _make_print_desc(Allocator a, string fmt, File_Handle f) {
+    return (_Print_Desc) {a, fmt, f};
 }
 
 typedef struct _Log_Desc {
@@ -6565,6 +6876,7 @@ u64 format_string_impl(_Format_String_Desc desc, u64 arg_count, ...);
 string sprint_impl(_Print_Desc desc, u64 arg_count, ...);
 string tprint_impl(_Print_Desc desc, u64 arg_count, ...);
 void print_impl(_Print_Desc desc, u64 arg_count, ...);
+void fprint_impl(_Print_Desc desc, u64 arg_count, ...);
 void log_impl(_Log_Desc desc, u64 arg_count, ...);
 
 #ifdef OSTD_IMPL
@@ -6683,6 +6995,11 @@ void log_impl(_Log_Desc desc, u64 arg_count, ...) {
     get_var_args(arg_count, args);
     log_args(desc.flags, desc.location, desc.fmt, arg_count, args);
 }
+void fprint_impl(_Print_Desc desc, u64 arg_count, ...) {
+    Var_Arg args[MAX_VAR_ARGS];
+    get_var_args(arg_count, args);
+    fprint_args(desc.file, desc.fmt, arg_count, args);
+}
 
 string sprint_args(Allocator a, string fmt, u64 arg_count, Var_Arg *args) {
     u64 n = format_string_args(0, 0, fmt, arg_count, args, 0);
@@ -6697,6 +7014,9 @@ string tprint_args(string fmt, u64 arg_count, Var_Arg *args) {
     return sprint_args(get_temp(), fmt, arg_count, args);
 }
 void print_args(string fmt, u64 arg_count, Var_Arg *args) {
+    fprint_args(sys_get_stdout(), fmt, arg_count, args);
+}
+void fprint_args(File_Handle f, string fmt, u64 arg_count, Var_Arg *args) {
 
     u64 n = format_string_args(0, 0, fmt, arg_count, args, 0);
 
@@ -6710,7 +7030,7 @@ void print_args(string fmt, u64 arg_count, Var_Arg *args) {
         args += consumed_args;
         arg_count -= consumed_args;
 
-        sys_write(sys_get_stdout(), buffer, to_write);
+        sys_write(f, buffer, to_write);
 
         written += to_write;
     }
@@ -6839,6 +7159,131 @@ u64 format_float(float64 x, int decimal_places, void *buffer, u64 buffer_size) {
     return written;
 }
 
+unit_local u64 string_to_unsigned_int(string str, int base, bool *success)
+{
+    u64 value = 0;
+    if (base < 2 || base > 36) {
+        if (success) *success = false;
+        return 0;
+    }
+    
+    u8 *p = str.data;
+
+    while (*p == ' ' || *p == '\t' || *p == '\n' ||
+           *p == '\r' || *p == '\f' || *p == '\v') {
+        p++;
+    }
+
+    while (p) {
+        if (p == str.data+str.count) {
+            break;
+        }
+        u8 c = *p;
+
+        s64 digit = -1;
+
+        if (c >= '0' && c <= '9') {
+            digit = (s64)(c - '0');
+        } else if (c >= 'a' && c <= 'z') {
+            digit = 10 + (s64)(c - 'a');
+        } else if (c >= 'A' && c <= 'Z') {
+            digit = 10 + (s64)(c - 'A');
+        } else {
+            if (success) *success = false;
+            return 0;
+        }
+
+        if (digit < 0 || digit >= base) {
+            if (success) *success = false;
+            return 0;
+        }
+
+        value = (value * (u64)base) + (u64)digit;
+        
+        p += 1;
+    }
+
+    if (success) *success = true;
+    return value;
+}
+
+unit_local s64 string_to_signed_int(string str, int base, bool *success)
+{
+    u8 *p = str.data;
+
+    while (*p == ' ' || *p == '\t' || *p == '\n' ||
+           *p == '\r' || *p == '\f' || *p == '\v') {
+        p++;
+    }
+
+    int sign = 1;
+    if (*p == '-') {
+        sign = -1;
+        p++;
+    } else if (*p == '+') {
+        p++;
+    }
+
+    u64 unsigned_val = string_to_unsigned_int(str, base, success);
+
+    s64 signed_val = (s64)unsigned_val;
+    if (sign < 0) {
+        signed_val = -signed_val;
+    }
+
+    return signed_val;
+}
+
+unit_local float64 string_to_float(string str, bool *success)
+{
+    u8 *p = str.data;
+
+    while (*p == ' ' || *p == '\t' || *p == '\n' ||
+           *p == '\r' || *p == '\f' || *p == '\v') {
+        p++;
+    }
+
+    int sign = 1;
+    if (*p == '-') {
+        sign = -1;
+        p++;
+    } else if (*p == '+') {
+        p++;
+    }
+
+    float64 value = 0.0;
+    float64 fraction = 0.0;
+    float64 divisor = 1.0;
+
+    while (*p >= '0' && *p <= '9') {
+        value = (value * 10.0) + (float64)(*p - '0');
+        p++;
+    }
+
+    if (*p == '.') {
+        p++;
+        while (*p >= '0' && *p <= '9') {
+            fraction = (fraction * 10.0) + (float64)(*p - '0');
+            divisor *= 10.0;
+            p++;
+        }
+    }
+    
+    if (p != str.data+str.count) {
+        if (success) *success = false;
+        return 0;
+    }
+
+    value = value + (fraction / divisor);
+
+    if (sign < 0) {
+        value = -value;
+    }
+
+    if (success) *success = true;
+    return value;
+}
+
 Logger_Proc logger = 0;
 
 #endif // OSTD_IMPL
@@ -6855,7 +7300,12 @@ bool sys_write_entire_file(string path, string data);
 #ifdef OSTD_IMPL
 
 bool sys_read_entire_file(Allocator a, string path, string *result) {
-    File_Handle f = sys_open_file(path, FILE_OPEN_READ);
+    const int MAX_ATTEMPTS = 100;
+    int attempts = MAX_ATTEMPTS;
+    File_Handle f = 0;
+    while (attempts--) {
+        f = sys_open_file(path, FILE_OPEN_READ);
+    }
     if (!f) return false;
     
     u64 size = sys_get_file_size(f);

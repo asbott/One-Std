@@ -1,17 +1,38 @@
-
-
-
-#define OSTD_IMPL
-#define OSTD_NO_GRAPHICS
-#include "../src/ostd.h"
-
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wdeclaration-after-statement"
-#if COMPILER_FLAGS & COMPILER_FLAG_MSC
+#pragma clang diagnostic ignored "-Wreserved-macro-identifier"
+#ifdef _MSC_VER
 #pragma clang diagnostic ignored "-Wunsafe-buffer-usage"
 #endif
 
+
+
+#include <intrin.h>
+#include <immintrin.h>
+#undef min
+#undef max
+#undef __crt_va_start
+#undef __crt_va_arg
+#undef __crt_va_end
+
+#define OSTD_IMPL
+#define OSTD_NO_GRAPHICS
+//#include "../src/ostd.h"
+#include "../ostd_single_header.h"
+
+
+
+typedef struct Scanline {
+	s16 vpx0;
+	s16 vpx1;
+	s16 vpy;
+	s16 pad;
+} Scanline;
+
 int main(void) {
+	//sys_set_thread_affinity_mask(sys_get_current_thread(), 1);
+	sys_set_local_process_priority_level(SYS_PRIORITY_HIGH);
+	sys_set_thread_priority_level(sys_get_current_thread(), SYS_PRIORITY_HIGH);
 
 #if OS_FLAGS & OS_FLAG_HAS_WINDOW_SYSTEM
 	Surface_Handle surface = sys_make_surface(DEFAULT(Surface_Desc));
@@ -19,6 +40,8 @@ int main(void) {
 #else
 	Surface_Handle surface = sys_get_surface();
 #endif
+
+	
 
 	bool culling = false;
 
@@ -31,21 +54,23 @@ int main(void) {
         (float2){  0.f+0.75f, -.25f  },
         (float2){  .25f+0.75f, .25f  },
     };
-
-    //verts[0] = m4_mulf2_trunc(m4_make_scale(f3(1.0f, 2.5f, 1.0f)), verts[0]);
-    //verts[1] = m4_mulf2_trunc(m4_make_scale(f3(1.0f, 2.5f, 1.0f)), verts[1]);
-    //verts[2] = m4_mulf2_trunc(m4_make_scale(f3(1.0f, 2.5f, 1.0f)), verts[2]);
-
-    //verts[0] = m4_mulf2_trunc(m4_make_translation(f3(-0.1f, -0.3f, 0)), verts[0]);
-    //verts[1] = m4_mulf2_trunc(m4_make_translation(f3(-0.1f, -0.3f, 0)), verts[1]);
-    //verts[2] = m4_mulf2_trunc(m4_make_translation(f3(-0.1f, -0.3f, 0)), verts[2]);
+    
+    u32 colors[] = {
+    	0x00ff0000,
+    	0x0000ff00,
+    	0x000000ff,
+    	
+    	0x00ff0000,
+    	0x0000ff00,
+    	0x000000ff,
+    };
 
     float target_frametime = 1.0f/60.0f;
 
 
     u64 vertex_count = sizeof(verts)/sizeof(float2);
 
-    float r = 0;
+    float rot = 0;
 
 	while (!surface_should_close(surface)) {
 
@@ -59,32 +84,51 @@ int main(void) {
 
 		u32 *pixels = (u32*)surface_map_pixels(surface);
 		assert(pixels);
+		assert((u64)pixels % 32 == 0);
 
 		memset(pixels, 0x00, (u64)(width*height*4));
 
 		float frag_x = (2.0f/(float)width);
 		float frag_y = (1.0f/(float)height);
+		(void)frag_x; (void)frag_y;
+		
 		//float frag = frag_x*frag_y;
 
-		s64 hw = width/2;
-		s64 hh = height/2;
+		s32 hw = (s32)width/2;
+		s32 hh = (s32)height/2;
 
-		r += target_frametime*0.0001;
+		rot += target_frametime*0.00001f;
 
-		float2 tri0 = m4_mulf2_trunc(m4_make_rotation_z(r), (float2){ -.25f,-.25f });
-        float2 tri1 = m4_mulf2_trunc(m4_make_rotation_z(r), (float2){  0.f,  .25f });
-        float2 tri2 = m4_mulf2_trunc(m4_make_rotation_z(r), (float2){  .25f,-.25f });
+		float2 tri0 = m4_mulf2_trunc(m4_make_rotation_z(rot), (float2){ -.25f,-.25f });
+        float2 tri1 = m4_mulf2_trunc(m4_make_rotation_z(rot), (float2){  0.f,  .25f });
+        float2 tri2 = m4_mulf2_trunc(m4_make_rotation_z(rot), (float2){  .25f,-.25f });
 
 		verts[0] = tri0;
 	    verts[1] = tri1;
 	    verts[2] = tri2;
 
-
-
+		Scanline scanlines[1024];
+		u64 scanline_count = 0;
+		(void)scanlines; (void)scanline_count;
+		
+		u64 cyc_triangles = 0;
+		u64 num_triangles = 0;
+		u64 cyc_pixels = 0;
+		u64 num_pixels = 0;
+		// u64 cyc_scanlines = 0;
+		// u64 num_scanlines = 0;
+		
+		
+		float64 tt0 = sys_get_seconds_monotonic();
+		u64 cyc_tri0 = __rdtsc();
 		for (u64 i = 0; i+2 < vertex_count; i += 3) {
 			float2 p0 = verts[i+0];
 			float2 p1 = verts[i+1];
 			float2 p2 = verts[i+2];
+			
+			u32 col0 = colors[i+0];
+			u32 col1 = colors[i+1];
+			u32 col2 = colors[i+2];
 
 			float2 p1_to_p0 = f2_sub(p0, p1);
 			float2 p1_to_p2 = f2_sub(p2, p1);
@@ -100,6 +144,7 @@ int main(void) {
 			float2 v0 = f2_sub(p1, p0);
 			float2 v1 = p1_to_p2;
 			float2 v2 = f2_sub(p0, p2);
+			float area = (p1.x - p0.x) * (p2.y - p0.y) - (p2.x - p0.x) * (p1.y - p0.y);
 
 			float min_x = min(p0.x, min(p1.x, p2.x));
 			float max_x = max(p0.x, max(p1.x, p2.x));
@@ -113,10 +158,11 @@ int main(void) {
 
 			// Scan line vector
 			float2 slv = (float2) { max_x-min_x, 0 };
+			(void)slv;
 
 			for (float y = min_y; y < max_y; y += frag_y) {
-
-				float2 intersections[2] = {0};
+				//u64 cyc_sl0 = __rdtsc();
+				float intersections[2] = {0};
 				u64 intersection_count = 0;
 
 				float s_to_v0_perp = slv.x*v0.y-slv.y*v0.x;
@@ -147,54 +193,198 @@ int main(void) {
 				float u2 = vs2_to_sl_perp/s_to_v2_perp;
 
 				if (t0 >= 0 && t0 <= 1.0f && u0 >= 0 && u0 <= 1.0f) {
-					intersections[intersection_count++] = (float2) { min_x+t0*slv.x, y*t0+slv.y };
+					intersections[intersection_count++] = min_x+t0*slv.x;
 				}
 				if (t1 >= 0 && t1 <= 1.0f && u1 >= 0 && u1 <= 1.0f) {
-					intersections[intersection_count++] = (float2) { min_x+t1*slv.x, y*t1+slv.y };
+					intersections[intersection_count++] = min_x+t1*slv.x;
 				}
 				if (t2 >= 0 && t2 <= 1.0f && u2 >= 0 && u2 <= 1.0f) {
-					//assert(intersection_count == 1);
-					intersections[intersection_count++] = (float2) { min_x+t2*slv.x, y*t2+slv.y };
+					intersections[intersection_count++] = min_x+t2*slv.x;
 				}
 
 				if (intersection_count == 2) {
-					if (intersections[0].x > intersections[1].x) {
-						float2 temp = intersections[0];
-						intersections[0] = intersections[1];
-						intersections[1] = temp;
-					}
+					float l = intersections[0];
+					float r = intersections[1];
+					/*if (l > r) {
+						float temp = l;
+						l = r;
+						r = temp;
+					}*/
 
-					for (float x = intersections[0].x; x < intersections[1].x; x += frag_x) {
-						s64 vpx = (s64)(x*(float)(hw))+hw;
-						s64 vpy = (s64)(y*(float)(hh))+hh;
+					s32 vpx0 = (s32)(l*(float)(hw))+hw;
+					s32 vpx1 = (s32)(r*(float)(hw))+hw;
+					s32 vpy  = (s32)(y*(float)(hh))+hh;
+					
+					
+					
+					if (vpx0 == vpx1) continue;
+					
+					// Barycentric coords
+					
+					float lbar0 = ((p1.x - l) * (p2.y - y) - (p2.x - l) * (p1.y - y)) / area;
+			        float lbar1 = ((p2.x - l) * (p0.y - y) - (p0.x - l) * (p2.y - y)) / area;
+			        float lbar2 = 1.0f - lbar0 - lbar1;
+			        
+					float rbar0 = ((p1.x - r) * (p2.y - y) - (p2.x - r) * (p1.y - y)) / area;
+			        float rbar1 = ((p2.x - r) * (p0.y - y) - (p0.x - r) * (p2.y - y)) / area;
+			        float rbar2 = 1.0f - rbar0 - rbar1;
+			
+			        u32 lr0 = (u32)(lbar0*(f32)(((col0) & 0x00ff0000) >> 16));
+			        u32 lg0 = (u32)(lbar0*(f32)(((col0) & 0x0000ff00) >> 8));
+			        u32 lb0 = (u32)(lbar0*(f32)(((col0)  & 0x000000ff) >> 0));
+			        
+			        u32 lr1 = (u32)(lbar1*(f32)(((col1) & 0x00ff0000) >> 16));
+			        u32 lg1 = (u32)(lbar1*(f32)(((col1) & 0x0000ff00) >> 8));
+			        u32 lb1 = (u32)(lbar1*(f32)(((col1)  & 0x000000ff) >> 0));
+			        
+			        u32 lr2 = (u32)(lbar2*(f32)(((col2) & 0x00ff0000) >> 16));
+			        u32 lg2 = (u32)(lbar2*(f32)(((col2) & 0x0000ff00) >> 8));
+			        u32 lb2 = (u32)(lbar2*(f32)(((col2)  & 0x000000ff) >> 0));
+			        
+			        
+			        u32 rr0 = (u32)(rbar0*(f32)(((col0) & 0x00ff0000) >> 16));
+			        u32 rg0 = (u32)(rbar0*(f32)(((col0) & 0x0000ff00) >> 8));
+			        u32 rb0 = (u32)(rbar0*(f32)(((col0)  & 0x000000ff) >> 0));
+			        
+			        u32 rr1 = (u32)(rbar1*(f32)(((col1) & 0x00ff0000) >> 16));
+			        u32 rg1 = (u32)(rbar1*(f32)(((col1) & 0x0000ff00) >> 8));
+			        u32 rb1 = (u32)(rbar1*(f32)(((col1)  & 0x000000ff) >> 0));
+			        
+			        u32 rr2 = (u32)(rbar2*(f32)(((col2) & 0x00ff0000) >> 16));
+			        u32 rg2 = (u32)(rbar2*(f32)(((col2) & 0x0000ff00) >> 8));
+			        u32 rb2 = (u32)(rbar2*(f32)(((col2)  & 0x000000ff) >> 0));
 
-						pixels[vpy*width+vpx] = 0xffffffff;
+			        s32 lr = (s32)((lr0+lr1+lr2));
+			        s32 lg = (s32)((lg0+lg1+lg2));
+			        s32 lb = (s32)((lb0+lb1+lb2));
+			        
+			        s32 rr = (s32)((rr0+rr1+rr2));
+			        s32 rg = (s32)((rg0+rg1+rg2));
+			        s32 rb = (s32)((rb0+rb1+rb2));
+			        
+			        f32 pitch = (f32)(vpx1-vpx0);
+			        
+			        f32 stepr = (f32)(((f32)(rr-lr)/pitch)); 
+			        f32 stepg = (f32)(((f32)(rg-lg)/pitch)); 
+			        f32 stepb = (f32)(((f32)(rb-lb)/pitch)); 
+			        
+					if (vpx1 < vpx0) {
+						Swap(vpx0, vpx1);
+						Swap(lr, rr);
+						Swap(lg, rg);
+						Swap(lb, rb);
 					}
+					
+					s32 yindex = vpy * (s32)width;
+					
+					f32 lrf = (f32)lr;
+					f32 lgf = (f32)lg;
+					f32 lbf = (f32)lb;
+					
+					__m256 accr256 = _mm256_set_ps(lrf+stepr*7,lrf+stepr*6,lrf+stepr*5,lrf+stepr*4,lrf+stepr*3,lrf+stepr*2,lrf+stepr*1,lrf+stepr*0);
+					__m256 accg256 = _mm256_set_ps(lgf+stepg*7,lgf+stepg*6,lgf+stepg*5,lgf+stepg*4,lgf+stepg*3,lgf+stepg*2,lgf+stepg*1,lgf+stepg*0);
+					__m256 accb256 = _mm256_set_ps(lbf+stepb*7,lbf+stepb*6,lbf+stepb*5,lbf+stepb*4,lbf+stepb*3,lbf+stepb*2,lbf+stepb*1,lbf+stepb*0);
+					
+					__m256 stepr256 = _mm256_set1_ps(stepr*8);
+					__m256 stepg256 = _mm256_set1_ps(stepg*8);
+					__m256 stepb256 = _mm256_set1_ps(stepb*8);
+					
+					__m256i cmp_vec_base  = _mm256_set_epi32(7, 6, 5, 4, 3, 2, 1, 0);
+					
+					s32 vpx = vpx0;
+					volatile u64 cyc_px0 = __rdtsc();
+					for (; vpx < vpx1; vpx += 8) {
+						
+						u32 *start = pixels + yindex + vpx;
+
+						__m256i a256 = _mm256_set1_epi32((int)0xff000000);
+						
+						__m256i r256 = _mm256_cvtps_epi32(accr256);
+						// avx 2
+						r256 = _mm256_slli_epi32(r256, 16);
+						
+						
+						__m256i g256 = _mm256_cvtps_epi32(accg256);
+						// avx 2
+						g256 = _mm256_slli_epi32(g256, 8);
+						
+						
+						__m256i b256 = _mm256_cvtps_epi32(accb256);
+
+						__m256i rgba256 = _mm256_or_si256(a256, r256);
+						rgba256 = _mm256_or_si256(rgba256, g256);
+						rgba256 = _mm256_or_si256(rgba256, b256);
+						
+						__m256i vpx256 = _mm256_set1_epi32(vpx);
+						__m256i cmp_vec = _mm256_add_epi32(cmp_vec_base, vpx256);
+						
+						__m256i threshold = _mm256_set1_epi32(vpx1);
+						
+						__m256i mask = _mm256_cmpgt_epi32(threshold, cmp_vec);
+						
+						_mm256_maskstore_epi32((s32*)start, mask, rgba256);
+						
+						accr256 = _mm256_add_ps(accr256, stepr256);
+						accg256 = _mm256_add_ps(accg256, stepg256);
+						accb256 = _mm256_add_ps(accb256, stepb256);
+						
+						
+					}
+					volatile u64 cyc_px1 = __rdtsc();
+					volatile u64 cyc_px = cyc_px1-cyc_px0;
+					cyc_pixels += cyc_px;
+					num_pixels += (u64)vpx1-(u64)vpx0;
+					
+					/*for (; vpx < vpx1; vpx += 1) {
+						volatile u64 cyc_px0 = __rdtsc();
+						
+						pixels[yindex + vpx] 
+							= 0xff000000 
+							| (((u32)accs[0] << 16)) 
+							| (((u32)accs[1] << 8)) 
+							| ((u32)accs[2]);
+						
+						*((f32*)(void*)&accr256 + 7) += *((f32*)(void*)&stepr256 + 7);
+						*((f32*)(void*)&accg256 + 7) += *((f32*)(void*)&stepg256 + 7);
+						*((f32*)(void*)&accb256 + 7) += *((f32*)(void*)&stepb256 + 7);
+						
+						volatile u64 cyc_px1 = __rdtsc();
+						volatile u64 cyc_px = cyc_px1-cyc_px0;
+						cyc_pixels += cyc_px;
+						num_pixels += 1;
+					}*/
+					
 				}
-
-				/*for (float x = min_x; x < max_x; x += frag_x) {
-
-					float2 p = (float2){x, y};
-					float2 w0 = f2_sub(p,p0);
-					float2 w1 = f2_sub(p,p1);
-					float2 w2 = f2_sub(p,p2);
-
-					float c0 = v0.x*w0.y - w0.x*v0.y;
-					float c1 = v1.x*w1.y - w1.x*v1.y;
-					float c2 = v2.x*w2.y - w2.x*v2.y;
-
-					if ((c0 <= 0.0f && c1 <= 0.0f && c2 <= 0.0f) || (c0 >= -0.0f && c1 >= -0.0f && c2 >= -0.0f)) {
-						s64 vpx = (s64)(x*(float)(hw))+hw;
-						s64 vpy = (s64)(y*(float)(hh))+hh;
-
-						pixels[vpy*width+vpx] = 0xffffffff;
-					}
-				}*/
+				
+				//u64 cyc_sl1 = __rdtsc();
+				//u64 cyc_sl = cyc_sl1-cyc_sl0;
+				//cyc_scanlines += cyc_sl;
+				//num_scanlines += 1;
 			}
 		}
+		u64 cyc_tri1 = __rdtsc();
+		u64 cyc_tri = cyc_tri1-cyc_tri0;
+		cyc_triangles += cyc_tri;
+		num_triangles += vertex_count/3;
+		
+		u64 cyc_avg_triangles = cyc_triangles/num_triangles;
+		/*u64 cyc_avg_scanlines = cyc_scanlines/num_scanlines;*/
+		f64 cyc_avg_pixels = (f64)cyc_pixels/(f64)num_pixels;
+		
+		(void)cyc_avg_triangles;
+		/*(void)cyc_avg_scanlines;*/
+		//(void)cyc_avg_pixels;
+		
+		print("\n%u triangles: %u per / %u total\n", num_triangles, cyc_avg_triangles, cyc_triangles);
+		/*print("%u scanlines: %u per / %u total\n", num_scanlines, cyc_avg_scanlines, cyc_scanlines);*/
+		print("%u pixels: %f per / %u total\n", num_pixels, cyc_avg_pixels, cyc_pixels);
+		
+		float64 tt1 = sys_get_seconds_monotonic();
+		float64 ms = (tt1-tt0)*1000.0;
+		print("%fms\n", ms);
 
 		// This waits exactly until vblank happened, letting you do 100% smooth frame pacing.
-		//sys_wait_vertical_blank(monitor);
+		sys_wait_vertical_blank(monitor);
 		surface_blit_pixels(surface);
 
 

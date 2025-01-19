@@ -6,7 +6,12 @@ bool sys_write_entire_file(string path, string data);
 #ifdef OSTD_IMPL
 
 bool sys_read_entire_file(Allocator a, string path, string *result) {
-    File_Handle f = sys_open_file(path, FILE_OPEN_READ);
+    const int MAX_ATTEMPTS = 100;
+    int attempts = MAX_ATTEMPTS;
+    File_Handle f = 0;
+    while (attempts--) {
+        f = sys_open_file(path, FILE_OPEN_READ);
+    }
     if (!f) return false;
     
     u64 size = sys_get_file_size(f);

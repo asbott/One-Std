@@ -15,6 +15,13 @@ build/
 *.bin
 *.lock
 *.probe
+*.obj
+
+*old.simd.asm
+
+*.exp
+*.lib
+*.dll
 
 test.wasm
 test.em

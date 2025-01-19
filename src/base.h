@@ -413,3 +413,5 @@ u64 format_float(float64 x, int decimal_places, void *buffer, u64 buffer_size);
 #define PP_EXCLUDE_FIRST_ARG_HELPER(first, ...) __VA_ARGS__
 #define PP_EXCLUDE_FIRST_ARG(...) PP_EXCLUDE_FIRST_ARG_HELPER(__VA_ARGS__)
 
+#define Swap(a, b) do {  u8 tmp__[sizeof(a)]; memcpy(tmp__, &a, sizeof(a)); a = b; memcpy(&b, tmp__, sizeof(b)); } while (0)
+

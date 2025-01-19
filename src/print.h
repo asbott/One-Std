@@ -41,6 +41,10 @@ u64 format_signed_int(s64 x, int base, void *buffer, u64 buffer_size);
 u64 format_unsigned_int(u64 x, int base, void *buffer, u64 buffer_size);
 u64 format_float(float64 x, int decimal_places, void *buffer, u64 buffer_size);
 
+unit_local u64 string_to_unsigned_int(string str, int base, bool *success);
+unit_local s64 string_to_signed_int(string str, int base, bool *success);
+unit_local float64 string_to_float(string str, bool *success);
+
 //////
 // Printing
 //////
@@ -58,10 +62,13 @@ typedef struct Source_Location {
 #define tprints(/*fmt, */...)            _tprints_ugly(__VA_ARGS__)
 #define print(/*fmt, */...)              _print_ugly(__VA_ARGS__)
 #define prints(/*fmt, */...)             _prints_ugly(__VA_ARGS__)
+#define fprint(file, /*fmt, */...)       _fprint_ugly(file, __VA_ARGS__)
+#define fprints(file, /*fmt, */...)      _fprints_ugly(file, __VA_ARGS__)
 
 string sprint_args(Allocator a, string fmt, u64 arg_count, Var_Arg *args);
 string tprint_args(string fmt, u64 arg_count, Var_Arg *args);
 void   print_args(string fmt, u64 arg_count, Var_Arg *args);
+void   fprint_args(File_Handle f, string fmt, u64 arg_count, Var_Arg *args);
 void   log_args(u64 flags, Source_Location location, string fmt, u64 arg_count, Var_Arg *args);
 
 typedef void (*Logger_Proc)(string message, u64 flags, Source_Location location);
@@ -86,17 +93,21 @@ void default_logger(string message, u64 flags, Source_Location location);
 
 
 #define _sprint_ugly(allocator, ...)\
-    MAKE_WRAPPED_CALL(sprint_impl, _make_print_desc(allocator, STR(PP_FIRST_ARG(__VA_ARGS__))), PP_EXCLUDE_FIRST_ARG(__VA_ARGS__, (string){0}))
+    MAKE_WRAPPED_CALL(sprint_impl, _make_print_desc(allocator, STR(PP_FIRST_ARG(__VA_ARGS__)), 0), PP_EXCLUDE_FIRST_ARG(__VA_ARGS__, (string){0}))
 #define _sprints_ugly(allocator, ...)\
-    MAKE_WRAPPED_CALL(sprint_impl, _make_print_desc(allocator, PP_FIRST_ARG(__VA_ARGS__)), PP_EXCLUDE_FIRST_ARG(__VA_ARGS__, (string){0}))
+    MAKE_WRAPPED_CALL(sprint_impl, _make_print_desc(allocator, PP_FIRST_ARG(__VA_ARGS__), 0), PP_EXCLUDE_FIRST_ARG(__VA_ARGS__, (string){0}))
 #define _tprint_ugly(...)\
-    MAKE_WRAPPED_CALL(tprint_impl, _make_print_desc((Allocator){0}, STR(PP_FIRST_ARG(__VA_ARGS__))), PP_EXCLUDE_FIRST_ARG(__VA_ARGS__, (string){0}))
+    MAKE_WRAPPED_CALL(tprint_impl, _make_print_desc((Allocator){0}, STR(PP_FIRST_ARG(__VA_ARGS__)), 0), PP_EXCLUDE_FIRST_ARG(__VA_ARGS__, (string){0}))
 #define _tprints_ugly(...)\
-    MAKE_WRAPPED_CALL(tprint_impl, _make_print_desc((Allocator){0}, PP_FIRST_ARG(__VA_ARGS__)), PP_EXCLUDE_FIRST_ARG(__VA_ARGS__, (string){0}))
+    MAKE_WRAPPED_CALL(tprint_impl, _make_print_desc((Allocator){0}, PP_FIRST_ARG(__VA_ARGS__), 0), PP_EXCLUDE_FIRST_ARG(__VA_ARGS__, (string){0}))
 #define _print_ugly(...)\
-    MAKE_WRAPPED_CALL(print_impl, _make_print_desc((Allocator){0}, STR(PP_FIRST_ARG(__VA_ARGS__))), PP_EXCLUDE_FIRST_ARG(__VA_ARGS__, (string){0}))
+    MAKE_WRAPPED_CALL(print_impl, _make_print_desc((Allocator){0}, STR(PP_FIRST_ARG(__VA_ARGS__)), 0), PP_EXCLUDE_FIRST_ARG(__VA_ARGS__, (string){0}))
 #define _prints_ugly(...)\
-    MAKE_WRAPPED_CALL(print_impl, _make_print_desc((Allocator){0}, PP_FIRST_ARG(__VA_ARGS__)), PP_EXCLUDE_FIRST_ARG(__VA_ARGS__, (string){0}))
+    MAKE_WRAPPED_CALL(print_impl, _make_print_desc((Allocator){0}, PP_FIRST_ARG(__VA_ARGS__), 0), PP_EXCLUDE_FIRST_ARG(__VA_ARGS__, (string){0}))
+#define _fprint_ugly(file, ...)\
+    MAKE_WRAPPED_CALL(fprint_impl, _make_print_desc((Allocator){0}, STR(PP_FIRST_ARG(__VA_ARGS__)), file), PP_EXCLUDE_FIRST_ARG(__VA_ARGS__, (string){0}))
+#define _fprints_ugly(file, ...)\
+    MAKE_WRAPPED_CALL(fprint_impl, _make_print_desc((Allocator){0}, PP_FIRST_ARG(__VA_ARGS__), file), PP_EXCLUDE_FIRST_ARG(__VA_ARGS__, (string){0}))
 
 #define _log_ugly(flags, ...)\
     MAKE_WRAPPED_CALL(log_impl, _make_log_desc((Allocator){0}, STR(PP_FIRST_ARG(__VA_ARGS__)), flags, HERE()), PP_EXCLUDE_FIRST_ARG(__VA_ARGS__, (string){0}))
@@ -115,9 +126,10 @@ unit_local inline _Format_String_Desc _make_format_string_desc(void *buffer, u64
 typedef struct _Print_Desc {
     Allocator a;
     string fmt;
+    File_Handle file;
 } _Print_Desc;
-unit_local inline _Print_Desc _make_print_desc(Allocator a, string fmt) {
-    return (_Print_Desc) {a, fmt};
+unit_local inline _Print_Desc _make_print_desc(Allocator a, string fmt, File_Handle f) {
+    return (_Print_Desc) {a, fmt, f};
 }
 
 typedef struct _Log_Desc {
@@ -134,6 +146,7 @@ u64 format_string_impl(_Format_String_Desc desc, u64 arg_count, ...);
 string sprint_impl(_Print_Desc desc, u64 arg_count, ...);
 string tprint_impl(_Print_Desc desc, u64 arg_count, ...);
 void print_impl(_Print_Desc desc, u64 arg_count, ...);
+void fprint_impl(_Print_Desc desc, u64 arg_count, ...);
 void log_impl(_Log_Desc desc, u64 arg_count, ...);
 
 #ifdef OSTD_IMPL
@@ -252,6 +265,11 @@ void log_impl(_Log_Desc desc, u64 arg_count, ...) {
     get_var_args(arg_count, args);
     log_args(desc.flags, desc.location, desc.fmt, arg_count, args);
 }
+void fprint_impl(_Print_Desc desc, u64 arg_count, ...) {
+    Var_Arg args[MAX_VAR_ARGS];
+    get_var_args(arg_count, args);
+    fprint_args(desc.file, desc.fmt, arg_count, args);
+}
 
 string sprint_args(Allocator a, string fmt, u64 arg_count, Var_Arg *args) {
     u64 n = format_string_args(0, 0, fmt, arg_count, args, 0);
@@ -266,6 +284,9 @@ string tprint_args(string fmt, u64 arg_count, Var_Arg *args) {
     return sprint_args(get_temp(), fmt, arg_count, args);
 }
 void print_args(string fmt, u64 arg_count, Var_Arg *args) {
+    fprint_args(sys_get_stdout(), fmt, arg_count, args);
+}
+void fprint_args(File_Handle f, string fmt, u64 arg_count, Var_Arg *args) {
 
     u64 n = format_string_args(0, 0, fmt, arg_count, args, 0);
 
@@ -279,7 +300,7 @@ void print_args(string fmt, u64 arg_count, Var_Arg *args) {
         args += consumed_args;
         arg_count -= consumed_args;
 
-        sys_write(sys_get_stdout(), buffer, to_write);
+        sys_write(f, buffer, to_write);
 
         written += to_write;
     }
@@ -406,6 +427,131 @@ u64 format_float(float64 x, int decimal_places, void *buffer, u64 buffer_size) {
     }
 
     return written;
+}
+
+unit_local u64 string_to_unsigned_int(string str, int base, bool *success)
+{
+    u64 value = 0;
+    if (base < 2 || base > 36) {
+        if (success) *success = false;
+        return 0;
+    }
+    
+    u8 *p = str.data;
+
+    while (*p == ' ' || *p == '\t' || *p == '\n' ||
+           *p == '\r' || *p == '\f' || *p == '\v') {
+        p++;
+    }
+
+    while (p) {
+        if (p == str.data+str.count) {
+            break;
+        }
+        u8 c = *p;
+
+        s64 digit = -1;
+
+        if (c >= '0' && c <= '9') {
+            digit = (s64)(c - '0');
+        } else if (c >= 'a' && c <= 'z') {
+            digit = 10 + (s64)(c - 'a');
+        } else if (c >= 'A' && c <= 'Z') {
+            digit = 10 + (s64)(c - 'A');
+        } else {
+            if (success) *success = false;
+            return 0;
+        }
+
+        if (digit < 0 || digit >= base) {
+            if (success) *success = false;
+            return 0;
+        }
+
+        value = (value * (u64)base) + (u64)digit;
+        
+        p += 1;
+    }
+
+    if (success) *success = true;
+    return value;
+}
+
+unit_local s64 string_to_signed_int(string str, int base, bool *success)
+{
+    u8 *p = str.data;
+
+    while (*p == ' ' || *p == '\t' || *p == '\n' ||
+           *p == '\r' || *p == '\f' || *p == '\v') {
+        p++;
+    }
+
+    int sign = 1;
+    if (*p == '-') {
+        sign = -1;
+        p++;
+    } else if (*p == '+') {
+        p++;
+    }
+
+    u64 unsigned_val = string_to_unsigned_int(str, base, success);
+
+    s64 signed_val = (s64)unsigned_val;
+    if (sign < 0) {
+        signed_val = -signed_val;
+    }
+
+    return signed_val;
+}
+
+unit_local float64 string_to_float(string str, bool *success)
+{
+    u8 *p = str.data;
+
+    while (*p == ' ' || *p == '\t' || *p == '\n' ||
+           *p == '\r' || *p == '\f' || *p == '\v') {
+        p++;
+    }
+
+    int sign = 1;
+    if (*p == '-') {
+        sign = -1;
+        p++;
+    } else if (*p == '+') {
+        p++;
+    }
+
+    float64 value = 0.0;
+    float64 fraction = 0.0;
+    float64 divisor = 1.0;
+
+    while (*p >= '0' && *p <= '9') {
+        value = (value * 10.0) + (float64)(*p - '0');
+        p++;
+    }
+
+    if (*p == '.') {
+        p++;
+        while (*p >= '0' && *p <= '9') {
+            fraction = (fraction * 10.0) + (float64)(*p - '0');
+            divisor *= 10.0;
+            p++;
+        }
+    }
+    
+    if (p != str.data+str.count) {
+        if (success) *success = false;
+        return 0;
+    }
+
+    value = value + (fraction / divisor);
+
+    if (sign < 0) {
+        value = -value;
+    }
+
+    if (success) *success = true;
+    return value;
 }
 
 Logger_Proc logger = 0;

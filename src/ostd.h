@@ -16,6 +16,7 @@
 #pragma clang diagnostic ignored "-Wdeclaration-after-statement"
 #pragma clang diagnostic ignored "-Wcovered-switch-default"
 #pragma clang diagnostic ignored "-Wcast-align"
+#pragma clang diagnostic ignored "-Wunused-function"
 #ifdef __EMSCRIPTEN__
 #pragma clang diagnostic ignored "-Wpadded"
 #endif // __EMSCRIPTEN__
