@@ -10,9 +10,27 @@ outw: f32 $output 5;
 
 nothing: f32;
 in1f: f32 = in1.f32;
-sq: f32 = in2*in2+1.0;
+sq: f32 = 0;
+
+sq1: f32 = in2;
+sq2: f32 = in2;
+
+sq3: f32 = 1.0;
+sq4: f32 = sq1*sq2;
+
+sq5: f32 = sq4+sq3;
+sq6: f32 = sq5+1.0;
+outz = in1f;
+sq7: f32 = sq6+1.0;
+outy = in1f/2.6;
+
+sq8: f32 = sq7+1.0;
+sq9: f32 = sq8+1.0;
+sq10: f32 = sq9+1.0;
+sq11: f32 = sq10+1.0;
+sq = sq11;
 
 outx = sq;
-outy = in1f/2.6;
-outz = in1f;
 outw = in1f*5.0;
+
+
