@@ -84,6 +84,8 @@ typedef enum Type {
 	TYPE_INVALID,
 	TYPE_FLOAT32,
 	TYPE_UINT32,
+	TYPE_V3F32,
+	TYPE_V4F32,
 } Type;
 
 typedef enum Storage_Flag {
@@ -134,7 +136,6 @@ typedef struct Code_Expr {
 
 
 unit_local string source;
-unit_local File_Handle out_file;
 
 unit_local Token tokens[16384];
 unit_local u64 token_count = 0;
@@ -864,6 +865,10 @@ unit_local void emit_text_x64_footer(Text_X64_Emitter *x64) {
 	fprint(x64->file, "END");
 }
 
+typedef struct Spirv_Emitter {
+	IR_Program *ir;
+	File_Handle file;
+} Spirv_Emitter;
 
 struct Code_Expr;
 unit_local void emit_expr(struct Code_Expr *expr);
@@ -892,7 +897,6 @@ unit_local Type get_expr_type(Code_Expr *expr) {
 
 unit_local string tprint_token(Token *token, string message) {
 	string token_str = (string){token->length, source.data+token->source_pos};
-
 	u32 line_counter = 1;
 	
 	u32 l0 = 0;
@@ -1151,10 +1155,7 @@ int main(int argc, char **argv) {
 	
 	SetLastError(0);
 	bool ok = sys_read_entire_file(a, in_path, &source);
-	DWORD er = GetLastError();
-	print("%u", er);
 	assert(ok);
-	out_file = sys_open_file(tprint("%s.asm", in_path), FILE_OPEN_WRITE | FILE_OPEN_CREATE | FILE_OPEN_RESET);
 	
 	
 	
@@ -1290,7 +1291,7 @@ int main(int argc, char **argv) {
 			} else if (strings_match(type_ident, STR("f32"))) {
 				decl->type = TYPE_FLOAT32;
 			} else {
-				log(0, "Unknown type '%s'\n", type_ident);
+				prints(tprint_token(type, STR("Unknown type")));
 				return 1;
 			}
 			decl->type_ident = type_ident;
@@ -1305,11 +1306,11 @@ int main(int argc, char **argv) {
 				
 				string spec_string =  (string){ spec->length, source.data+spec->source_pos };
 				
-				if (strings_match(spec_string, STR("input"))) {
+				if (strings_match(spec_string, STR("Input"))) {
 					decl->storage_flags |= STORAGE_INPUT;
-				} else if (strings_match(spec_string, STR("input_scalar"))) {
+				} else if (strings_match(spec_string, STR("InputScalar"))) {
 					decl->storage_flags |= STORAGE_INPUT_SCALAR;
-				} else if (strings_match(spec_string, STR("output"))) {
+				} else if (strings_match(spec_string, STR("Output"))) {
 					decl->storage_flags |= STORAGE_OUTPUT;
 				} else {
 					log(0, "Unexpected post-declaration token\n", type_ident);
@@ -1332,12 +1333,10 @@ int main(int argc, char **argv) {
 		if (do_parse_expr) {
 			// Expression
 			Token *next;
-			print("tok %u\n", expr_start->kind);
 			Code_Expr *expr = parse_expr(expr_start, &next);
 			if (!expr) {
 				return 1;
 			}
-			print("expr %u\n", expr->kind);
 			if (lhs_decl) {
 				if (expr->kind == EXPR_OP) expr->op_result_reg = (s64)lhs_decl_index;
 				Code_Expr *decl_expr = &exprs[expr_count++];
@@ -1407,28 +1406,45 @@ int main(int argc, char **argv) {
 		put_ir_expr(main_block, expr);
 	}
 	put_ir_footer(&ir);
-	
-	Text_X64_Emitter x64 = (Text_X64_Emitter){0};
-	x64.ir = &ir;
-	x64.file = out_file;
-	for (u64 i = 0; i < sizeof(x64.regs)/sizeof(x64.regs[0]); i += 1) {
-		x64.regs[i].ir_reg_current = -1;
+
+	{	
+		Text_X64_Emitter x64 = (Text_X64_Emitter){0};
+		x64.ir = &ir;
+		x64.file = sys_open_file(tprint("%s.asm", in_path), FILE_OPEN_WRITE | FILE_OPEN_CREATE | FILE_OPEN_RESET);
+		for (u64 i = 0; i < sizeof(x64.regs)/sizeof(x64.regs[0]); i += 1) {
+			x64.regs[i].ir_reg_current = -1;
+		}
+		
+		emit_text_x64_header(&x64);
+		emit_text_x64_block(&x64, main_block);
+		emit_text_x64_footer(&x64);
+		
+		sys_close(x64.file);
 	}
 	
-	emit_text_x64_header(&x64);
-	emit_text_x64_block(&x64, main_block);
-	emit_text_x64_footer(&x64);
-	
-	sys_close(out_file);
+	/*{	
+		Spirv_Emitter spv = (Spirv_Emitter){0};
+		spv.ir = &ir;
+		spv.file = sys_open_file(tprint("%s.spv", in_path), FILE_OPEN_WRITE | FILE_OPEN_CREATE | FILE_OPEN_RESET);;
+		for (u64 i = 0; i < sizeof(spv.regs)/sizeof(spv.regs[0]); i += 1) {
+			spv.regs[i].ir_reg_current = -1;
+		}
+		
+		emit_spv_header(&spv);
+		emit_spv_block(&spv, main_block);
+		emit_spv_footer(&spv);
+		
+		sys_close(spv.file);
+	}
     
-    //print("Program exit early");
-    //volatile bool t = true;
-    //if (t) return 0;
+    print("Program exit early");
+    volatile bool t = true;
+    if (t) return 0;*/
     
-    Easy_Command_Result assembler_res = sys_run_command_easy(tprint("\"C:\\Program Files\\Microsoft Visual Studio\\2022\\Community\\VC\\Tools\\MSVC\\14.41.34120\\bin\\Hostx86\\x64\\ml64.exe\" /c /Fo\"%s.obj\" \"%s.asm\"", in_path, in_path));
+    Easy_Command_Result assembler_res = sys_run_command_easy(tprint("\"C:\\Program Files\\Microsoft Visual Studio\\2022\\Community\\VC\\Tools\\MSVC\\14.42.34433\\bin\\Hostx86\\x64\\ml64.exe\" /c /Fo\"%s.obj\" \"%s.asm\"", in_path, in_path));
     assert(assembler_res.process_start_success && assembler_res.exit_code == 0 || assembler_res.exit_code == 1104);
     
-    Easy_Command_Result linker_res = sys_run_command_easy(tprint("\"C:\\Program Files\\Microsoft Visual Studio\\2022\\Community\\VC\\Tools\\MSVC\\14.41.34120\\bin\\Hostx64\\x64\\link.exe\" /DLL /EXPORT:out_buffer /EXPORT:in_buffer /SUBSYSTEM:WINDOWS /ENTRY:DllMain /OUT:%s %s.obj", out_path, in_path));
+    Easy_Command_Result linker_res = sys_run_command_easy(tprint("\"C:\\Program Files\\Microsoft Visual Studio\\2022\\Community\\VC\\Tools\\MSVC\\14.42.34433\\bin\\Hostx64\\x64\\link.exe\" /DLL /EXPORT:out_buffer /EXPORT:in_buffer /SUBSYSTEM:WINDOWS /ENTRY:DllMain /OUT:%s %s.obj", out_path, in_path));
     assert(linker_res.process_start_success && linker_res.exit_code == 0);
 	
 	u32 in0 = 5;

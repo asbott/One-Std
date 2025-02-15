@@ -1,12 +1,12 @@
 
 
-in1: u32   $input_scalar 0;
-in2: f32   $input 1;
+in1: u32   $InputScalar(0);
+in2: f32   $Input(1);
 
-outx: f32 $output 2;
-outy: f32 $output 3;
-outz: f32 $output 4;
-outw: f32 $output 5;
+outx: f32 $Output(2);
+outy: f32 $Output(3);
+outz: f32 $Output(4);
+outw: f32 $Output(5);
 
 nothing: f32;
 in1f: f32 = in1.f32;

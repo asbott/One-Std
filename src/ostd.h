@@ -48,6 +48,11 @@
 #include "graphics.h"
 #endif // OSTD_NO_GRAPHICS
 
+#ifndef OSTD_NO_COMPILER
+#include "ol_compiler.h"
+#endif // OSTD_NO_COMPILER
+
+
 
 #if defined(__clang__)
 #pragma clang diagnostic pop

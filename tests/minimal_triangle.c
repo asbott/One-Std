@@ -3,7 +3,8 @@
 #define OSTD_IMPL
 #define OGA_IMPL_VULKAN
 
-#include "../ostd_single_header.h"
+//#include "../ostd_single_header.h"
+#include "../src/ostd.h"
 #include "minimal_triangle.spv.h"
 
 unit_local bool inline check_oga_result(Oga_Result result) {
@@ -121,6 +122,20 @@ int main(void) {
     // GPU Programs
     /////
     
+    string frag_src;
+    bool frag_src_ok = sys_read_entire_file(get_temp(), STR("tests/triangle.frag.ol"), &frag_src);
+    assert(frag_src_ok);
+    
+    void *frag_code;
+    u64 frag_code_size;
+    Ol_Compile_Desc frag_compile = (Ol_Compile_Desc){0};
+    frag_compile.code_text = frag_src;
+    frag_compile.target = OGA_OL_TARGET;
+    frag_compile.program_kind = OL_PROGRAM_GPU_FRAGMENT;
+    string compile_err;
+    Ol_Result compile_result = ol_compile(get_temp(), frag_compile, &frag_code, &frag_code_size, &compile_err);
+    assertmsg(compile_result == OL_OK, compile_err);
+    
     Oga_Program *vert_program, *frag_program;
     
     Oga_Program_Desc vert_desc, frag_desc;
@@ -130,6 +145,9 @@ int main(void) {
     
     frag_desc.code = triangle_frag_code;
     frag_desc.code_size = sizeof(triangle_frag_code);
+    
+    // frag_desc.code = frag_code;
+    // frag_desc.code_size = frag_code_size;
     
     if (!check_oga_result(oga_init_program(context, vert_desc, &vert_program)))
         return 1;
@@ -172,7 +190,11 @@ int main(void) {
         return 1;
     
     Oga_Command_List cmds[3];
-    if (!check_oga_result(oga_get_command_lists(pools[0], cmds, 3)))
+    if (!check_oga_result(oga_get_command_lists(pools[0], &cmds[0], 1)))
+        return 1;
+    if (!check_oga_result(oga_get_command_lists(pools[1], &cmds[1], 1)))
+        return 1;
+    if (!check_oga_result(oga_get_command_lists(pools[2], &cmds[2], 1)))
         return 1;
         
     // todo(charlie) batch create latches
@@ -190,12 +212,12 @@ int main(void) {
         return 1;
     if (!check_oga_result(oga_init_gpu_latch(context, &commands_done_latches[2])))
         return 1;
-    Oga_Cpu_Latch *present_latches[3];
-    if (!check_oga_result(oga_init_cpu_latch(context, &present_latches[0], true)))
+    Oga_Cpu_Latch *cmd_latches[3];
+    if (!check_oga_result(oga_init_cpu_latch(context, &cmd_latches[0], true)))
         return 1;
-    if (!check_oga_result(oga_init_cpu_latch(context, &present_latches[1], true)))
+    if (!check_oga_result(oga_init_cpu_latch(context, &cmd_latches[1], true)))
         return 1;
-    if (!check_oga_result(oga_init_cpu_latch(context, &present_latches[2], true)))
+    if (!check_oga_result(oga_init_cpu_latch(context, &cmd_latches[2], true)))
         return 1;
     
     bool running = true;
@@ -208,8 +230,8 @@ int main(void) {
         reset_temporary_storage();
         
         // Wait for frame to be ready, then reset it
-        oga_wait_latch(present_latches[frame_index]);
-        oga_reset_latch(present_latches[frame_index]);
+        oga_wait_latch(cmd_latches[frame_index]);
+        oga_reset_latch(cmd_latches[frame_index]);
         oga_reset_command_pool(pools[frame_index]);
         
         // Retrieve the next swap chain image index
@@ -268,7 +290,7 @@ int main(void) {
         // the present latch to notify the present call when it can start presenting
         Oga_Submit_Command_List_Desc submit = (Oga_Submit_Command_List_Desc){0};
         submit.engine = engine;
-        submit.signal_cpu_latch = present_latches[frame_index];
+        submit.signal_cpu_latch = cmd_latches[frame_index];
         submit.wait_gpu_latches = &image_ready_latches[frame_index];
         submit.wait_gpu_latch_count = 1;
         submit.signal_gpu_latches = &commands_done_latches[frame_index];

@@ -1132,6 +1132,8 @@ inline string oga_format_str(Oga_Format f);
 //////
 /////////////////////////////////////////////////////
 
+#define OGA_OL_TARGET OL_TARGET_SPIRV
+
 #if COMPILER_FLAGS & COMPILER_FLAG_MSC
     #pragma comment(lib, "vendors/vulkan-1.lib")
 #endif // COMPILER_FLAGS & COMPILER_FLAG_MSC
@@ -1151,6 +1153,8 @@ inline string oga_format_str(Oga_Format f);
 //////
 /////////////////////////////////////////////////////
 
+#define OGA_OL_TARGET OL_TARGET_WGPU
+
 #if !(OS_FLAGS & OS_FLAG_WEB)
     #error WebGPU can only be implemented when targetting web (Emscripten)
 #else
@@ -1165,6 +1169,8 @@ inline string oga_format_str(Oga_Format f);
 // :D3D12
 //////
 /////////////////////////////////////////////////////
+
+#define OGA_OL_TARGET OL_TARGET_DXIL
 
 #if !(OS_FLAGS & OS_FLAG_WINDOWS)
     #error D3D12 can only be implemented when targetting Windows
@@ -1181,6 +1187,8 @@ inline string oga_format_str(Oga_Format f);
 //////
 /////////////////////////////////////////////////////
 
+#define OGA_OL_TARGET OL_TARGET_MSL
+
 #if !(OS_FLAGS & OS_FLAG_APPLE)
     #error Metal can only be implemented when targetting Apple
 #else
@@ -1195,6 +1203,8 @@ inline string oga_format_str(Oga_Format f);
 // :Software
 //////
 /////////////////////////////////////////////////////
+
+#define OGA_OL_TARGET OL_TARGET_AVX
 
 #endif
 
