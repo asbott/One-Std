@@ -1,4 +1,5 @@
 
+
 # One Standard Library
 
 The only C99 library you will ever need, with the aim of targetting all modern platforms, and making portable low-level programming sane.
@@ -13,6 +14,20 @@ The only C99 library you will ever need, with the aim of targetting all modern p
 Everything is designed to be as simple to use as possible.
 
 See tests/ for example code.
+
+TOC
+   - [Licensing/Information](#licensinginformation)
+   - [OGA](#oga)
+   - [OSL](#osl)
+   - [System API](#system-api)
+   - [Current State](#current-state)
+   - [Quick Guide](#quick-guide)
+
+
+
+
+
+## Licensing/Information
 
 You're welcome to use One-Standard-Library and any of its modules for personal projects or within small/indie game studios. While attribution isn't required, it is appreciated. For projects involving teams of more than about 10 people, please contact me at charlie.malmqvist1@gmail.com to discuss licensing options. If you’re ever in doubt, just get in touch — I’ll likely give you the green light.
 
