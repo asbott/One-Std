@@ -29,6 +29,9 @@ inline void deallocatef(Allocator a, void *p, u64 flags);
 #define New(a, T) ((T*)allocate(a, sizeof(T)))
 #define NewBuffer(a, T, n) ((T*)allocate(a, sizeof(T)*n))
 
+#define PushTemp() New(get_temp(), T)
+#define PushTempBuffer(T, n) NewBuffer(get_temp(), T, n)
+
 inline string string_allocate(Allocator a, u64 n);
 inline void string_deallocate(Allocator a, string s);
 
@@ -187,9 +190,6 @@ void free_arena(Arena arena) {
 void *arena_push(Arena *arena, u64 size) {
 
     System_Info info = sys_get_info();
-
-    // Align to 8
-    size = (size + 7u) & ~(7u);
 
     void *allocated_tail = (u8*)arena->start + arena->allocated_size;
     void *reserved_tail = (u8*)arena->start + arena->reserved_size;

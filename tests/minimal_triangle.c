@@ -1,11 +1,14 @@
-
+#ifdef __clang__
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wdeclaration-after-statement"
+#pragma clang diagnostic ignored "-Wunsafe-buffer-usage"
+#endif
 
 #define OSTD_IMPL
 #define OGA_IMPL_VULKAN
 
 //#include "../ostd_single_header.h"
 #include "../src/ostd.h"
-#include "minimal_triangle.spv.h"
 
 unit_local bool inline check_oga_result(Oga_Result result) {
     if (result != OGA_OK) {
@@ -52,6 +55,7 @@ int main(void) {
     
     Oga_Logical_Engine_Family_Info engine_family 
     	= target_device.engine_family_infos[engine_family_index];
+    (void)engine_family;
     
     Oga_Logical_Engines_Create_Desc engine_desc = (Oga_Logical_Engines_Create_Desc){0};
     engine_desc.count = 1;
@@ -88,10 +92,10 @@ int main(void) {
 
 	// Any platform should support one of these formats, unless it's a very peculiar platform
 	Oga_Format wanted_formats[] = {
-        OGA_FORMAT_B8G8R8A8_SRGB,
-        OGA_FORMAT_R8G8B8A8_SRGB,
         OGA_FORMAT_B8G8R8A8_UNORM,
-        OGA_FORMAT_R8G8B8A8_UNORM
+        OGA_FORMAT_R8G8B8A8_UNORM,
+        OGA_FORMAT_B8G8R8A8_SRGB,
+        OGA_FORMAT_R8G8B8A8_SRGB
     };
  
  	// Another helper. Again, if you want more granular control, see the implementation.   
@@ -102,14 +106,13 @@ int main(void) {
     	sizeof(wanted_formats)/sizeof(Oga_Format), 
     	&surface_format
 	);
+	assert(surface_format_ok);
     
     Oga_Swapchain_Desc sc_desc = (Oga_Swapchain_Desc){0};
     sc_desc.surface = surface;
     sc_desc.requested_image_count = 3;
     sc_desc.image_format = surface_format;
-    // todo(charlie) sys_get_surface_framebuffer_size
-    sc_desc.width = 800;
-    sc_desc.height = 600;
+    surface_get_framebuffer_size(surface, (s64*)&sc_desc.width, (s64*)&sc_desc.height);
     sc_desc.engine_families_with_access = &engine_family_index;
     sc_desc.engine_families_with_access_count = 1;
     sc_desc.present_mode = OGA_PRESENT_MODE_VSYNC;
@@ -122,36 +125,48 @@ int main(void) {
     // GPU Programs
     /////
     
-    string frag_src;
+    string vert_src, frag_src;
+    void *frag_code, *vert_code;
+    u64 frag_code_size, vert_code_size;
+    
+    bool vert_src_ok = sys_read_entire_file(get_temp(), STR("tests/triangle.vert.ol"), &vert_src);
+    assert(vert_src_ok);
+    
     bool frag_src_ok = sys_read_entire_file(get_temp(), STR("tests/triangle.frag.ol"), &frag_src);
     assert(frag_src_ok);
     
-    void *frag_code;
-    u64 frag_code_size;
-    Ol_Compile_Desc frag_compile = (Ol_Compile_Desc){0};
-    frag_compile.code_text = frag_src;
-    frag_compile.target = OGA_OL_TARGET;
-    frag_compile.program_kind = OL_PROGRAM_GPU_FRAGMENT;
+    Osl_Compile_Desc vert_desc = (Osl_Compile_Desc){0};
+    vert_desc.code_text = vert_src;
+    vert_desc.target = OGA_OSL_TARGET;
+    vert_desc.program_kind = OSL_PROGRAM_GPU_VERTEX;
+    
+    Osl_Compile_Desc frag_desc = (Osl_Compile_Desc){0};
+    frag_desc.code_text = frag_src;
+    frag_desc.target = OGA_OSL_TARGET;
+    frag_desc.program_kind = OSL_PROGRAM_GPU_FRAGMENT;
+    
     string compile_err;
-    Ol_Result compile_result = ol_compile(get_temp(), frag_compile, &frag_code, &frag_code_size, &compile_err);
-    assertmsg(compile_result == OL_OK, compile_err);
+    Osl_Result compile_result;
+    
+    compile_result = osl_compile(get_temp(), vert_desc, &vert_code, &vert_code_size, &compile_err);
+    assertmsgs(compile_result == OSL_OK, compile_err);
+    
+    compile_result = osl_compile(get_temp(), frag_desc, &frag_code, &frag_code_size, &compile_err);
+    assertmsgs(compile_result == OSL_OK, compile_err);
     
     Oga_Program *vert_program, *frag_program;
     
-    Oga_Program_Desc vert_desc, frag_desc;
+    Oga_Program_Desc vert_program_desc, frag_program_desc;
     
-    vert_desc.code = triangle_vert_code;
-    vert_desc.code_size = sizeof(triangle_vert_code);
+    vert_program_desc.code = vert_code;
+    vert_program_desc.code_size = vert_code_size;
     
-    frag_desc.code = triangle_frag_code;
-    frag_desc.code_size = sizeof(triangle_frag_code);
+    frag_program_desc.code = frag_code;
+    frag_program_desc.code_size = frag_code_size;
     
-    // frag_desc.code = frag_code;
-    // frag_desc.code_size = frag_code_size;
-    
-    if (!check_oga_result(oga_init_program(context, vert_desc, &vert_program)))
+    if (!check_oga_result(oga_init_program(context, vert_program_desc, &vert_program)))
         return 1;
-    if (!check_oga_result(oga_init_program(context, frag_desc, &frag_program)))
+    if (!check_oga_result(oga_init_program(context, frag_program_desc, &frag_program)))
         return 1;
     
     //////
@@ -265,7 +280,7 @@ int main(void) {
         attachment.load_op = OGA_ATTACHMENT_LOAD_OP_CLEAR;
         attachment.store_op = OGA_ATTACHMENT_STORE_OP_STORE;
         attachment.image_optimization = OGA_IMAGE_OPTIMIZATION_RENDER_ATTACHMENT;
-        memcpy(attachment.clear_color, &(float32[4]){1.f, 0.f, 0.f, 1.f}, 16);
+        memcpy(attachment.clear_color, &(float32[4]){0.39f, 0.58f, 0.93f, 1.0f}, 16);
         
         Oga_Begin_Render_Pass_Desc begin_desc = (Oga_Begin_Render_Pass_Desc){0};
         begin_desc.render_pass = render_pass;

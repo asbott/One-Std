@@ -19,7 +19,6 @@
 
 #ifdef __clang__
     #define CLANG 1
-    //#error hi1
 #else
     #define CLANG 0
 #endif
@@ -415,3 +414,6 @@ u64 format_float(float64 x, int decimal_places, void *buffer, u64 buffer_size);
 
 #define Swap(a, b) do {  u8 tmp__[sizeof(a)]; memcpy(tmp__, &a, sizeof(a)); a = b; memcpy(&b, tmp__, sizeof(b)); } while (0)
 
+#ifndef offsetof
+#define offsetof(t, d) ((sys_uint)&(((t *)0)->d))
+#endif

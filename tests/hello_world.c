@@ -1,11 +1,10 @@
-#define OSTD_IMPL
+// Save compilation time by not compiling the graphics module
 #define OSTD_NO_GRAPHICS
-#include "../src/ostd.h"
+#define OSTD_IMPL
+#include "../ostd_single_header.h"
 
-int main(void) {
-	int a = 5;
-	int b = 2;
-	print("a-b: %i\n", a-b);
+int main(void) {]
+	print("Hello, World!\n");
 	return 0;
 }
 

@@ -467,22 +467,6 @@ typedef struct Oga_Present_Desc {
 } Oga_Present_Desc;
 Oga_Result oga_submit_present(Oga_Swapchain *swapchain, Oga_Present_Desc desc);
 
-/**************************************************************************************/
-/**************************************************************************************/
-/**************************************************************************************/
-/********************************* SPIRV HEADER START *********************************/
-/**************************************************************************************/
-/**************************************************************************************/
-/**************************************************************************************/
-#include "./../vendors/spirv/spirv.h"
-/**************************************************************************************/
-/**************************************************************************************/
-/**************************************************************************************/
-/********************************* SPIRV HEADER END ***********************************/
-/**************************************************************************************/
-/**************************************************************************************/
-/**************************************************************************************/
-
 //////////
 /// Render passes & Programs
 
@@ -1132,7 +1116,7 @@ inline string oga_format_str(Oga_Format f);
 //////
 /////////////////////////////////////////////////////
 
-#define OGA_OL_TARGET OL_TARGET_SPIRV
+#define OGA_OSL_TARGET OSL_TARGET_SPIRV
 
 #if COMPILER_FLAGS & COMPILER_FLAG_MSC
     #pragma comment(lib, "vendors/vulkan-1.lib")
@@ -1153,7 +1137,7 @@ inline string oga_format_str(Oga_Format f);
 //////
 /////////////////////////////////////////////////////
 
-#define OGA_OL_TARGET OL_TARGET_WGPU
+#define OGA_OSL_TARGET OSL_TARGET_WGPU
 
 #if !(OS_FLAGS & OS_FLAG_WEB)
     #error WebGPU can only be implemented when targetting web (Emscripten)
@@ -1170,7 +1154,7 @@ inline string oga_format_str(Oga_Format f);
 //////
 /////////////////////////////////////////////////////
 
-#define OGA_OL_TARGET OL_TARGET_DXIL
+#define OGA_OSL_TARGET OSL_TARGET_DXIL
 
 #if !(OS_FLAGS & OS_FLAG_WINDOWS)
     #error D3D12 can only be implemented when targetting Windows
@@ -1187,7 +1171,7 @@ inline string oga_format_str(Oga_Format f);
 //////
 /////////////////////////////////////////////////////
 
-#define OGA_OL_TARGET OL_TARGET_MSL
+#define OGA_OSL_TARGET OSL_TARGET_MSL
 
 #if !(OS_FLAGS & OS_FLAG_APPLE)
     #error Metal can only be implemented when targetting Apple
@@ -1204,7 +1188,7 @@ inline string oga_format_str(Oga_Format f);
 //////
 /////////////////////////////////////////////////////
 
-#define OGA_OL_TARGET OL_TARGET_AVX
+#define OGA_OSL_TARGET OSL_TARGET_AVX
 
 #endif
 

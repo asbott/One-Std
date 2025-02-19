@@ -149,6 +149,11 @@ void print_impl(_Print_Desc desc, u64 arg_count, ...);
 void fprint_impl(_Print_Desc desc, u64 arg_count, ...);
 void log_impl(_Log_Desc desc, u64 arg_count, ...);
 
+
+// todo(charlie) move to appropriate file
+string string_replace(Allocator a, string s, string sub, string new);
+
+
 #ifdef OSTD_IMPL
 
 u64 format_string_impl(_Format_String_Desc desc, u64 arg_count, ...) {
@@ -556,4 +561,45 @@ unit_local float64 string_to_float(string str, bool *success)
 
 Logger_Proc logger = 0;
 
+// todo(charlie) move to appropriate file
+string string_replace(Allocator a, string s, string sub, string replacement) {
+    if (s.count < sub.count) return (string){0};
+
+    string temp_string = string_allocate(get_temp(), s.count * 2);
+
+    u64 out_index = 0;
+    for (u64 i = 0; i < s.count; ) {
+        if (i <= s.count - sub.count &&
+            strings_match((string){.count = sub.count, .data = s.data + i}, sub)) {
+            
+            while (out_index + replacement.count >= temp_string.count) {
+                string new_temp_string = string_allocate(get_temp(), temp_string.count * 2);
+                memcpy(new_temp_string.data, temp_string.data, temp_string.count);
+                temp_string = new_temp_string;
+            }
+
+            if (replacement.count > 0) {
+                memcpy(temp_string.data + out_index, replacement.data, replacement.count);
+            }
+            out_index += replacement.count;
+            i += sub.count;
+        } else {
+            while (out_index >= temp_string.count) {
+                string new_temp_string = string_allocate(get_temp(), temp_string.count * 2);
+                memcpy(new_temp_string.data, temp_string.data, temp_string.count);
+                temp_string = new_temp_string;
+            }
+            temp_string.data[out_index++] = s.data[i++];
+        }
+    }
+
+    string final_string = string_allocate(a, out_index);
+    memcpy(final_string.data, temp_string.data, out_index);
+
+    return final_string;
+}
+
+
 #endif // OSTD_IMPL
+
+

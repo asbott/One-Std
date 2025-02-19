@@ -66,18 +66,22 @@ inline float64 fmod_cycling(float64 x, float64 y) {
 }
 
 unit_local inline float64 sin(float64 x) {
+    if (x == 0.0) return 0.0;
     x = fmod_cycling(x, TAU);
     trig_lookup(sine_table, x/TAU);
 }
 unit_local inline float64 asin(float64 x) {
+    if (x == 0.0) return 0.0;
     x = clamp(x, -1.0, 1.0);
     trig_lookup(asine_table, ((x+1.0)/2.0)/TAU);
 }
 unit_local inline float64 cos(float64 x) {
+    if (x == 0.0) return 1.0;
     x = fmod_cycling(x, TAU);
     trig_lookup(cosine_table, x/TAU);
 }
 unit_local inline float64 acos(float64 x) {
+    if (x == 1.0) return 0.0;
     x = clamp(x, -1.0, 1.0);
     trig_lookup(acosine_table, ((x+1.0)/2.0)/TAU);
 }
@@ -88,6 +92,7 @@ unit_local inline float64 tan(float64 x) {
     return tan_table[i];
 }
 unit_local inline float64 atan(float64 x) {
+    if (x == 0.0) return 0.0;
     float64 theta = (x < 1.0 && x > -1.0) ? x : (x > 0.0 ? PI / 2 : -PI / 2);
     
     for (int i = 0; i < 5; ++i) { 

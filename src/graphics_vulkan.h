@@ -208,8 +208,8 @@ unit_local inline string _str_vk_result(VkResult result) {
     return STR("<>");
 }
 
-#define _vk_assert1(expr) do { VkResult _res = expr; string _res_str = _str_vk_result(_res); assertmsgs(_res == VK_SUCCESS, tprint("Vulkan call %s failed: %s. If you see this, you're either doing something very wrong, or there is an internal error in Oga.", STR(#expr), _res_str)); } while(0)
-#define _vk_assert2(expr) do { VkResult _res = expr; if (_res == VK_ERROR_OUT_OF_DEVICE_MEMORY) return OGA_ERROR_OUT_OF_DEVICE_MEMORY; if (_res == VK_ERROR_OUT_OF_HOST_MEMORY) return OGA_ERROR_STATE_ALLOCATION_FAILED;  string _res_str = _str_vk_result(_res); assertmsgs(_res == VK_SUCCESS, tprint("Vulkan call %s failed: %s. If you see this, you're either doing something very wrong, or there is an internal error in Oga.", STR(#expr), _res_str)); } while(0)
+#define _vk_assert1(expr) do { VkResult _res = expr; string _res_str = _str_vk_result(_res); assertmsgs(_res == VK_SUCCESS, tprint("Vulkan call '%s' failed: %s. If you see this, you're either doing something very wrong, or there is an internal error in Oga.", STR(#expr), _res_str)); } while(0)
+#define _vk_assert2(expr) do { VkResult _res = expr; if (_res == VK_ERROR_OUT_OF_DEVICE_MEMORY) return OGA_ERROR_OUT_OF_DEVICE_MEMORY; if (_res == VK_ERROR_OUT_OF_HOST_MEMORY) return OGA_ERROR_STATE_ALLOCATION_FAILED;  string _res_str = _str_vk_result(_res); assertmsgs(_res == VK_SUCCESS, tprint("Vulkan call '%s' failed: %s. If you see this, you're either doing something very wrong, or there is an internal error in Oga.", STR(#expr), _res_str)); } while(0)
 
 
 unit_local VkDebugUtilsMessengerEXT _vk_messenger;
@@ -1324,7 +1324,7 @@ Oga_Result oga_init_program(Oga_Context *context, Oga_Program_Desc desc, Oga_Pro
     VkResult result = vkCreateShaderModule((VkDevice)context->id, &info, &vk_allocs, (VkShaderModule*)&(*program)->id);
     
     if (result != VK_SUCCESS) {
-        if (result == VK_ERROR_INVALID_SHADER_NV) {
+        if (result == VK_ERROR_INVALID_SHADER_NV || result == VK_ERROR_INITIALIZATION_FAILED) {
             deallocate(context->state_allocator, *program);
             return OGA_INIT_PROGRAM_ERROR_BAD_CODE;
         }
@@ -1373,10 +1373,10 @@ Oga_Result oga_init_render_passes(Oga_Context *context, Oga_Render_Pass_Desc* de
         if (desc.flags & OGA_RENDER_PASS_INHERITANCE_PARENT) pipeline_flags |= VK_PIPELINE_CREATE_ALLOW_DERIVATIVES_BIT;
         if (desc.flags & OGA_RENDER_PASS_INHERITANCE_CHILD)  pipeline_flags |= VK_PIPELINE_CREATE_DERIVATIVE_BIT;
         
-        char *vert_entry = NewBuffer(get_temp(), char, desc.vertex_program_entry_point.count);
-        char *frag_entry = NewBuffer(get_temp(), char, desc.fragment_program_entry_point.count);
-        memcpy(vert_entry, desc.vertex_program_entry_point.data, desc.vertex_program_entry_point.count);
-        memcpy(frag_entry, desc.fragment_program_entry_point.data, desc.fragment_program_entry_point.count);
+        char *vert_entry = NewBuffer(get_temp(), char, desc.vertex_program_entry_point.count+1);
+        char *frag_entry = NewBuffer(get_temp(), char, desc.fragment_program_entry_point.count+1);
+        memcpy(vert_entry, desc.vertex_program_entry_point.data, desc.vertex_program_entry_point.count+1);
+        memcpy(frag_entry, desc.fragment_program_entry_point.data, desc.fragment_program_entry_point.count+1);
         vert_entry[desc.vertex_program_entry_point.count] = 0;
         frag_entry[desc.fragment_program_entry_point.count] = 0;
         

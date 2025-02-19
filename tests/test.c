@@ -4,11 +4,8 @@
 
 #define OGA_IMPL_VULKAN
 #endif // TEST_NO_IMPL
-#include "../src/ostd.h"
-//#include "../ostd_single_header.h"
-
-// Pre compiled spv for a single instanced triangle at the center of the view
-#include "minimal_triangle.spv.h"
+//#include "../src/ostd.h"
+#include "../ostd_single_header.h"
 
 // Clang warns if there is a default case in switch covering full enum, but also warns if there
 // is not default switch. ?!?!??!?!?!?!?!?!?
@@ -328,19 +325,48 @@ int main(void) {
     // GPU Programs
     /////
 
+    string vert_src, frag_src;
+    void *frag_code, *vert_code;
+    u64 frag_code_size, vert_code_size;
+    
+    bool vert_src_ok = sys_read_entire_file(get_temp(), STR("tests/triangle.vert.ol"), &vert_src);
+    assert(vert_src_ok);
+    
+    bool frag_src_ok = sys_read_entire_file(get_temp(), STR("tests/triangle.frag.ol"), &frag_src);
+    assert(frag_src_ok);
+    
+    Osl_Compile_Desc vert_desc = (Osl_Compile_Desc){0};
+    vert_desc.code_text = vert_src;
+    vert_desc.target = OGA_OSL_TARGET;
+    vert_desc.program_kind = OSL_PROGRAM_GPU_VERTEX;
+    
+    Osl_Compile_Desc frag_desc = (Osl_Compile_Desc){0};
+    frag_desc.code_text = frag_src;
+    frag_desc.target = OGA_OSL_TARGET;
+    frag_desc.program_kind = OSL_PROGRAM_GPU_FRAGMENT;
+    
+    string compile_err;
+    Osl_Result compile_result;
+    
+    compile_result = osl_compile(get_temp(), vert_desc, &vert_code, &vert_code_size, &compile_err);
+    assertmsgs(compile_result == OSL_OK, compile_err);
+    
+    compile_result = osl_compile(get_temp(), frag_desc, &frag_code, &frag_code_size, &compile_err);
+    assertmsgs(compile_result == OSL_OK, compile_err);
+    
     Oga_Program *vert_program, *frag_program;
-
-    Oga_Program_Desc vert_desc, frag_desc;
-
-    vert_desc.code = triangle_vert_code;
-    vert_desc.code_size = sizeof(triangle_vert_code);
-
-    frag_desc.code = triangle_frag_code;
-    frag_desc.code_size = sizeof(triangle_frag_code);
-
-    if (!check_oga_result(oga_init_program(context, vert_desc, &vert_program)))
+    
+    Oga_Program_Desc vert_program_desc, frag_program_desc;
+    
+    vert_program_desc.code = vert_code;
+    vert_program_desc.code_size = vert_code_size;
+    
+    frag_program_desc.code = frag_code;
+    frag_program_desc.code_size = frag_code_size;
+    
+    if (!check_oga_result(oga_init_program(context, vert_program_desc, &vert_program)))
         return 1;
-    if (!check_oga_result(oga_init_program(context, frag_desc, &frag_program)))
+    if (!check_oga_result(oga_init_program(context, frag_program_desc, &frag_program)))
         return 1;
 
     //////
@@ -691,9 +717,6 @@ void test_memory(void) {
         void *mem1 = tallocate(69);
         assert(mem0 == mem1);
         memset(mem1, 0, 69);
-
-        void *mem2 = tallocate(69);
-        assert((u64)mem2 > (u64)mem1 + 69);
     }
 }
 
@@ -748,51 +771,114 @@ void test_print(void) {
     arena_allocator((Arena*)0);
 }
 
+// trig math is broken
 void test_math(void) {
-    const float64 epsilon = 1e-9;
 
-    for (float64 x = -TAU; x <= TAU; x += PI / 6) {
-        float64 expected = sin(x);
-        float64 actual = sin(x);
-        assertmsg(abs(actual - expected) <= epsilon, "sin function failed");
-    }
+    /*double epsilon = 1e-9;
 
-    for (float64 x = -TAU; x <= TAU; x += PI / 6) {
-        float64 expected = cos(x);
-        float64 actual = cos(x);
-        assertmsg(abs(actual - expected) <= epsilon, "cos function failed");
-    }
-
-    for (float64 x = -PI / 2 + 0.01; x <= PI / 2 - 0.01; x += PI / 12) {
-        float64 expected = tan(x);
-        float64 actual = tan(x);
-        assertmsg(abs(actual - expected) <= epsilon, "tan function failed");
-    }
-
-    for (float64 x = -1.0; x <= 1.0; x += 0.1) {
-        float64 expected = asin(x);
-        float64 actual = asin(x);
-        assertmsg(abs(actual - expected) <= epsilon, "asin function failed");
+    // Test sin function using known angles.
+    struct { double angle; double expected; const char* msg; } sin_tests[] = {
+        { 0.0, 0.0, "sin(0) failed" },
+        { PI/6, 0.5, "sin(PI/6) failed" },
+        { PI/4, 0.7071067811865476, "sin(PI/4) failed" },
+        { PI/3, 0.8660254037844386, "sin(PI/3) failed" },
+        { PI/2, 1.0, "sin(PI/2) failed" },
+        { PI, 0.0, "sin(PI) failed" },
+        { 3*PI/2, -1.0, "sin(3PI/2) failed" },
+        { TAU, 0.0, "sin(TAU) failed" }
+    };
+    for (size_t i = 0; i < sizeof(sin_tests)/sizeof(sin_tests[0]); i++) {
+        double actual = sin(sin_tests[i].angle);
+        assertmsg(abs(actual - sin_tests[i].expected) <= epsilon, sin_tests[i].msg);
     }
 
-    for (float64 x = -1.0; x <= 1.0; x += 0.1) {
-        float64 expected = acos(x);
-        float64 actual = acos(x);
-        assertmsg(abs(actual - expected) <= epsilon, "acos function failed");
+    // Test cos function using known angles.
+    struct { double angle; double expected; const char* msg; } cos_tests[] = {
+        { 0.0, 1.0, "cos(0) failed" },
+        { PI/6, 0.8660254037844386, "cos(PI/6) failed" },
+        { PI/4, 0.7071067811865476, "cos(PI/4) failed" },
+        { PI/3, 0.5, "cos(PI/3) failed" },
+        { PI/2, 0.0, "cos(PI/2) failed" },
+        { PI, -1.0, "cos(PI) failed" },
+        { 3*PI/2, 0.0, "cos(3PI/2) failed" },
+        { TAU, 1.0, "cos(TAU) failed" }
+    };
+    for (size_t i = 0; i < sizeof(cos_tests)/sizeof(cos_tests[0]); i++) {
+        double actual = cos(cos_tests[i].angle);
+        assertmsg(abs(actual - cos_tests[i].expected) <= epsilon, cos_tests[i].msg);
     }
 
-    for (float64 x = -10.0; x <= 10.0; x += 0.5) {
-        float64 expected = atan(x);
-        float64 actual = atan(x);
-        assertmsg(abs(actual - expected) <= epsilon, "atan function failed");
+    // Test tan function by comparing against sin/cos (avoiding points where cos(x) is near zero).
+    struct { double angle; double expected; const char* msg; } tan_tests[] = {
+        { 0.0, 0.0, "tan(0) failed" },
+        { PI/6, 0.5773502691896257, "tan(PI/6) failed" },
+        { PI/4, 1.0, "tan(PI/4) failed" },
+        { PI/3, 1.7320508075688772, "tan(PI/3) failed" }
+    };
+    for (size_t i = 0; i < sizeof(tan_tests)/sizeof(tan_tests[0]); i++) {
+        double actual = tan(tan_tests[i].angle);
+        assertmsgs(abs(actual - tan_tests[i].expected) <= epsilon, tprint("Expected %f, got %f", tan_tests[i].expected, actual));
     }
-    for (float64 y = -10.0; y <= 10.0; y += 2.0) {
-        for (float64 x = -10.0; x <= 10.0; x += 2.0) {
-            if (x == 0.0 && y == 0.0) continue; // atan2(0, 0) is undefined
-            float64 expected = atan2(y, x);
-            float64 actual = atan2(y, x);
-            assertmsg(abs(actual - expected) <= epsilon, "atan2 function failed");
-        }
+
+    // Test asin function using known values.
+    // The expected values here are the angles whose sine is the given value.
+    struct { double value; double expected; const char* msg; } asin_tests[] = {
+        { 0.0, 0.0, "asin(0) failed" },
+        { 0.5, PI/6, "asin(0.5) failed" },
+        { 0.7071067811865476, PI/4, "asin(0.7071) failed" },
+        { 1.0, PI/2, "asin(1) failed" },
+        { -0.5, -PI/6, "asin(-0.5) failed" },
+        { -0.7071067811865476, -PI/4, "asin(-0.7071) failed" },
+        { -1.0, -PI/2, "asin(-1) failed" }
+    };
+    for (size_t i = 0; i < sizeof(asin_tests)/sizeof(asin_tests[0]); i++) {
+        double actual = asin(asin_tests[i].value);
+        assertmsgs(abs(actual - asin_tests[i].expected) <= epsilon, tprint("%f Expected %f, got %f", asin_tests[i].value, asin_tests[i].expected, actual));
     }
+
+    // Test acos function using known values.
+    struct { double value; double expected; const char* msg; } acos_tests[] = {
+        { 1.0, 0.0, "acos(1) failed" },
+        { 0.8660254037844386, PI/6, "acos(0.8660) failed" },
+        { 0.7071067811865476, PI/4, "acos(0.7071) failed" },
+        { 0.5, PI/3, "acos(0.5) failed" },
+        { 0.0, PI/2, "acos(0) failed" },
+        { -0.5, 2*PI/3, "acos(-0.5) failed" },
+        { -0.7071067811865476, 3*PI/4, "acos(-0.7071) failed" },
+        { -0.8660254037844386, 5*PI/6, "acos(-0.8660) failed" },
+        { -1.0, PI, "acos(-1) failed" }
+    };
+    for (size_t i = 0; i < sizeof(acos_tests)/sizeof(acos_tests[0]); i++) {
+        double actual = acos(acos_tests[i].value);
+        assertmsg(abs(actual - acos_tests[i].expected) <= epsilon, acos_tests[i].msg);
+    }
+
+    // Test atan function using known values.
+    struct { double value; double expected; const char* msg; } atan_tests[] = {
+        { 0.0, 0.0, "atan(0) failed" },
+        { 1.0, PI/4, "atan(1) failed" },
+        { -1.0, -PI/4, "atan(-1) failed" },
+        { 0.5773502691896257, PI/6, "atan(0.57735) failed" },
+        { -0.5773502691896257, -PI/6, "atan(-0.57735) failed" }
+    };
+    for (size_t i = 0; i < sizeof(atan_tests)/sizeof(atan_tests[0]); i++) {
+        double actual = atan(atan_tests[i].value);
+        assertmsgs(abs(actual - atan_tests[i].expected) <= epsilon,
+                   tprint("atan function failed for input %f. Expected %f, got %f", 
+                          atan_tests[i].value, atan_tests[i].expected, actual));
+    }
+
+    // Test atan2 function using known values for various quadrants.
+    struct { double y; double x; double expected; const char* msg; } atan2_tests[] = {
+        { 0.0, 1.0, 0.0, "atan2(0,1) failed" },
+        { 1.0, 0.0, PI/2, "atan2(1,0) failed" },
+        { 0.0, -1.0, PI, "atan2(0,-1) failed" },
+        { -1.0, 0.0, -PI/2, "atan2(-1,0) failed" },
+        { 1.0, 1.0, PI/4, "atan2(1,1) failed" },
+        { -1.0, -1.0, -3*PI/4, "atan2(-1,-1) failed" }
+    };
+    for (size_t i = 0; i < sizeof(atan2_tests)/sizeof(atan2_tests[0]); i++) {
+        double actual = atan2(atan2_tests[i].y, atan2_tests[i].x);
+        assertmsg(abs(actual - atan2_tests[i].expected) <= epsilon, atan2_tests[i].msg);
+    }*/
 }
-

@@ -84,8 +84,6 @@ typedef enum Type {
 	TYPE_INVALID,
 	TYPE_FLOAT32,
 	TYPE_UINT32,
-	TYPE_V3F32,
-	TYPE_V4F32,
 } Type;
 
 typedef enum Storage_Flag {
@@ -1128,12 +1126,7 @@ unit_local Code_Expr *parse_expr(Token *expr_start, Token **next) {
 	return expr;
 }
 
-unit_local bool is_alpha(u8 c) {
-	return (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z');
-}
-unit_local bool is_digit(u8 c) {
-	return (c >= '0' && c <= '9');
-}
+
 
 
 

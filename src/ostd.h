@@ -33,6 +33,7 @@
 
 #include "string.h"
 
+
 #include "system.h"
 
 #include "unicode.h"
@@ -49,7 +50,7 @@
 #endif // OSTD_NO_GRAPHICS
 
 #ifndef OSTD_NO_COMPILER
-#include "ol_compiler.h"
+#include "osl_compiler.h"
 #endif // OSTD_NO_COMPILER
 
 
