@@ -129,10 +129,10 @@ int main(void) {
     void *frag_code, *vert_code;
     u64 frag_code_size, vert_code_size;
     
-    bool vert_src_ok = sys_read_entire_file(get_temp(), STR("tests/triangle.vert.ol"), &vert_src);
+    bool vert_src_ok = sys_read_entire_file(get_temp(), STR("tests/triangle.vert.osl"), &vert_src);
     assert(vert_src_ok);
     
-    bool frag_src_ok = sys_read_entire_file(get_temp(), STR("tests/triangle.frag.ol"), &frag_src);
+    bool frag_src_ok = sys_read_entire_file(get_temp(), STR("tests/triangle.frag.osl"), &frag_src);
     assert(frag_src_ok);
     
     Osl_Compile_Desc vert_desc = (Osl_Compile_Desc){0};
@@ -153,6 +153,8 @@ int main(void) {
     
     compile_result = osl_compile(get_temp(), frag_desc, &frag_code, &frag_code_size, &compile_err);
     assertmsgs(compile_result == OSL_OK, compile_err);
+    
+    sys_write_entire_file(STR("test.spv"), (string) { vert_code_size, (u8*)vert_code });
     
     Oga_Program *vert_program, *frag_program;
     

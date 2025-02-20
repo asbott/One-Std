@@ -91,7 +91,8 @@ typedef enum Spv_Op_Code_Enum {
     OpConvertFToS=110,
     OpConvertSToF=111,
     OpConvertUToF=112,
-    OpBitcast=124
+    OpBitcast=124,
+    OpName = 5
 } Spv_Op_Code_Enum;
 
 typedef enum Spv_Execution_Model {
@@ -196,6 +197,7 @@ typedef struct Spv_Converter {
 	Spv_Block const_block;
 	Spv_Block entry_block;
 	Spv_Block annotations_block;
+	Spv_Block debug_block;
 	
 	u32 next_id;
 	u32 entry_id;
@@ -312,6 +314,7 @@ typedef struct Osl_Type_Indirection {
 typedef struct Osl_Type_Ident {
 	Osl_Type_Indirection indirections[8]; // Max 8 indirections
 	u64 indirection_count;
+	Osl_Token *token;
 	
 	string name;
 } Osl_Type_Ident;
@@ -339,6 +342,9 @@ typedef struct Osl_Value_Decl {
 	string ident;
 	struct Osl_Expr *init_expr;
 	s64 vnum;
+	
+	
+	u32 spv_loaded_id; // For Spv converter
 } Osl_Value_Decl;
 
 typedef enum Osl_Instantiation_Kind {
@@ -406,7 +412,7 @@ typedef enum Osl_Expr_Kind {
 	OSL_EXPR_DECL_IDENT,
 	OSL_EXPR_LITERAL_FLOAT,
 	OSL_EXPR_LITERAL_INT,
-	OSL_EXPR_IDENT, 
+	OSL_EXPR_TYPE_IDENT, 
 	OSL_EXPR_INSTANTIATE,
 	OSL_EXPR_ACCESS_CHAIN,
 } Osl_Expr_Kind;
@@ -843,6 +849,7 @@ unit_local u32 spv_push_op_vector_shuffle(Spv_Converter *spv, Spv_Block *block, 
 
 
 
+
 unit_local void spv_init(Spv_Converter *spv, Osl_Compiler *compiler, u32 vnum_count) {
 	*spv = (Spv_Converter){0};
 	spv->compiler = compiler;
@@ -851,6 +858,7 @@ unit_local void spv_init(Spv_Converter *spv, Osl_Compiler *compiler, u32 vnum_co
 	spv_block_init(&spv->const_block, 1024*10);
 	spv_block_init(&spv->entry_block, 1024*10);
 	spv_block_init(&spv->annotations_block, 1024*10);
+	spv_block_init(&spv->debug_block, 1024*10);
 	
 	spv->array_type_arena = make_arena(1024*1024*1024*69, 1024*10);
 	spv->array_types = (Osl_Type_Info*)spv->array_type_arena.start;
@@ -911,6 +919,7 @@ unit_local Spv_Block *spv_finalize(Spv_Converter *spv) {
 	
 	
 	spv_push_block(&spv->header_block, &spv->settings_block);
+	spv_push_block(&spv->header_block, &spv->debug_block);
 	spv_push_block(&spv->header_block, &spv->annotations_block);
 	spv_push_block(&spv->header_block, &spv->const_block);
 	
@@ -1030,8 +1039,12 @@ unit_local Osl_Result spv_emit_expr(Spv_Converter *spv, Spv_Block *block, Osl_Ex
 		
 		switch (op->op_kind) {
 		case OSL_OP_CAST: {
-			
+			assert(op->rhs->kind == OSL_EXPR_TYPE_IDENT);
 			op2_type = _osl_resolve_type(spv, op->rhs->val.type_ident);
+			if (!op2_type) {
+				spv->compiler->err_log = _osl_tprint_token(spv->compiler, op->rhs->val.type_ident.token, STR("Unresolved type"));
+				return spv->compiler->result = OSL_UNRESOLVED_TYPE;
+			}
 			*type = op2_type;
 			
 			Osl_Type_Info *underlying1 = op1_type;
@@ -1159,6 +1172,10 @@ unit_local Osl_Result spv_emit_expr(Spv_Converter *spv, Spv_Block *block, Osl_Ex
 		    spv_push_word(block, op1);
 		    spv_push_word(block, op2);
 		    *result_id = op1;
+		    
+		    if (op->lhs->kind == OSL_EXPR_DECL_IDENT) {
+		    	op->lhs->val.decl->spv_loaded_id = op2;
+		    }
 		} else {
 		    spv_push_word(block, op1_type->type_id);
 		    *result_id = spv_push_result_arg(spv, block);
@@ -1176,10 +1193,10 @@ unit_local Osl_Result spv_emit_expr(Spv_Converter *spv, Spv_Block *block, Osl_Ex
 		
 		
 		Osl_Type_Info *inst_type = _osl_resolve_type(spv, inst->type_ident);
-		Osl_Type_Info *underlying = _osl_resolve_type(spv, inst->type_ident);
+		Osl_Type_Info *underlying = inst_type;
 		
 		if (!inst_type) {
-			spv->compiler->err_log = _osl_tprint_token(spv->compiler, _osl_get_node(expr)->first_token, STR("Unresolved type"));
+			spv->compiler->err_log = _osl_tprint_token(spv->compiler, inst->type_ident.token, STR("Unresolved type"));
 			return spv->compiler->result = OSL_UNRESOLVED_TYPE;
 		}
 		
@@ -1481,11 +1498,16 @@ unit_local Osl_Result spv_emit_expr(Spv_Converter *spv, Spv_Block *block, Osl_Ex
 		if (in_memory) {
 			*result_id = id_pointer;
 		} else {
-			*result_id = spv_push_op_load(spv, block, id_pointer, (*type)->type_id);
+			if (expr->val.decl->spv_loaded_id == 0) {
+				*result_id = spv_push_op_load(spv, block, id_pointer, (*type)->type_id);
+				expr->val.decl->spv_loaded_id = *result_id;
+			} else {
+				*result_id = expr->val.decl->spv_loaded_id;
+			}
 		}
 		break;
 	}
-	case OSL_EXPR_IDENT: // fallthrough
+	case OSL_EXPR_TYPE_IDENT: // fallthrough
 	default: {
 		assert(false);
 		break;
@@ -1514,12 +1536,18 @@ unit_local Osl_Result spv_emit_node(Spv_Converter *spv, Spv_Block *block, Osl_No
 		
 		Osl_Type_Info *decl_type = _osl_resolve_type(spv, decl->type_ident);
 		
-		u32 type_id = decl_type->type_id;
-		
-		if (!type_id) {
-			spv->compiler->err_log = _osl_tprint_token(spv->compiler, node->first_token, STR("Unresolved type"));
+		if (!decl_type) {
+			spv->compiler->err_log = _osl_tprint_token(spv->compiler, decl->type_ident.token, STR("Unresolved type"));
 			return spv->compiler->result = OSL_UNRESOLVED_TYPE;
 		}
+		
+		u32 type_id = decl_type->type_id;
+		assert(type_id);
+		
+		spv_begin_op(&spv->debug_block, OpName);
+		spv_push_word(&spv->debug_block, (u32)decl->vnum);
+		spv_push_string_arg(&spv->debug_block, decl->ident);
+		spv_end_op(&spv->debug_block);
 		
 		spv->vnum_types[decl->vnum] = type_id;
 		
@@ -1617,6 +1645,7 @@ unit_local Osl_Result spv_emit_node(Spv_Converter *spv, Spv_Block *block, Osl_No
 			}
 			
 			spv_push_op_store(block, (u32)decl->vnum, result_id);
+			decl->spv_loaded_id = 0;
 		}
 		
 		break;
@@ -1786,11 +1815,13 @@ unit_local Osl_Expr *_osl_parse_expr(Osl_Compiler *compiler, Osl_Token *expr_sta
 
 unit_local Osl_Result _osl_parse_type_ident(Osl_Compiler *compiler, Osl_Token *first, Osl_Token **done_token, Osl_Type_Ident *result) {
 	*result = (Osl_Type_Ident) {0};
+	result->token = first;
 	if (first->kind == OSL_TOKEN_KIND_IDENTIFIER) {
 		result->name = (string) { first->length, compiler->source.data + first->source_pos };
 		*done_token = first+1;
 		return OSL_OK;
 	} 
+	
 	
 	Osl_Token *next = first;
 	
@@ -1831,6 +1862,7 @@ unit_local Osl_Result _osl_parse_type_ident(Osl_Compiler *compiler, Osl_Token *f
 	
 	*done_token = next+1;
 	
+	assert(result->token);
 	return OSL_OK;
 }
 
@@ -1884,8 +1916,45 @@ unit_local bool _osl_does_token_terminate_expr(Osl_Token_Kind kind) {
 }
 
 
+unit_local Osl_Expr *_osl_parse_expr_rec(Osl_Compiler *compiler, Osl_Token *expr_start, Osl_Token **done_token, Osl_Op_Kind left_op);
 
 unit_local Osl_Expr *_osl_parse_one_expr(Osl_Compiler *compiler, Osl_Token *expr_start, Osl_Token **done_token, Osl_Op_Kind left_op) {
+	
+	if (expr_start->kind == '-') {
+		Osl_Expr *negated_expr = _osl_parse_expr(compiler, expr_start+1, done_token);
+		if (!negated_expr) return 0;
+		
+		Osl_Node *op_expr_node = (Osl_Node*)arena_push(&compiler->node_arena, sizeof(Osl_Node));
+		op_expr_node->first_token = expr_start;
+	    op_expr_node->kind = OSL_NODE_EXPR;
+	    compiler->total_node_count += 1;
+	    compiler->current_block->nodes[compiler->current_block->node_count++] = op_expr_node;
+		Osl_Expr *op_expr = &op_expr_node->val.expr;
+		*op_expr = (Osl_Expr){0};
+		op_expr->vnum = -1;
+		op_expr->kind = OSL_EXPR_OP;
+		
+		op_expr->val.op.op_kind = OSL_OP_UNARY_NEGATE;
+		op_expr->val.op.op_token = expr_start-1;
+		op_expr->val.op.lhs = negated_expr;
+		
+		return op_expr;
+	}
+	
+	if (expr_start->kind == OSL_TOKEN_KIND_LPAREN) {
+		Osl_Expr *enclosed_expr = _osl_parse_expr(compiler, expr_start+1, done_token);
+		if (!enclosed_expr) return 0;
+		
+		if (!_osl_exp_token(compiler, *done_token, OSL_TOKEN_KIND_RPAREN)) {
+			string b = _osl_tprint_token(compiler, expr_start, STR("Expected a match for this"));
+			compiler->err_log = tprint("%s%s", compiler->err_log, b);
+			return 0;
+		}
+		
+		*done_token += 1;
+		return enclosed_expr;
+	}
+	
 	Osl_Node *expr_node = (Osl_Node*)arena_push(&compiler->node_arena, sizeof(Osl_Node));
 	expr_node->first_token = expr_start;
     expr_node->kind = OSL_NODE_EXPR;
@@ -1894,13 +1963,6 @@ unit_local Osl_Expr *_osl_parse_one_expr(Osl_Compiler *compiler, Osl_Token *expr
 	Osl_Expr *expr = &expr_node->val.expr;
 	*expr = (Osl_Expr){0};
 	expr->vnum = -1;
-	
-	bool is_negated = false;
-	
-	if (expr_start->kind == '-') {
-		is_negated = true;
-		expr_start += 1;
-	}
 	
 	string expr_ident = (string) { expr_start->length, compiler->source.data+expr_start->source_pos };
 	if (expr_start->kind == OSL_TOKEN_KIND_IDENTIFIER) {
@@ -1950,9 +2012,10 @@ unit_local Osl_Expr *_osl_parse_one_expr(Osl_Compiler *compiler, Osl_Token *expr
 			
 			if (!expr->val.decl) {
 				if (left_op != 0xFFFF && left_op == OSL_OP_CAST) {
-					expr->kind = OSL_EXPR_IDENT;
+					expr->kind = OSL_EXPR_TYPE_IDENT;
 					Osl_Result type_res = _osl_parse_type_ident(compiler, expr_start, done_token, &expr->val.type_ident);
 					if (type_res != OSL_OK) return 0;
+					assert(expr->val.type_ident.token);
 				} else {
 					compiler->err_log = _osl_tprint_token(compiler, expr_start, tprint("No value named '%s' was defined here yet in this procedural block", expr_ident));
 					compiler->result = OSL_UNDEFINED_VALUE;
@@ -2034,24 +2097,6 @@ unit_local Osl_Expr *_osl_parse_one_expr(Osl_Compiler *compiler, Osl_Token *expr
 		*done_token = next;
 	}
 	
-	if (is_negated) {
-		Osl_Node *op_expr_node = (Osl_Node*)arena_push(&compiler->node_arena, sizeof(Osl_Node));
-		op_expr_node->first_token = expr_start;
-	    op_expr_node->kind = OSL_NODE_EXPR;
-	    compiler->total_node_count += 1;
-	    compiler->current_block->nodes[compiler->current_block->node_count++] = op_expr_node;
-		Osl_Expr *op_expr = &op_expr_node->val.expr;
-		*op_expr = (Osl_Expr){0};
-		op_expr->vnum = -1;
-		op_expr->kind = OSL_EXPR_OP;
-		
-		op_expr->val.op.op_kind = OSL_OP_UNARY_NEGATE;
-		op_expr->val.op.op_token = expr_start-1;
-		op_expr->val.op.lhs = expr;
-		
-		expr = op_expr;
-	}
-	
 	return expr;
 }
 unit_local Osl_Expr *_osl_parse_expr_rec(Osl_Compiler *compiler, Osl_Token *expr_start, Osl_Token **done_token, Osl_Op_Kind left_op) {
@@ -2111,6 +2156,11 @@ unit_local Osl_Expr *_osl_parse_expr_rec(Osl_Compiler *compiler, Osl_Token *expr
 		parent_op->val.op.lhs = lexpr;
 		parent_op->val.op.rhs = rexpr;
 		
+		if (parent_op->val.op.op_kind == OSL_OP_CAST) {
+			
+			assert(parent_op->val.op.rhs->kind == OSL_EXPR_TYPE_IDENT);
+		}
+		
 		return parent_op;
 	}
 }
@@ -2139,32 +2189,40 @@ unit_local Osl_Expr *_osl_parse_expr(Osl_Compiler *compiler, Osl_Token *expr_sta
 		
 		Osl_Token *next_expr_start = op_token+1;
 		
-		Osl_Expr *next_expr = _osl_parse_expr_rec(compiler, next_expr_start, done_token, (Osl_Op_Kind)0xFFFF);
+		Osl_Expr *next_expr = _osl_parse_expr_rec(compiler, next_expr_start, done_token, rop);
 		if (!next_expr) return 0;
 		
-		Osl_Node *parent_node = (Osl_Node*)arena_push(&compiler->node_arena, sizeof(Osl_Node));
-        parent_node->first_token = expr_start;
-        parent_node->kind = OSL_NODE_EXPR;
+		Osl_Node *next = (Osl_Node*)arena_push(&compiler->node_arena, sizeof(Osl_Node));
+        next->first_token = expr_start;
+        next->kind = OSL_NODE_EXPR;
         compiler->total_node_count += 1;
-        compiler->current_block->nodes[compiler->current_block->node_count++] = parent_node;
-		Osl_Expr *parent_op = &parent_node->val.expr;
-		*parent_op = (Osl_Expr){0};
-		parent_op->vnum = -1;
-		parent_op->kind = OSL_EXPR_OP;
-		parent_op->val.op.op_kind = rop;
-		parent_op->val.op.op_token = op_token;
+        compiler->current_block->nodes[compiler->current_block->node_count++] = next;
+		Osl_Expr *next_op = &next->val.expr;
+		*next_op = (Osl_Expr){0};
+		next_op->vnum = -1;
+		next_op->kind = OSL_EXPR_OP;
+		next_op->val.op.op_kind = rop;
+		next_op->val.op.op_token = op_token;
+		if (last_expr->kind == OSL_EXPR_OP && _osl_precedence(rop) > _osl_precedence(last_expr->val.op.op_kind)) {
+			next_op->val.op.lhs = last_expr->val.op.rhs;
+			next_op->val.op.rhs = next_expr;
+			last_expr->val.op.rhs = next_op;
+		} else {
+			next_op->val.op.lhs = last_expr;
+			next_op->val.op.rhs = next_expr;
+			last_expr = next_op;
+		}
 		
-		if (rop == OSL_OP_SET && !_osl_can_expr_have_storage(last_expr)) {
-			Osl_Node *rop_node = _osl_get_node(parent_op);
+		if (last_expr->val.op.op_kind == OSL_OP_CAST) {
+			assert(last_expr->val.op.rhs->kind == OSL_EXPR_TYPE_IDENT);
+		}
+		
+		if (rop == OSL_OP_SET && !_osl_can_expr_have_storage(last_expr->val.op.lhs)) {
+			Osl_Node *rop_node = _osl_get_node(next_op);
 			compiler->err_log = _osl_tprint_token(compiler, rop_node->first_token, STR("Cannot assign to an expression that does not have storage"));
 			compiler->result = OSL_ASSIGN_NON_STORAGE_VALUE;
 			return 0;
 		}
-		
-		parent_op->val.op.lhs = last_expr;
-		parent_op->val.op.rhs = next_expr;
-		
-		last_expr = parent_op;
 	}
 	
 	return last_expr;

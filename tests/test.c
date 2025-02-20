@@ -329,10 +329,10 @@ int main(void) {
     void *frag_code, *vert_code;
     u64 frag_code_size, vert_code_size;
     
-    bool vert_src_ok = sys_read_entire_file(get_temp(), STR("tests/triangle.vert.ol"), &vert_src);
+    bool vert_src_ok = sys_read_entire_file(get_temp(), STR("tests/triangle.vert.osl"), &vert_src);
     assert(vert_src_ok);
     
-    bool frag_src_ok = sys_read_entire_file(get_temp(), STR("tests/triangle.frag.ol"), &frag_src);
+    bool frag_src_ok = sys_read_entire_file(get_temp(), STR("tests/triangle.frag.osl"), &frag_src);
     assert(frag_src_ok);
     
     Osl_Compile_Desc vert_desc = (Osl_Compile_Desc){0};

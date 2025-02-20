@@ -1,0 +1,24 @@
+
+vertex_index: u32 $VertexIndex;
+
+out_position: f32v4 $VertexPosition;
+out_color: f32v3 $Output(0); 
+
+colors: [3]f32v3 = f32v3.[
+    f32v3.(1.0, 0.0, 0.0),
+    f32v3.(0.0, 1.0, 0.0),
+    f32v3.(0.0, 0.0, 1.0)
+];
+
+positions: [3]f32v2 = f32v2.[
+	f32v2.( 0.0, -0.5),
+	f32v2.( 0.5,  0.5),
+	f32v2.(-0.5,  0.5)
+];
+
+pos: f32v2 = positions[vertex_index];
+
+out_position = f32v4.(pos.x, pos.y, 0.0, 1.0);
+out_color = colors[vertex_index];
+
+
