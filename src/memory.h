@@ -29,7 +29,7 @@ inline void deallocatef(Allocator a, void *p, u64 flags);
 #define New(a, T) ((T*)allocate(a, sizeof(T)))
 #define NewBuffer(a, T, n) ((T*)allocate(a, sizeof(T)*n))
 
-#define PushTemp() New(get_temp(), T)
+#define PushTemp(T) New(get_temp(), T)
 #define PushTempBuffer(T, n) NewBuffer(get_temp(), T, n)
 
 inline string string_allocate(Allocator a, u64 n);

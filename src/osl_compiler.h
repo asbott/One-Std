@@ -83,6 +83,7 @@ typedef enum Spv_Op_Code_Enum {
     OpUDiv = 134,
     OpSDiv = 135,
     OpFDiv = 136,
+    OpVectorTimesScalar = 142,
     OpVectorShuffle = 79,
     OpUConvert=113,
     OpSConvert=114,
@@ -221,9 +222,6 @@ typedef struct Spv_Converter {
     Arena array_type_arena;
     Osl_Type_Info *array_types;
     u64 array_type_count;
-    
-    u32 vnum_types[16384];
-    u32 vnum_pointer_types[16384];
     
 	
 } Spv_Converter;
@@ -474,13 +472,14 @@ typedef struct Osl_Compiler {
     Osl_Block top_block;
     Osl_Block *current_block;
     
-    Osl_Node *top_nodes[8196];
-    u64 top_node_count;
     
     Osl_Result result;
     string err_log;
     
     s64 next_vnum;
+    
+    u64 top_node_count;
+    Osl_Node *top_nodes[8196];
     
 } Osl_Compiler;
 
@@ -1022,12 +1021,17 @@ unit_local Osl_Result spv_emit_expr(Spv_Converter *spv, Spv_Block *block, Osl_Ex
 		if (res != OSL_OK) return res;
 		assert(op1); assert(op1_type);
 		
+		bool is_vector_v_scalar = false;
+		bool is_scalar_v_vector = false;
+		
 		if (op->op_kind != OSL_OP_CAST && op->op_kind != OSL_OP_UNARY_NEGATE && op->op_kind != OSL_OP_UNARY_NEGATE) {
 			res = spv_emit_expr(spv, block, op->rhs, &op2, &op2_type, false);
 			if (res != OSL_OK) return res;
 			assert(op2); assert(op2_type);
-			if (op1_type != op2_type) {
-				string a = _osl_tprint_token(spv->compiler, op->op_token, STR("Types in operation do not match ..."));
+			is_vector_v_scalar = op1_type->kind == OSL_TYPE_COMPOSITE && op1_type->val.comp_type.underlying == op2_type;
+			is_scalar_v_vector = op2_type->kind == OSL_TYPE_COMPOSITE && op2_type->val.comp_type.underlying == op1_type;
+			if (op1_type != op2_type && !((op->op_kind == OSL_OP_MUL || op->op_kind == OSL_OP_DIV) && (is_vector_v_scalar || is_scalar_v_vector))) {
+				string a = _osl_tprint_token(spv->compiler, op->op_token, STR("Cannot perform this operations on these types ..."));
 				string b = _osl_tprint_token(spv->compiler, _osl_get_node(op->lhs)->first_token, tprint("... Left hand side is of tyoe '%s' ... ", op1_type->name));
 				string c = _osl_tprint_token(spv->compiler, _osl_get_node(op->rhs)->first_token, tprint("... Right hand side is of type '%s'", op2_type->name));
 				spv->compiler->err_log = tprint("%s\n%s\n%s", a, b, c);
@@ -1039,6 +1043,7 @@ unit_local Osl_Result spv_emit_expr(Spv_Converter *spv, Spv_Block *block, Osl_Ex
 		
 		switch (op->op_kind) {
 		case OSL_OP_CAST: {
+		
 			assert(op->rhs->kind == OSL_EXPR_TYPE_IDENT);
 			op2_type = _osl_resolve_type(spv, op->rhs->val.type_ident);
 			if (!op2_type) {
@@ -1106,51 +1111,161 @@ unit_local Osl_Result spv_emit_expr(Spv_Converter *spv, Spv_Block *block, Osl_Ex
 				return spv->compiler->result = OSL_INVALID_CAST;
 			}
 			
+			spv_push_word(block, op2_type->type_id);
+		    *result_id = spv_push_result_arg(spv, block);
+		    spv_push_word(block, op1);
+		    
+		    spv_end_op(block);
+			
 			break;
 		}
 		case OSL_OP_UNARY_NEGATE: {
+		
 			assert(!op->rhs);
 			if (op1_type->kind == OSL_TYPE_FLOAT || (op1_type->kind == OSL_TYPE_COMPOSITE && op1_type->val.comp_type.underlying->kind == OSL_TYPE_FLOAT)) 
 				spv_begin_op(block, OpFNegate);
 			else if (op1_type->kind == OSL_TYPE_INT || (op1_type->kind == OSL_TYPE_COMPOSITE && op1_type->val.comp_type.underlying->kind == OSL_TYPE_INT)) 
 				spv_begin_op(block, OpSNegate); // todo(charlie) err if int is unsigned
 			else assert(false);
+			
+			spv_push_word(block, op1_type->type_id);
+		    *result_id = spv_push_result_arg(spv, block);
+		    spv_push_word(block, op1);
+		    
+		    spv_end_op(block);
+			
 			break;
 		}
 		case OSL_OP_ADD: {
+		
 			if (op1_type->kind == OSL_TYPE_FLOAT || (op1_type->kind == OSL_TYPE_COMPOSITE && op1_type->val.comp_type.underlying->kind == OSL_TYPE_FLOAT)) 
 				spv_begin_op(block, OpFAdd);
 			else if (op1_type->kind == OSL_TYPE_INT || (op1_type->kind == OSL_TYPE_COMPOSITE && op1_type->val.comp_type.underlying->kind == OSL_TYPE_INT)) 
 				spv_begin_op(block, OpIAdd);
 			else assert(false);
+			
+			spv_push_word(block, op1_type->type_id);
+		    *result_id = spv_push_result_arg(spv, block);
+		    spv_push_word(block, op1);
+		    spv_push_word(block, op2);
+	    	spv_end_op(block);
+			
 			break;
 		}
 		case OSL_OP_SUB: {
+		
 			if (op1_type->kind == OSL_TYPE_FLOAT || (op1_type->kind == OSL_TYPE_COMPOSITE && op1_type->val.comp_type.underlying->kind == OSL_TYPE_FLOAT)) 
 				spv_begin_op(block, OpFSub);
 			else if (op1_type->kind == OSL_TYPE_INT || (op1_type->kind == OSL_TYPE_COMPOSITE && op1_type->val.comp_type.underlying->kind == OSL_TYPE_INT)) 
 				spv_begin_op(block, OpISub);
 			else assert(false);
+			
+			spv_push_word(block, op1_type->type_id);
+		    *result_id = spv_push_result_arg(spv, block);
+		    spv_push_word(block, op1);
+		    spv_push_word(block, op2);
+	    	spv_end_op(block);
+			
 			break;
 		}
 		case OSL_OP_MUL: {
-			if (op1_type->kind == OSL_TYPE_FLOAT || (op1_type->kind == OSL_TYPE_COMPOSITE && op1_type->val.comp_type.underlying->kind == OSL_TYPE_FLOAT)) 
-				spv_begin_op(block, OpFMul);
-			else if (op1_type->kind == OSL_TYPE_INT || (op1_type->kind == OSL_TYPE_COMPOSITE && op1_type->val.comp_type.underlying->kind == OSL_TYPE_INT)) 
-				spv_begin_op(block, OpIMul);
-			else assert(false);
+		
+				
+			
+			if (op1_type == op2_type) {
+				
+				if (op1_type->kind == OSL_TYPE_FLOAT || (op1_type->kind == OSL_TYPE_COMPOSITE && op1_type->val.comp_type.underlying->kind == OSL_TYPE_FLOAT)) 
+					spv_begin_op(block, OpFMul);
+				else if (op1_type->kind == OSL_TYPE_INT || (op1_type->kind == OSL_TYPE_COMPOSITE && op1_type->val.comp_type.underlying->kind == OSL_TYPE_INT)) 
+					spv_begin_op(block, OpIMul);
+				else assert(false);
+				
+				spv_push_word(block, op1_type->type_id);
+			    *result_id = spv_push_result_arg(spv, block);
+			    spv_push_word(block, op1);
+			    spv_push_word(block, op2);
+		    	spv_end_op(block);
+				
+			} else if ((op1_type->kind == OSL_TYPE_COMPOSITE || op2_type->kind == OSL_TYPE_COMPOSITE)) {
+				
+				
+				Osl_Type_Info *comp_type_base = 
+					op1_type->kind == OSL_TYPE_COMPOSITE 
+					? op1_type
+					: op2_type;
+				
+				Osl_Type_Info_Composite *comp_type = &comp_type_base->val.comp_type;
+				
+				Osl_Type_Info *scalar_type = &op1_type->val.comp_type == comp_type ? op2_type : op1_type;
+				
+				u32 comp_op = comp_type == &op1_type->val.comp_type ? op1 : op2;
+				u32 scalar_op = comp_op == op1 ? op2 : op1;
+				
+				assert(comp_type->underlying == scalar_type);
+				
+				if (is_vector_v_scalar) {
+					
+					Spv_Op_Code_Enum spv_op = (Spv_Op_Code_Enum)0;
+					if (scalar_type->kind == OSL_TYPE_FLOAT)
+						spv_op = OpFMul;
+					else if (scalar_type->kind == OSL_TYPE_INT)
+						spv_op = OpIMul;
+					else assert(false);
+					
+					assert(comp_type->component_count <= 128);
+					u32 results[128];
+					
+					for (u32 i = 0; i < comp_type->component_count; i += 1) {
+						u32 comp_part_id = spv_push_op_composite_extract(spv, block, comp_op, scalar_type->type_id, &i, 1);
+						
+						spv_begin_op(block, spv_op);
+						spv_push_word(block, scalar_type->type_id);
+					    results[i] = spv_push_result_arg(spv, block);
+					    spv_push_word(block, comp_part_id);
+					    spv_push_word(block, scalar_op);
+				    	spv_end_op(block);
+					}
+					
+					*result_id = spv_push_op_composite_construct(spv, block, comp_type_base->type_id, results, comp_type->component_count);
+					*type = comp_type_base;
+					
+				} else if (is_scalar_v_vector) {
+					
+				} else assert(false);
+				
+			} else assert(false);
+			
 			break;
 		}
 		case OSL_OP_DIV: {
+		
 			if (op1_type->kind == OSL_TYPE_FLOAT || (op1_type->kind == OSL_TYPE_COMPOSITE && op1_type->val.comp_type.underlying->kind == OSL_TYPE_FLOAT)) 
 				spv_begin_op(block, OpFDiv);
 			else if (op1_type->kind == OSL_TYPE_INT || (op1_type->kind == OSL_TYPE_COMPOSITE && op1_type->val.comp_type.underlying->kind == OSL_TYPE_INT)) 
 				spv_begin_op(block, op1_type->val.int_type.is_signed ? OpSDiv : OpUDiv);
 			else assert(false);
+			
+			spv_push_word(block, op1_type->type_id);
+		    *result_id = spv_push_result_arg(spv, block);
+		    spv_push_word(block, op1);
+		    spv_push_word(block, op2);
+	    	spv_end_op(block);
+			
 			break;
 		}
 		case OSL_OP_SET: {
+		
 			spv_begin_op(block, OpStore);
+			spv_push_word(block, op1);
+		    spv_push_word(block, op2);
+		    *result_id = op1;
+		    
+		    if (op->lhs->kind == OSL_EXPR_DECL_IDENT) {
+		    	op->lhs->val.decl->spv_loaded_id = op2;
+		    }
+		    
+		    spv_end_op(block);
+		    
 			break;
 		}
 		default: {
@@ -1158,32 +1273,7 @@ unit_local Osl_Result spv_emit_expr(Spv_Converter *spv, Spv_Block *block, Osl_Ex
 			break;
 		}
 		}
-		
-		
-		if (op->op_kind == OSL_OP_CAST) {
-		    spv_push_word(block, op2_type->type_id);
-		    *result_id = spv_push_result_arg(spv, block);
-		    spv_push_word(block, op1);
-		} else if (op->op_kind == OSL_OP_UNARY_NEGATE) {
-		    spv_push_word(block, op1_type->type_id);
-		    *result_id = spv_push_result_arg(spv, block);
-		    spv_push_word(block, op1);
-		}else if (op->op_kind == OSL_OP_SET) {
-		    spv_push_word(block, op1);
-		    spv_push_word(block, op2);
-		    *result_id = op1;
-		    
-		    if (op->lhs->kind == OSL_EXPR_DECL_IDENT) {
-		    	op->lhs->val.decl->spv_loaded_id = op2;
-		    }
-		} else {
-		    spv_push_word(block, op1_type->type_id);
-		    *result_id = spv_push_result_arg(spv, block);
-		    spv_push_word(block, op1);
-		    spv_push_word(block, op2);
-		}
 	    
-	    spv_end_op(block);
 		
 		break;
 	}
@@ -1549,8 +1639,6 @@ unit_local Osl_Result spv_emit_node(Spv_Converter *spv, Spv_Block *block, Osl_No
 		spv_push_string_arg(&spv->debug_block, decl->ident);
 		spv_end_op(&spv->debug_block);
 		
-		spv->vnum_types[decl->vnum] = type_id;
-		
 		Spv_Storage_Class storage_class = SpvStorageClass_Private;
 		
 		if (decl->storage_class != OSL_STORAGE_DEFAULT) {
@@ -1566,7 +1654,6 @@ unit_local Osl_Result spv_emit_node(Spv_Converter *spv, Spv_Block *block, Osl_No
 		}
 		
 		type_id = spv_push_decl_pointer_type(spv, &spv->const_block, type_id, storage_class);
-		spv->vnum_pointer_types[decl->vnum] = type_id;
 		
 		assert(decl->vnum > 0);
 		spv_push_decl_variable(spv, &spv->const_block, storage_class, type_id, 0, decl->ident, (u32)decl->vnum);
@@ -1920,6 +2007,8 @@ unit_local Osl_Expr *_osl_parse_expr_rec(Osl_Compiler *compiler, Osl_Token *expr
 
 unit_local Osl_Expr *_osl_parse_one_expr(Osl_Compiler *compiler, Osl_Token *expr_start, Osl_Token **done_token, Osl_Op_Kind left_op) {
 	
+	Osl_Expr *expr = 0;
+	
 	if (expr_start->kind == '-') {
 		Osl_Expr *negated_expr = _osl_parse_expr(compiler, expr_start+1, done_token);
 		if (!negated_expr) return 0;
@@ -1938,10 +2027,8 @@ unit_local Osl_Expr *_osl_parse_one_expr(Osl_Compiler *compiler, Osl_Token *expr
 		op_expr->val.op.op_token = expr_start-1;
 		op_expr->val.op.lhs = negated_expr;
 		
-		return op_expr;
-	}
-	
-	if (expr_start->kind == OSL_TOKEN_KIND_LPAREN) {
+		expr = op_expr;
+	} else if (expr_start->kind == OSL_TOKEN_KIND_LPAREN) {
 		Osl_Expr *enclosed_expr = _osl_parse_expr(compiler, expr_start+1, done_token);
 		if (!enclosed_expr) return 0;
 		
@@ -1952,94 +2039,95 @@ unit_local Osl_Expr *_osl_parse_one_expr(Osl_Compiler *compiler, Osl_Token *expr
 		}
 		
 		*done_token += 1;
-		return enclosed_expr;
-	}
+		expr = enclosed_expr;
+	} else {
 	
-	Osl_Node *expr_node = (Osl_Node*)arena_push(&compiler->node_arena, sizeof(Osl_Node));
-	expr_node->first_token = expr_start;
-    expr_node->kind = OSL_NODE_EXPR;
-    compiler->total_node_count += 1;
-    compiler->current_block->nodes[compiler->current_block->node_count++] = expr_node;
-	Osl_Expr *expr = &expr_node->val.expr;
-	*expr = (Osl_Expr){0};
-	expr->vnum = -1;
-	
-	string expr_ident = (string) { expr_start->length, compiler->source.data+expr_start->source_pos };
-	if (expr_start->kind == OSL_TOKEN_KIND_IDENTIFIER) {
-		if (expr_start[1].kind == OSL_TOKEN_KIND_DOT && (expr_start[2].kind == OSL_TOKEN_KIND_LPAREN || expr_start[2].kind == OSL_TOKEN_KIND_LBRACKET)) {
-			expr->kind = OSL_EXPR_INSTANTIATE;
-			
-			Osl_Instantiation *inst = &expr->val.inst;
-			
-			Osl_Token_Kind list_end = OSL_TOKEN_KIND_RPAREN;
-			
-			if (expr_start[2].kind == OSL_TOKEN_KIND_LPAREN) {
-				inst->kind = OSL_INST_COMP;
-				list_end = OSL_TOKEN_KIND_RPAREN;
-			} else if (expr_start[2].kind == OSL_TOKEN_KIND_LBRACKET) {
-				inst->kind = OSL_INST_ARRAY;
-				list_end = OSL_TOKEN_KIND_RBRACKET;
-			} else 
-				assert(false);
-			
-			Osl_Result type_res = _osl_parse_type_ident(compiler, expr_start, done_token, &inst->type_ident);
-			if (type_res != OSL_OK) return 0;
-			
-			
-			Osl_Result res = _osl_parse_arg_list(compiler, list_end, &expr_start[2], done_token, &inst->list);
-			if (res != OSL_OK) return 0;
-			
-			if (inst->type_ident.indirection_count >= 8) {
-				compiler->err_log = _osl_tprint_token(compiler, expr_start, STR("The max number of type indirections is 8. This exceeds that."));
-				compiler->result = OSL_EXCEED_MAX_TYPE_INDIRECTIONS;
-				return 0;
-			}
-			
-		} else {
-			expr->kind = OSL_EXPR_DECL_IDENT;
-			for (u64 j = 0; j < compiler->current_block->node_count; j += 1) {
-				Osl_Node *node = compiler->current_block->nodes[j];
+		Osl_Node *expr_node = (Osl_Node*)arena_push(&compiler->node_arena, sizeof(Osl_Node));
+		expr_node->first_token = expr_start;
+	    expr_node->kind = OSL_NODE_EXPR;
+	    compiler->total_node_count += 1;
+	    compiler->current_block->nodes[compiler->current_block->node_count++] = expr_node;
+		expr = &expr_node->val.expr;
+		*expr = (Osl_Expr){0};
+		expr->vnum = -1;
+		
+		string expr_ident = (string) { expr_start->length, compiler->source.data+expr_start->source_pos };
+		if (expr_start->kind == OSL_TOKEN_KIND_IDENTIFIER) {
+			if (expr_start[1].kind == OSL_TOKEN_KIND_DOT && (expr_start[2].kind == OSL_TOKEN_KIND_LPAREN || expr_start[2].kind == OSL_TOKEN_KIND_LBRACKET)) {
+				expr->kind = OSL_EXPR_INSTANTIATE;
 				
-				if (node->kind == OSL_NODE_VALUE_DECL) {
-					Osl_Value_Decl *decl = &node->val.value_decl;
-					if (strings_match(expr_ident, decl->ident)) {
-						expr->val.decl = decl;
-						expr->vnum = decl->vnum;
-						break;
-					}
-				}
-			}
-			
-			if (!expr->val.decl) {
-				if (left_op != 0xFFFF && left_op == OSL_OP_CAST) {
-					expr->kind = OSL_EXPR_TYPE_IDENT;
-					Osl_Result type_res = _osl_parse_type_ident(compiler, expr_start, done_token, &expr->val.type_ident);
-					if (type_res != OSL_OK) return 0;
-					assert(expr->val.type_ident.token);
-				} else {
-					compiler->err_log = _osl_tprint_token(compiler, expr_start, tprint("No value named '%s' was defined here yet in this procedural block", expr_ident));
-					compiler->result = OSL_UNDEFINED_VALUE;
+				Osl_Instantiation *inst = &expr->val.inst;
+				
+				Osl_Token_Kind list_end = OSL_TOKEN_KIND_RPAREN;
+				
+				if (expr_start[2].kind == OSL_TOKEN_KIND_LPAREN) {
+					inst->kind = OSL_INST_COMP;
+					list_end = OSL_TOKEN_KIND_RPAREN;
+				} else if (expr_start[2].kind == OSL_TOKEN_KIND_LBRACKET) {
+					inst->kind = OSL_INST_ARRAY;
+					list_end = OSL_TOKEN_KIND_RBRACKET;
+				} else 
+					assert(false);
+				
+				Osl_Result type_res = _osl_parse_type_ident(compiler, expr_start, done_token, &inst->type_ident);
+				if (type_res != OSL_OK) return 0;
+				
+				
+				Osl_Result res = _osl_parse_arg_list(compiler, list_end, &expr_start[2], done_token, &inst->list);
+				if (res != OSL_OK) return 0;
+				
+				if (inst->type_ident.indirection_count >= 8) {
+					compiler->err_log = _osl_tprint_token(compiler, expr_start, STR("The max number of type indirections is 8. This exceeds that."));
+					compiler->result = OSL_EXCEED_MAX_TYPE_INDIRECTIONS;
 					return 0;
 				}
+				
+			} else {
+				expr->kind = OSL_EXPR_DECL_IDENT;
+				for (u64 j = 0; j < compiler->current_block->node_count; j += 1) {
+					Osl_Node *node = compiler->current_block->nodes[j];
+					
+					if (node->kind == OSL_NODE_VALUE_DECL) {
+						Osl_Value_Decl *decl = &node->val.value_decl;
+						if (strings_match(expr_ident, decl->ident)) {
+							expr->val.decl = decl;
+							expr->vnum = decl->vnum;
+							break;
+						}
+					}
+				}
+				
+				if (!expr->val.decl) {
+					if (left_op != 0xFFFF && left_op == OSL_OP_CAST) {
+						expr->kind = OSL_EXPR_TYPE_IDENT;
+						Osl_Result type_res = _osl_parse_type_ident(compiler, expr_start, done_token, &expr->val.type_ident);
+						if (type_res != OSL_OK) return 0;
+						assert(expr->val.type_ident.token);
+					} else {
+						compiler->err_log = _osl_tprint_token(compiler, expr_start, tprint("No value named '%s' was defined here yet in this procedural block", expr_ident));
+						compiler->result = OSL_UNDEFINED_VALUE;
+						return 0;
+					}
+				}
+				*done_token = expr_start+1;
 			}
+		} else if (expr_start->kind == OSL_TOKEN_KIND_FLOAT_LITERAL) {
+			expr->kind = OSL_EXPR_LITERAL_FLOAT;
+			bool conv_ok;
+			expr->val.lit.lit_flt = string_to_float(expr_ident, &conv_ok);
+			assert(conv_ok);
 			*done_token = expr_start+1;
+		} else if (expr_start->kind == OSL_TOKEN_KIND_INT_LITERAL) {
+			expr->kind = OSL_EXPR_LITERAL_INT;
+			bool conv_ok;
+			expr->val.lit.lit_int = string_to_unsigned_int(expr_ident, 10, &conv_ok);
+			assert(conv_ok);
+			*done_token = expr_start+1;
+		} else {
+			compiler->err_log = _osl_tprint_token(compiler, expr_start, STR("Expected an expression here, but it is not recognized as such."));
+			compiler->result = OSL_NOT_AN_EXPR;
+			return 0;
 		}
-	} else if (expr_start->kind == OSL_TOKEN_KIND_FLOAT_LITERAL) {
-		expr->kind = OSL_EXPR_LITERAL_FLOAT;
-		bool conv_ok;
-		expr->val.lit.lit_flt = string_to_float(expr_ident, &conv_ok);
-		assert(conv_ok);
-		*done_token = expr_start+1;
-	} else if (expr_start->kind == OSL_TOKEN_KIND_INT_LITERAL) {
-		expr->kind = OSL_EXPR_LITERAL_INT;
-		bool conv_ok;
-		expr->val.lit.lit_int = string_to_unsigned_int(expr_ident, 10, &conv_ok);
-		assert(conv_ok);
-		*done_token = expr_start+1;
-	} else {
-		compiler->err_log = _osl_tprint_token(compiler, expr_start, STR("Expected an expression here, but it is not recognized as such."));
-		compiler->result = OSL_NOT_AN_EXPR;
-		return 0;
 	}
 	
 	if ((*done_token)->kind == OSL_TOKEN_KIND_DOT || (*done_token)->kind == OSL_TOKEN_KIND_LBRACKET) {
@@ -2157,8 +2245,14 @@ unit_local Osl_Expr *_osl_parse_expr_rec(Osl_Compiler *compiler, Osl_Token *expr
 		parent_op->val.op.rhs = rexpr;
 		
 		if (parent_op->val.op.op_kind == OSL_OP_CAST) {
+			if (parent_op->val.op.rhs->kind != OSL_EXPR_TYPE_IDENT) {
+				Osl_Token *tok = _osl_get_node(parent_op->val.op.rhs)->first_token;
+				string tok_string = (string) {tok->length, compiler->source.data+tok->source_pos };
+				compiler->err_log = _osl_tprint_token(compiler, tok, tprint("Cannot cast to '%s'. This is not a type. If this looks like a type, make sure you haven't shadowed a type name with a value declaration", tok_string));
+				compiler->result = OSL_INVALID_CAST;
+				return 0;
+			}
 			
-			assert(parent_op->val.op.rhs->kind == OSL_EXPR_TYPE_IDENT);
 		}
 		
 		return parent_op;
@@ -2214,7 +2308,13 @@ unit_local Osl_Expr *_osl_parse_expr(Osl_Compiler *compiler, Osl_Token *expr_sta
 		}
 		
 		if (last_expr->val.op.op_kind == OSL_OP_CAST) {
-			assert(last_expr->val.op.rhs->kind == OSL_EXPR_TYPE_IDENT);
+			if (last_expr->val.op.rhs->kind != OSL_EXPR_TYPE_IDENT) {
+				Osl_Token *tok = _osl_get_node(last_expr->val.op.rhs)->first_token;
+				string tok_string = (string) {tok->length, compiler->source.data+tok->source_pos };
+				compiler->err_log = _osl_tprint_token(compiler, tok, tprint("Cannot cast to '%s'. This is not a type, so that doesn't make sense.", tok_string));
+				compiler->result = OSL_INVALID_CAST;
+				return 0;
+			}
 		}
 		
 		if (rop == OSL_OP_SET && !_osl_can_expr_have_storage(last_expr->val.op.lhs)) {
@@ -2232,20 +2332,20 @@ Osl_Result osl_compile(Allocator a, Osl_Compile_Desc desc, void **pcode, u64 *pc
     (void)a;
     (void)pcode;
     (void)pcode_size;
-    Osl_Compiler compiler = (Osl_Compiler){0};
-    compiler.source = string_replace(get_temp(), desc.code_text, STR("\t"), STR(""));
-    compiler.next_vnum = 1;
-    compiler.program_kind = desc.program_kind;
-    compiler.token_arena = make_arena(1024*1024*1024*69, 1024*100);
-    compiler.tokens = (Osl_Token*)compiler.token_arena.start;
-    compiler.node_arena = make_arena(1024*1024*1024*69, 1024*100);
-    compiler.result = OSL_OK;
-    compiler.top_block.is_procedural = true;
-    compiler.current_block = &compiler.top_block;
+    Osl_Compiler *compiler = PushTemp(Osl_Compiler);
+    compiler->source = string_replace(get_temp(), desc.code_text, STR("\t"), STR(""));
+    compiler->next_vnum = 1;
+    compiler->program_kind = desc.program_kind;
+    compiler->token_arena = make_arena(1024*1024*1024*69, 1024*100);
+    compiler->tokens = (Osl_Token*)compiler->token_arena.start;
+    compiler->node_arena = make_arena(1024*1024*1024*69, 1024*100);
+    compiler->result = OSL_OK;
+    compiler->top_block.is_procedural = true;
+    compiler->current_block = &compiler->top_block;
     
-    _osl_tokenize(&compiler);
+    _osl_tokenize(compiler);
     
-    Osl_Token *current = compiler.tokens;
+    Osl_Token *current = compiler->tokens;
     
     while (current->kind != OSL_TOKEN_KIND_EOF) {
     	Osl_Token *first = current;
@@ -2255,19 +2355,19 @@ Osl_Result osl_compile(Allocator a, Osl_Compile_Desc desc, void **pcode, u64 *pc
         if (first->kind == OSL_TOKEN_KIND_IDENTIFIER) {
         	if (next->kind == ':') {
         		
-	            Osl_Node *n = (Osl_Node*)arena_push(&compiler.node_arena, sizeof(Osl_Node));
+	            Osl_Node *n = (Osl_Node*)arena_push(&compiler->node_arena, sizeof(Osl_Node));
 	            n->kind = OSL_NODE_VALUE_DECL;
 	            n->first_token = first;
-	            compiler.total_node_count += 1;
-	            compiler.top_block.nodes[compiler.top_block.node_count++] = n;
+	            compiler->total_node_count += 1;
+	            compiler->top_block.nodes[compiler->top_block.node_count++] = n;
 	            Osl_Value_Decl *decl = &n->val.value_decl;
 	            *decl = (Osl_Value_Decl){0};
 	           
-	            decl->ident = (string) { first->length, compiler.source.data+first->source_pos };
+	            decl->ident = (string) { first->length, compiler->source.data+first->source_pos };
 	            
 	            Osl_Token *prev_defined_token = 0;
-	            for (u64 j = 0; j < compiler.current_block->node_count-1; j += 1) {
-					Osl_Node *node = compiler.current_block->nodes[j];
+	            for (u64 j = 0; j < compiler->current_block->node_count-1; j += 1) {
+					Osl_Node *node = compiler->current_block->nodes[j];
 					if (node->kind == OSL_NODE_VALUE_DECL) {
 						Osl_Value_Decl *existing_decl = &node->val.value_decl;
 						if (strings_match(decl->ident, existing_decl->ident)) {
@@ -2278,16 +2378,16 @@ Osl_Result osl_compile(Allocator a, Osl_Compile_Desc desc, void **pcode, u64 *pc
 				}
 				
 				if (prev_defined_token) {
-					string msga = _osl_tprint_token(&compiler, first, STR("Redefinition of value symbol ... "));
-					string msgb = _osl_tprint_token(&compiler, prev_defined_token, STR("... Previously defined here"));
-					compiler.err_log = tprint("%s%s", msga, msgb);
-					compiler.result = OSL_VALUE_NAME_REDIFINITION;
+					string msga = _osl_tprint_token(compiler, first, STR("Redefinition of value symbol ... "));
+					string msgb = _osl_tprint_token(compiler, prev_defined_token, STR("... Previously defined here"));
+					compiler->err_log = tprint("%s%s", msga, msgb);
+					compiler->result = OSL_VALUE_NAME_REDIFINITION;
 					break;
 				}
 	            
 	            Osl_Token *type_token = ++current;
 	            
-	            Osl_Result type_res = _osl_parse_type_ident(&compiler, type_token, &current, &decl->type_ident);
+	            Osl_Result type_res = _osl_parse_type_ident(compiler, type_token, &current, &decl->type_ident);
 	            if (type_res != OSL_OK) break;
 	            
 	            next = current;
@@ -2296,62 +2396,62 @@ Osl_Result osl_compile(Allocator a, Osl_Compile_Desc desc, void **pcode, u64 *pc
 	            	
 	            	Osl_Token *deco_token = ++current;
 	            	
-		            if (!_osl_exp_token(&compiler, deco_token, OSL_TOKEN_KIND_IDENTIFIER))
+		            if (!_osl_exp_token(compiler, deco_token, OSL_TOKEN_KIND_IDENTIFIER))
 		            	break;
 	            	
-	            	string decoration_string = (string) { deco_token->length, compiler.source.data+deco_token->source_pos };
+	            	string decoration_string = (string) { deco_token->length, compiler->source.data+deco_token->source_pos };
 	            	
-	            	if ((compiler.program_kind == OSL_PROGRAM_GPU_VERTEX
-            		   || compiler.program_kind == OSL_PROGRAM_GPU_FRAGMENT)
+	            	if ((compiler->program_kind == OSL_PROGRAM_GPU_VERTEX
+            		   || compiler->program_kind == OSL_PROGRAM_GPU_FRAGMENT)
             		   && strings_match(decoration_string, STR("Input"))) {
 	            		decl->storage_class = OSL_STORAGE_INPUT;
-	            		Osl_Result res = _osl_parse_arg_list(&compiler, OSL_TOKEN_KIND_RPAREN, ++current, &current, &decl->storage_args);
+	            		Osl_Result res = _osl_parse_arg_list(compiler, OSL_TOKEN_KIND_RPAREN, ++current, &current, &decl->storage_args);
 						if (res != OSL_OK) break;
 						if (decl->builtin_kind == OSL_BUILTIN_NONE && decl->storage_args.arg_count != 1) {
-							compiler.err_log = _osl_tprint_token(&compiler, deco_token, tprint("Expected exactly 1 integer argument, but got %i", decl->storage_args.arg_count));
-							compiler.result = OSL_BAD_DECORATION_ARGUMENTS;
+							compiler->err_log = _osl_tprint_token(compiler, deco_token, tprint("Expected exactly 1 integer argument, but got %i", decl->storage_args.arg_count));
+							compiler->result = OSL_BAD_DECORATION_ARGUMENTS;
 							break;
 						}
-	            	} else if ((compiler.program_kind == OSL_PROGRAM_GPU_VERTEX
-	            		   || compiler.program_kind == OSL_PROGRAM_GPU_FRAGMENT)
+	            	} else if ((compiler->program_kind == OSL_PROGRAM_GPU_VERTEX
+	            		   || compiler->program_kind == OSL_PROGRAM_GPU_FRAGMENT)
 	            		   && strings_match(decoration_string, STR("Output"))) {
 	            		decl->storage_class = OSL_STORAGE_OUTPUT;
-	            		Osl_Result res = _osl_parse_arg_list(&compiler, OSL_TOKEN_KIND_RPAREN, ++current, &current, &decl->storage_args);
+	            		Osl_Result res = _osl_parse_arg_list(compiler, OSL_TOKEN_KIND_RPAREN, ++current, &current, &decl->storage_args);
 						if (res != OSL_OK) break;
 						if (decl->builtin_kind == OSL_BUILTIN_NONE && decl->storage_args.arg_count != 1) {
-							compiler.err_log = _osl_tprint_token(&compiler, deco_token, tprint("Expected exactly 1 integer argument, but got %i", decl->storage_args.arg_count));
-							compiler.result = OSL_BAD_DECORATION_ARGUMENTS;
+							compiler->err_log = _osl_tprint_token(compiler, deco_token, tprint("Expected exactly 1 integer argument, but got %i", decl->storage_args.arg_count));
+							compiler->result = OSL_BAD_DECORATION_ARGUMENTS;
 							break;
 						}
-	            	} else if ((compiler.program_kind == OSL_PROGRAM_GPU_VERTEX
-	            		   || compiler.program_kind == OSL_PROGRAM_GPU_FRAGMENT)
+	            	} else if ((compiler->program_kind == OSL_PROGRAM_GPU_VERTEX
+	            		   || compiler->program_kind == OSL_PROGRAM_GPU_FRAGMENT)
 	            		   && (strings_match(decoration_string, STR("VertexPosition")))) {
 	            		decl->builtin_kind = OSL_BUILTIN_VERTEX_POSITION;
-	            		if (compiler.program_kind == OSL_PROGRAM_GPU_VERTEX) {
+	            		if (compiler->program_kind == OSL_PROGRAM_GPU_VERTEX) {
 	            			decl->storage_class = OSL_STORAGE_OUTPUT;
-	            		} else if (compiler.program_kind == OSL_PROGRAM_GPU_VERTEX) {
+	            		} else if (compiler->program_kind == OSL_PROGRAM_GPU_VERTEX) {
 	            			decl->storage_class = OSL_STORAGE_INPUT;
 	            		} else assert(false);
 	            		current += 1;
-	            	} else if (compiler.program_kind == OSL_PROGRAM_GPU_VERTEX && strings_match(decoration_string, STR("VertexId"))) {
+	            	} else if (compiler->program_kind == OSL_PROGRAM_GPU_VERTEX && strings_match(decoration_string, STR("VertexId"))) {
 	            		decl->builtin_kind = OSL_BUILTIN_VERTEX_ID;
 	            		decl->storage_class = OSL_STORAGE_INPUT;
 	            		current += 1;
-	            	} else if (compiler.program_kind == OSL_PROGRAM_GPU_VERTEX && strings_match(decoration_string, STR("VertexIndex"))) {
+	            	} else if (compiler->program_kind == OSL_PROGRAM_GPU_VERTEX && strings_match(decoration_string, STR("VertexIndex"))) {
 	            		decl->builtin_kind = OSL_BUILTIN_VERTEX_INDEX;
 	            		decl->storage_class = OSL_STORAGE_INPUT;
 	            		current += 1;
-	            	} else if (compiler.program_kind == OSL_PROGRAM_GPU_VERTEX && strings_match(decoration_string, STR("InstanceId"))) {
+	            	} else if (compiler->program_kind == OSL_PROGRAM_GPU_VERTEX && strings_match(decoration_string, STR("InstanceId"))) {
 	            		decl->builtin_kind = OSL_BUILTIN_INSTANCE_ID;
 	            		decl->storage_class = OSL_STORAGE_INPUT;
 	            		current += 1;
-	            	} else if (compiler.program_kind == OSL_PROGRAM_GPU_VERTEX && strings_match(decoration_string, STR("InstanceIndex"))) {
+	            	} else if (compiler->program_kind == OSL_PROGRAM_GPU_VERTEX && strings_match(decoration_string, STR("InstanceIndex"))) {
 	            		decl->builtin_kind = OSL_BUILTIN_INSTANCE_INDEX;
 	            		decl->storage_class = OSL_STORAGE_INPUT;
 	            		current += 1;
 	            	} else {
-	            		compiler.err_log = _osl_tprint_token(&compiler, deco_token, STR("Invalid declaration token"));
-	            		compiler.result = OSL_BAD_DECL_CLASS;
+	            		compiler->err_log = _osl_tprint_token(compiler, deco_token, STR("Invalid declaration token"));
+	            		compiler->result = OSL_BAD_DECL_CLASS;
 	            		break;
 	            	}
 	            	
@@ -2359,31 +2459,31 @@ Osl_Result osl_compile(Allocator a, Osl_Compile_Desc desc, void **pcode, u64 *pc
 	            	next = current;
 	            }
 	         	if (next->kind == '=') {
-	            	decl->init_expr = _osl_parse_expr(&compiler, next+1, &current);
+	            	decl->init_expr = _osl_parse_expr(compiler, next+1, &current);
 	            	if (!decl->init_expr)
 	            		break;
 	            }	
 	            
-	            if (!_osl_exp_token(&compiler, current++, (Osl_Token_Kind)';'))
+	            if (!_osl_exp_token(compiler, current++, (Osl_Token_Kind)';'))
 	            	break;
 	            	
-	            decl->vnum = compiler.next_vnum++;
+	            decl->vnum = compiler->next_vnum++;
 	            
-	            compiler.top_nodes[compiler.top_node_count++] = _osl_get_node(decl);
+	            compiler->top_nodes[compiler->top_node_count++] = _osl_get_node(decl);
 	           
         	} else {
-        		Osl_Expr *expr = _osl_parse_expr(&compiler, first, &current);
+        		Osl_Expr *expr = _osl_parse_expr(compiler, first, &current);
 	            if (!expr) {
 	            	break;
 	            }
-	            if (!_osl_exp_token(&compiler, current++, OSL_TOKEN_KIND_SEMICOLON)) {
+	            if (!_osl_exp_token(compiler, current++, OSL_TOKEN_KIND_SEMICOLON)) {
 	            	break;
 	            }
-	            compiler.top_nodes[compiler.top_node_count++] = _osl_get_node(expr);
+	            compiler->top_nodes[compiler->top_node_count++] = _osl_get_node(expr);
         	}
         } else {
-        	compiler.err_log = _osl_tprint_token(&compiler, first, STR("Unable to infer intent with this top-level statement"));
-            compiler.result =  OSL_UNEXPECTED_TOKEN;
+        	compiler->err_log = _osl_tprint_token(compiler, first, STR("Unable to infer intent with this top-level statement"));
+            compiler->result =  OSL_UNEXPECTED_TOKEN;
         	break;
         }
     }
@@ -2395,34 +2495,34 @@ Osl_Result osl_compile(Allocator a, Osl_Compile_Desc desc, void **pcode, u64 *pc
             assert(false); break;
     }
     
-    if (compiler.result != OSL_OK) {
-        if (err_log) *err_log = compiler.err_log;
+    if (compiler->result != OSL_OK) {
+        if (err_log) *err_log = compiler->err_log;
     } else {
     
-    	Spv_Converter spv;
-    	spv_init(&spv, &compiler, (u32)compiler.next_vnum);
+    	Spv_Converter *spv = PushTemp(Spv_Converter);
+    	spv_init(spv, compiler, (u32)compiler->next_vnum);
     	
-    	for (u64 i = 0; i < compiler.top_node_count; i += 1) {
-    		Osl_Node *n = compiler.top_nodes[i];
+    	for (u64 i = 0; i < compiler->top_node_count; i += 1) {
+    		Osl_Node *n = compiler->top_nodes[i];
     		if (n->kind == OSL_NODE_VALUE_DECL && n->val.value_decl.storage_class != OSL_STORAGE_DEFAULT)
-    			spv_emit_node(&spv, &spv.const_block, n);    		
+    			spv_emit_node(spv, &spv->const_block, n);    		
     		else
-    			spv_emit_node(&spv, &spv.entry_block, n); 
+    			spv_emit_node(spv, &spv->entry_block, n); 
     			
-    		if (compiler.result != OSL_OK) break;
+    		if (compiler->result != OSL_OK) break;
     	} 
     	
-		if (compiler.result == OSL_OK) {
-	    	Spv_Block *block = spv_finalize(&spv);
+		if (compiler->result == OSL_OK) {
+	    	Spv_Block *block = spv_finalize(spv);
 	    	*pcode = block->data;
 	    	*pcode_size = block->count;
 		}
     }
     
-    if (compiler.result != OSL_OK) {
-        if (err_log) *err_log = compiler.err_log;
+    if (compiler->result != OSL_OK) {
+        if (err_log) *err_log = compiler->err_log;
     }
-    return compiler.result;
+    return compiler->result;
 }
 
 #endif // OSTD_IMPL
