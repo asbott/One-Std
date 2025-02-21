@@ -1,8 +1,0 @@
-
-
-in_color: f32v3 $Input(0);
-
-out_color: f32v4 $Output(0);
-
-out_color = f32v4.(in_color.x, in_color.y, in_color.z, 1.0);
-

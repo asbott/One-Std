@@ -72,6 +72,9 @@ int main(void) {
 
     float rot = 0;
 
+	f64 start_time = sys_get_seconds_monotonic();
+	(void)start_time;
+	
 	while (!surface_should_close(surface)) {
 
 	    Physical_Monitor monitor;
@@ -389,6 +392,12 @@ int main(void) {
 
 
 		surface_poll_events(surface);
+		
+#ifdef RUNNING_TESTS
+        if (sys_get_seconds_monotonic()-start_time > TESTING_DURATION) {
+            surface_close(surface);
+        }
+#endif // RUNNING_TESTS
 	}
 
 	return 0;

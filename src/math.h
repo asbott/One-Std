@@ -142,8 +142,9 @@ float64 ln64(float64 x) {
 
 
 u64 powu(u64 x, u64 e) {
+    if (e == 0) return 1;
     u64 result = x;
-    for (u64 i = 0; i < e; i += 1) {
+    for (u64 i = 0; i < e-1; i += 1) {
         result *= x;
     }
     return result;

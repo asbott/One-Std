@@ -313,17 +313,24 @@ typedef u32 sys_uint;
 #endif
 
 #if !CSTD_C23
+
 #if (COMPILER_FLAGS & COMPILER_FLAG_CLANG) && ((COMPILER_FLAGS & COMPILER_FLAG_MSC) || COMPILER_FLAGS & COMPILER_FLAG_EMSCRIPTEN)
     #pragma clang diagnostic push
     #pragma clang diagnostic ignored "-Wc23-compat"
-#endif
+#endif // (COMPILER_FLAGS & COMPILER_FLAG_CLANG) && ((COMPILER_FLAGS & COMPILER_FLAG_MSC) || COMPILER_FLAGS & COMPILER_FLAG_EMSCRIPTEN)
+
     typedef s8 bool;
     #define true 1
     #define false 0
 #if (COMPILER_FLAGS & COMPILER_FLAG_CLANG) && ((COMPILER_FLAGS & COMPILER_FLAG_MSC) || COMPILER_FLAGS & COMPILER_FLAG_EMSCRIPTEN)
     #pragma clang diagnostic pop
-#endif
-#endif
+#endif // (COMPILER_FLAGS & COMPILER_FLAG_CLANG) && ((COMPILER_FLAGS & COMPILER_FLAG_MSC) || COMPILER_FLAGS & COMPILER_FLAG_EMSCRIPTEN)
+
+#else // !CSTD_C23
+
+#pragma clang diagnostic ignored "-Wpre-c23-compat"
+
+#endif // CSTD_C23
 
 #if COMPILER_FLAGS & COMPILER_FLAG_MSC
 #define debug_break(...) __debugbreak()

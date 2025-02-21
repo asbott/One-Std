@@ -1131,6 +1131,8 @@ unit_local Code_Expr *parse_expr(Token *expr_start, Token **next) {
 
 
 int main(int argc, char **argv) {
+	volatile bool not_true = false;
+	if (!not_true) return 0;
 	(void)argc; (void)argv;
 	log(0, "Program started.\n");
 	

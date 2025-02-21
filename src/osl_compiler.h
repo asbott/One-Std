@@ -1239,17 +1239,71 @@ unit_local Osl_Result spv_emit_expr(Spv_Converter *spv, Spv_Block *block, Osl_Ex
 		}
 		case OSL_OP_DIV: {
 		
-			if (op1_type->kind == OSL_TYPE_FLOAT || (op1_type->kind == OSL_TYPE_COMPOSITE && op1_type->val.comp_type.underlying->kind == OSL_TYPE_FLOAT)) 
-				spv_begin_op(block, OpFDiv);
-			else if (op1_type->kind == OSL_TYPE_INT || (op1_type->kind == OSL_TYPE_COMPOSITE && op1_type->val.comp_type.underlying->kind == OSL_TYPE_INT)) 
-				spv_begin_op(block, op1_type->val.int_type.is_signed ? OpSDiv : OpUDiv);
-			else assert(false);
+		
+			if (op1_type == op2_type) {
+				
+				if (op1_type->kind == OSL_TYPE_FLOAT || (op1_type->kind == OSL_TYPE_COMPOSITE && op1_type->val.comp_type.underlying->kind == OSL_TYPE_FLOAT)) 
+					spv_begin_op(block, OpFDiv);
+				else if (op1_type->kind == OSL_TYPE_INT || (op1_type->kind == OSL_TYPE_COMPOSITE && op1_type->val.comp_type.underlying->kind == OSL_TYPE_INT)) 
+					spv_begin_op(block, op1_type->val.int_type.is_signed ? OpSDiv : OpUDiv);
+				else assert(false);
+				
+				spv_push_word(block, op1_type->type_id);
+			    *result_id = spv_push_result_arg(spv, block);
+			    spv_push_word(block, op1);
+			    spv_push_word(block, op2);
+		    	spv_end_op(block);
+				
+			} else if ((op1_type->kind == OSL_TYPE_COMPOSITE || op2_type->kind == OSL_TYPE_COMPOSITE)) {
+				Osl_Type_Info *comp_type_base = 
+					op1_type->kind == OSL_TYPE_COMPOSITE 
+					? op1_type
+					: op2_type;
+				
+				Osl_Type_Info_Composite *comp_type = &comp_type_base->val.comp_type;
+				
+				Osl_Type_Info *scalar_type = &op1_type->val.comp_type == comp_type ? op2_type : op1_type;
+				
+				u32 comp_op = comp_type == &op1_type->val.comp_type ? op1 : op2;
+				u32 scalar_op = comp_op == op1 ? op2 : op1;
+				
+				assert(comp_type->underlying == scalar_type);
+				
+				if (is_vector_v_scalar) {
+					
+					Spv_Op_Code_Enum spv_op = (Spv_Op_Code_Enum)0;
+					if (scalar_type->kind == OSL_TYPE_FLOAT)
+						spv_op = OpFDiv;
+					else if (scalar_type->kind == OSL_TYPE_INT && scalar_type->val.int_type.is_signed)
+						spv_op = OpSDiv;
+					else if (scalar_type->kind == OSL_TYPE_INT && !scalar_type->val.int_type.is_signed)
+						spv_op = OpUDiv;
+					else assert(false);
+					
+					assert(comp_type->component_count <= 128);
+					u32 results[128];
+					
+					for (u32 i = 0; i < comp_type->component_count; i += 1) {
+						u32 comp_part_id = spv_push_op_composite_extract(spv, block, comp_op, scalar_type->type_id, &i, 1);
+						
+						spv_begin_op(block, spv_op);
+						spv_push_word(block, scalar_type->type_id);
+					    results[i] = spv_push_result_arg(spv, block);
+					    spv_push_word(block, comp_part_id);
+					    spv_push_word(block, scalar_op);
+				    	spv_end_op(block);
+					}
+					
+					*result_id = spv_push_op_composite_construct(spv, block, comp_type_base->type_id, results, comp_type->component_count);
+					*type = comp_type_base;
+					
+				} else if (is_scalar_v_vector) {
+					
+				} else assert(false);
+				
+			} else assert(false);
 			
-			spv_push_word(block, op1_type->type_id);
-		    *result_id = spv_push_result_arg(spv, block);
-		    spv_push_word(block, op1);
-		    spv_push_word(block, op2);
-	    	spv_end_op(block);
+			break;
 			
 			break;
 		}

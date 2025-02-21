@@ -830,24 +830,28 @@ Oga_Result oga_cmd_copy_memory(Oga_Pointer *dst, Oga_Pointer *src, u64 offset, u
 void* oga_state_allocator_proc(Allocator_Message msg, void *data, void *old, u64 old_n, u64 n, u64 alignment, u64 flags) {
     (void)flags;
     (void)old_n;
-    (void)alignment; // Since fitting into blocks, they will already be aligned
     Oga_State_Allocator_Data *a = (Oga_State_Allocator_Data*)data;
+
+    if (alignment == 0)
+        alignment = 8;
     
     System_Info info = sys_get_info();
     
     switch (msg) {
         case ALLOCATOR_ALLOCATE:
         {
-            if (n > 16384) {
+            if (n > 4096) {
                 // Just directly map pages for big allocations. This should be rare, or probably never happen.
                 void *p = sys_map_pages(SYS_MEMORY_RESERVE | SYS_MEMORY_ALLOCATE, 0, (n+info.page_size)/info.page_size, false);
+                assert(p);
+                assert((u64)p % info.page_size == 0);
+                assertmsgs((u64)p % alignment == 0, tprint("Expected alignment of %i, pointer is %u", alignment, p));
                 return p;
             }
-        
             Oga_Allocator_Row *row = 0;
             u64 stride = 0;
             for (u64 i = 0; i < 11; i += 1) {
-                u64 row_stride = powu(2, i+3);
+                u64 row_stride = powu(2, i+4);
                 if (n <= row_stride) {
                     stride = row_stride;
                     row = &a->rows[i];
@@ -864,13 +868,16 @@ void* oga_state_allocator_proc(Allocator_Message msg, void *data, void *old, u64
                 void *reserved = sys_map_pages(SYS_MEMORY_RESERVE, 0, (1024*1024*1024)/info.page_size, false);
                 assert(reserved);
                 
-                row->start = sys_map_pages(SYS_MEMORY_ALLOCATE, reserved, max(info.granularity, 1024*32)/info.page_size, true);
+                u64 initial_row_size = max(info.granularity, 1024*32);
+                row->start = sys_map_pages(SYS_MEMORY_ALLOCATE, reserved, initial_row_size/info.page_size, true);
                 
                 if (!row->start) return 0;
                 
-                row->end = (u8*)row->start + (max(info.granularity, 1024*32)/info.page_size)*info.page_size;
+                // Round to page size (actual allocated size)
+                row->end = (u8*)row->start + (initial_row_size/info.page_size)*info.page_size;
                 
                 row->first_free_index = 0;
+                row->highest_allocated_index = 0;
             }
             
             
@@ -881,7 +888,7 @@ void* oga_state_allocator_proc(Allocator_Message msg, void *data, void *old, u64
             
             if ((u8*)next == (u8*)row->end) {
                 u64 old_size = (u64)row->end - (u64)row->start;
-                u64 new_size = old_size*2;
+                u64 new_size = (((old_size*2)+info.page_size)/info.page_size)*info.page_size;
                 
                 void *expansion = sys_map_pages(SYS_MEMORY_ALLOCATE, row->end, new_size/info.page_size, true);
 #if OS_FLAGS & OS_FLAG_WINDOWS
@@ -891,6 +898,7 @@ void* oga_state_allocator_proc(Allocator_Message msg, void *data, void *old, u64
                     // todo(charlie) #Portability #Memory #Speed
                     // If target system has poor mapping features, we might hit this often, which is kind of crazy.
                     void *p = sys_map_pages(SYS_MEMORY_RESERVE | SYS_MEMORY_ALLOCATE, 0, (n+info.page_size)/info.page_size, false);
+                    assert((u64)p % alignment == 0);
                     return p;
                 }
                 
@@ -903,6 +911,7 @@ void* oga_state_allocator_proc(Allocator_Message msg, void *data, void *old, u64
             if (allocated_index >= row->highest_allocated_index) {
                 row->first_free_index = allocated_index+1;
             } else {
+                // When we free a block, we store the index to the next free block
                 row->first_free_index = *(u64*)next;
             }
             
@@ -912,23 +921,33 @@ void* oga_state_allocator_proc(Allocator_Message msg, void *data, void *old, u64
             
             assert(row->first_free_index <= row->highest_allocated_index+1);
             
+            assert((u64)next % alignment == 0);
+            
             return next;
         }
         case ALLOCATOR_REALLOCATE:
         {
+            if (n == 0) {
+                oga_state_allocator_proc(ALLOCATOR_FREE, 0, old, 0, 0, alignment, flags);
+                return 0;
+            }
             void * pnew = oga_state_allocator_proc(ALLOCATOR_ALLOCATE, data, 0, 0, n, alignment, flags);
-            memcpy(pnew, old, min(n, old_n));
-            oga_state_allocator_proc(ALLOCATOR_FREE, data, old, 0, 0, alignment, flags);
+            if (old) {
+                memcpy(pnew, old, min(n, old_n));
+                oga_state_allocator_proc(ALLOCATOR_FREE, 0, old, 0, 0, alignment, flags);
+            }
             return pnew;
         }
         case ALLOCATOR_FREE:
         {
+            if (!old) return 0;
+            
             Oga_Allocator_Row *row = 0;
             u64 stride = 16;
             for (u64 i = 0; i < 11; i += 1) {
                 if ((u64)old >= (u64)a->rows[i].start && (u64)old < (u64)a->rows[i].end) {
                     row = &a->rows[i];
-                    u64 exp = powu(2, i+3);
+                    u64 exp = powu(2, i+4);
                     assertmsgs(stride == exp, tprint("%u, %u", stride, exp));
                     break;
                 }
@@ -945,6 +964,7 @@ void* oga_state_allocator_proc(Allocator_Message msg, void *data, void *old, u64
             assert(offset % stride == 0);
             u64 index = offset/stride;
             
+            // Use old memory to store index to the next free block
             *(u64*)old = row->first_free_index;
             row->first_free_index = index;
             
@@ -971,7 +991,7 @@ Oga_Pick_Device_Result oga_pick_device(Oga_Device_Pick_Flag pick_flags, Oga_Devi
 
     s64 device_scores[32] = {0};
 
-    Oga_Pick_Device_Result results[32] = {0};
+     Oga_Pick_Device_Result results[32] = {0};
 
     for (u64 i = 0; i < device_count; i += 1) {
         Oga_Device device = devices[i];
@@ -1017,6 +1037,13 @@ Oga_Pick_Device_Result oga_pick_device(Oga_Device_Pick_Flag pick_flags, Oga_Devi
         }
           
         u64 preferred_features_count = 0;
+
+#ifdef __clang__
+        // clang loop vectorization shits its pants here when -mavx -mavx2, so just disable it.
+        // It completely messes up the branches, basically always doing continue here for some reason.
+        // todo(charlie) try gcc and see if same thing happens
+        #pragma clang loop vectorize(disable)
+#endif // __clang__
         for (u64 f = 0; f < 64; f += 1) {
             // Feature flag is preferred ?
             if (preferred_features & (1 << f)) {

@@ -18,6 +18,7 @@
 // For syntax highligthing
 #if 0
 #include "ostd.h"
+#include "../vendors/vulkan/vulkan.h"
 #endif
 
 
@@ -502,7 +503,7 @@ unit_local inline VkInstance _vk_instance(void) {
 
         _vk_assert1(vkCreateInstance(&create_info, 0, &__instance));
 
-#if DEBUG
+#ifdef DEBUG
         VkDebugUtilsMessengerCreateInfoEXT debug_create_info = (VkDebugUtilsMessengerCreateInfoEXT){0};
         debug_create_info.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_MESSENGER_CREATE_INFO_EXT;
 
@@ -918,7 +919,6 @@ Oga_Result oga_init_context(Oga_Device target_device, Oga_Context_Desc desc, Oga
         a.data = &c->default_allocator_data;
         c->state_allocator = a;
     }
-    
     _Vk_Context_Internal *internal = (_Vk_Context_Internal*)c->internal;
 
     VkPhysicalDeviceFeatures enabled_features = (VkPhysicalDeviceFeatures){0};
@@ -1638,7 +1638,7 @@ Oga_Result oga_reset_latch(Oga_Cpu_Latch *cpu_latch) {
 }
 
 Oga_Result oga_init_command_pool(Oga_Context *context, Oga_Command_Pool_Desc desc, Oga_Command_Pool **pool) {
-    *pool = allocate(context->state_allocator, sizeof(Oga_Command_Pool) + sizeof(VkCommandPool));
+    *pool = allocate(context->state_allocator, sizeof(Oga_Command_Pool));
     if (!*pool) {
         return OGA_ERROR_STATE_ALLOCATION_FAILED;
     }
@@ -1656,19 +1656,21 @@ Oga_Result oga_init_command_pool(Oga_Context *context, Oga_Command_Pool_Desc des
 
     create_info.queueFamilyIndex = (u32)desc.engine_family_index;
 
-    VkAllocationCallbacks vk_allocs = _vk_allocator(&context->state_allocator);
-    _vk_assert2(vkCreateCommandPool((VkDevice)context->id, &create_info, &vk_allocs, (VkCommandPool *)&(*pool)->id));
+    // Passing VkAllocationCallbacks here seems to crash on some AMD drivers
+    VkAllocationCallbacks vk_allocs = _vk_allocator(&context->state_allocator); (void)vk_allocs;
+    _vk_assert2(vkCreateCommandPool((VkDevice)context->id, &create_info, 0, (VkCommandPool *)&(*pool)->id));
 
     return OGA_OK;
 }
 
 void oga_uninit_command_pool(Oga_Command_Pool *pool) {
-    VkAllocationCallbacks vk_allocs = _vk_allocator(&pool->context->state_allocator);
+    VkAllocationCallbacks vk_allocs = _vk_allocator(&pool->context->state_allocator); (void)vk_allocs;
 
     _vk_assert1(vkDeviceWaitIdle(pool->context->id));
     vkResetCommandPool(pool->context->id, pool->id, 0);
+    // Passing VkAllocationCallbacks here seems to crash on some AMD drivers
     _vk_assert1(vkDeviceWaitIdle(pool->context->id));
-    vkDestroyCommandPool(pool->context->id, pool->id, &vk_allocs);
+    vkDestroyCommandPool(pool->context->id, pool->id, 0);
 
     Allocator a = pool->context->state_allocator;
     *pool = (Oga_Command_Pool){0};

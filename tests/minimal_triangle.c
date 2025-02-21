@@ -129,10 +129,10 @@ int main(void) {
     void *frag_code, *vert_code;
     u64 frag_code_size, vert_code_size;
     
-    bool vert_src_ok = sys_read_entire_file(get_temp(), STR("tests/triangle.vert.osl"), &vert_src);
+    bool vert_src_ok = sys_read_entire_file(get_temp(), STR("tests/shaders/triangle.vert.osl"), &vert_src);
     assert(vert_src_ok);
     
-    bool frag_src_ok = sys_read_entire_file(get_temp(), STR("tests/triangle.frag.osl"), &frag_src);
+    bool frag_src_ok = sys_read_entire_file(get_temp(), STR("tests/shaders/triangle.frag.osl"), &frag_src);
     assert(frag_src_ok);
     
     Osl_Compile_Desc vert_desc = (Osl_Compile_Desc){0};
@@ -153,8 +153,6 @@ int main(void) {
     
     compile_result = osl_compile(get_temp(), frag_desc, &frag_code, &frag_code_size, &compile_err);
     assertmsgs(compile_result == OSL_OK, compile_err);
-    
-    sys_write_entire_file(STR("test.spv"), (string) { vert_code_size, (u8*)vert_code });
     
     Oga_Program *vert_program, *frag_program;
     
@@ -243,8 +241,17 @@ int main(void) {
     
     bool image_virgin_flags[3] = {1,1,1};
     
+    f64 start_time = sys_get_seconds_monotonic();
+    (void)start_time;
+    
     while (running) {
         reset_temporary_storage();
+        
+#ifdef RUNNING_TESTS
+        if (sys_get_seconds_monotonic()-start_time > TESTING_DURATION) {
+            running = false;
+        }
+#endif // RUNNING_TESTS
         
         // Wait for frame to be ready, then reset it
         oga_wait_latch(cmd_latches[frame_index]);
@@ -332,4 +339,31 @@ int main(void) {
             break;
         }   
     }
+    
+    // System will free any resources when our program exits, this is to get sanity validation errors to make sure
+    // we have everything under control.
+#ifdef DEBUG
+    oga_uninit_command_pool(pools[0]);
+    oga_uninit_command_pool(pools[1]);
+    oga_uninit_command_pool(pools[2]);
+    oga_uninit_cpu_latch(cmd_latches[0]);
+    oga_uninit_cpu_latch(cmd_latches[1]);
+    oga_uninit_cpu_latch(cmd_latches[2]);
+    oga_uninit_gpu_latch(image_ready_latches[0]);
+    oga_uninit_gpu_latch(image_ready_latches[1]);
+    oga_uninit_gpu_latch(image_ready_latches[2]);
+    oga_uninit_gpu_latch(commands_done_latches[0]);
+    oga_uninit_gpu_latch(commands_done_latches[1]);
+    oga_uninit_gpu_latch(commands_done_latches[2]);
+    oga_uninit_render_pass(render_pass);
+    oga_uninit_program(vert_program);
+    oga_uninit_program(frag_program);
+    oga_uninit_swapchain(swapchain);
+    oga_uninit_context(context);
+#if OS_FLAGS & OS_FLAG_HAS_WINDOW_SYSTEM
+    surface_close(surface);
+#endif
+
+    oga_reset(); // Only really necessary to get messages about leaked resources
+#endif
 }

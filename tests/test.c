@@ -329,10 +329,10 @@ int main(void) {
     void *frag_code, *vert_code;
     u64 frag_code_size, vert_code_size;
     
-    bool vert_src_ok = sys_read_entire_file(get_temp(), STR("tests/triangle.vert.osl"), &vert_src);
+    bool vert_src_ok = sys_read_entire_file(get_temp(), STR("tests/shaders/triangle.vert.osl"), &vert_src);
     assert(vert_src_ok);
     
-    bool frag_src_ok = sys_read_entire_file(get_temp(), STR("tests/triangle.frag.osl"), &frag_src);
+    bool frag_src_ok = sys_read_entire_file(get_temp(), STR("tests/shaders/triangle.frag.osl"), &frag_src);
     assert(frag_src_ok);
     
     Osl_Compile_Desc vert_desc = (Osl_Compile_Desc){0};
@@ -434,11 +434,19 @@ int main(void) {
 
     u64 frame_count = 3;
     u64 frame_index = 0;
+    
+    f64 start_time = sys_get_seconds_monotonic();
+    (void)start_time;
 
     bool image_virgin_flags[3] = {1,1,1};
     float64 last_time = 0.0;
     while (running) {
         reset_temporary_storage();
+#ifdef RUNNING_TESTS
+        if (sys_get_seconds_monotonic()-start_time > TESTING_DURATION) {
+            running = false;
+        }
+#endif // RUNNING_TESTS
         float64 now = sys_get_seconds_monotonic();
         float64 delta = now-last_time;
         if ((u64)now > (u64)last_time) {
@@ -447,7 +455,7 @@ int main(void) {
             print("%fms, %ffps\n", ms, fps);
         }
         last_time = now;
-
+        
 
         surface_poll_events(surface);
 
@@ -528,7 +536,7 @@ int main(void) {
 
     // System will free any resources when our program exits, this is to get sanity validation errors to make sure
     // we have everything under control.
-#if DEBUG
+#ifdef DEBUG
     oga_uninit_command_pool(pools[0]);
     oga_uninit_command_pool(pools[1]);
     oga_uninit_command_pool(pools[2]);

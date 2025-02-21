@@ -1135,7 +1135,7 @@ Easy_Command_Result sys_run_command_easy(string command_line) {
     sys_write_string(sys_get_stdout(), STR(cmd));
     sys_write_string(sys_get_stdout(), STR("\n"));
     
-    bool ok = (bool)CreateProcessA(0, cmd, 0, 0, false, 0, 0, 0, &si, &pi);
+    bool ok = (bool)(int)CreateProcessA(0, cmd, 0, 0, false, 0, 0, 0, &si, &pi);
     
     if (!ok) {
         res.process_start_success = false;

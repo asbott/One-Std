@@ -3,7 +3,7 @@
 #define OSTD_IMPL
 #include "../ostd_single_header.h"
 
-int main(void) {]
+int main(void) {
 	print("Hello, World!\n");
 	return 0;
 }
