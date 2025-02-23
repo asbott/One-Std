@@ -1,0 +1,22 @@
+
+
+in_color: f32v3 $Input(0);
+in_uv: f32v2 $Input(1);
+
+vs_pos: f32v4 $VertexPosition;
+
+out_color: f32v4 $Output(0);
+
+sample_mode: SampleMode $Binding(0);
+image: Image2Df32v4 $Binding(1);
+
+image_color: f32v4 = sample(image, sample_mode, in_uv);
+
+/*if vs_pos.x > 0.15 {
+	out_color = v32v4.(1.0, 0.0, 0.0, 1.0);
+} else if vs_pos.x > 0.0  out_color = v32v4.(0.0, 1.0, 0.0, 1.0);
+else
+	out_color = image_color;*/
+
+out_color = f32v4.(in_color.x, in_color.y, in_color.z, 1.0) * image_color;
+

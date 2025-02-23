@@ -35,7 +35,7 @@ int main(void) {
 	Oga_Device target_device = pick0.device;
 	
 	////
-	// Find an approperiate engine for graphics and present
+	// Find an appropriate engine for graphics and present
 	
 	u64 engine_family_index = U64_MAX;
     
@@ -128,10 +128,10 @@ int main(void) {
     void *frag_code, *vert_code;
     u64 frag_code_size, vert_code_size;
     
-    bool vert_src_ok = sys_read_entire_file(get_temp(), STR("tests/shaders/triangle.vert.osl"), &vert_src);
+    bool vert_src_ok = sys_read_entire_file(get_temp(), STR("tests/shaders/vertex_list_triangle.vert.osl"), &vert_src);
     assert(vert_src_ok);
     
-    bool frag_src_ok = sys_read_entire_file(get_temp(), STR("tests/shaders/triangle.frag.osl"), &frag_src);
+    bool frag_src_ok = sys_read_entire_file(get_temp(), STR("tests/shaders/vertex_list_triangle.frag.osl"), &frag_src);
     assert(frag_src_ok);
     
     Osl_Compile_Desc vert_desc = (Osl_Compile_Desc){0};
@@ -165,12 +165,62 @@ int main(void) {
     
     if (!check_oga_result(oga_init_program(context, vert_program_desc, &vert_program)))
         return 1;
+        
     if (!check_oga_result(oga_init_program(context, frag_program_desc, &frag_program)))
+        return 1;
+    
+    //////
+    // Vertex List
+    /////
+    
+    struct { float4 pos; float3 col; } verts[] = {
+    	{ f4( 0.2f, -0.5f, 0.0f, 1.0f), f3(1.0f, 0.0f, 0.0f) },
+    	{ f4( 0.5f,  0.5f, 0.0f, 1.0f), f3(0.0f, 1.0f, 0.0f) },
+    	{ f4(-0.5f,  0.5f, 0.0f, 1.0f), f3(0.0f, 0.0f, 1.0f) }
+    };
+    
+    // Allocate the memory
+    Oga_Memory_Pointer vertex_list_mem = (Oga_Memory_Pointer){0};
+    Oga_Memory_Property_Flag mem_props = OGA_MEMORY_PROPERTY_GPU_LOCAL | OGA_MEMORY_PROPERTY_GPU_TO_CPU_MAPPABLE;
+    if (!check_oga_result(oga_allocate_memory(context, sizeof(verts), mem_props, OGA_MEMORY_USAGE_VERTEX_LIST, &vertex_list_mem)))
+        return 1;
+    
+    // Map the memory and write to it, then unmap it
+    void *mapped_memory = 0;
+    if (!check_oga_result(oga_map_memory(vertex_list_mem, sizeof(verts), &mapped_memory)))
+        return 1;
+    memcpy(mapped_memory, verts, sizeof(verts));
+    oga_unmap_memory(vertex_list_mem);
+    
+    Oga_Vertex_List_View *vlist = 0;
+    Oga_Memory_View_Desc vlist_desc = (Oga_Memory_View_Desc){0};
+    vlist_desc.memory_pointer = vertex_list_mem;
+    vlist_desc.size = sizeof(verts);
+    
+    if (!check_oga_result(oga_init_vertex_list_view(context, vlist_desc, &vlist)))
         return 1;
     
     //////
     // Render pass
     /////
+    
+    // Vertex layout
+    Oga_Vertex_List_Layout_Desc vertex_layout_desc = (Oga_Vertex_List_Layout_Desc) {0};
+    vertex_layout_desc.bindings[0].stride = sizeof(float4)+sizeof(float3);
+    vertex_layout_desc.bindings[0].input_rate = OGA_VERTEX_INPUT_RATE_VERTEX;
+    vertex_layout_desc.binding_count = 1;
+    
+    vertex_layout_desc.attributes[vertex_layout_desc.attribute_count].binding = 0;
+    vertex_layout_desc.attributes[vertex_layout_desc.attribute_count].location = 0;
+    vertex_layout_desc.attributes[vertex_layout_desc.attribute_count].offset = 0;
+    vertex_layout_desc.attributes[vertex_layout_desc.attribute_count].type = OGA_VERTEX_ATTRIBUTE_TYPE_F32V4;
+    vertex_layout_desc.attribute_count += 1;
+    
+    vertex_layout_desc.attributes[vertex_layout_desc.attribute_count].binding = 0;
+    vertex_layout_desc.attributes[vertex_layout_desc.attribute_count].location = 1;
+    vertex_layout_desc.attributes[vertex_layout_desc.attribute_count].offset = sizeof(float4);
+    vertex_layout_desc.attributes[vertex_layout_desc.attribute_count].type = OGA_VERTEX_ATTRIBUTE_TYPE_F32V3;
+    vertex_layout_desc.attribute_count += 1;
     
     Oga_Render_Pass_Desc render_desc = (Oga_Render_Pass_Desc){0};
     render_desc.vertex_program = vert_program;
@@ -182,6 +232,7 @@ int main(void) {
     render_desc.topology = OGA_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
     render_desc.cull_mode = OGA_CULL_NONE;
     render_desc.line_width = 1.0;
+    render_desc.vertex_input_layout = vertex_layout_desc;
     
     Oga_Render_Pass *render_pass;
     if (!check_oga_result(oga_init_render_pass(context, render_desc, &render_pass)))
@@ -211,7 +262,7 @@ int main(void) {
     if (!check_oga_result(oga_get_command_lists(pools[2], &cmds[2], 1)))
         return 1;
         
-    // todo(charlie) batch create latches
+    // GPU-waited latches that will be signalled when the next swapchain image is ready
     Oga_Gpu_Latch *image_ready_latches[3];
     if (!check_oga_result(oga_init_gpu_latch(context, &image_ready_latches[0])))
         return 1;
@@ -271,6 +322,7 @@ int main(void) {
         // Begin submitting commands to the command list
         oga_cmd_begin(cmd, 0);
         
+        
         ///
         // Start the render pass
         
@@ -290,10 +342,11 @@ int main(void) {
         
         // The draw call
         Oga_Draw_Desc draw_desc = (Oga_Draw_Desc){0};
-        draw_desc.draw_type = OGA_DRAW_INSTANCED;
-        draw_desc.instance_count = 1;
-        draw_desc.vertex_count = 3;
-        oga_cmd_draw(cmd, draw_desc);
+        draw_desc.draw_type = OGA_DRAW_VERTEX_LIST;
+        draw_desc.vertex_count = sizeof(verts)/sizeof(verts[0]);
+        draw_desc.vertex_list_bindings[0] = vlist;
+        draw_desc.vertex_list_binding_count = 1;
+        check_oga_result(oga_cmd_draw(cmd, draw_desc));
         
         oga_cmd_end_render_pass(cmd, render_pass);
         
@@ -344,6 +397,8 @@ int main(void) {
     oga_uninit_gpu_latch(commands_done_latches[0]);
     oga_uninit_gpu_latch(commands_done_latches[1]);
     oga_uninit_gpu_latch(commands_done_latches[2]);
+    oga_uninit_vertex_list_view(vlist);
+    oga_deallocate_memory(vertex_list_mem);
     oga_uninit_render_pass(render_pass);
     oga_uninit_program(vert_program);
     oga_uninit_program(frag_program);

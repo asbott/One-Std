@@ -424,3 +424,7 @@ u64 format_float(float64 x, int decimal_places, void *buffer, u64 buffer_size);
 #ifndef offsetof
 #define offsetof(t, d) ((sys_uint)&(((t *)0)->d))
 #endif
+
+
+void __cpuid(int cpuInfo[4], int function_id);
+

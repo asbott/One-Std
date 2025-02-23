@@ -30,7 +30,7 @@ for %%F in (*.c) do (
     echo ==== Running test: %%F ====
     
     REM --- Debug compile ---
-    clang -g -o "test_result\!fname!-debug.exe" "!fname!.c" -O0 -std=c99 -pedantic -nodefaultlibs -Wall -Werror -Weverything -DDEBUG -I../vendors -L./../. -DRUNNING_TESTS -DTESTING_DURATION=1 -mavx -mavx2> "test_result\!fname!-debug_compile.log" 2>&1
+    clang -o "test_result\!fname!-debug.exe" "!fname!.c" -O0 -std=c99 -pedantic -nodefaultlibs -Wall -Werror -Weverything -DDEBUG -I../vendors -L./../. -DRUNNING_TESTS -DTESTING_DURATION=1 -mavx -mavx2> "test_result\!fname!-debug_compile.log" 2>&1
     set "debugCompileError=!ERRORLEVEL!"
     echo. >> test_result\full_log.txt
     echo ===== !fname!-debug compile output ===== >> test_result\full_log.txt

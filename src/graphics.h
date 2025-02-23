@@ -5,6 +5,7 @@
 #include "ostd.h" // For syntax highlighting.
 #endif
 
+// todo(charlie) make a stack of non-OK results which can be popped
 typedef enum Oga_Result {
     OGA_OK,
 
@@ -33,6 +34,32 @@ typedef enum Oga_Result {
     OGA_ERROR_OUTDATED,
     OGA_ERROR_SURFACE_LOST,
     
+    OGA_ALLOCATE_MEMORY_ERROR_INVALID_PROPERTIES_AND_USAGE_COMBINATION,
+    OGA_ERROR_INVALID_INPUT_RATE_ENUM,
+    
+    OGA_MEMORY_OFFSET_ERROR_UNDERFLOW,
+    OGA_MEMORY_OFFSET_ERROR_OVERFLOW,
+    
+    OGA_CMD_DRAW_ERROR_INVALID_DRAW_TYPE_ENUM,
+    OGA_CMD_DRAW_ERROR_VERTEX_LIST_BINDING_COUNT_ZERO,
+    OGA_CMD_DRAW_ERROR_MISSING_VERTEX_LIST_BINDING,
+    OGA_CMD_DRAW_ERROR_VERTEX_LIST_OFFSET_OUT_OF_RANGE,
+    OGA_CMD_DRAW_ERROR_MISSING_INDEX_LIST,
+    OGA_CMD_DRAW_ERROR_INVALID_INDEX_TYPE_ENUM,
+    
+    OGA_INIT_VERTEX_LIST_VIEW_ERROR_MEMORY_LACKS_SUPPORT,
+    OGA_INIT_INDEX_LIST_VIEW_ERROR_MEMORY_LACKS_SUPPORT,
+    
+    OGA_INIT_IMAGE_VIEW_ERROR_INVALID_DIMENSIONS_ENUM,
+    OGA_INIT_IMAGE_VIEW_ERR_IMAGE_MEMORY_UNALIGNED,
+    OGA_INIT_IMAGE_VIEW_ERR_UNMATCHED_MEMORY_REQUIREMENT,
+    OGA_INIT_IMAGE_COPY_TARGET_VIEW_ERROR_INVALID_FLAGS,
+    
+    OGA_INIT_RENDER_PASS_ERROR_INVALID_PROGRAM_BINDING_KIND_ENUM,
+    OGA_INIT_BINDING_LIST_LAYOUT_ERROR_MISSING_STAGE_FLAGS,
+    
+    OGA_PUSH_BINDING_LIST_ERROR_LAYOUT_COUNT_MISMATCH,
+    
 } Oga_Result;
 
 unit_local inline string oga_get_result_name(Oga_Result r) {
@@ -52,6 +79,25 @@ unit_local inline string oga_get_result_name(Oga_Result r) {
         case OGA_ERROR_OUT_OF_DEVICE_MEMORY:                            return STR("OGA_ERROR_OUT_OF_DEVICE_MEMORY");
         case OGA_ERROR_OUTDATED:                                        return STR("OGA_ERROR_OUTDATED");
         case OGA_ERROR_SURFACE_LOST:                                    return STR("OGA_ERROR_SURFACE_LOST");
+        case OGA_ALLOCATE_MEMORY_ERROR_INVALID_PROPERTIES_AND_USAGE_COMBINATION: return STR("OGA_ALLOCATE_MEMORY_ERROR_INVALID_PROPERTIES_AND_USAGE_COMBINATION");
+        case OGA_ERROR_INVALID_INPUT_RATE_ENUM:                         return STR("OGA_ERROR_INVALID_INPUT_RATE_ENUM");
+        case OGA_MEMORY_OFFSET_ERROR_UNDERFLOW:                         return STR("OGA_MEMORY_OFFSET_ERROR_UNDERFLOW");
+        case OGA_MEMORY_OFFSET_ERROR_OVERFLOW:                          return STR("OGA_MEMORY_OFFSET_ERROR_OVERFLOW");
+        case OGA_CMD_DRAW_ERROR_INVALID_DRAW_TYPE_ENUM:                 return STR("OGA_CMD_DRAW_ERROR_INVALID_DRAW_TYPE_ENUM");
+        case OGA_CMD_DRAW_ERROR_VERTEX_LIST_BINDING_COUNT_ZERO:         return STR("OGA_CMD_DRAW_ERROR_VERTEX_LIST_BINDING_COUNT_ZERO");
+        case OGA_CMD_DRAW_ERROR_MISSING_VERTEX_LIST_BINDING:            return STR("OGA_CMD_DRAW_ERROR_MISSING_VERTEX_LIST_BINDING");
+        case OGA_CMD_DRAW_ERROR_VERTEX_LIST_OFFSET_OUT_OF_RANGE:        return STR("OGA_CMD_DRAW_ERROR_MISSING_VERTEX_LIST_BINDING");
+        case OGA_CMD_DRAW_ERROR_MISSING_INDEX_LIST:                     return STR("OGA_CMD_DRAW_ERROR_MISSING_INDEX_LIST");
+        case OGA_CMD_DRAW_ERROR_INVALID_INDEX_TYPE_ENUM:                return STR("OGA_CMD_DRAW_ERROR_INVALID_INDEX_TYPE_ENUM");
+        case OGA_INIT_VERTEX_LIST_VIEW_ERROR_MEMORY_LACKS_SUPPORT:      return STR("OGA_INIT_VERTEX_LIST_VIEW_ERROR_MEMORY_LACKS_SUPPORT");
+        case OGA_INIT_INDEX_LIST_VIEW_ERROR_MEMORY_LACKS_SUPPORT:       return STR("OGA_INIT_INDEX_LIST_VIEW_ERROR_MEMORY_LACKS_SUPPORT");
+        case OGA_INIT_IMAGE_VIEW_ERROR_INVALID_DIMENSIONS_ENUM:         return STR("OGA_INIT_IMAGE_VIEW_ERROR_INVALID_DIMENSIONS_ENUM");
+        case OGA_INIT_IMAGE_VIEW_ERR_IMAGE_MEMORY_UNALIGNED:            return STR("OGA_INIT_IMAGE_VIEW_ERR_IMAGE_MEMORY_UNALIGNED");
+        case OGA_INIT_IMAGE_VIEW_ERR_UNMATCHED_MEMORY_REQUIREMENT:      return STR("OGA_INIT_IMAGE_VIEW_ERR_UNMATCHED_MEMORY_REQUIREMENT");
+        case OGA_INIT_IMAGE_COPY_TARGET_VIEW_ERROR_INVALID_FLAGS:       return STR("OGA_INIT_IMAGE_COPY_TARGET_VIEW_ERROR_INVALID_FLAGS");
+        case OGA_INIT_RENDER_PASS_ERROR_INVALID_PROGRAM_BINDING_KIND_ENUM: return STR("OGA_INIT_RENDER_PASS_ERROR_INVALID_PROGRAM_BINDING_KIND_ENUM");
+        case OGA_INIT_BINDING_LIST_LAYOUT_ERROR_MISSING_STAGE_FLAGS:    return STR("OGA_INIT_BINDING_LIST_LAYOUT_ERROR_MISSING_STAGE_FLAGS");
+        case OGA_PUSH_BINDING_LIST_ERROR_LAYOUT_COUNT_MISMATCH:         return STR("OGA_PUSH_BINDING_LIST_ERROR_LAYOUT_COUNT_MISMATCH");
         default: return STR("<>");
     }
     return STR("<>");
@@ -62,7 +108,7 @@ unit_local inline string oga_get_result_message(Oga_Result r) {
         case OGA_SUBOPTIMAL: 
             return STR("Swapchain is suboptimal and should be recreated, but can still be used.");
         case OGA_NOT_READY: 
-            return STR("Swapchain has no ready images yet");
+            return STR("Swapchain has no ready imagess yet");
         case OGA_TIMEOUT: 
             return STR("A timeout expired");
         case OGA_CONTEXT_INIT_ERROR_MISSING_DEVICE_FEATURES:
@@ -80,81 +126,258 @@ unit_local inline string oga_get_result_message(Oga_Result r) {
         case OGA_INIT_PROGRAM_ERROR_BAD_CODE:
             return STR("The code passed was bad (or code_size) was incorrect.");
         case OGA_ERROR_STATE_ALLOCATION_FAILED:
-            return STR("An allocation with the state_allocator passed in Oga_Context creation returned null upon allocation.");
+            return STR("An allocation with the state_allocator passed in Oga_Context creation returned 0 upon allocation.");
         case OGA_ERROR_OUT_OF_DEVICE_MEMORY:
             return STR("Out of device memory");
         case OGA_ERROR_OUTDATED:
             return STR("A swapchain has become out of date and can no longer present");
         case OGA_ERROR_SURFACE_LOST:
             return STR("A surface was lost; closed or corrupt");
+        case OGA_ALLOCATE_MEMORY_ERROR_INVALID_PROPERTIES_AND_USAGE_COMBINATION:
+            return STR("The given combination of memory property flags and usage flags did not match to an available heap & memory type. Please see Oga_Device::memory_heaps for heap availability and support.");
+        case OGA_ERROR_INVALID_INPUT_RATE_ENUM:
+            return STR("The given Oga_Vertex_Attribute_Type enum for Oga_Vertex_List_Attribute_Desc::type was not a valid enum value. It muse be one of: OGA_VERTEX_INPUT_RATE_VERTEX or OGA_VERTEX_INPUT_RATE_INSTANCE.");
+        case OGA_MEMORY_OFFSET_ERROR_UNDERFLOW:
+            return STR("The resulting pointer from oga_memory_offset() underflows the allocated memory block");
+        case OGA_MEMORY_OFFSET_ERROR_OVERFLOW:
+            return STR("The resulting pointer from oga_memory_offset() overflows the allocated memory block");
+        case OGA_CMD_DRAW_ERROR_INVALID_DRAW_TYPE_ENUM:
+            return STR("The value in Oga_Draw_Desc::draw_type was of an invalid value. See enum Oga_Draw_Type for valid values.");
+        case OGA_CMD_DRAW_ERROR_VERTEX_LIST_BINDING_COUNT_ZERO:
+            return STR("A vertex list draw command was submitted but Oga_Draw_Desc::vertex_list_binding_count is 0.");
+        case OGA_CMD_DRAW_ERROR_MISSING_VERTEX_LIST_BINDING:
+            return STR("A binding slot within the range 0 to Oga_Draw_Desc::vertex_list_binding_count was set to 0 in Oga_Draw_Desc::vertex_list_bindings.");
+        case OGA_CMD_DRAW_ERROR_VERTEX_LIST_OFFSET_OUT_OF_RANGE:
+            return STR("A vertex list binding offset in Oga_Draw_Desc::vertex_list_offsets was out of range");
+        case OGA_CMD_DRAW_ERROR_MISSING_INDEX_LIST:
+            return STR("An indexed draw command was submitted but Oga_Draw_Desc::index_list was set to 0.");
+        case OGA_CMD_DRAW_ERROR_INVALID_INDEX_TYPE_ENUM:
+            return STR("An indexed draw command was submitted Oga_Draw_Desc::index_type was of an invalid enum value. Valid values are: OGA_INDEX_U32 or OGA_INDEX_U16");
+        case OGA_INIT_VERTEX_LIST_VIEW_ERROR_MEMORY_LACKS_SUPPORT:
+            return STR("Tried creating a Vertex List View, pointing to memory from a heap which lacks the support flag OGA_MEMORY_USAGE_VERTEX_LIST. Make sure you include the usage flag OGA_MEMORY_USAGE_VERTEX_LIST in oga_allocate_memory() to make sure you get memory from a heap with the required support flags.");
+        case OGA_INIT_INDEX_LIST_VIEW_ERROR_MEMORY_LACKS_SUPPORT:
+            return STR("Tried creating a Vertex List View, pointing to memory from a heap which lacks the support flag OGA_MEMORY_USAGE_INDEX_LIST. Make sure you include the usage flag OGA_MEMORY_USAGE_INDEX_LIST in oga_allocate_memory() to make sure you get memory from a heap with the required support flags.");
+        case OGA_INIT_IMAGE_VIEW_ERROR_INVALID_DIMENSIONS_ENUM:
+            return STR("Oga_Image_View_Desc::dimensions was an invalid value. It must be one of: OGA_1D, OGA_2D or OGA_3D");
+        case OGA_INIT_IMAGE_VIEW_ERR_IMAGE_MEMORY_UNALIGNED:
+            return STR("Oga_Image_View_Desc::memory_pointer offset must be aligned to Oga_Device::limits.image_memory_granularity, but it was not.");
+        case OGA_INIT_IMAGE_VIEW_ERR_UNMATCHED_MEMORY_REQUIREMENT:
+            return STR("Oga_Image_View_Desc::memory_pointer allocation size is not enough to meet the memory requirement for the image. To get the memory requirement for an image kind and size, use oga_get_image_memory_requirement()");
+        case OGA_INIT_IMAGE_COPY_TARGET_VIEW_ERROR_INVALID_FLAGS:
+            return STR("Oga_Image_Copy_Target_View_Desc::flags does not convey any intent.");
+        case OGA_INIT_RENDER_PASS_ERROR_INVALID_PROGRAM_BINDING_KIND_ENUM:
+            return STR("A program binding had an invalid enum value for Oga_Program_Binding_Desc::kind. See Oga_Binding_Kind for valid enum values.");
+        case OGA_INIT_BINDING_LIST_LAYOUT_ERROR_MISSING_STAGE_FLAGS:
+            return STR("A Oga_Program_Binding_Desc::stage_flags was 0. It needs to contain at least one valid stage flag from Oga_Program_Stage_Flag");
+        case OGA_PUSH_BINDING_LIST_ERROR_LAYOUT_COUNT_MISMATCH:
+            return STR("Oga_Binding_List_Desc::binding_count is greater than what was passed into oga_init_binding_list_layout Oga_Binding_List_Layout_Desc::binding_count. Cannot allocate a binding list with more bindings than was specified for the layout.");
         default: return STR("<>");
     }
     return STR("<>");
 }
 
 typedef enum Oga_Format {
+    OGA_FORMAT_R4G4_UNORM_PACK8,
+    OGA_FORMAT_R4G4B4A4_UNORM_PACK16,
+    OGA_FORMAT_B4G4R4A4_UNORM_PACK16,
+    OGA_FORMAT_R5G6B5_UNORM_PACK16,
+    OGA_FORMAT_B5G6R5_UNORM_PACK16,
+    OGA_FORMAT_R5G5B5A1_UNORM_PACK16,
+    OGA_FORMAT_A1R5G5B5_UNORM_PACK16,
+
     OGA_FORMAT_R8_UNORM,
     OGA_FORMAT_R8_SNORM,
     OGA_FORMAT_R8_UINT,
     OGA_FORMAT_R8_SINT,
+    OGA_FORMAT_R8_SRGB,
+
     OGA_FORMAT_R8G8_UNORM,
     OGA_FORMAT_R8G8_SNORM,
     OGA_FORMAT_R8G8_UINT,
     OGA_FORMAT_R8G8_SINT,
+    OGA_FORMAT_R8G8_SRGB,
+
+    OGA_FORMAT_R8G8B8_UNORM,
+    OGA_FORMAT_R8G8B8_SNORM,
+    OGA_FORMAT_R8G8B8_UINT,
+    OGA_FORMAT_R8G8B8_SINT,
+    OGA_FORMAT_R8G8B8_SRGB,
+
     OGA_FORMAT_R8G8B8A8_UNORM,
     OGA_FORMAT_R8G8B8A8_SNORM,
     OGA_FORMAT_R8G8B8A8_UINT,
     OGA_FORMAT_R8G8B8A8_SINT,
     OGA_FORMAT_R8G8B8A8_SRGB,
+
     OGA_FORMAT_B8G8R8A8_UNORM,
     OGA_FORMAT_B8G8R8A8_SNORM,
     OGA_FORMAT_B8G8R8A8_UINT,
     OGA_FORMAT_B8G8R8A8_SINT,
     OGA_FORMAT_B8G8R8A8_SRGB,
+
+    OGA_FORMAT_R16_UNORM,
+    OGA_FORMAT_R16_SNORM,
+    OGA_FORMAT_R16_UINT,
+    OGA_FORMAT_R16_SINT,
+    OGA_FORMAT_R16_SFLOAT,
+
+    OGA_FORMAT_R16G16_UNORM,
+    OGA_FORMAT_R16G16_SNORM,
+    OGA_FORMAT_R16G16_UINT,
+    OGA_FORMAT_R16G16_SINT,
+    OGA_FORMAT_R16G16_SFLOAT,
+
+    OGA_FORMAT_R16G16B16A16_UNORM,
+    OGA_FORMAT_R16G16B16A16_SNORM,
+    OGA_FORMAT_R16G16B16A16_UINT,
+    OGA_FORMAT_R16G16B16A16_SINT,
     OGA_FORMAT_R16G16B16A16_SFLOAT,
+
+    OGA_FORMAT_R32_SFLOAT,
+    OGA_FORMAT_R32_UINT,
+    OGA_FORMAT_R32_SINT,
+
+    OGA_FORMAT_R32G32_SFLOAT,
+    OGA_FORMAT_R32G32_UINT,
+    OGA_FORMAT_R32G32_SINT,
+
+    OGA_FORMAT_R32G32B32_SFLOAT,
+    OGA_FORMAT_R32G32B32_UINT,
+    OGA_FORMAT_R32G32B32_SINT,
+
     OGA_FORMAT_R32G32B32A32_SFLOAT,
+    OGA_FORMAT_R32G32B32A32_UINT,
+    OGA_FORMAT_R32G32B32A32_SINT,
+    
+    OGA_FORMAT_DEPTH16_UNORM,
+    OGA_FORMAT_DEPTH24_UNORM_S8_UINT,
     OGA_FORMAT_DEPTH32_SFLOAT,
     OGA_FORMAT_DEPTH32_SFLOAT_S8_UINT,
-    OGA_FORMAT_DEPTH24_UNORM_S8_UINT,
-    OGA_FORMAT_DEPTH16_UNORM,
-    
+
+    OGA_FORMAT_BC1_RGB_UNORM_BLOCK,
+    OGA_FORMAT_BC1_RGB_SRGB_BLOCK,
+    OGA_FORMAT_BC1_RGBA_UNORM_BLOCK,
+    OGA_FORMAT_BC1_RGBA_SRGB_BLOCK,
+    OGA_FORMAT_BC2_UNORM_BLOCK,
+    OGA_FORMAT_BC2_SRGB_BLOCK,
+    OGA_FORMAT_BC3_UNORM_BLOCK,
+    OGA_FORMAT_BC3_SRGB_BLOCK,
+    OGA_FORMAT_BC4_UNORM_BLOCK,
+    OGA_FORMAT_BC4_SNORM_BLOCK,
+    OGA_FORMAT_BC5_UNORM_BLOCK,
+    OGA_FORMAT_BC5_SNORM_BLOCK,
+    OGA_FORMAT_BC6H_UFLOAT_BLOCK,
+    OGA_FORMAT_BC6H_SFLOAT_BLOCK,
+    OGA_FORMAT_BC7_UNORM_BLOCK,
+    OGA_FORMAT_BC7_SRGB_BLOCK,
+
     OGA_FORMAT_ENUM_MAX,
 } Oga_Format;
 
 unit_local inline string oga_format_str(Oga_Format f) {
     switch (f) {
-        case OGA_FORMAT_R8_UNORM:               return RSTR(R8_UNORM);
-        case OGA_FORMAT_R8_SNORM:               return RSTR(R8_SNORM);
-        case OGA_FORMAT_R8_UINT:                return RSTR(R8_UINT);
-        case OGA_FORMAT_R8_SINT:                return RSTR(R8_SINT);
-        case OGA_FORMAT_R8G8_UNORM:             return RSTR(R8G8_UNORM);
-        case OGA_FORMAT_R8G8_SNORM:             return RSTR(R8G8_SNORM);
-        case OGA_FORMAT_R8G8_UINT:              return RSTR(R8G8_UINT);
-        case OGA_FORMAT_R8G8_SINT:              return RSTR(R8G8_SINT);
-        case OGA_FORMAT_R8G8B8A8_UNORM:         return RSTR(R8G8B8A8_UNORM);
-        case OGA_FORMAT_R8G8B8A8_SNORM:         return RSTR(R8G8B8A8_SNORM);
-        case OGA_FORMAT_R8G8B8A8_UINT:          return RSTR(R8G8B8A8_UINT);
-        case OGA_FORMAT_R8G8B8A8_SINT:          return RSTR(R8G8B8A8_SINT);
-        case OGA_FORMAT_R8G8B8A8_SRGB:          return RSTR(R8G8B8A8_SRGB);
-        case OGA_FORMAT_B8G8R8A8_UNORM:         return RSTR(B8G8R8A8_UNORM);
-        case OGA_FORMAT_B8G8R8A8_SNORM:         return RSTR(B8G8R8A8_SNORM);
-        case OGA_FORMAT_B8G8R8A8_UINT:          return RSTR(B8G8R8A8_UINT);
-        case OGA_FORMAT_B8G8R8A8_SINT:          return RSTR(B8G8R8A8_SINT);
-        case OGA_FORMAT_B8G8R8A8_SRGB:          return RSTR(B8G8R8A8_SRGB);
-        case OGA_FORMAT_R16G16B16A16_SFLOAT:    return RSTR(R16G16B16A16_SFLOAT);
-        case OGA_FORMAT_R32G32B32A32_SFLOAT:    return RSTR(R32G32B32A32_SFLOAT);
-        case OGA_FORMAT_DEPTH32_SFLOAT:         return RSTR(DEPTH32_SFLOAT);
-        case OGA_FORMAT_DEPTH32_SFLOAT_S8_UINT: return RSTR(DEPTH32_SFLOAT_S8_UINT);
-        case OGA_FORMAT_DEPTH24_UNORM_S8_UINT:  return RSTR(DEPTH24_UNORM_S8_UINT);
-        case OGA_FORMAT_DEPTH16_UNORM:          return RSTR(DEPTH16_UNORM);
-        
+        case OGA_FORMAT_R4G4_UNORM_PACK8:              return RSTR(R4G4_UNORM_PACK8);
+        case OGA_FORMAT_R4G4B4A4_UNORM_PACK16:          return RSTR(R4G4B4A4_UNORM_PACK16);
+        case OGA_FORMAT_B4G4R4A4_UNORM_PACK16:          return RSTR(B4G4R4A4_UNORM_PACK16);
+        case OGA_FORMAT_R5G6B5_UNORM_PACK16:            return RSTR(R5G6B5_UNORM_PACK16);
+        case OGA_FORMAT_B5G6R5_UNORM_PACK16:            return RSTR(B5G6R5_UNORM_PACK16);
+        case OGA_FORMAT_R5G5B5A1_UNORM_PACK16:          return RSTR(R5G5B5A1_UNORM_PACK16);
+        case OGA_FORMAT_A1R5G5B5_UNORM_PACK16:          return RSTR(A1R5G5B5_UNORM_PACK16);
+
+        case OGA_FORMAT_R8_UNORM:                       return RSTR(R8_UNORM);
+        case OGA_FORMAT_R8_SNORM:                       return RSTR(R8_SNORM);
+        case OGA_FORMAT_R8_UINT:                        return RSTR(R8_UINT);
+        case OGA_FORMAT_R8_SINT:                        return RSTR(R8_SINT);
+        case OGA_FORMAT_R8_SRGB:                        return RSTR(R8_SRGB);
+
+        case OGA_FORMAT_R8G8_UNORM:                     return RSTR(R8G8_UNORM);
+        case OGA_FORMAT_R8G8_SNORM:                     return RSTR(R8G8_SNORM);
+        case OGA_FORMAT_R8G8_UINT:                      return RSTR(R8G8_UINT);
+        case OGA_FORMAT_R8G8_SINT:                      return RSTR(R8G8_SINT);
+        case OGA_FORMAT_R8G8_SRGB:                      return RSTR(R8G8_SRGB);
+
+        case OGA_FORMAT_R8G8B8_UNORM:                   return RSTR(R8G8B8_UNORM);
+        case OGA_FORMAT_R8G8B8_SNORM:                   return RSTR(R8G8B8_SNORM);
+        case OGA_FORMAT_R8G8B8_UINT:                    return RSTR(R8G8B8_UINT);
+        case OGA_FORMAT_R8G8B8_SINT:                    return RSTR(R8G8B8_SINT);
+        case OGA_FORMAT_R8G8B8_SRGB:                    return RSTR(R8G8B8_SRGB);
+
+        case OGA_FORMAT_R8G8B8A8_UNORM:                 return RSTR(R8G8B8A8_UNORM);
+        case OGA_FORMAT_R8G8B8A8_SNORM:                 return RSTR(R8G8B8A8_SNORM);
+        case OGA_FORMAT_R8G8B8A8_UINT:                  return RSTR(R8G8B8A8_UINT);
+        case OGA_FORMAT_R8G8B8A8_SINT:                  return RSTR(R8G8B8A8_SINT);
+        case OGA_FORMAT_R8G8B8A8_SRGB:                  return RSTR(R8G8B8A8_SRGB);
+
+        case OGA_FORMAT_B8G8R8A8_UNORM:                 return RSTR(B8G8R8A8_UNORM);
+        case OGA_FORMAT_B8G8R8A8_SNORM:                 return RSTR(B8G8R8A8_SNORM);
+        case OGA_FORMAT_B8G8R8A8_UINT:                  return RSTR(B8G8R8A8_UINT);
+        case OGA_FORMAT_B8G8R8A8_SINT:                  return RSTR(B8G8R8A8_SINT);
+        case OGA_FORMAT_B8G8R8A8_SRGB:                  return RSTR(B8G8R8A8_SRGB);
+
+        case OGA_FORMAT_R16_UNORM:                      return RSTR(R16_UNORM);
+        case OGA_FORMAT_R16_SNORM:                      return RSTR(R16_SNORM);
+        case OGA_FORMAT_R16_UINT:                       return RSTR(R16_UINT);
+        case OGA_FORMAT_R16_SINT:                       return RSTR(R16_SINT);
+        case OGA_FORMAT_R16_SFLOAT:                     return RSTR(R16_SFLOAT);
+
+        case OGA_FORMAT_R16G16_UNORM:                   return RSTR(R16G16_UNORM);
+        case OGA_FORMAT_R16G16_SNORM:                   return RSTR(R16G16_SNORM);
+        case OGA_FORMAT_R16G16_UINT:                    return RSTR(R16G16_UINT);
+        case OGA_FORMAT_R16G16_SINT:                    return RSTR(R16G16_SINT);
+        case OGA_FORMAT_R16G16_SFLOAT:                  return RSTR(R16G16_SFLOAT);
+
+        case OGA_FORMAT_R16G16B16A16_UNORM:             return RSTR(R16G16B16A16_UNORM);
+        case OGA_FORMAT_R16G16B16A16_SNORM:             return RSTR(R16G16B16A16_SNORM);
+        case OGA_FORMAT_R16G16B16A16_UINT:              return RSTR(R16G16B16A16_UINT);
+        case OGA_FORMAT_R16G16B16A16_SINT:              return RSTR(R16G16B16A16_SINT);
+        case OGA_FORMAT_R16G16B16A16_SFLOAT:            return RSTR(R16G16B16A16_SFLOAT);
+
+        case OGA_FORMAT_R32_SFLOAT:                     return RSTR(R32_SFLOAT);
+        case OGA_FORMAT_R32_UINT:                       return RSTR(R32_UINT);
+        case OGA_FORMAT_R32_SINT:                       return RSTR(R32_SINT);
+
+        case OGA_FORMAT_R32G32_SFLOAT:                  return RSTR(R32G32_SFLOAT);
+        case OGA_FORMAT_R32G32_UINT:                    return RSTR(R32G32_UINT);
+        case OGA_FORMAT_R32G32_SINT:                    return RSTR(R32G32_SINT);
+
+        case OGA_FORMAT_R32G32B32_SFLOAT:               return RSTR(R32G32B32_SFLOAT);
+        case OGA_FORMAT_R32G32B32_UINT:                 return RSTR(R32G32B32_UINT);
+        case OGA_FORMAT_R32G32B32_SINT:                 return RSTR(R32G32B32_SINT);
+
+        case OGA_FORMAT_R32G32B32A32_SFLOAT:            return RSTR(R32G32B32A32_SFLOAT);
+        case OGA_FORMAT_R32G32B32A32_UINT:              return RSTR(R32G32B32A32_UINT);
+        case OGA_FORMAT_R32G32B32A32_SINT:              return RSTR(R32G32B32A32_SINT);
+
+        case OGA_FORMAT_DEPTH16_UNORM:                  return RSTR(DEPTH16_UNORM);
+        case OGA_FORMAT_DEPTH24_UNORM_S8_UINT:          return RSTR(DEPTH24_UNORM_S8_UINT);
+        case OGA_FORMAT_DEPTH32_SFLOAT:                 return RSTR(DEPTH32_SFLOAT);
+        case OGA_FORMAT_DEPTH32_SFLOAT_S8_UINT:         return RSTR(DEPTH32_SFLOAT_S8_UINT);
+
+        case OGA_FORMAT_BC1_RGB_UNORM_BLOCK:            return RSTR(BC1_RGB_UNORM_BLOCK);
+        case OGA_FORMAT_BC1_RGB_SRGB_BLOCK:             return RSTR(BC1_RGB_SRGB_BLOCK);
+        case OGA_FORMAT_BC1_RGBA_UNORM_BLOCK:           return RSTR(BC1_RGBA_UNORM_BLOCK);
+        case OGA_FORMAT_BC1_RGBA_SRGB_BLOCK:            return RSTR(BC1_RGBA_SRGB_BLOCK);
+        case OGA_FORMAT_BC2_UNORM_BLOCK:                return RSTR(BC2_UNORM_BLOCK);
+        case OGA_FORMAT_BC2_SRGB_BLOCK:                 return RSTR(BC2_SRGB_BLOCK);
+        case OGA_FORMAT_BC3_UNORM_BLOCK:                return RSTR(BC3_UNORM_BLOCK);
+        case OGA_FORMAT_BC3_SRGB_BLOCK:                 return RSTR(BC3_SRGB_BLOCK);
+        case OGA_FORMAT_BC4_UNORM_BLOCK:                return RSTR(BC4_UNORM_BLOCK);
+        case OGA_FORMAT_BC4_SNORM_BLOCK:                return RSTR(BC4_SNORM_BLOCK);
+        case OGA_FORMAT_BC5_UNORM_BLOCK:                return RSTR(BC5_UNORM_BLOCK);
+        case OGA_FORMAT_BC5_SNORM_BLOCK:                return RSTR(BC5_SNORM_BLOCK);
+        case OGA_FORMAT_BC6H_UFLOAT_BLOCK:              return RSTR(BC6H_UFLOAT_BLOCK);
+        case OGA_FORMAT_BC6H_SFLOAT_BLOCK:              return RSTR(BC6H_SFLOAT_BLOCK);
+        case OGA_FORMAT_BC7_UNORM_BLOCK:                return RSTR(BC7_UNORM_BLOCK);
+        case OGA_FORMAT_BC7_SRGB_BLOCK:                 return RSTR(BC7_SRGB_BLOCK);
+
         case OGA_FORMAT_ENUM_MAX:
-        default: return RSTR(<>);
+        default:
+            return RSTR(<>);
     }
     return RSTR(<>);
 }
 
-typedef enum Oga_Memory_Property_Flag {
+typedef enum Oga_Memory_Property_Flag_ {
     // Memory is near GPU and accessed with high performance
     OGA_MEMORY_PROPERTY_GPU_LOCAL  = 0x00000001,
     // Memory can be mapped
@@ -163,7 +386,25 @@ typedef enum Oga_Memory_Property_Flag {
     OGA_MEMORY_PROPERTY_GPU_TO_CPU_REFLECTED = 0x00000004,
     // Cached memory is accessed quicker, but does not instantly reflect GPU writes
     OGA_MEMORY_PROPERTY_GPU_TO_CPU_CACHED   = 0x00000008,
-} Oga_Memory_Property_Flag;
+} Oga_Memory_Property_Flag_;
+typedef u64 Oga_Memory_Property_Flag;
+
+typedef enum Oga_Memory_Usage_ {
+    OGA_MEMORY_USAGE_NONE = 0,
+    OGA_MEMORY_USAGE_VERTEX_LIST = 1 << 2,
+    OGA_MEMORY_USAGE_INDEX_LIST = 1 << 3,
+    OGA_MEMORY_USAGE_FAST_READONLY_DATA_BLOCK = 1 << 4,
+    OGA_MEMORY_USAGE_LARGE_READWRITE_DATA_BLOCK = 1 << 5,
+    OGA_MEMORY_USAGE_COPY_DST = 1 << 6,
+    OGA_MEMORY_USAGE_COPY_SRC = 1 << 7,
+    OGA_MEMORY_USAGE_IMAGE_1D = 1 << 8,
+    OGA_MEMORY_USAGE_IMAGE_2D = 1 << 9,
+    OGA_MEMORY_USAGE_IMAGE_3D = 1 << 10,
+    OGA_MEMORY_USAGE_FBLOCK_1D = 1 << 8,
+    OGA_MEMORY_USAGE_FBLOCK_2D = 1 << 9,
+    OGA_MEMORY_USAGE_FBLOCK_3D = 1 << 10,
+} Oga_Memory_Usage_;
+typedef u64 Oga_Memory_Usage;
 
 // Unique identifer/handle for an instance of something.
 // For example, if we need to know if two Oga_Device's are the same, we compare
@@ -199,6 +440,7 @@ typedef struct Oga_Logical_Engine_Family_Info {
 typedef struct Oga_Memory_Heap {
     Oga_Memory_Property_Flag properties;
     u64 size;
+    Oga_Memory_Usage supported_usage_flags;
 } Oga_Memory_Heap;
 
 typedef enum Oga_Device_Kind {
@@ -210,18 +452,18 @@ typedef enum Oga_Device_Kind {
 
 // todo(charlie) populate this with an exhaustive list.
 typedef struct Oga_Device_Limits {
-    u64 max_program_pointer_sets_per_stage;
+    u64 max_program_view_sets_per_stage;
 
     u64 max_fast_data_blocks_per_stage;
     u64 max_large_data_blocks_per_stage;
-    u64 max_fast_images_per_stage;
-    u64 max_large_images_per_stage;
+    u64 max_images_per_stage;
+    u64 max_fblocks_per_stage;
     u64 max_samplers_per_stage;
 
     u64 max_fast_data_blocks_per_layout;
     u64 max_large_data_blocks_per_layout;
-    u64 max_fast_images_per_layout;
-    u64 max_large_images_per_layout;
+    u64 max_images_per_layout;
+    u64 max_fblocks_per_layout;
     u64 max_samplers_per_layout;
 
     u64 max_memory_allocations;
@@ -255,12 +497,13 @@ typedef struct Oga_Device_Limits {
 
     Oga_Sample_Count_Flag supported_sample_counts_render_pass;
 
-    Oga_Sample_Count_Flag supported_sample_counts_fast_image_float;
-    Oga_Sample_Count_Flag supported_sample_counts_large_image_float;
-    Oga_Sample_Count_Flag supported_sample_counts_fast_image_int;
-    Oga_Sample_Count_Flag supported_sample_counts_large_image_int;
+    Oga_Sample_Count_Flag supported_sample_counts_image_float;
+    Oga_Sample_Count_Flag supported_sample_counts_fblock_float;
+    Oga_Sample_Count_Flag supported_sample_counts_image_int;
+    Oga_Sample_Count_Flag supported_sample_counts_fblock_int;
     
     u64 memory_granularity;
+    u64 image_memory_granularity;
 
 } Oga_Device_Limits;
 
@@ -343,6 +586,7 @@ typedef struct Oga_Pick_Device_Result {
     Oga_Device_Feature_Flag failed_required_features;
     Oga_Device_Feature_Flag failed_preferred_features;
 } Oga_Pick_Device_Result;
+// todo(charlie) add consideration for heap properties and usage flags
 Oga_Pick_Device_Result oga_pick_device(Oga_Device_Pick_Flag pick_flags, Oga_Device_Feature_Flag required_features, Oga_Device_Feature_Flag preferred_features);
 
 //////////
@@ -405,6 +649,8 @@ typedef struct Oga_Context {
 Oga_Result oga_init_context(Oga_Device target_device, Oga_Context_Desc desc, Oga_Context **context);
 void oga_uninit_context(Oga_Context *context);
 
+void oga_wait_engine_idle(Oga_Logical_Engine engine);
+void oga_wait_context_idle(Oga_Context *context);
 
 //////////
 /// Swap chain
@@ -431,9 +677,8 @@ typedef struct Oga_Swapchain_Desc {
     Oga_Format image_format;
     u64 width;
     u64 height;
-    u64 *engine_families_with_access; // The indices of the queue families that will be allowed to access the images
-    u64 engine_families_with_access_count;
     Oga_Present_Mode present_mode;
+    u64 graphics_engine_family_index; // Swapchain needs a graphics engine
     
 } Oga_Swapchain_Desc;
 
@@ -441,10 +686,11 @@ typedef struct Oga_Swapchain_Desc {
 
 #define MAX_SWAPCHAIN_IMAGES 16
 
+struct Oga_Render_Image_View;
 typedef struct Oga_Swapchain {
     void *id;
     Oga_Context *context;
-    struct Oga_Image *images[MAX_SWAPCHAIN_IMAGES];
+    struct Oga_Render_Image_View *images[MAX_SWAPCHAIN_IMAGES];
     u64 current_image_index;
     u64 image_count;
     Oga_Format image_format;
@@ -468,7 +714,7 @@ typedef struct Oga_Present_Desc {
 Oga_Result oga_submit_present(Oga_Swapchain *swapchain, Oga_Present_Desc desc);
 
 //////////
-/// Render passes & Programs
+/// GPU Programs
 
 typedef enum Oga_Program_Kind {
     OGA_PROGRAM_VERTEX,
@@ -493,6 +739,182 @@ typedef struct Oga_Program {
 
 Oga_Result oga_init_program(Oga_Context *context, Oga_Program_Desc desc, Oga_Program **program);
 void oga_uninit_program(Oga_Program *program);
+
+//////////
+/// Render Passes
+
+typedef enum Oga_Program_Stage_Flag_ {
+    OGA_PROGRAM_STAGE_VERTEX = 1 << 1,
+    OGA_PROGRAM_STAGE_FRAGMENT = 1 << 2,
+} Oga_Program_Stage_Flag_;
+typedef u64 Oga_Program_Stage_Flag;
+
+typedef enum Oga_Sampling_Filter {
+    OGA_SAMPLE_FILTER_LINEAR,
+    OGA_SAMPLE_FILTER_NEAREST,
+} Oga_Sampling_Filter;
+typedef enum Oga_Sampling_Address_Mode {
+    OGA_SAMPLE_ADDRESS_MODE_REPEAT,
+    OGA_SAMPLE_ADDRESS_MODE_MIRRORED_REPEAT,
+    OGA_SAMPLE_ADDRESS_MODE_CLAMP_TO_EDGE,
+    OGA_SAMPLE_ADDRESS_MODE_CLAMP_TO_BORDER,
+} Oga_Sampling_Address_Mode;
+typedef struct Oga_Sample_Mode_Desc {
+    Oga_Sampling_Filter magnification_filter;
+    Oga_Sampling_Filter minification_filter;
+    Oga_Sampling_Address_Mode address_mode_u;
+    Oga_Sampling_Address_Mode address_mode_v;
+    Oga_Sampling_Address_Mode address_mode_w;
+    float max_anisotropy;
+} Oga_Sample_Mode_Desc;
+
+typedef enum Oga_Binding_Kind {
+    OGA_BINDING_IMAGE,
+    OGA_BINDING_SAMPLE_MODE,
+    
+    OGA_BINDING_ENUM_MAX
+} Oga_Binding_Kind;
+typedef struct Oga_Binding_Layout_Entry_Desc {
+    Oga_Binding_Kind kind;
+    u64 binding_slot;
+    u64 binding_count; // Number of elements in this binding. If > 1, the program declaration should be an array
+    Oga_Program_Stage_Flag stage_flags;
+} Oga_Binding_Layout_Entry_Desc;
+typedef struct Oga_Binding_List_Layout_Desc {
+    Oga_Binding_Layout_Entry_Desc *bindings;
+    u64 binding_count;
+    u64 binding_list_count;
+} Oga_Binding_List_Layout_Desc;
+
+typedef struct Oga_Binding_List_Layout {
+    void *id;
+    Oga_Context *context;
+    Oga_Binding_Layout_Entry_Desc *bindings;
+    u64 binding_count;
+    u64 binding_list_count;
+    u64 allocated_lists_count;
+} Oga_Binding_List_Layout;
+
+Oga_Result oga_init_binding_list_layout(Oga_Context *context, Oga_Binding_List_Layout_Desc desc, Oga_Binding_List_Layout **layout);
+void oga_uninit_binding_list_layout(Oga_Binding_List_Layout *layout);
+
+struct Oga_Image_View;
+typedef struct Oga_Binding_Desc {
+    Oga_Binding_Kind kind;
+    u64 binding_slot;
+    u64 array_index;
+    u64 count;
+    
+    // OGA_BINDING_IMAGE
+    struct Oga_Image_View **images;
+    
+    // OGA_BINDING_SAMPLE_MODE
+    Oga_Sample_Mode_Desc *sample_modes;
+    
+    
+} Oga_Binding_Desc;
+typedef struct Oga_Binding_List_Desc {
+    Oga_Binding_Desc *bindings;
+    u64 binding_count;
+} Oga_Binding_List_Desc;
+
+typedef struct Oga_Binding_List {
+    void *id;
+    Oga_Context *context;
+    Oga_Binding_List_Layout *layout;
+} Oga_Binding_List;
+
+Oga_Result oga_push_binding_list(Oga_Binding_List_Layout *layout, Oga_Binding_List_Desc desc, Oga_Binding_List **list);
+
+// I looked through various devices and they all report these numbers
+// Including RTX 5090 as well as GT 710 (vulkan)
+#define OGA_MAX_VERTEX_BINDING_COUNT 32
+#define OGA_MAX_VERTEX_ATTRIBUTE_COUNT 32
+#define MAX_VERTEX_ATTRIBUTE_OFFSET 2047
+#define MAX_VERTEX_BINDING_OFFSET 2048
+
+typedef enum Oga_Vertex_List_Input_Rate {
+    OGA_VERTEX_INPUT_RATE_VERTEX,
+    OGA_VERTEX_INPUT_RATE_INSTANCE,
+} Oga_Vertex_List_Input_Rate;
+
+typedef enum Oga_Vertex_Attribute_Type {
+    OGA_VERTEX_ATTRIBUTE_TYPE_F32,
+    OGA_VERTEX_ATTRIBUTE_TYPE_F32V2,
+    OGA_VERTEX_ATTRIBUTE_TYPE_F32V3,
+    OGA_VERTEX_ATTRIBUTE_TYPE_F32V4,
+    OGA_VERTEX_ATTRIBUTE_TYPE_S32,
+    OGA_VERTEX_ATTRIBUTE_TYPE_S32V2,
+    OGA_VERTEX_ATTRIBUTE_TYPE_S32V3,
+    OGA_VERTEX_ATTRIBUTE_TYPE_S32V4,
+    OGA_VERTEX_ATTRIBUTE_TYPE_S16,
+    OGA_VERTEX_ATTRIBUTE_TYPE_S16V2,
+    OGA_VERTEX_ATTRIBUTE_TYPE_S16V3,
+    OGA_VERTEX_ATTRIBUTE_TYPE_S16V4,
+    OGA_VERTEX_ATTRIBUTE_TYPE_S8,
+    OGA_VERTEX_ATTRIBUTE_TYPE_S8V2,
+    OGA_VERTEX_ATTRIBUTE_TYPE_S8V3,
+    OGA_VERTEX_ATTRIBUTE_TYPE_S8V4,
+    OGA_VERTEX_ATTRIBUTE_TYPE_U32,
+    OGA_VERTEX_ATTRIBUTE_TYPE_U32V2,
+    OGA_VERTEX_ATTRIBUTE_TYPE_U32V3,
+    OGA_VERTEX_ATTRIBUTE_TYPE_U32V4,
+    OGA_VERTEX_ATTRIBUTE_TYPE_U16,
+    OGA_VERTEX_ATTRIBUTE_TYPE_U16V2,
+    OGA_VERTEX_ATTRIBUTE_TYPE_U16V3,
+    OGA_VERTEX_ATTRIBUTE_TYPE_U16V4,
+    OGA_VERTEX_ATTRIBUTE_TYPE_U8,
+    OGA_VERTEX_ATTRIBUTE_TYPE_U8V2,
+    OGA_VERTEX_ATTRIBUTE_TYPE_U8V3,
+    OGA_VERTEX_ATTRIBUTE_TYPE_U8V4,
+    OGA_VERTEX_ATTRIBUTE_TYPE_U8_NORMALIZED,
+    OGA_VERTEX_ATTRIBUTE_TYPE_U8V2_NORMALIZED,
+    OGA_VERTEX_ATTRIBUTE_TYPE_U8V3_NORMALIZED,
+    OGA_VERTEX_ATTRIBUTE_TYPE_U8V4_NORMALIZED,
+} Oga_Vertex_Attribute_Type;
+
+/*
+    We often only need one vertex list in one binding slot:
+    
+    Oga_Vertex_List_Layout_Desc desc = (Oga_Vertex_List_Layout_Desc) {0};
+    desc.bindings[0].stride = sizeof(float4)+sizeof(float3);
+    desc.bindings[0].input_rate = OGA_VERTEX_INPUT_RATE_VERTEX;
+    desc.binding_count = 1;
+    
+    desc.attributes[desc.attribute_count].binding = 0;
+    desc.attributes[desc.attribute_count].location = 0;
+    desc.attributes[desc.attribute_count].offset = 0;
+    desc.attributes[desc.attribute_count].type = OGA_VERTEX_ATTRIBUTE_TYPE_F32V4;
+    desc.attribute_count += 1;
+    
+    desc.attributes[desc.attribute_count].binding = 0;
+    desc.attributes[desc.attribute_count].location = 1;
+    desc.attributes[desc.attribute_count].offset = sizeof(float4);
+    desc.attributes[desc.attribute_count].type = OGA_VERTEX_ATTRIBUTE_TYPE_F32V3;
+    desc.attribute_count += 1;
+*/
+typedef struct Oga_Vertex_List_Binding_Desc {
+    
+    u64 stride; // The stride between the start of each vertex in the vertex list in this binding slot
+    Oga_Vertex_List_Input_Rate input_rate; // Input is per vertex or per instance
+    
+} Oga_Vertex_List_Binding_Desc;
+typedef struct Oga_Vertex_List_Attribute_Desc {
+    
+    u64 binding; // The attribute points to the vertex list in this binding slot
+    u64 location; // The attribute is bound to this location in the program input
+    u64 offset; 
+    Oga_Vertex_Attribute_Type type;
+    
+} Oga_Vertex_List_Attribute_Desc;
+typedef struct Oga_Vertex_List_Layout_Desc {
+    
+    Oga_Vertex_List_Binding_Desc bindings[OGA_MAX_VERTEX_BINDING_COUNT]; // Vertex list binding slots
+    u64 binding_count;
+    Oga_Vertex_List_Attribute_Desc attributes[OGA_MAX_VERTEX_ATTRIBUTE_COUNT];
+    u64 attribute_count;
+    
+} Oga_Vertex_List_Layout_Desc;
 
 typedef u64 Oga_Render_Pass_Flag;
 unit_local Oga_Render_Pass_Flag OGA_RENDER_PASS_INHERITANCE_PARENT = 1 << 0;
@@ -538,11 +960,16 @@ typedef struct Oga_Render_Pass_Desc {
     // See Oga_Device::limits.supported_sample_counts_render_pass
     Oga_Sample_Count_Flag rasterization_samples;
     
+    Oga_Vertex_List_Layout_Desc vertex_input_layout;
+    
+    Oga_Binding_List_Layout *binding_list_layout;
+    
 } Oga_Render_Pass_Desc;
 
 typedef struct Oga_Render_Pass {
     void *id;
     Oga_Context *context;
+    Oga_Vertex_List_Layout_Desc vertex_input_layout;
 } Oga_Render_Pass;
 
 Oga_Result oga_init_render_passes(Oga_Context *context, Oga_Render_Pass_Desc* descs, Oga_Render_Pass **render_passes, u64 render_pass_count);
@@ -573,133 +1000,146 @@ Oga_Result oga_wait_latch(Oga_Cpu_Latch *cpu_latch);
 Oga_Result oga_reset_latch(Oga_Cpu_Latch *cpu_latch);
 
 //////////
-/// Memory & Pointers
+/// Memory & Views
 
-typedef struct Oga_Memory {
+#define OGA_INTERNALLY_MANAGED_MEMORY_HANDLE ((Oga_Memory_Pointer) { (void*)U64_MAX, (Oga_Context*) U64_MAX, U64_MAX, U64_MAX, U64_MAX, U64_MAX, U64_MAX })
+typedef struct Oga_Memory_Pointer {
+    void *id;
+    Oga_Context *context;
+    u64 offset;
     u64 size;
-    Oga_Memory_Property_Flag usage;
-} Oga_Memory;
-#define OGA_INTERNALLY_MANAGED_MEMORY_HANDLE ((void*)0xFFFFFFFFFFFFFFFF)
-
-Oga_Result oga_allocate_memory(Oga_Context *context, u64 size, Oga_Memory_Property_Flag usage_flags);
-void oga_deallocate_memory(Oga_Memory *mem);
-Oga_Result oga_map_memory(Oga_Memory *mem, u64 offset, u64 size, void *mapped_mem);
-Oga_Result oga_unmap_memory(Oga_Memory *mem);
-
-typedef u64 Oga_Image_Optimization;
-#define OGA_IMAGE_OPTIMIZATION_UNDEFINED 0
-#define OGA_IMAGE_OPTIMIZATION_GENERAL 1
-#define OGA_IMAGE_OPTIMIZATION_RENDER_ATTACHMENT 2
-#define OGA_IMAGE_OPTIMIZATION_SHADER_READONLY 3
-#define OGA_IMAGE_OPTIMIZATION_TRANSFER_DST 4
-#define OGA_IMAGE_OPTIMIZATION_TRANSFER_SRC 5
-#define OGA_IMAGE_OPTIMIZATION_PRESENT 6
-
-typedef enum Oga_Pointer_Kind {
-    OGA_POINTER_KIND_PROGRAM_POINTER,
-    OGA_POINTER_KIND_VERTEX_LIST,
-    OGA_POINTER_KIND_INDEX_LIST,
-    OGA_POINTER_KIND_COPY_TASK,
-} Oga_Pointer_Kind;
-
-typedef enum Oga_Pointer_Flag {
-    OGA_POINTER_FLAG_COPY_DST = 1 << 0,
-    OGA_POINTER_FLAG_COPY_SRC = 1 << 1,
-} Oga_Pointer_Flag;
-
-typedef enum Oga_Program_Pointer_Kind {
-    OGA_PROGRAM_POINTER_KIND_DATA_BLOCK,
-    OGA_PROGRAM_POINTER_KIND_IMAGE1D,
-    OGA_PROGRAM_POINTER_KIND_IMAGE2D,
-    OGA_PROGRAM_POINTER_KIND_IMAGE3D,
-} Oga_Program_Pointer_Kind;
-
-typedef enum Oga_Program_Pointer_Flag {
-    OGA_PROGRAM_POINTER_FLAG_READ,
-    OGA_PROGRAM_POINTER_FLAG_WRITE,
-
-    // When a program pointer is flagged with large or write, it can have larger
-    // storage (or be written to) at the cost of memory access performance.
-    // see limits max_fast_access_xxxxx_size
-    OGA_PROGRAM_POINTER_FLAG_LARGE,
-} Oga_Program_Pointer_Flag;
-
-typedef struct Oga_Program_Pointer_Desc {
-    Oga_Program_Pointer_Kind kind;
-    Oga_Program_Pointer_Flag flags;
-
-} Oga_Program_Pointer_Desc;
-
-typedef struct Oga_Vertex_List_Desc  {
-    int _;
-} Oga_Vertex_List_Desc;
-
-typedef struct Oga_Index_List_Desc  {
-    int _;
-
-} Oga_Index_List_Desc;
-
-typedef struct Oga_Copy_Task_Desc  {
-    int _;
-
-} Oga_Copy_Task_Desc;
-
-typedef struct Oga_Pointer_Desc {
-    Oga_Pointer_Kind kind;
-    Oga_Pointer_Flag flags;
-
-    Oga_Memory *memory;
-    u64 memory_offset;
+    u64 heap_index;
+    Oga_Memory_Property_Flag properties;
+    Oga_Memory_Usage usage;
     
-    union {
-        Oga_Program_Pointer_Desc program_pointer;
-        Oga_Vertex_List_Desc vertex_list;
-        Oga_Index_List_Desc index_list;
-        Oga_Copy_Task_Desc copy_task;
-    } UNION;
-} Oga_Pointer_Desc;
+#ifdef OGA_DEBUG
+    // todo(charlie) #validation Track view regions
+#endif 
+} Oga_Memory_Pointer;
 
-//Oga_Result oga_make_pointer(Oga_Context c, Oga_Pointer_Desc desc);
-
-// Program Pointers can be trivially casted
-// Oga_Image2D *my_image = ...;
-// Oga_Pointer *some_pointer = (Oga_Pointer *)my_image;
-// ...
-// if (some_pointer->kind == OGA_PROGRAM_POINTER_KIND_IMAGE2D) {
-//     Oga_Image2D *as_image = (Oga_Image2D*)some_pointer;
-// }
+Oga_Result oga_allocate_memory(Oga_Context *context, u64 size, Oga_Memory_Property_Flag properties, Oga_Memory_Usage usage, Oga_Memory_Pointer *ptr);
+void oga_deallocate_memory(Oga_Memory_Pointer ptr);
+Oga_Result oga_map_memory(Oga_Memory_Pointer ptr, u64 size, void **mapped_mem);
+void oga_unmap_memory(Oga_Memory_Pointer ptr);
+Oga_Result oga_memory_offset(Oga_Memory_Pointer ptr, s64 offset, Oga_Memory_Pointer *result_ptr);
 
 
-typedef struct Oga_Pointer {
-#define OGA_POINTER_MEMBERS\
-    void *id;\
-    Oga_Memory *memory; /* This will be set to 0xFFFFFFFFFFFFFFFF if memory is internally managed in drivers */ \
-    Oga_Pointer_Kind pointer_kind;
-    
-    OGA_POINTER_MEMBERS
-} Oga_Pointer;
+typedef struct Oga_Memory_View_Desc  {
+    Oga_Memory_Pointer memory_pointer;
+    u64 size;
+} Oga_Memory_View_Desc;
 
-typedef struct Oga_Program_Pointer {
-#define OGA_PROGRAM_POINTER_MEMBERS OGA_POINTER_MEMBERS\
-    Oga_Program_Pointer_Kind program_pointer_kind;
-    
-    OGA_PROGRAM_POINTER_MEMBERS
-} Oga_Program_Pointer;
+// These are the same (as of now) but we have a compiler and a statically typechecked programming language,
+// which we should use.
+typedef struct Oga_Vertex_List_View {
+    void *id;
+    Oga_Context *context;
+    Oga_Memory_Pointer memory_pointer;
+    u64 size;
+} Oga_Vertex_List_View;
+typedef struct Oga_Index_List_View {
+    void *id;
+    Oga_Context *context;
+    Oga_Memory_Pointer memory_pointer;
+    u64 size;
+} Oga_Index_List_View;
 
-typedef enum Oga_Image_Kind {
-    OGA_IMAGE_1D,
-    OGA_IMAGE_2D,
-    OGA_IMAGE_3D,
-} Oga_Image_Kind;
+Oga_Result oga_init_vertex_list_view(Oga_Context *context, Oga_Memory_View_Desc desc, Oga_Vertex_List_View **vlist);
+void oga_uninit_vertex_list_view(Oga_Vertex_List_View *vlist);
 
-typedef struct Oga_Image {
-    OGA_PROGRAM_POINTER_MEMBERS
-        
+Oga_Result oga_init_index_list_view(Oga_Context *context, Oga_Memory_View_Desc desc, Oga_Index_List_View **ilist);
+void oga_uninit_index_list_view(Oga_Index_List_View *ilist);
+
+typedef enum Oga_Dimensions {
+    OGA_1D,
+    OGA_2D,
+    OGA_3D,
+} Oga_Dimensions;
+
+typedef struct Oga_Image_View_Desc {
+    Oga_Memory_Pointer memory_pointer;
+    Oga_Format format;
+    Oga_Dimensions dimensions;
     u64 width, height, depth;
-    Oga_Image_Kind image_kind;
-} Oga_Image;
+    bool linear_tiling;
+    u64 graphics_engine_family_index;
+    
+} Oga_Image_View_Desc;
+
+typedef struct Oga_Image_View {
+    void *id;
+    Oga_Context *context;
+    Oga_Memory_Pointer memory_pointer;
+    u64 width, height, depth;
+    Oga_Dimensions dimensions;
+    bool linear_tiling;
+} Oga_Image_View;
+
+typedef enum Oga_Image_Copy_Flag_ {
+    OGA_IMAGE_COPY_DST = 1 << 1,
+    OGA_IMAGE_COPY_SRC = 1 << 2,
+} Oga_Image_Copy_Flag_;
+typedef u64 Oga_Image_Copy_Flag;
 
 
+
+Oga_Result oga_init_image_view(Oga_Context *context, Oga_Image_View_Desc desc, Oga_Image_View **image);
+void oga_uninit_image_view(Oga_Image_View *image);
+
+u64 oga_get_image_memory_requirement(Oga_Context *context, Oga_Image_View_Desc desc);
+
+typedef struct Oga_Image_Copy_Target_View_Desc {
+    Oga_Memory_Pointer memory_pointer;
+    Oga_Format format;
+    Oga_Dimensions dimensions;
+    u64 width, height, depth;
+    bool linear_tiling;
+    u64 graphics_engine_family_index;
+    Oga_Image_Copy_Flag flags;
+} Oga_Image_Copy_Target_View_Desc;
+
+typedef struct Oga_Image_Copy_Target_View {
+    void *id;
+    Oga_Context *context;
+    Oga_Memory_Pointer memory_pointer;
+    u64 width, height, depth;
+    Oga_Dimensions dimensions;
+    bool linear_tiling;
+    Oga_Image_Copy_Flag flags;
+} Oga_Image_Copy_Target_View;
+
+Oga_Result oga_init_image_copy_target_view(Oga_Context *context, Oga_Image_Copy_Target_View_Desc desc, Oga_Image_Copy_Target_View **image);
+void oga_uninit_image_copy_target_view(Oga_Image_Copy_Target_View *image);
+
+typedef struct Oga_Render_Image_View_Desc {
+    Oga_Memory_Pointer memory_pointer;
+    Oga_Format format;
+    u64 width, height;    
+} Oga_Render_Image_View_Desc;
+
+typedef struct Oga_Render_Image_View {
+    void *id;
+    Oga_Context *context;
+    Oga_Memory_Pointer memory_pointer;
+    u64 width, height;
+} Oga_Render_Image_View;
+
+// todo(charlie)
+// Oga_Result oga_init_render_image_view(Oga_Context *context, Oga_Render_Image_View_Desc desc, Oga_Render_Image_View **view);
+// void oga_uninit_render_image_view(Oga_Render_Image_View *view);
+//
+// u64 oga_get_render_image_memory_requirement(Oga_Context *context, Oga_Render_Image_View_Desc desc);
+
+
+
+
+//////////
+/// Program Pointers & Layout
+
+
+
+// todo(charlie) #validation
+// Keep track of all init()'s and report them here if they were not uninitted
 // This is really only here to get validation/debug layer messages for leaked resources
 void oga_reset(void);
 
@@ -707,15 +1147,9 @@ void oga_reset(void);
 //////////
 /// Commands
 
-// note(charlie)
-// If it was up to me, I would let you manage your own memory.
-// Unfortunately, graphics API designers decided that we can't be trusted.
-// So we need to use this really weird, intrusive, generalized mystical abstraction,
-// praying to the driver gods that it's good enough.
-
 typedef u64 Oga_Command_Pool_Flag;
 #define  OGA_COMMAND_POOL_NONE 0
-#define  OGA_COMMAND_POOL_SHORT_LIVED (1 << 0)
+#define  OGA_COMMAND_POOL_SHORT_LIVED_ALLOCATIONS (1 << 0)
 
 typedef struct Oga_Command_Pool_Desc {
     Oga_Command_Pool_Flag flags;
@@ -730,6 +1164,13 @@ typedef struct Oga_Command_Pool {
 typedef struct Oga_Command_List {
     void *id;
     Oga_Command_Pool *pool;
+    
+#ifdef OGA_DEBUG
+    // todo(charlie) #validation track all submitted commands and validate
+    //  - Vertex lists bound when cmd_draw in a render pass which specified vertex list bindings
+    //  - Index list is bound when cmd_draw indexed
+    //  - Formatted blocks are in the correct layout state for the operations they will be used in
+#endif
 } Oga_Command_List;
 
 Oga_Result oga_init_command_pool(Oga_Context *context, Oga_Command_Pool_Desc desc, Oga_Command_Pool **pool);
@@ -758,8 +1199,6 @@ typedef struct Oga_Submit_Command_List_Desc {
 } Oga_Submit_Command_List_Desc;
 Oga_Result oga_submit_command_list(Oga_Command_List cmd, Oga_Submit_Command_List_Desc desc);
 
-void oga_cmd_transition_image_optimization(Oga_Command_List cmd, Oga_Image *image, Oga_Image_Optimization src_optimization, Oga_Image_Optimization optimization);
-
 typedef u64 Oga_Msaa_Resolve_Mode_Flag;
 #define OGA_MSAA_RESOLVE_MODE_NONE    0
 #define OGA_MSAA_RESOLVE_MODE_ZERO    (1 << 0)
@@ -778,14 +1217,12 @@ typedef enum Oga_Attachment_Store_Op {
 } Oga_Attachment_Store_Op;
 
 typedef struct Oga_Render_Attachment_Desc {
-    Oga_Image *image;
-    Oga_Image_Optimization image_optimization;
+    Oga_Render_Image_View *image;
     
     // If rendering with multisampling, we can resolve the multiple samples into single samples
     // on another image.
     Oga_Msaa_Resolve_Mode_Flag resolve_mode;
-    const Oga_Image *resolve_image;
-    Oga_Image_Optimization resolve_image_optimization;
+    const Oga_Image_View *resolve_image;
     
     Oga_Attachment_Load_Op load_op;
     Oga_Attachment_Store_Op store_op;
@@ -795,7 +1232,6 @@ typedef struct Oga_Render_Attachment_Desc {
 } Oga_Render_Attachment_Desc;
 
 typedef struct Oga_Begin_Render_Pass_Desc {
-    Oga_Render_Pass *render_pass;
     s64 render_area_offset_x;
     s64 render_area_offset_y;
     u64 render_area_width;
@@ -804,12 +1240,69 @@ typedef struct Oga_Begin_Render_Pass_Desc {
     Oga_Render_Attachment_Desc *attachments;
 } Oga_Begin_Render_Pass_Desc;
 
-void oga_cmd_begin_render_pass(Oga_Command_List cmd, Oga_Begin_Render_Pass_Desc desc);
-void oga_cmd_end_render_pass(Oga_Command_List cmd);
+void oga_cmd_begin_render_pass(Oga_Command_List cmd, Oga_Render_Pass *render_pass, Oga_Begin_Render_Pass_Desc desc);
+void oga_cmd_end_render_pass(Oga_Command_List cmd, Oga_Render_Pass *render_pass);
 
-void oga_cmd_draw(Oga_Command_List cmd, u64 vertex_count, u64 vertex_start, u64 instance_count, u64 instance_start);
+void oga_cmd_bind_render_pass_binding_list(Oga_Command_List cmd, Oga_Render_Pass *pass, Oga_Binding_List *list);
 
-Oga_Result oga_cmd_copy_memory(Oga_Pointer *dst, Oga_Pointer *src, u64 offset, u64 size);
+typedef enum Oga_Draw_Type {
+    OGA_DRAW_INSTANCED,
+    OGA_DRAW_VERTEX_LIST,
+    OGA_DRAW_VERTEX_LIST_INSTANCED,
+    OGA_DRAW_VERTEX_LIST_INDEXED,
+    OGA_DRAW_VERTEX_LIST_INSTANCED_INDEXED,
+    
+    OGA_DRAW_INSTANCED_INDIRECT,
+    OGA_DRAW_VERTEX_LIST_INDIRECT,
+    OGA_DRAW_VERTEX_LIST_INSTANCED_INDIRECT,
+    OGA_DRAW_VERTEX_LIST_INDEXED_INDIRECT,
+    OGA_DRAW_VERTEX_LIST_INSTANCED_INDEXED_INDIRECT,
+} Oga_Draw_Type;
+typedef enum Oga_Index_Type {
+    OGA_INDEX_U32,
+    OGA_INDEX_U16,
+} Oga_Index_Type;
+typedef struct Oga_Draw_Desc {
+    
+    Oga_Draw_Type draw_type;
+    
+    // All
+    u64 vertex_start; // The first vertex to draw. For vertex lists, this is an offset from the BASE vertex at the binding point
+    u64 vertex_count;
+    
+    // Vertex list
+    Oga_Vertex_List_View *vertex_list_bindings[OGA_MAX_VERTEX_BINDING_COUNT];
+    u64 vertex_list_offsets[OGA_MAX_VERTEX_BINDING_COUNT]; // Offset to the BASE vertex to be bound
+    u64 vertex_list_binding_count;
+    
+    // Instanced
+    u64 instance_start;
+    u64 instance_count;
+    
+    // Indexed
+    u64 index_start;
+    u64 index_count;
+    Oga_Index_List_View *index_list;
+    u64 index_list_offset;
+    Oga_Index_Type index_type;
+    
+    // Indirect
+    // Indirect_Block *indirect_block;
+    
+} Oga_Draw_Desc;
+
+Oga_Result oga_cmd_draw(Oga_Command_List cmd, Oga_Draw_Desc desc);
+
+void oga_cmd_copy_linear(Oga_Command_List cmd, Oga_Memory_Pointer dst, Oga_Memory_Pointer src, u64 size);
+
+typedef struct Oga_Image_Copy_Desc {
+    s64 offset_x, offset_y, offset_z;
+    u64 width, height, depth;
+} Oga_Image_Copy_Desc;
+void oga_cmd_copy_linear_to_image(Oga_Command_List cmd, Oga_Image_Copy_Target_View *dst_view, Oga_Image_Copy_Desc dst_desc, Oga_Memory_Pointer src);
+void oga_cmd_copy_image_to_linear(Oga_Command_List cmd, Oga_Memory_Pointer dst, Oga_Image_Copy_Target_View *src_view, Oga_Image_Copy_Desc src_desc);
+void oga_cmd_copy_image(Oga_Command_List cmd, Oga_Image_Copy_Target_View *dst_view, Oga_Image_Copy_Desc dst_desc, Oga_Image_Copy_Target_View *src_view, Oga_Image_Copy_Desc src_desc);
+
 
 #ifdef OGA_IMPL_AUTO
     #if (OS_FLAGS & OS_FLAG_WEB)
@@ -845,7 +1338,7 @@ void* oga_state_allocator_proc(Allocator_Message msg, void *data, void *old, u64
                 void *p = sys_map_pages(SYS_MEMORY_RESERVE | SYS_MEMORY_ALLOCATE, 0, (n+info.page_size)/info.page_size, false);
                 assert(p);
                 assert((u64)p % info.page_size == 0);
-                assertmsgs((u64)p % alignment == 0, tprint("Expected alignment of %i, pointer is %u", alignment, p));
+                assertmsgs((u64)p % alignment == 0, tprint("Expected alignment of %i, view is %u", alignment, p));
                 return p;
             }
             Oga_Allocator_Row *row = 0;

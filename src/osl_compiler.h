@@ -24,6 +24,8 @@ typedef enum Osl_Result {
     OSL_SWIZZLE_USED_AS_STORAGE,
     OSL_INVALID_CAST,
     OSL_VALUE_NAME_REDIFINITION,
+    OSL_UNRESOLVED_FUNCTION_OR_INTRINSIC,
+    OSL_BAD_CALL_ARGUMENTS,
 } Osl_Result;
 
 typedef enum Osl_Target {
@@ -49,6 +51,7 @@ typedef enum Spv_Op_Code_Enum {
     OpCapability           = 17,
     OpMemoryModel          = 14,
     OpEntryPoint           = 15,
+    OpTypeSampledImage = 27,
     OpFunction             = 54,
     OpFunctionParameter    = 55,
     OpFunctionEnd          = 56,
@@ -62,6 +65,8 @@ typedef enum Spv_Op_Code_Enum {
     OpLabel                = 248,
     OpReturn               = 253,
     OpTypePointer          = 32,
+    OpTypeImage          = 25,
+    OpTypeSampler          = 26,
     OpVariable             = 59,
     OpDecorate             = 71,
     OpLoad                 = 61,
@@ -72,6 +77,8 @@ typedef enum Spv_Op_Code_Enum {
     OpConstant             = 43,
     OpConstantComposite    = 44,
     OpAccessChain          = 65,
+    OpImageSampleImplicitLod = 87,
+    OpSampledImage = 86,
     OpSNegate = 126,
     OpFNegate = 127,
     OpIAdd = 128,
@@ -103,6 +110,7 @@ typedef enum Spv_Execution_Model {
 } Spv_Execution_Model;
 
 typedef enum Spv_Storage_Class {
+    SpvStorageClass_UniformConstant       = 0,
     SpvStorageClass_Input         = 1,
     SpvStorageClass_Uniform       = 2,
     SpvStorageClass_Output        = 3,
@@ -133,7 +141,9 @@ typedef enum Spv_Decoration {
     SpvDecoration_Builtin     = 11,
     SpvDecoration_Flat        = 14,
     SpvDecoration_Volatile    = 21,
-    SpvDecoration_Location    = 30
+    SpvDecoration_Location    = 30,
+    SpvDecoration_Binding    = 33,
+    SpvDecoration_DescriptorSet    = 34
 } Spv_Decoration;
 
 typedef enum Spv_Builtin {
@@ -156,6 +166,8 @@ typedef enum Osl_Type_Kind {
 	OSL_TYPE_FLOAT,
 	OSL_TYPE_COMPOSITE,
 	OSL_TYPE_ARRAY,
+	OSL_TYPE_IMAGE2D_F32V4,
+	OSL_TYPE_SAMPLE_MODE,
 } Osl_Type_Kind;
 
 struct Osl_Type_Info;
@@ -218,6 +230,10 @@ typedef struct Spv_Converter {
     Osl_Type_Info type_f32v2;
     Osl_Type_Info type_f32v3;
     Osl_Type_Info type_f32v4;
+    
+    Osl_Type_Info type_image2d_f32v4;
+    
+    Osl_Type_Info type_sample_mode;
     
     Arena array_type_arena;
     Osl_Type_Info *array_types;
@@ -321,6 +337,7 @@ typedef enum Osl_Storage_Class {
 	OSL_STORAGE_DEFAULT = 0,
 	OSL_STORAGE_INPUT = 1,
 	OSL_STORAGE_OUTPUT = 2,
+	OSL_STORAGE_BINDING = 3,
 } Osl_Storage_Class;
 typedef enum Osl_Builtin_Kind {
 	OSL_BUILTIN_NONE,
@@ -355,6 +372,11 @@ typedef struct Osl_Instantiation {
 	Osl_Arg_List list;
 	Osl_Type_Ident type_ident;
 } Osl_Instantiation;
+
+typedef struct Osl_Call {
+	string ident;
+	Osl_Arg_List arg_list;
+} Osl_Call;
 
 typedef struct Osl_Access_Chain {
 	struct Osl_Expr *base_expr;
@@ -413,6 +435,7 @@ typedef enum Osl_Expr_Kind {
 	OSL_EXPR_TYPE_IDENT, 
 	OSL_EXPR_INSTANTIATE,
 	OSL_EXPR_ACCESS_CHAIN,
+	OSL_EXPR_CALL,
 } Osl_Expr_Kind;
 
 typedef struct Osl_Expr {
@@ -424,8 +447,8 @@ typedef struct Osl_Expr {
 		Osl_Instantiation inst;
 		Osl_Type_Ident type_ident;
 		Osl_Access_Chain access;
+		Osl_Call call;
 	} val;
-	string cast_to_type_ident;
 	s64 vnum;
 } Osl_Expr;
 
@@ -683,6 +706,27 @@ unit_local void spv_push_base_decls(Spv_Converter *spv) {
     spv->type_s32v4.val.comp_type.underlying = &spv->type_s32;
     spv->type_s32v4.type_id = spv_push_decl_vector(spv, &spv->const_block, spv->type_s32.type_id, 4);
     
+    spv->type_image2d_f32v4.kind = OSL_TYPE_IMAGE2D_F32V4;
+    spv->type_image2d_f32v4.name = STR("Image2Df32v4");
+    spv->type_image2d_f32v4.size = 0;
+    spv_begin_op(&spv->const_block, OpTypeImage);
+    spv->type_image2d_f32v4.type_id = spv_push_result_arg(spv, &spv->const_block);
+    spv_push_word(&spv->const_block, spv->type_f32.type_id);
+    spv_push_word(&spv->const_block, 1);
+    spv_push_word(&spv->const_block, 0);
+    spv_push_word(&spv->const_block, 0);
+    spv_push_word(&spv->const_block, 0);
+    spv_push_word(&spv->const_block, 1);
+    spv_push_word(&spv->const_block, 0);
+    spv_end_op(&spv->const_block);
+    
+    spv->type_sample_mode.kind = OSL_TYPE_SAMPLE_MODE;
+    spv->type_sample_mode.name = STR("SampleMode");
+    spv->type_sample_mode.size = 0;
+    spv_begin_op(&spv->const_block, OpTypeSampler);
+    spv->type_sample_mode.type_id = spv_push_result_arg(spv, &spv->const_block);
+    spv_end_op(&spv->const_block);
+    
 }
 
 unit_local u32 spv_push_decl_pointer_type(Spv_Converter *spv, Spv_Block *block, u32 type, Spv_Storage_Class storage_class) {
@@ -906,7 +950,7 @@ unit_local Spv_Block *spv_finalize(Spv_Converter *spv) {
 	for (u64 i = 0; i < spv->compiler->top_node_count; i += 1) {
 		Osl_Node *n = spv->compiler->top_nodes[i];
 		
-		if (n->kind == OSL_NODE_VALUE_DECL && n->val.value_decl.storage_class != OSL_STORAGE_DEFAULT) {
+		if (n->kind == OSL_NODE_VALUE_DECL && (n->val.value_decl.storage_class == OSL_STORAGE_INPUT || n->val.value_decl.storage_class == OSL_STORAGE_OUTPUT)) {
 			assert(n->val.value_decl.vnum >= 0);
 			interface[interface_count++] = (u32)n->val.value_decl.vnum;
 		}
@@ -963,30 +1007,34 @@ unit_local Osl_Type_Info *arrayify_type(Spv_Converter *spv, Osl_Type_Info *elem,
 unit_local Osl_Type_Info *_osl_resolve_type(Spv_Converter *spv, Osl_Type_Ident type_ident) {
 
 	Osl_Type_Info *type = 0;
-	if (strings_match(type_ident.name, STR("f32"))) {
+	if (strings_match(type_ident.name, STR("f32")) || strings_match(type_ident.name, STR("float"))) {
 		type = &spv->type_f32;
-	} else if (strings_match(type_ident.name, STR("f32v2"))) {
+	} else if (strings_match(type_ident.name, STR("f32v2")) || strings_match(type_ident.name, STR("float2"))) {
 		type = &spv->type_f32v2;
-	} else if (strings_match(type_ident.name, STR("f32v3"))) {
+	} else if (strings_match(type_ident.name, STR("f32v3")) || strings_match(type_ident.name, STR("float3"))) {
 		type = &spv->type_f32v3;
-	} else if (strings_match(type_ident.name, STR("f32v4"))) {
+	} else if (strings_match(type_ident.name, STR("f32v4")) || strings_match(type_ident.name, STR("float4"))) {
 		type = &spv->type_f32v4;
-	} else if (strings_match(type_ident.name, STR("u32"))) {
+	} else if (strings_match(type_ident.name, STR("u32")) || strings_match(type_ident.name, STR("uint"))) {
 		type = &spv->type_u32;
-	} else if (strings_match(type_ident.name, STR("u32v2"))) {
+	} else if (strings_match(type_ident.name, STR("u32v2")) || strings_match(type_ident.name, STR("uint2"))) {
 		type = &spv->type_u32v2;
-	} else if (strings_match(type_ident.name, STR("u32v3"))) {
+	} else if (strings_match(type_ident.name, STR("u32v3")) || strings_match(type_ident.name, STR("uint3"))) {
 		type = &spv->type_u32v3;
-	} else if (strings_match(type_ident.name, STR("u32v4"))) {
+	} else if (strings_match(type_ident.name, STR("u32v4")) || strings_match(type_ident.name, STR("uint4"))) {
 		type = &spv->type_u32v4;
-	} else if (strings_match(type_ident.name, STR("s32"))) {
+	} else if (strings_match(type_ident.name, STR("s32")) || strings_match(type_ident.name, STR("sint"))) {
 		type = &spv->type_s32;
-	} else if (strings_match(type_ident.name, STR("s32v2"))) {
+	} else if (strings_match(type_ident.name, STR("s32v2")) || strings_match(type_ident.name, STR("sint2"))) {
 		type = &spv->type_s32v2;
-	} else if (strings_match(type_ident.name, STR("s32v3"))) {
+	} else if (strings_match(type_ident.name, STR("s32v3")) || strings_match(type_ident.name, STR("sint3"))) {
 		type = &spv->type_s32v3;
-	} else if (strings_match(type_ident.name, STR("s32v4"))) {
+	} else if (strings_match(type_ident.name, STR("s32v4")) || strings_match(type_ident.name, STR("sint4"))) {
 		type = &spv->type_s32v4;
+	} else if (strings_match(type_ident.name, STR("Image2Df32v4")) || strings_match(type_ident.name, STR("Image2Dfloat4"))) {
+		type = &spv->type_image2d_f32v4;
+	} else if (strings_match(type_ident.name, STR("SampleMode"))) {
+		type = &spv->type_sample_mode;
 	}
 	
 	for (u32 i = 0; i < type_ident.indirection_count; i += 1) {
@@ -1405,23 +1453,25 @@ unit_local Osl_Result spv_emit_expr(Spv_Converter *spv, Spv_Block *block, Osl_Ex
 			assert(!in_memory);
 		}
 		
+		u32 base_id;
+		Osl_Type_Info *base_type;
+		Osl_Result res = spv_emit_expr(spv, block, access->base_expr, &base_id, &base_type, accessing_storage);
+		if (res != OSL_OK) return res;
+		assert(base_id); assert(base_type);
+		
 		Spv_Storage_Class base_storage_class = SpvStorageClass_Private;
 		if (access->base_expr->kind == OSL_EXPR_DECL_IDENT) {
 			switch (access->base_expr->val.decl->storage_class) {
 			case OSL_STORAGE_DEFAULT: base_storage_class = SpvStorageClass_Private; break;
 			case OSL_STORAGE_INPUT:   base_storage_class = SpvStorageClass_Input;   break;
 			case OSL_STORAGE_OUTPUT:  base_storage_class = SpvStorageClass_Output;  break;
+			case OSL_STORAGE_BINDING: base_storage_class = SpvStorageClass_UniformConstant; break;
 			default:
 				assert(false);
 				break;
 			}
 		}
 		
-		u32 base_id;
-		Osl_Type_Info *base_type;
-		Osl_Result res = spv_emit_expr(spv, block, access->base_expr, &base_id, &base_type, accessing_storage);
-		if (res != OSL_OK) return res;
-		assert(base_id); assert(base_type);
 		
 		u32 *args = PushTempBuffer(u32, access->item_count);
 		u64 arg_count = 0;
@@ -1651,6 +1701,60 @@ unit_local Osl_Result spv_emit_expr(Spv_Converter *spv, Spv_Block *block, Osl_Ex
 		}
 		break;
 	}
+	case OSL_EXPR_CALL: {
+		assert(!in_memory);
+		Osl_Call *call = &expr->val.call;
+		
+		if (strings_match(call->ident, STR("sample"))) {
+			
+			if (call->arg_list.arg_count != 3) {
+				spv->compiler->err_log = _osl_tprint_token(spv->compiler, _osl_get_node(expr)->first_token, STR("Bad number of arguments. Intrinsic signature is 'xxx sample(image: ImageXDxxx, sample_mode: SampleMode, uv: f32v2)'"));
+				return spv->compiler->result = OSL_BAD_CALL_ARGUMENTS;
+			}
+			
+			u32 arg_ids[3];
+			Osl_Type_Info *arg_types[3];
+			
+			Osl_Result res = spv_emit_expr(spv, block, call->arg_list.args[0], &arg_ids[0], &arg_types[0], false);
+			if (res != OSL_OK) return res;
+			res = spv_emit_expr(spv, block, call->arg_list.args[1], &arg_ids[1], &arg_types[1], false);
+			if (res != OSL_OK) return res;
+			res = spv_emit_expr(spv, block, call->arg_list.args[2], &arg_ids[2], &arg_types[2], false);
+			if (res != OSL_OK) return res;
+			
+			if (arg_types[0] != &spv->type_image2d_f32v4 || arg_types[1] != &spv->type_sample_mode || arg_types[2] != &spv->type_f32v2) {
+				spv->compiler->err_log = _osl_tprint_token(spv->compiler, _osl_get_node(expr)->first_token, tprint("Bad argument types (%s, %s, %s). Intrinsic signature is 'xxx sample(image: ImageXDxxx, sample_mode: SampleMode, uv: f32v2)'", arg_types[0]->name, arg_types[1]->name, arg_types[2]->name));
+				return spv->compiler->result = OSL_BAD_CALL_ARGUMENTS;
+			}
+			
+			spv_begin_op(&spv->const_block, OpTypeSampledImage);
+			u32 type_sampled_image = spv_push_result_arg(spv, &spv->const_block);
+			spv_push_word(&spv->const_block, arg_types[0]->type_id);
+			spv_end_op(&spv->const_block);
+			
+			spv_begin_op(block, OpSampledImage);
+			spv_push_word(block, type_sampled_image);
+			u32 sampled_image_id = spv_push_result_arg(spv, block);
+			spv_push_word(block, arg_ids[0]);
+			spv_push_word(block, arg_ids[1]);
+			spv_end_op(block);
+			
+			spv_begin_op(block, OpImageSampleImplicitLod);
+			spv_push_word(block, spv->type_f32v4.type_id);
+			*result_id = spv_push_result_arg(spv, block);
+			spv_push_word(block, sampled_image_id);
+			spv_push_word(block, arg_ids[2]);
+			spv_end_op(block);
+			
+			*type = &spv->type_f32v4;
+			
+		} else {
+			spv->compiler->err_log = _osl_tprint_token(spv->compiler, _osl_get_node(expr)->first_token, STR("Could not resolve this to a function or intrinsic, but it is being used in a function call."));
+			return spv->compiler->result = OSL_UNRESOLVED_FUNCTION_OR_INTRINSIC;
+		}
+		
+		break;
+	}
 	case OSL_EXPR_TYPE_IDENT: // fallthrough
 	default: {
 		assert(false);
@@ -1701,6 +1805,7 @@ unit_local Osl_Result spv_emit_node(Spv_Converter *spv, Spv_Block *block, Osl_No
 				
 			case OSL_STORAGE_INPUT:  storage_class = SpvStorageClass_Input; break;
 			case OSL_STORAGE_OUTPUT: storage_class = SpvStorageClass_Output; break;
+			case OSL_STORAGE_BINDING: storage_class = SpvStorageClass_UniformConstant; break;
 			
 			case OSL_STORAGE_DEFAULT: // fallthrough
 			default: assert(false); break;
@@ -1729,13 +1834,30 @@ unit_local Osl_Result spv_emit_node(Spv_Converter *spv, Spv_Block *block, Osl_No
 						spv->compiler->err_log = _osl_tprint_token(spv->compiler, _osl_get_node(decl)->first_token, tprint("Expected exactly 1 INTEGER argument for location."));
 						return spv->compiler->result = OSL_BAD_DECORATION_ARGUMENTS;
 					}
-				}
-				
-				if (decl->storage_args.arg_count >= 1) {
-					spv_push_decoration(&spv->annotations_block, (u32)decl->vnum, SpvDecoration_Location, (u32*)&decl->storage_args.args[0]->val.lit.lit_int, 1); 
+					
+					if (decl->storage_args.arg_count >= 1) {
+						spv_push_decoration(&spv->annotations_block, (u32)decl->vnum, SpvDecoration_Location, (u32*)&decl->storage_args.args[0]->val.lit.lit_int, 1); 
+					}
 				}
 				break;
 			
+			case OSL_STORAGE_BINDING:
+				if (decl->storage_args.arg_count != 1) {
+					spv->compiler->err_log = _osl_tprint_token(spv->compiler, _osl_get_node(decl)->first_token, tprint("Expected exactly 1 integer argument for location. Got '%i' arguments.", decl->storage_args.arg_count));
+					return spv->compiler->result = OSL_BAD_DECORATION_ARGUMENTS;
+				}
+				
+				if (decl->storage_args.args[0]->kind != OSL_EXPR_LITERAL_INT) {
+					spv->compiler->err_log = _osl_tprint_token(spv->compiler, _osl_get_node(decl)->first_token, tprint("Expected exactly 1 INTEGER argument for location."));
+					return spv->compiler->result = OSL_BAD_DECORATION_ARGUMENTS;
+				}
+				
+				if (decl->storage_args.arg_count >= 1) {
+					spv_push_decoration(&spv->annotations_block, (u32)decl->vnum, SpvDecoration_Binding, (u32*)&decl->storage_args.args[0]->val.lit.lit_int, 1); 
+					u32 zero = 0;
+					spv_push_decoration(&spv->annotations_block, (u32)decl->vnum, SpvDecoration_DescriptorSet, &zero, 1); 
+				}
+				break;
 			case OSL_STORAGE_DEFAULT: // fallthrough
 			default: assert(false); break;
 			}
@@ -2024,6 +2146,11 @@ unit_local Osl_Result _osl_parse_arg_list(Osl_Compiler *compiler, Osl_Token_Kind
 	if (!_osl_exp_token(compiler, start, open_token))
 		return compiler->result;
 	
+	if (start[1].kind == close_token) {
+		*done_token = start+2;
+		return OSL_OK;
+	}
+	
 	Osl_Token *next = start;
 	
 	while (next->kind != OSL_TOKEN_KIND_EOF && next->kind != close_token) {
@@ -2135,6 +2262,19 @@ unit_local Osl_Expr *_osl_parse_one_expr(Osl_Compiler *compiler, Osl_Token *expr
 					compiler->result = OSL_EXCEED_MAX_TYPE_INDIRECTIONS;
 					return 0;
 				}
+				
+			} else if (expr_start[1].kind == OSL_TOKEN_KIND_LPAREN) {
+				expr->kind = OSL_EXPR_CALL;
+				
+				Osl_Call *call = &expr->val.call;
+				
+				Osl_Token_Kind list_end = OSL_TOKEN_KIND_RPAREN;
+				
+				call->ident = (string) {expr_start->length, compiler->source.data+expr_start->source_pos};
+				
+				Osl_Result res = _osl_parse_arg_list(compiler, list_end, &expr_start[1], done_token, &call->arg_list);
+				if (res != OSL_OK) return 0;
+				
 				
 			} else {
 				expr->kind = OSL_EXPR_DECL_IDENT;
@@ -2461,7 +2601,7 @@ Osl_Result osl_compile(Allocator a, Osl_Compile_Desc desc, void **pcode, u64 *pc
 	            		decl->storage_class = OSL_STORAGE_INPUT;
 	            		Osl_Result res = _osl_parse_arg_list(compiler, OSL_TOKEN_KIND_RPAREN, ++current, &current, &decl->storage_args);
 						if (res != OSL_OK) break;
-						if (decl->builtin_kind == OSL_BUILTIN_NONE && decl->storage_args.arg_count != 1) {
+						if (decl->storage_args.arg_count != 1) {
 							compiler->err_log = _osl_tprint_token(compiler, deco_token, tprint("Expected exactly 1 integer argument, but got %i", decl->storage_args.arg_count));
 							compiler->result = OSL_BAD_DECORATION_ARGUMENTS;
 							break;
@@ -2472,7 +2612,18 @@ Osl_Result osl_compile(Allocator a, Osl_Compile_Desc desc, void **pcode, u64 *pc
 	            		decl->storage_class = OSL_STORAGE_OUTPUT;
 	            		Osl_Result res = _osl_parse_arg_list(compiler, OSL_TOKEN_KIND_RPAREN, ++current, &current, &decl->storage_args);
 						if (res != OSL_OK) break;
-						if (decl->builtin_kind == OSL_BUILTIN_NONE && decl->storage_args.arg_count != 1) {
+						if (decl->storage_args.arg_count != 1) {
+							compiler->err_log = _osl_tprint_token(compiler, deco_token, tprint("Expected exactly 1 integer argument, but got %i", decl->storage_args.arg_count));
+							compiler->result = OSL_BAD_DECORATION_ARGUMENTS;
+							break;
+						}
+	            	} else if ((compiler->program_kind == OSL_PROGRAM_GPU_VERTEX
+	            		   || compiler->program_kind == OSL_PROGRAM_GPU_FRAGMENT)
+	            		   && strings_match(decoration_string, STR("Binding"))) {
+	            		decl->storage_class = OSL_STORAGE_BINDING;
+	            		Osl_Result res = _osl_parse_arg_list(compiler, OSL_TOKEN_KIND_RPAREN, ++current, &current, &decl->storage_args);
+						if (res != OSL_OK) break;
+						if (decl->storage_args.arg_count != 1) {
 							compiler->err_log = _osl_tprint_token(compiler, deco_token, tprint("Expected exactly 1 integer argument, but got %i", decl->storage_args.arg_count));
 							compiler->result = OSL_BAD_DECORATION_ARGUMENTS;
 							break;
@@ -2483,7 +2634,7 @@ Osl_Result osl_compile(Allocator a, Osl_Compile_Desc desc, void **pcode, u64 *pc
 	            		decl->builtin_kind = OSL_BUILTIN_VERTEX_POSITION;
 	            		if (compiler->program_kind == OSL_PROGRAM_GPU_VERTEX) {
 	            			decl->storage_class = OSL_STORAGE_OUTPUT;
-	            		} else if (compiler->program_kind == OSL_PROGRAM_GPU_VERTEX) {
+	            		} else if (compiler->program_kind == OSL_PROGRAM_GPU_FRAGMENT) {
 	            			decl->storage_class = OSL_STORAGE_INPUT;
 	            		} else assert(false);
 	            		current += 1;
@@ -2504,7 +2655,7 @@ Osl_Result osl_compile(Allocator a, Osl_Compile_Desc desc, void **pcode, u64 *pc
 	            		decl->storage_class = OSL_STORAGE_INPUT;
 	            		current += 1;
 	            	} else {
-	            		compiler->err_log = _osl_tprint_token(compiler, deco_token, STR("Invalid declaration token"));
+	            		compiler->err_log = _osl_tprint_token(compiler, deco_token, STR("Invalid declaration class token"));
 	            		compiler->result = OSL_BAD_DECL_CLASS;
 	            		break;
 	            	}

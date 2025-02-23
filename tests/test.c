@@ -4,8 +4,8 @@
 
 #define OGA_IMPL_VULKAN
 #endif // TEST_NO_IMPL
-//#include "../src/ostd.h"
-#include "../ostd_single_header.h"
+#include "../src/ostd.h"
+//#include "../ostd_single_header.h"
 
 // Clang warns if there is a default case in switch covering full enum, but also warns if there
 // is not default switch. ?!?!??!?!?!?!?!?!?
@@ -102,6 +102,32 @@ int main(void) {
 
             mem_gb = heap.size/(1024*1024);
             print(("| %u MB\n"), mem_gb);
+            print("\t\tSupported usage flags: ");
+            if (heap.supported_usage_flags & OGA_MEMORY_USAGE_IMAGE_1D)
+                print("IMAGE_1D ");
+            if (heap.supported_usage_flags & OGA_MEMORY_USAGE_IMAGE_2D)
+                print("IMAGE_2D ");
+            if (heap.supported_usage_flags & OGA_MEMORY_USAGE_IMAGE_3D)
+                print("IMAGE_3D ");
+            if (heap.supported_usage_flags & OGA_MEMORY_USAGE_IMAGE_1D)
+                print("IMAGE_1D ");
+            if (heap.supported_usage_flags & OGA_MEMORY_USAGE_IMAGE_2D)
+                print("IMAGE_2D ");
+            if (heap.supported_usage_flags & OGA_MEMORY_USAGE_IMAGE_3D)
+                print("IMAGE_3D ");
+            if (heap.supported_usage_flags & OGA_MEMORY_USAGE_VERTEX_LIST)
+                print("VERTEX_LIST ");
+            if (heap.supported_usage_flags & OGA_MEMORY_USAGE_INDEX_LIST)
+                print("INDEX_LIST ");
+            if (heap.supported_usage_flags & OGA_MEMORY_USAGE_FAST_READONLY_DATA_BLOCK)
+                print("FAST_READONLY_DATABLOCK ");
+            if (heap.supported_usage_flags & OGA_MEMORY_USAGE_LARGE_READWRITE_DATA_BLOCK)
+                print("LARGE_READWRITE_DATABLOCK ");
+            if (heap.supported_usage_flags & OGA_MEMORY_USAGE_COPY_DST)
+                print("COPY_DST ");
+            if (heap.supported_usage_flags & OGA_MEMORY_USAGE_COPY_SRC)
+                print("COPY_SRC ");
+            print("\n");
         }
         print("\t%u supported surface formats:\n", device->supported_surface_format_count);
         for (u64 j = 0; j < device->supported_surface_format_count; j += 1) {
@@ -247,6 +273,21 @@ int main(void) {
     if (!check_oga_result(oga_init_context(target_device, context_desc, &context)))
         return 1;
 
+    Oga_Memory_Pointer test_mem = (Oga_Memory_Pointer){0};
+    Oga_Memory_Property_Flag mem_flags = OGA_MEMORY_PROPERTY_GPU_LOCAL | OGA_MEMORY_PROPERTY_GPU_TO_CPU_MAPPABLE;
+    if (!check_oga_result(oga_allocate_memory(context, 4096, mem_flags, OGA_MEMORY_USAGE_NONE, &test_mem)))
+        return 1;
+    
+    void *mapped_mem = allocate(get_temp(), 4096);
+    if (!check_oga_result(oga_map_memory(test_mem, 4096, &mapped_mem)))
+        return 1;
+    
+    memset(mapped_mem, 0xff, 4096);
+    
+    oga_unmap_memory(test_mem);
+    
+    oga_deallocate_memory(test_mem);
+
     ///
     // Retrieve logical engines
     Oga_Logical_Engine graphics_engine = context->engines_by_family[family_index_graphics].engines[engine_index_graphics];
@@ -297,8 +338,6 @@ int main(void) {
 
 
 
-    u64 engine_families_with_access[] = { family_index_graphics, family_index_present };
-
     Oga_Present_Mode present_mode = OGA_PRESENT_MODE_VSYNC;
     if (context->device.features & OGA_DEVICE_FEATURE_PRESENT_MAILBOX) {
         // It just breaks on android for some reason todo(charlie) fix
@@ -313,8 +352,7 @@ int main(void) {
     sc_desc.image_format = surface_format;
     sc_desc.width = 800;
     sc_desc.height = 600;
-    sc_desc.engine_families_with_access = engine_families_with_access;
-    sc_desc.engine_families_with_access_count = sizeof(engine_families_with_access)/sizeof(u64);
+    sc_desc.graphics_engine_family_index = family_index_graphics;
     sc_desc.present_mode = present_mode;
 
     Oga_Swapchain *swapchain;
@@ -438,7 +476,6 @@ int main(void) {
     f64 start_time = sys_get_seconds_monotonic();
     (void)start_time;
 
-    bool image_virgin_flags[3] = {1,1,1};
     float64 last_time = 0.0;
     while (running) {
         reset_temporary_storage();
@@ -481,32 +518,27 @@ int main(void) {
 
         oga_cmd_begin(cmd, 0);
 
-        Oga_Image_Optimization src_opt = OGA_IMAGE_OPTIMIZATION_PRESENT;
-        if (image_virgin_flags[image_index]) src_opt = OGA_IMAGE_OPTIMIZATION_UNDEFINED;
-        image_virgin_flags[image_index] = false;
-        oga_cmd_transition_image_optimization(cmd, swapchain->images[image_index], src_opt, OGA_IMAGE_OPTIMIZATION_RENDER_ATTACHMENT);
-
         Oga_Render_Attachment_Desc attachment = (Oga_Render_Attachment_Desc){0};
         attachment.image = swapchain->images[image_index];
         attachment.load_op = OGA_ATTACHMENT_LOAD_OP_CLEAR;
         attachment.store_op = OGA_ATTACHMENT_STORE_OP_STORE;
-        attachment.image_optimization = OGA_IMAGE_OPTIMIZATION_RENDER_ATTACHMENT;
         memcpy(attachment.clear_color, &(float32[4]){1.f, 0.f, 0.f, 1.f}, 16);
 
         Oga_Begin_Render_Pass_Desc begin_desc = (Oga_Begin_Render_Pass_Desc){0};
-        begin_desc.render_pass = render_pass;
         begin_desc.render_area_width = 800;
         begin_desc.render_area_height = 600;
         begin_desc.attachment_count = 1;
         begin_desc.attachments = &attachment;
 
-        oga_cmd_begin_render_pass(cmd, begin_desc);
+        oga_cmd_begin_render_pass(cmd, render_pass, begin_desc);
 
-        oga_cmd_draw(cmd, 3, 0, 1, 0);
+        Oga_Draw_Desc draw_desc = (Oga_Draw_Desc){0};
+        draw_desc.draw_type = OGA_DRAW_INSTANCED;
+        draw_desc.instance_count = 1;
+        draw_desc.vertex_count = 3;
+        oga_cmd_draw(cmd, draw_desc);
 
-        oga_cmd_end_render_pass(cmd);
-
-        oga_cmd_transition_image_optimization(cmd, swapchain->images[image_index], OGA_IMAGE_OPTIMIZATION_RENDER_ATTACHMENT, OGA_IMAGE_OPTIMIZATION_PRESENT);
+        oga_cmd_end_render_pass(cmd, render_pass);
 
         oga_cmd_end(cmd);
 

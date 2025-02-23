@@ -118,6 +118,7 @@ unit_local inline float64 atan2(float64 y, float64 x) {
 float32 ln32(float32 x);
 float64 ln64(float64 x);
 u64 powu(u64 x, u64 e);
+f64 powf64(f64 x, f64 e);
 
 #ifdef OSTD_IMPL
 
@@ -145,6 +146,14 @@ u64 powu(u64 x, u64 e) {
     if (e == 0) return 1;
     u64 result = x;
     for (u64 i = 0; i < e-1; i += 1) {
+        result *= x;
+    }
+    return result;
+}
+f64 powf64(f64 x, f64 e) {
+    if (e == 0) return 1;
+    f64 result = x;
+    for (f64 i = 0; i < e-1; i += 1) {
         result *= x;
     }
     return result;
@@ -584,6 +593,9 @@ inline float2 m4_mulf2_trunc(Matrix4 m0, float2 m1) {
     return f;
 } 
 
+inline f64 get_power_of_two_f64(f64 x, u64 exp) {
+    return x * (f64)(1ULL << exp);
+}
 
 #if defined(__GNUC__) || defined(__GNUG__)
 #pragma GCC diagnostic pop

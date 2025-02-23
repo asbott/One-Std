@@ -13,7 +13,7 @@ unit_local inline bool is_whitespace(u8 c) {
 }
 
 
-unit_local inline size_t align_next(size_t n, size_t align) {
-    return ((n + align - 1) / align) * align;
+unit_local inline u64 align_next(u64 n, u64 align) {
+    return (n+align-1) & ~(align-1);
 }
 

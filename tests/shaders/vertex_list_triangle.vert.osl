@@ -1,0 +1,13 @@
+
+vertex_index: u32 $VertexIndex;
+
+in_position: f32v4 $Input(0);
+in_color: float3 $Input(1);
+
+out_position: f32v4 $VertexPosition;
+out_color: f32v3 $Output(0); 
+
+out_position = in_position;
+out_color = in_color * 0.85;
+
+

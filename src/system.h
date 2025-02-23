@@ -759,7 +759,9 @@ unit_local void _win_lazy_enable_dpi_awarness(void) {
 }
 
 unit_local u64 _win_utf8_to_wide(string utf8, u16 *result, u64 result_max) {
-    return (u64)MultiByteToWideChar(CP_UTF8, 0, (LPCCH)utf8.data, (int)utf8.count, (LPWSTR)result, (int)result_max);
+    u64 n = (u64)MultiByteToWideChar(CP_UTF8, 0, (LPCCH)utf8.data, (int)utf8.count, (LPWSTR)result, (int)result_max);
+    if (n < result_max) result[n] = 0;
+    return n;
 }
 
 unit_local LRESULT window_proc ( HWND hwnd,  u32 message,  WPARAM wparam,  LPARAM lparam) {
@@ -1076,7 +1078,7 @@ void sys_close(File_Handle h) {
 File_Handle sys_open_file(string path, File_Open_Flags flags) {
     u16 cpath[MAX_PATH_LENGTH*2];
     _win_utf8_to_wide(path, cpath, MAX_PATH_LENGTH*2);
-
+    
     DWORD access_mode = 0;
     DWORD creation_flags = 0;
 

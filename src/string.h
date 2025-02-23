@@ -13,6 +13,14 @@ unit_local inline u64 c_style_strlen(const char *s) {
     while (*p++) {}
     return (u64)(p-s-1);
 }
+unit_local inline u64 c_style_strcmp(const char *a, const char *b) {
+    while (*a && (*a == *b)) {
+        a++;
+        b++;
+    }
+    return (u64)(*a - *b);
+}
+
 
 #define STR(c) ((string){ c_style_strlen((const char*)c), (u8*)(uintptr)(const void*)(c) })
 #define STRN(n, c) ((string){ n, (u8*)(uintptr)(const void*)(c) })
