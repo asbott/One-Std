@@ -1303,7 +1303,6 @@ void oga_cmd_copy_linear_to_image(Oga_Command_List cmd, Oga_Image_Copy_Target_Vi
 void oga_cmd_copy_image_to_linear(Oga_Command_List cmd, Oga_Memory_Pointer dst, Oga_Image_Copy_Target_View *src_view, Oga_Image_Copy_Desc src_desc);
 void oga_cmd_copy_image(Oga_Command_List cmd, Oga_Image_Copy_Target_View *dst_view, Oga_Image_Copy_Desc dst_desc, Oga_Image_Copy_Target_View *src_view, Oga_Image_Copy_Desc src_desc);
 
-
 #ifdef OGA_IMPL_AUTO
     #if (OS_FLAGS & OS_FLAG_WEB)
         #define OGA_IMPL_WEBGPU
@@ -1316,9 +1315,15 @@ void oga_cmd_copy_image(Oga_Command_List cmd, Oga_Image_Copy_Target_View *dst_vi
         // todo(charlie) consoles
         #define OGA_IMPL_VULKAN
     #endif
-#endif // OGA_IMPL_HARDWARE_AUTO
+#endif // OGA_IMPL_AUTO
 
-#ifdef OSTD_IMPL
+#if !defined(OGA_IMPL_WEBGPU) && !defined(OGA_IMPL_D3D12) && !defined(OGA_IMPL_METAL) && !defined(OGA_IMPL_VULKAN)
+
+    #define OGA_NO_IMPL
+
+#endif
+
+#if defined(OSTD_IMPL)
 
 void* oga_state_allocator_proc(Allocator_Message msg, void *data, void *old, u64 old_n, u64 n, u64 alignment, u64 flags) {
     (void)flags;

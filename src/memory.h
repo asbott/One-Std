@@ -48,6 +48,7 @@ typedef struct Arena {
 
 Arena make_arena(u64 reserved_size, u64 initial_allocated_size);
 void *arena_push(Arena *arena, u64 size);
+void *arena_push_copy(Arena *arena, void *src, u64 size);
 void arena_pop(Arena *arena, u64 size);
 void arena_reset(Arena *arena);
 void free_arena(Arena arena);
@@ -216,6 +217,12 @@ void *arena_push(Arena *arena, u64 size) {
     arena->position = (u8*)arena->position + size;
 
     return p;
+}
+
+void *arena_push_copy(Arena *arena, void *src, u64 size) {
+    void *dst = arena_push(arena, size);
+    memcpy(dst, src, size);
+    return dst;
 }
 
 void arena_pop(Arena *arena, u64 size) {

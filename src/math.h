@@ -120,93 +120,6 @@ float64 ln64(float64 x);
 u64 powu(u64 x, u64 e);
 f64 powf64(f64 x, f64 e);
 
-#ifdef OSTD_IMPL
-
-float32 ln32(float32 x) {
-    u32 bx = * (u32 *) (&x);
-    u32 ex = bx >> 23;
-    s32 t = (s32)ex-(s32)127;
-    bx = 1065353216 | (bx & 8388607);
-    x = * (float32 *) (&bx);
-    return -1.49278f+(2.11263f+(-0.729104f+0.10969f*x)*x)*x+0.6931471806f*(float32)t;
-}
-
-float64 ln64(float64 x) {
-    u64 bx = *(u64 *)(&x); // Read float64 bits
-    u64 ex = bx >> 52; // Extract exponent (11 bits)
-    s32 t = (s32)ex - 1023; // Adjust for float64 bias
-    bx = 4607182418800017408ULL | (bx & 4503599627370495ULL); // Normalize mantissa
-    x = *(float64 *)(&bx);
-    return -1.49278 + (2.11263 + (-0.729104 + 0.10969 * x) * x) * x + 0.6931471806 * t;
-}
-
-
-
-u64 powu(u64 x, u64 e) {
-    if (e == 0) return 1;
-    u64 result = x;
-    for (u64 i = 0; i < e-1; i += 1) {
-        result *= x;
-    }
-    return result;
-}
-f64 powf64(f64 x, f64 e) {
-    if (e == 0) return 1;
-    f64 result = x;
-    for (f64 i = 0; i < e-1; i += 1) {
-        result *= x;
-    }
-    return result;
-}
-
-inline float32 sqrt32(float32 n) {
-    if (n < 0.0f) {
-        return -1.0f;
-    }
-    if (n == 0.0f) {
-        return 0.0f;
-    }
-
-    float32 x = n;
-    float32 tolerance = 0.000001f;
-    float32 delta;
-
-    do {
-        float32 next_x = 0.5f * (x + n / x);
-        delta = next_x - x;
-        if (delta < 0.0f) {
-            delta = -delta;
-        }
-        x = next_x;
-    } while (delta > tolerance);
-
-    return x;
-}
-
-inline float64 sqrt64(float64 n) {
-    if (n < 0.0) {
-        return -1.0;
-    }
-    if (n == 0.0) {
-        return 0.0;
-    }
-
-    float64 x = n;
-    float64 tolerance = 0.000001;
-    float64 delta;
-
-    do {
-        float64 next_x = 0.5 * (x + n / x);
-        delta = next_x - x;
-        if (delta < 0.0) {
-            delta = -delta;
-        }
-        x = next_x;
-    } while (delta > tolerance);
-
-    return x;
-}
-
 #define f2_expand(v) (v).x, (v).y
 #define f3_expand(v) (v).x, (v).y, (v).z
 #define f4_expand(v) (v).x, (v).y, (v).z, (v).w
@@ -299,6 +212,99 @@ typedef float2x32 float2;
 typedef float3x32 float3;
 typedef float4x32 float4;
 
+
+
+
+
+
+
+
+
+inline float32 ln32(float32 x) {
+    u32 bx = * (u32 *) (&x);
+    u32 ex = bx >> 23;
+    s32 t = (s32)ex-(s32)127;
+    bx = 1065353216 | (bx & 8388607);
+    x = * (float32 *) (&bx);
+    return -1.49278f+(2.11263f+(-0.729104f+0.10969f*x)*x)*x+0.6931471806f*(float32)t;
+}
+
+inline float64 ln64(float64 x) {
+    u64 bx = *(u64 *)(&x); // Read float64 bits
+    u64 ex = bx >> 52; // Extract exponent (11 bits)
+    s32 t = (s32)ex - 1023; // Adjust for float64 bias
+    bx = 4607182418800017408ULL | (bx & 4503599627370495ULL); // Normalize mantissa
+    x = *(float64 *)(&bx);
+    return -1.49278 + (2.11263 + (-0.729104 + 0.10969 * x) * x) * x + 0.6931471806 * t;
+}
+
+
+
+inline u64 powu(u64 x, u64 e) {
+    if (e == 0) return 1;
+    u64 result = x;
+    for (u64 i = 0; i < e-1; i += 1) {
+        result *= x;
+    }
+    return result;
+}
+inline f64 powf64(f64 x, f64 e) {
+    if (e == 0) return 1;
+    f64 result = x;
+    for (f64 i = 0; i < e-1; i += 1) {
+        result *= x;
+    }
+    return result;
+}
+
+inline float32 sqrt32(float32 n) {
+    if (n < 0.0f) {
+        return -1.0f;
+    }
+    if (n == 0.0f) {
+        return 0.0f;
+    }
+
+    float32 x = n;
+    float32 tolerance = 0.000001f;
+    float32 delta;
+
+    do {
+        float32 next_x = 0.5f * (x + n / x);
+        delta = next_x - x;
+        if (delta < 0.0f) {
+            delta = -delta;
+        }
+        x = next_x;
+    } while (delta > tolerance);
+
+    return x;
+}
+
+inline float64 sqrt64(float64 n) {
+    if (n < 0.0) {
+        return -1.0;
+    }
+    if (n == 0.0) {
+        return 0.0;
+    }
+
+    float64 x = n;
+    float64 tolerance = 0.000001;
+    float64 delta;
+
+    do {
+        float64 next_x = 0.5 * (x + n / x);
+        delta = next_x - x;
+        if (delta < 0.0) {
+            delta = -delta;
+        }
+        x = next_x;
+    } while (delta > tolerance);
+
+    return x;
+}
+
 inline float2x32 f2x32(float32 x, float32 y)                       { return (float2x32){x, y}; }
 inline float3x32 f3x32(float32 x, float32 y, float32 z)            { return (float3x32){x, y, z}; }
 inline float4x32 f4x32(float32 x, float32 y, float32 z, float32 w) { return (float4x32){x, y, z, w}; }
@@ -380,8 +386,6 @@ inline float32 f4x32_dot(float4x32 a, float4x32 b) { return a.x * b.x + a.y * b.
 inline float32 f2x32_perp(float2x32 a, float2x32 b) { return (a.x * b.y) - (a.y * b.x); }
 inline float3x32 f3x32_cross(float3x32 a, float3x32 b) { return f3x32((a.y*b.z)-(a.z*b.y), (a.z*b.x)-(a.x*b.z), (a.x*b.y)-(a.y*b.x)); }
 
-
-#endif // OSTD_IMPL
 
 // Column major
 typedef struct Matrix4 {

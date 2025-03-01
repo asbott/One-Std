@@ -1,9 +1,15 @@
 
 
+//VS_Out :: struct {
+//	color: f32v3;
+//	uv: f32v2;
+//	pos: f32v4;
+//}
+
+//in: VS_Out $Input(0);
 in_color: f32v3 $Input(0);
 in_uv: f32v2 $Input(1);
-
-vs_pos: f32v4 $VertexPosition;
+in_pos: f32v4 $Input(2);
 
 out_color: f32v4 $Output(0);
 
@@ -12,11 +18,78 @@ image: Image2Df32v4 $Binding(1);
 
 image_color: f32v4 = sample(image, sample_mode, in_uv);
 
-/*if vs_pos.x > 0.15 {
-	out_color = v32v4.(1.0, 0.0, 0.0, 1.0);
-} else if vs_pos.x > 0.0  out_color = v32v4.(0.0, 1.0, 0.0, 1.0);
-else
-	out_color = image_color;*/
+//if in_pos.x > 0.15 {
+//	out_color = f32v4.(1.0, 0.0, 0.0, 1.0);
+//} else if in_pos.x > 0.0  out_color = f32v4.(0.0, 1.0, 0.0, 1.0);
+//else
+//	out_color = image_color;
+	
+if 1 {
+	out_color = f32v4.(9.0, 9.0, 9.0, 9.0);
+}
+	
+out_color = f32v4.(0.0, 0.0, 0.0, 1.0);
+if 2.0 && 1.0 {
+	out_color = f32v4.(0.0, 1.0, 0.0, 2.0);
+} else if (1 >= 2 || sample(image, sample_mode, in_uv).g < 0.1) {
+	out_color = f32v4.(1.0, 0.0, 0.0, 1.0);
+} else if 2 == 5 || 3 != 1 {
 
-out_color = f32v4.(in_color.x, in_color.y, in_color.z, 1.0) * image_color;
+	out_color = f32v4.(0.0, 1.0, 0.0, 3.0);
+} else if 0 {
+	out_color = f32v4.(1.0, 2.0, 3.0, 4.0);
+} else if (7 >= 7) {
+	out_color = f32v4.(0.0, 0.0, 1.0, 1.0);
+} else {
+	out_color = f32v4.(1.0, 1.0, 1.0, 1.0);
+}
+
+i: u32 = 5;
+
+i = i - 1;
+
+while i > 0 {
+	//defer i -= 1;
+	
+	// break
+	// continue
+	
+	//out_color.g = out_color.g + 0.05;
+	
+	i = i - 1;
+}
+	
+// @flatten
+// @noflatten
+	
+//if 0 {
+//	
+//}
+
+//@weight(0.1, 0.9)
+//if 1 == 2 {
+//	
+//}
+//if !(1 == 3) {}
+
+// @unroll
+// @nounroll
+// while (x) {}
+
+
+/*
+#if STAGE_VERTEX {
+	kernel_vs :: () {
+		
+	}
+	kernel_vs();
+} else if STAGE_FRAGMENT {
+	kernel_fs :: () {
+		
+	}
+	kernel_fs();
+}
+*/
+
+
 
