@@ -2307,3 +2307,361 @@ unit_local const HRESULT DXGI_ERROR_NOT_FOUND = 0x887A0002;
 
 WINDOWS_IMPORT HRESULT WINAPI CreateDXGIFactory(const GUID *riid, void **ppFactory);
 
+
+
+
+
+
+
+#define WSABASEERR 10000
+#define WSAEINTR                         10004L
+#define WSAEBADF                         10009L
+#define WSAEACCES                        10013L
+#define WSAEFAULT                        10014L
+#define WSAEINVAL                        10022L
+#define WSAEMFILE                        10024L
+#define WSAEWOULDBLOCK                   10035L
+#define WSAEINPROGRESS                   10036L
+#define WSAEALREADY                      10037L
+#define WSAENOTSOCK                      10038L
+#define WSAEDESTADDRREQ                  10039L
+#define WSAEMSGSIZE                      10040L
+#define WSAEPROTOTYPE                    10041L
+#define WSAENOPROTOOPT                   10042L
+#define WSAEPROTONOSUPPORT               10043L
+#define WSAESOCKTNOSUPPORT               10044L
+#define WSAEOPNOTSUPP                    10045L
+#define WSAEPFNOSUPPORT                  10046L
+#define WSAEAFNOSUPPORT                  10047L
+#define WSAEADDRINUSE                    10048L
+#define WSAEADDRNOTAVAIL                 10049L
+#define WSAENETDOWN                      10050L
+#define WSAENETUNREACH                   10051L
+#define WSAENETRESET                     10052L
+#define WSAECONNABORTED                  10053L
+#define WSAECONNRESET                    10054L
+#define WSAENOBUFS                       10055L
+#define WSAEISCONN                       10056L
+#define WSAENOTCONN                      10057L
+#define WSAESHUTDOWN                     10058L
+#define WSAETOOMANYREFS                  10059L
+#define WSAETIMEDOUT                     10060L
+#define WSAECONNREFUSED                  10061L
+#define WSAELOOP                         10062L
+#define WSAENAMETOOLONG                  10063L
+#define WSAEHOSTDOWN                     10064L
+#define WSAEHOSTUNREACH                  10065L
+#define WSAENOTEMPTY                     10066L
+#define WSAEPROCLIM                      10067L
+#define WSAEUSERS                        10068L
+#define WSAEDQUOT                        10069L
+#define WSAESTALE                        10070L
+#define WSAEREMOTE                       10071L
+#define WSASYSNOTREADY                   10091L
+#define WSAVERNOTSUPPORTED               10092L
+#define WSANOTINITIALISED                10093L
+#define WSAEDISCON                       10101L
+#define WSAENOMORE                       10102L
+#define WSAECANCELLED                    10103L
+#define WSAEINVALIDPROCTABLE             10104L
+#define WSAEINVALIDPROVIDER              10105L
+#define WSAEPROVIDERFAILEDINIT           10106L
+#define WSASYSCALLFAILURE                10107L
+#define WSASERVICE_NOT_FOUND             10108L
+#define WSATYPE_NOT_FOUND                10109L
+#define WSA_E_NO_MORE                    10110L
+#define WSA_E_CANCELLED                  10111L
+#define WSAEREFUSED                      10112L
+#define WSAHOST_NOT_FOUND                11001L
+#define WSATRY_AGAIN                     11002L
+#define WSANO_RECOVERY                   11003L
+#define WSANO_DATA                       11004L
+#define WSA_QOS_RECEIVERS                11005L
+#define WSA_QOS_SENDERS                  11006L
+#define WSA_QOS_NO_SENDERS               11007L
+#define WSA_QOS_NO_RECEIVERS             11008L
+#define WSA_QOS_REQUEST_CONFIRMED        11009L
+#define WSA_QOS_ADMISSION_FAILURE        11010L
+#define WSA_QOS_POLICY_FAILURE           11011L
+#define WSA_QOS_BAD_STYLE                11012L
+#define WSA_QOS_BAD_OBJECT               11013L
+#define WSA_QOS_TRAFFIC_CTRL_ERROR       11014L
+#define WSA_QOS_GENERIC_ERROR            11015L
+#define WSA_QOS_ESERVICETYPE             11016L
+#define WSA_QOS_EFLOWSPEC                11017L
+#define WSA_QOS_EPROVSPECBUF             11018L
+#define WSA_QOS_EFILTERSTYLE             11019L
+#define WSA_QOS_EFILTERTYPE              11020L
+#define WSA_QOS_EFILTERCOUNT             11021L
+#define WSA_QOS_EOBJLENGTH               11022L
+#define WSA_QOS_EFLOWCOUNT               11023L
+#define WSA_QOS_EUNKOWNPSOBJ             11024L
+#define WSA_QOS_EPOLICYOBJ               11025L
+#define WSA_QOS_EFLOWDESC                11026L
+#define WSA_QOS_EPSFLOWSPEC              11027L
+#define WSA_QOS_EPSFILTERSPEC            11028L
+#define WSA_QOS_ESDMODEOBJ               11029L
+#define WSA_QOS_ESHAPERATEOBJ            11030L
+#define WSA_QOS_RESERVED_PETYPE          11031L
+#define WSA_SECURE_HOST_NOT_FOUND        11032L
+#define WSA_IPSEC_NAME_POLICY_ERROR      11033L
+
+#define WSADESCRIPTION_LEN      256
+#define WSASYS_STATUS_LEN       128
+
+typedef UINT_PTR        SOCKET;
+
+typedef struct WSAData {
+        WORD                    wVersion;
+        WORD                    wHighVersion;
+#ifdef _WIN64
+        unsigned short          iMaxSockets;
+        unsigned short          iMaxUdpDg;
+        char *              lpVendorInfo;
+        char                    szDescription[WSADESCRIPTION_LEN+1];
+        char                    szSystemStatus[WSASYS_STATUS_LEN+1];
+#else
+        char                    szDescription[WSADESCRIPTION_LEN+1];
+        char                    szSystemStatus[WSASYS_STATUS_LEN+1];
+        unsigned short          iMaxSockets;
+        unsigned short          iMaxUdpDg;
+        char *              lpVendorInfo;
+#endif
+} WSADATA;
+
+typedef WSADATA *LPWSADATA;
+
+WINDOWS_IMPORT int WINAPI WSAStartup( WORD      wVersionRequired, LPWSADATA lpWSAData);
+
+/*
+ * Address families.
+ */
+#define AF_UNSPEC       0               /* unspecified */
+#define AF_UNIX         1               /* local to host (pipes, portals) */
+#define AF_INET         2               /* internetwork: UDP, TCP, etc. */
+#define AF_IMPLINK      3               /* arpanet imp addresses */
+#define AF_PUP          4               /* pup protocols: e.g. BSP */
+#define AF_CHAOS        5               /* mit CHAOS protocols */
+#define AF_IPX          6               /* IPX and SPX */
+#define AF_NS           6               /* XEROX NS protocols */
+#define AF_ISO          7               /* ISO protocols */
+#define AF_OSI          AF_ISO          /* OSI is ISO */
+#define AF_ECMA         8               /* european computer manufacturers */
+#define AF_DATAKIT      9               /* datakit protocols */
+#define AF_CCITT        10              /* CCITT protocols, X.25 etc */
+#define AF_SNA          11              /* IBM SNA */
+#define AF_DECnet       12              /* DECnet */
+#define AF_DLI          13              /* Direct data link interface */
+#define AF_LAT          14              /* LAT */
+#define AF_HYLINK       15              /* NSC Hyperchannel */
+#define AF_APPLETALK    16              /* AppleTalk */
+#define AF_NETBIOS      17              /* NetBios-style addresses */
+#define AF_VOICEVIEW    18              /* VoiceView */
+#define AF_FIREFOX      19              /* FireFox */
+#define AF_UNKNOWN1     20              /* Somebody is using this! */
+#define AF_BAN          21              /* Banyan */
+
+#define AF_MAX          22
+
+/*
+ * Types
+ */
+#define SOCK_STREAM     1               /* stream socket */
+#define SOCK_DGRAM      2               /* datagram socket */
+#define SOCK_RAW        3               /* raw-protocol interface */
+#define SOCK_RDM        4               /* reliably-delivered message */
+#define SOCK_SEQPACKET  5               /* sequenced packet stream */
+
+
+#define IPPROTO_IP              0               /* dummy for IP */
+#define IPPROTO_ICMP            1               /* control message protocol */
+#define IPPROTO_IGMP            2               /* group management protocol */
+#define IPPROTO_GGP             3               /* gateway^2 (deprecated) */
+#define IPPROTO_TCP             6               /* tcp */
+#define IPPROTO_PUP             12              /* pup */
+#define IPPROTO_UDP             17              /* user datagram protocol */
+#define IPPROTO_IDP             22              /* xns idp */
+#define IPPROTO_ND              77              /* UNOFFICIAL net disk proto */
+
+#define IPPROTO_RAW             255             /* raw IP packet */
+#define IPPROTO_MAX             256
+
+
+
+
+
+           
+typedef struct in_addr {
+        union {
+                struct { UCHAR s_b1,s_b2,s_b3,s_b4; } S_un_b;
+                struct { USHORT s_w1,s_w2; } S_un_w;
+                ULONG S_addr;
+        } S_un;
+#define s_addr  S_un.S_addr /* can be used for most tcp & ip code */
+#define s_host  S_un.S_un_b.s_b2    // host on imp
+#define s_net   S_un.S_un_b.s_b1    // network
+#define s_imp   S_un.S_un_w.s_w2    // imp
+#define s_impno S_un.S_un_b.s_b4    // imp #
+#define s_lh    S_un.S_un_b.s_b3    // logical host
+} IN_ADDR, *PIN_ADDR,  *LPIN_ADDR;
+
+    
+#define INVALID_SOCKET  (SOCKET)(~0)
+#define SOCKET_ERROR            (-1)
+    
+  typedef struct sockaddr_in SOCKADDR_IN;
+typedef struct sockaddr_in *PSOCKADDR_IN;
+typedef struct sockaddr_in *LPSOCKADDR_IN;
+
+typedef USHORT ADDRESS_FAMILY;
+
+typedef struct sockaddr_in {
+
+#if(_WIN32_WINNT < 0x0600)
+    short   sin_family;
+#else //(_WIN32_WINNT < 0x0600)
+    ADDRESS_FAMILY sin_family;
+#endif //(_WIN32_WINNT < 0x0600)
+
+    USHORT sin_port;
+    IN_ADDR sin_addr;
+    CHAR sin_zero[8];
+} SOCKADDR_IN, *PSOCKADDR_IN;
+
+struct sockaddr {
+        USHORT sa_family;              /* address family */
+        char    sa_data[14];            /* up to 14 bytes of direct address */
+};
+
+
+WINDOWS_IMPORT
+SOCKET
+WINAPI
+socket(
+    int af,
+    int type,
+    int protocol
+    );
+    
+WINDOWS_IMPORT
+USHORT
+WINAPI
+htons(
+    USHORT hostshort
+    );
+WINDOWS_IMPORT
+USHORT
+WINAPI
+htonl(
+   USHORT hostlong
+    );
+        
+WINDOWS_IMPORT
+int
+WINAPI
+bind(
+     SOCKET s,
+    const struct sockaddr * name,
+     int namelen
+    );
+    
+WINDOWS_IMPORT
+int
+WINAPI
+WSAGetLastError(
+    void
+    );    
+
+WINDOWS_IMPORT
+int
+WINAPI
+listen(
+     SOCKET s,
+     int backlog
+    );
+
+WINDOWS_IMPORT
+SOCKET
+WINAPI
+accept(
+    SOCKET s,
+    struct sockaddr * addr,
+    int * addrlen
+    );
+    
+
+WINDOWS_IMPORT
+unsigned long
+WINAPI
+inet_addr(
+     const char * cp
+    );
+    
+#define INADDR_NONE             0xffffffff
+
+
+WINDOWS_IMPORT
+int
+WINAPI
+connect(
+    SOCKET s,
+    const struct sockaddr * name,
+    int namelen
+    );
+
+
+WINDOWS_IMPORT
+int
+WINAPI
+send(
+    SOCKET s,
+    const char * buf,
+    int len,
+    int flags
+    );
+    
+WINDOWS_IMPORT
+int
+WINAPI
+recv(
+    SOCKET s,
+    char * buf,
+    int len,
+    int flags
+    );
+
+
+
+WINDOWS_IMPORT
+int
+WINAPI
+closesocket(
+    SOCKET s
+    );
+
+WINDOWS_IMPORT
+int
+WINAPI
+ioctlsocket(
+     SOCKET s,
+     long cmd,
+    unsigned long * argp
+    );
+    
+
+#define IOCPARM_MASK    0x7f            /* parameters must be < 128 bytes */
+#define IOC_VOID        0x20000000      /* no parameters */
+#define IOC_OUT         0x40000000      /* copy out parameters */
+#define IOC_IN          0x80000000      /* copy in parameters */
+#define IOC_INOUT       (IOC_IN|IOC_OUT)
+#define _IO(x,y)        (IOC_VOID|((x)<<8)|(y))
+
+#define _IOR(x,y,t)     (IOC_OUT|(((long)sizeof(t)&IOCPARM_MASK)<<16)|((x)<<8)|(y))
+
+#define _IOW(x,y,t)     (IOC_IN|(((long)sizeof(t)&IOCPARM_MASK)<<16)|((x)<<8)|(y))
+#define FIONREAD    _IOR('f', 127, unsigned long) /* get # bytes to read */
+#define FIONBIO     _IOW('f', 126, unsigned long) /* set/clear non-blocking i/o */
+#define FIOASYNC    _IOW('f', 125, unsigned long) /* set/clear async i/o */
+
+#define NO_ERROR 0L                                                 // dderror
+

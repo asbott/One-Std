@@ -87,6 +87,67 @@ typedef struct Easy_Command_Result {
 } Easy_Command_Result;
 Easy_Command_Result sys_run_command_easy(string command_line);
 
+typedef u64 Socket;
+
+typedef enum Socket_Result {
+    SOCKET_OK = 0,
+
+    SOCKET_DISCONNECTED,
+    SOCKET_NOT_INITIALIZED,
+    SOCKET_NOACCESS,
+    SOCKET_IN_PROGRESS,
+    SOCKET_NOT_A_SOCKET,
+    
+    SOCKET_INVALID_ADDRESS,
+    SOCKET_TIMED_OUT,
+    SOCKET_CONNECTION_REFUSED,
+    SOCKET_CONNECTION_RESET,
+    SOCKET_ALREADY_CONNECTED,
+    SOCKET_ADDRESS_IN_USE,
+    SOCKET_NETWORK_UNREACHABLE,
+    SOCKET_HOST_UNREACHABLE,
+    SOCKET_PROTOCOL_ERROR,
+} Socket_Result;
+
+
+
+int _to_win_sock_err(Socket_Result r);
+
+typedef enum Socket_Domain {
+    SOCKET_DOMAIN_IPV4,
+    SOCKET_DOMAIN_BLUETOOTH,
+    SOCKET_DOMAIN_APPLETALK,
+#if OS_FLAGS & OS_FLAG_UNIX
+    SOCKET_DOMAIN_UNIX,
+#endif
+
+} Socket_Domain;
+
+typedef enum Socket_Type {
+    SOCKET_TYPE_STREAM,
+    SOCKET_TYPE_DGRAM,
+    SOCKET_TYPE_RAW,
+    SOCKET_TYPE_RDM,
+    SOCKET_TYPE_SEQPACKET,
+} Socket_Type;
+
+typedef enum Socket_Protocol {
+    SOCKET_PROTOCOL_TCP,
+    SOCKET_PROTOCOL_UDP,
+} Socket_Protocol;
+
+u32 sys_convert_address_string(string address);
+
+Socket_Result sys_socket_init(Socket *socket, Socket_Domain domain, Socket_Type type, Socket_Protocol protocol);
+Socket_Result sys_socket_bind(Socket socket, u32 address, u16 port);
+Socket_Result sys_socket_listen(Socket socket, s64 backlog);
+Socket_Result sys_socket_accept(Socket socket, Socket *accepted);
+Socket_Result sys_socket_connect(Socket sock, u32 address, u16 port, Socket_Domain domain);
+Socket_Result sys_socket_send(Socket socket, void *data, u64 length, u64 *sent);
+Socket_Result sys_socket_recv(Socket socket, void *buffer, u64 length, u64 *sent);
+Socket_Result sys_socket_close(Socket socket);
+Socket_Result sys_socket_set_blocking(Socket *socket, bool blocking);
+
 //////
 // Surfaces (Window)
 //////
@@ -253,6 +314,7 @@ void sys_print_stack_trace(File_Handle handle);
     #ifndef _WINDOWS_ /* This is defined in windows.h */
     #include "windows_loader.h"
     #endif // _WINDOWS_
+    
 #endif// OS_FLAGS & OS_FLAG_WINDOWS
 
 #ifndef OSTD_HEADLESS
@@ -332,13 +394,17 @@ unit_local _Surface_State *_get_surface_state(Surface_Handle h) {
 #include <unistd.h>
 #include <sched.h>
 #include <pthread.h>
-
 #include <sys/mman.h>
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <errno.h>
 #include <execinfo.h>
 #include <fcntl.h>
+#include <netinet/in.h>
+#include <arpa/inet.h>
+#include <sys/socket.h>
+#include <unistd.h>
+
 #undef bool
 
 typedef struct _Mapped_Region_Desc {
@@ -734,6 +800,7 @@ Thread_Handle sys_get_current_thread(void) {
     #pragma comment(lib, "dbghelp")
     #pragma comment(lib, "pdh")
     #pragma comment(lib, "winmm")
+    #pragma comment(lib, "ws2_32.lib")
 #ifndef OSTD_HEADLESS
     #pragma comment(lib, "gdi32")
     #pragma comment(lib, "dxgi")
@@ -1176,6 +1243,251 @@ Easy_Command_Result sys_run_command_easy(string command_line) {
     res.process_start_success = true;
     
     return res;
+}
+
+inline unit_local int _to_winsock_err(Socket_Result r) {
+    switch(r) {
+        case SOCKET_OK: return 0;
+        case SOCKET_DISCONNECTED: return WSAECONNRESET;
+        case SOCKET_NOT_INITIALIZED: return WSANOTINITIALISED;
+        case SOCKET_NOACCESS: return WSAEACCES;
+        case SOCKET_IN_PROGRESS: return WSAEWOULDBLOCK;
+        case SOCKET_NOT_A_SOCKET: return WSAENOTSOCK;
+        case SOCKET_INVALID_ADDRESS: return WSAEFAULT;
+        case SOCKET_TIMED_OUT: return WSAETIMEDOUT;
+        case SOCKET_CONNECTION_REFUSED: return WSAECONNREFUSED;
+        case SOCKET_CONNECTION_RESET: return WSAECONNRESET;
+        case SOCKET_ALREADY_CONNECTED: return WSAEISCONN;
+        case SOCKET_ADDRESS_IN_USE: return WSAEADDRINUSE;
+        case SOCKET_NETWORK_UNREACHABLE: return WSAENETUNREACH;
+        case SOCKET_HOST_UNREACHABLE: return WSAEHOSTUNREACH;
+        case SOCKET_PROTOCOL_ERROR: return WSAEPROTONOSUPPORT;
+        default: return -1;
+    }
+}
+
+
+static Socket_Result _ensure_winsock_initialized(void) {
+    static bool winsock_initialized = false;
+    if (!winsock_initialized) {
+        WSADATA wsaData;
+        int result = WSAStartup(2 | (2 << 8), &wsaData);
+        if (result != 0) {
+            return SOCKET_NOT_INITIALIZED;
+        }
+        winsock_initialized = true;
+    }
+    return SOCKET_OK;
+}
+
+int _to_win_sock_err(Socket_Result r) {
+    switch(r) {
+        case SOCKET_OK: return 0;
+        case SOCKET_DISCONNECTED: return WSAECONNRESET;
+        case SOCKET_NOT_INITIALIZED: return WSANOTINITIALISED;
+        case SOCKET_NOACCESS: return WSAEACCES;
+        case SOCKET_IN_PROGRESS: return WSAEWOULDBLOCK;
+        case SOCKET_NOT_A_SOCKET: return WSAENOTSOCK;
+        case SOCKET_INVALID_ADDRESS: return WSAEFAULT;
+        case SOCKET_TIMED_OUT: return WSAETIMEDOUT;
+        case SOCKET_CONNECTION_REFUSED: return WSAECONNREFUSED;
+        case SOCKET_CONNECTION_RESET: return WSAECONNRESET;
+        case SOCKET_ALREADY_CONNECTED: return WSAEISCONN;
+        case SOCKET_ADDRESS_IN_USE: return WSAEADDRINUSE;
+        case SOCKET_NETWORK_UNREACHABLE: return WSAENETUNREACH;
+        case SOCKET_HOST_UNREACHABLE: return WSAEHOSTUNREACH;
+        case SOCKET_PROTOCOL_ERROR: return WSAEPROTONOSUPPORT;
+        default: return -1;
+    }
+}
+
+u32 sys_convert_address_string(string address) {
+    assert(address.count < 1024);
+    char addr_str[1024] = {0};
+    memcpy(addr_str, address.data, address.count);
+    addr_str[address.count] = '\0';
+    return inet_addr(addr_str);
+}
+
+Socket_Result sys_socket_init(Socket *s, Socket_Domain domain, Socket_Type type, Socket_Protocol protocol) {
+    Socket_Result init_res = _ensure_winsock_initialized();
+    if (init_res != SOCKET_OK)
+        return init_res;
+
+    int af = 0;
+    switch (domain) {
+        case SOCKET_DOMAIN_IPV4:
+            af = AF_INET;
+            break;
+        case SOCKET_DOMAIN_BLUETOOTH:
+            // todo(charlie)
+            return SOCKET_INVALID_ADDRESS;
+        case SOCKET_DOMAIN_APPLETALK:
+            return SOCKET_INVALID_ADDRESS;
+#if OS_FLAGS & OS_FLAG_UNIX
+        case SOCKET_DOMAIN_UNIX:
+            return SOCKET_INVALID_ADDRESS;
+#endif
+        default:
+            return SOCKET_PROTOCOL_ERROR;
+    }
+
+    int sock_type = 0;
+    switch (type) {
+        case SOCKET_TYPE_STREAM:
+            sock_type = SOCK_STREAM;
+            break;
+        case SOCKET_TYPE_DGRAM:
+            sock_type = SOCK_DGRAM;
+            break;
+        case SOCKET_TYPE_RAW:
+            sock_type = SOCK_RAW;
+            break;
+        case SOCKET_TYPE_RDM:
+            sock_type = SOCK_RDM;
+            break;
+        case SOCKET_TYPE_SEQPACKET:
+            sock_type = SOCK_SEQPACKET;
+            break;
+        default:
+            return SOCKET_PROTOCOL_ERROR;
+    }
+
+    int proto = 0;
+    switch (protocol) {
+        case SOCKET_PROTOCOL_TCP:
+            proto = IPPROTO_TCP;
+            break;
+        case SOCKET_PROTOCOL_UDP:
+            proto = IPPROTO_UDP;
+            break;
+        default:
+            return SOCKET_PROTOCOL_ERROR;
+    }
+
+    SOCKET win_sock = socket(af, sock_type, proto);
+    if (win_sock == INVALID_SOCKET) {
+        return SOCKET_PROTOCOL_ERROR;
+    }
+    *s = (Socket)win_sock;
+    return SOCKET_OK;
+}
+
+Socket_Result sys_socket_bind(Socket sock, u32 address, u16 port) {
+    struct sockaddr_in addr;
+    addr.sin_family = AF_INET;
+    addr.sin_port = htons(port);
+    addr.sin_addr.s_addr = htonl((u16)address);
+    int result = bind((SOCKET)sock, (struct sockaddr*)&addr, sizeof(addr));
+    if (result == SOCKET_ERROR) {
+        int err = WSAGetLastError();
+        switch(err) {
+            case WSAEADDRINUSE: return SOCKET_ADDRESS_IN_USE;
+            case WSAEACCES:   return SOCKET_NOACCESS;
+            default:         return SOCKET_PROTOCOL_ERROR;
+        }
+    }
+    return SOCKET_OK;
+}
+
+Socket_Result sys_socket_listen(Socket sock, s64 backlog) {
+    int result = listen((SOCKET)sock, (int)backlog);
+    if (result == SOCKET_ERROR) {
+        return SOCKET_PROTOCOL_ERROR;
+    }
+    return SOCKET_OK;
+}
+
+Socket_Result sys_socket_accept(Socket sock, Socket *accepted) {
+    struct sockaddr_in addr;
+    int addr_len = sizeof(addr);
+    SOCKET client = accept((SOCKET)sock, (struct sockaddr*)&addr, &addr_len);
+    if (client == INVALID_SOCKET) {
+        int err = WSAGetLastError();
+        if (err == WSAEWOULDBLOCK)
+            return SOCKET_IN_PROGRESS;
+        return SOCKET_PROTOCOL_ERROR;
+    }
+    *accepted = (Socket)client;
+    return SOCKET_OK;
+}
+
+Socket_Result sys_socket_connect(Socket sock, u32 address, u16 port, Socket_Domain domain) {
+    if (domain != SOCKET_DOMAIN_IPV4)
+        return SOCKET_INVALID_ADDRESS;
+
+    struct sockaddr_in addr_in;
+    addr_in.sin_family = AF_INET;
+    addr_in.sin_port = htons(port);
+    addr_in.sin_addr.s_addr = address;
+    if (addr_in.sin_addr.s_addr == INADDR_NONE)
+        return SOCKET_INVALID_ADDRESS;
+
+    int result = connect((SOCKET)sock, (struct sockaddr*)&addr_in, sizeof(addr_in));
+    if (result == SOCKET_ERROR) {
+        int err = WSAGetLastError();
+        if (err == WSAEWOULDBLOCK)
+            return SOCKET_IN_PROGRESS;
+        if (err == WSAETIMEDOUT)
+            return SOCKET_TIMED_OUT;
+        if (err == WSAECONNREFUSED)
+            return SOCKET_CONNECTION_REFUSED;
+        if (err == WSAEALREADY)
+            return SOCKET_ALREADY_CONNECTED;
+        return SOCKET_PROTOCOL_ERROR;
+    }
+    return SOCKET_OK;
+}
+
+Socket_Result sys_socket_send(Socket sock, void *data, u64 length, u64 *sent) {
+    int result = send((SOCKET)sock, (const char*)data, (int)length, 0);
+    if (result == SOCKET_ERROR) {
+        int err = WSAGetLastError();
+        if (err == WSAEWOULDBLOCK) {
+            if (sent)
+                *sent = 0;
+            return SOCKET_IN_PROGRESS;
+        }
+        return SOCKET_PROTOCOL_ERROR;
+    }
+    if (sent)
+        *sent = result > 0 ? (u64)result : 0;
+    return SOCKET_OK;
+}
+
+Socket_Result sys_socket_recv(Socket sock, void *buffer, u64 length, u64 *received) {
+    int result = recv((SOCKET)sock, (char*)buffer, (int)length, 0);
+    if (result == SOCKET_ERROR) {
+        int err = WSAGetLastError();
+        if (err == WSAEWOULDBLOCK) {
+            if (received)
+                *received = 0;
+            return SOCKET_IN_PROGRESS;
+        }
+        return SOCKET_PROTOCOL_ERROR;
+    } else if (result == 0) {
+        if (received)
+            *received = 0;
+        return SOCKET_DISCONNECTED;
+    }
+    if (received)
+        *received = result > 0 ? (u64)result : 0;
+    return SOCKET_OK;
+}
+
+Socket_Result sys_socket_close(Socket sock) {
+    int result = closesocket((SOCKET)sock);
+    if (result == SOCKET_ERROR)
+        return SOCKET_PROTOCOL_ERROR;
+    return SOCKET_OK;
+}
+
+Socket_Result sys_socket_set_blocking(Socket *sock, bool blocking) {
+    unsigned long mode = blocking ? 0 : 1;
+    int result = ioctlsocket((SOCKET)(*sock), (long)FIONBIO, &mode);
+    if (result != NO_ERROR)
+        return SOCKET_PROTOCOL_ERROR;
+    return SOCKET_OK;
 }
 
 #ifndef OSTD_HEADLESS
@@ -2417,4 +2729,18 @@ void sys_print_stack_trace(File_Handle handle) {
 #endif // OS_FLAGS & XXXXX
 
 #endif // OSTD_IMPL
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 

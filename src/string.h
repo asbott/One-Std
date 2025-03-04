@@ -54,3 +54,14 @@ unit_local inline bool string_starts_with(string s, string sub) {
     
     return memcmp(s.data, sub.data, sub.count) == 0;
 }
+
+unit_local s64 string_find_index_from_left(string s, string sub) {
+    
+    for (u64 i = 0; i < s.count-sub.count; i += 1) {
+        
+        if (strings_match((string){sub.count, s.data+i}, sub)) {
+            return (s64)i;
+        }
+    }
+    return -1;
+}
