@@ -4040,7 +4040,10 @@ unit_local _Surface_State *_get_surface_state(Surface_Handle h) {
 //////
 /////////////////////////////////////////////////////
 
-
+#if (OS_FLAGS & OS_FLAG_LINUX)
+#define _GNU_SOURCE
+#define _POSIX_C_SOURCE
+#endif
 
 // todo(charlie) dynamically link & manually  define some stuff to minimize namespace bloat here
 #include <unistd.h>
