@@ -42,3 +42,17 @@ b = a;
 
 v4: f32v4;
 bonkers: f32v2 = v4.xyz.yzz.zzx.yz.xy.yx.xx;
+
+/*
+#if STAGE_VERTEX {
+	kernel_vs :: () {
+		
+	}
+	kernel_vs();
+} else if STAGE_FRAGMENT {
+	kernel_fs :: () {
+		
+	}
+	kernel_fs();
+}
+*/

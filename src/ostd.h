@@ -46,7 +46,7 @@
 #include "system2.h"
 
 #ifndef OSTD_NO_GRAPHICS
-#include "graphics.h"
+#include "oga_graphics.h"
 #endif // OSTD_NO_GRAPHICS
 
 #ifndef OSTD_NO_COMPILER

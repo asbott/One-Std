@@ -32,5 +32,7 @@ tests/android_vs2019/.agde/agde.gradle
 tests/android_vs2019/.gradle/buildOutputCleanup/cache.properties
 
 test.spv
+test.vert.spv
+test.frag.spv
 
 tests/test_result

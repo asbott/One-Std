@@ -1,0 +1,37 @@
+
+
+VS_Out :: struct {
+	color: f32v3;
+	pos: f32v4;
+	index: f32;
+}
+
+Data :: struct {
+	tints: [3]f32v4;
+	offsets: [3]f32v4;
+}
+
+data: BlockView(Data) $UniformBinding(1);
+
+fs_in: VS_Out $Output(0);
+
+out_position: f32v4 $VertexPosition;
+instance_index: u32 $InstanceIndex;
+
+in_position: f32v4 $Input(0);
+in_color: float3 $Input(1);
+in_uv: f32v2 $Input(2);
+
+out_position = in_position+data.offsets[instance_index];
+
+fs_in.color = in_color;
+fs_in.pos = out_position;
+fs_in.index = instance_index->f32;
+
+
+
+
+
+
+
+

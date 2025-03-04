@@ -91,6 +91,8 @@ Easy_Command_Result sys_run_command_easy(string command_line);
 // Surfaces (Window)
 //////
 
+#ifndef OSTD_HEADLESS
+
 typedef void* Surface_Handle;
 
 // note(charlie)
@@ -172,6 +174,8 @@ void surface_blit_pixels(Surface_Handle h);
 
 bool surface_get_monitor(Surface_Handle h, Physical_Monitor *monitor);
 
+#endif // !OSTD_HEADLESS
+
 //////
 // Time
 //////
@@ -244,7 +248,6 @@ void sys_print_stack_trace(File_Handle handle);
         #include <Windows.h>
         #include <DbgHelp.h>
     #endif // OSTD_INCLUDE_WINDOWS
-
     // We manually declare windows functions so we don't need to bloat compilation and
     // namespace with windows.h
     #ifndef _WINDOWS_ /* This is defined in windows.h */
@@ -253,21 +256,24 @@ void sys_print_stack_trace(File_Handle handle);
 #endif// OS_FLAGS & OS_FLAG_WINDOWS
 
 #if OS_FLAGS & OS_FLAG_LINUX
-#if COMPILER_FLAGS & COMPILER_FLAG_GNU
-    #define _GNU_SOURCE
-#endif
-#include <X11/Xlib.h>
-#include <X11/Xutil.h>
-#include <X11/extensions/Xrandr.h>
-// For waiting for vblank. Unfortunately.
-#include <GL/gl.h>
-#include <GL/glx.h>
+    #if COMPILER_FLAGS & COMPILER_FLAG_GNU
+        #define _GNU_SOURCE
+    #endif
+    
+    #include <X11/Xlib.h>
+    #include <X11/Xutil.h>
+    #include <X11/extensions/Xrandr.h>
+    // For waiting for vblank. Unfortunately.
+    #include <GL/gl.h>
+    #include <GL/glx.h>
+    struct _XDisplay;
+    typedef struct _XDisplay Display;
+    struct wl_display;
+    typedef struct wl_display wl_display;
 #endif // OS_FLAGS & OS_FLAG_LINUX
 
-struct _XDisplay;
-typedef struct _XDisplay Display;
-struct wl_display;
-typedef struct wl_display wl_display;
+
+#ifndef OSTD_HEADLESS
 
 typedef struct _Surface_State {
     Surface_Handle handle;
@@ -304,8 +310,8 @@ unit_local _Surface_State *_get_surface_state(Surface_Handle h) {
     return 0;
 }
 
+#endif // !OSTD_HEADLESS
 #endif // (OS_FLAGS & OS_FLAG_HAS_WINDOW_SYSTEM)
-
 
 
 #if (OS_FLAGS & OS_FLAG_UNIX)
@@ -722,11 +728,23 @@ Thread_Handle sys_get_current_thread(void) {
     #pragma comment(lib, "user32")
     #pragma comment(lib, "shcore")
     #pragma comment(lib, "dbghelp")
-    #pragma comment(lib, "gdi32")
     #pragma comment(lib, "pdh")
-    #pragma comment(lib, "dxgi")
     #pragma comment(lib, "winmm")
+#ifndef OSTD_HEADLESS
+    #pragma comment(lib, "gdi32")
+    #pragma comment(lib, "dxgi")
+#endif // !OSTD_HEADLESS
+
 #endif // COMPILER_FLAGS & COMPILER_FLAG_MSC
+
+
+unit_local u64 _win_utf8_to_wide(string utf8, u16 *result, u64 result_max) {
+    u64 n = (u64)MultiByteToWideChar(CP_UTF8, 0, (LPCCH)utf8.data, (int)utf8.count, (LPWSTR)result, (int)result_max);
+    if (n < result_max) result[n] = 0;
+    return n;
+}
+
+#ifndef OSTD_HEADLESS
 
 typedef enum MONITOR_DPI_TYPE {
   MDT_EFFECTIVE_DPI = 0,
@@ -758,11 +776,6 @@ unit_local void _win_lazy_enable_dpi_awarness(void) {
     }
 }
 
-unit_local u64 _win_utf8_to_wide(string utf8, u16 *result, u64 result_max) {
-    u64 n = (u64)MultiByteToWideChar(CP_UTF8, 0, (LPCCH)utf8.data, (int)utf8.count, (LPWSTR)result, (int)result_max);
-    if (n < result_max) result[n] = 0;
-    return n;
-}
 
 unit_local LRESULT window_proc ( HWND hwnd,  u32 message,  WPARAM wparam,  LPARAM lparam) {
 
@@ -785,6 +798,8 @@ unit_local LRESULT window_proc ( HWND hwnd,  u32 message,  WPARAM wparam,  LPARA
 
     return 0;
 }
+
+#endif // !OSTD_HEADLESS
 
 
 void *sys_map_pages(u64 action, void *virtual_base, u64 number_of_pages, bool strict_base_address) {
@@ -933,6 +948,8 @@ System_Info sys_get_info(void) {
     return info;
 }
 
+#ifndef OSTD_HEADLESS
+
 typedef struct MonitorContext {
     Physical_Monitor *buffer;
     u64 max_count;
@@ -1037,6 +1054,8 @@ bool sys_wait_vertical_blank(Physical_Monitor monitor) {
     }
     return false;
 }
+
+#endif // !OSTD_HEADLESS
 
 File_Handle sys_get_stdout(void) {
     return (File_Handle)GetStdHandle((u32)-11);
@@ -1154,6 +1173,8 @@ Easy_Command_Result sys_run_command_easy(string command_line) {
     
     return res;
 }
+
+#ifndef OSTD_HEADLESS
 
 Surface_Handle sys_make_surface(Surface_Desc desc) {
     _Surface_State *s = _alloc_surface_state();
@@ -1366,6 +1387,8 @@ bool surface_get_monitor(Surface_Handle h, Physical_Monitor *monitor) {
 
     return false;
 }
+
+#endif // !OSTD_HEADLESS
 
 float64 sys_get_seconds_monotonic(void) {
     LARGE_INTEGER freq, counter = (LARGE_INTEGER){0};
@@ -1784,6 +1807,8 @@ void sys_set_stderr(File_Handle h) {
     _android_user_stderr_handle = (int)(u64)h;
 }
 
+#ifndef OSTD_HEADLESS
+
 Surface_Handle sys_get_surface(void) {
     return (Surface_Handle)_android_window;
 }
@@ -1845,6 +1870,8 @@ bool surface_get_monitor(Surface_Handle h, Physical_Monitor *monitor) {
     return true;
 }
 
+#endif // !OSTD_HEADLESS
+
 void sys_print_stack_trace(File_Handle handle) {
     sys_write_string(handle, STR("<Stack trace unimplemented>"));
 }
@@ -1856,6 +1883,8 @@ void sys_print_stack_trace(File_Handle handle) {
 // :Linux
 //////
 /////////////////////////////////////////////////////
+
+#ifndef OSTD_HEADLESS
 
 Display *xdisplay = 0;
 
@@ -2073,6 +2102,8 @@ bool surface_get_monitor(Surface_Handle h, Physical_Monitor *monitor) {
     return false;
 }
 
+#endif // OSTD_HEADLESS
+
 File_Handle sys_get_stdout(void) {
     return (File_Handle)(u64)STDOUT_FILENO;
 }
@@ -2090,6 +2121,8 @@ void sys_set_stderr(File_Handle h) {
 }
 
 unit_local bool _x11_initted = false;
+
+#ifndef OSTD_HEADLESS
 
 Surface_Handle sys_make_surface(Surface_Desc desc) {
         if (!_x11_initted) {
@@ -2207,74 +2240,76 @@ bool surface_get_framebuffer_size(Surface_Handle h, s64 *width, s64 *height) {
     return true;
 }
 
-    void* surface_map_pixels(Surface_Handle h) {
-        _Surface_State *state = _get_surface_state(h);
-        if (!state) return 0;
+void* surface_map_pixels(Surface_Handle h) {
+    _Surface_State *state = _get_surface_state(h);
+    if (!state) return 0;
 
-        if (state->pixels) {
-            return state->pixels;
-        }
-
-        s64 width, height;
-        if (!surface_get_framebuffer_size(h, &width, &height)) return 0;
-
-        s64 bytes_needed = width * height * 4;
-        s64 pages        = (bytes_needed + 4095) / 4096;
-
-        state->pixels = sys_map_pages(SYS_MEMORY_RESERVE | SYS_MEMORY_ALLOCATE, 0, pages, false);
-        if (!state->pixels) {
-            return 0;
-        }
-
-        int screen = DefaultScreen(xdisplay);
-        int depth  = DefaultDepth(xdisplay, screen);
-
-        state->ximage = XCreateImage(
-            xdisplay,
-            DefaultVisual(xdisplay, screen),
-            (unsigned int)depth,
-            ZPixmap,
-            0,
-            (char*)state->pixels,
-            (unsigned int)width,
-            (unsigned int)height,
-            32,
-            (int)(width * 4)
-        );
-
-        state->gc = XCreateGC(xdisplay, (Drawable)h, 0, 0);
-
+    if (state->pixels) {
         return state->pixels;
     }
 
-    void surface_blit_pixels(Surface_Handle h) {
-        _Surface_State *state = _get_surface_state(h);
-        if (!state) return;
+    s64 width, height;
+    if (!surface_get_framebuffer_size(h, &width, &height)) return 0;
 
-        if (!state->pixels || !state->ximage) {
-            return;
-        }
+    s64 bytes_needed = width * height * 4;
+    s64 pages        = (bytes_needed + 4095) / 4096;
 
-        s64 width, height;
-        if (!surface_get_framebuffer_size(h, &width, &height)) {
-            return;
-        }
-
-        Window window = (Window)state->handle;
-        glXMakeCurrent(0, 0, 0);
-        XPutImage(
-            xdisplay,
-            (Drawable)window,
-            state->gc,
-            state->ximage,
-            0, 0,
-            0, 0,
-            (unsigned int)width,
-            (unsigned int)height
-        );
-
-        XFlush(xdisplay);
+    state->pixels = sys_map_pages(SYS_MEMORY_RESERVE | SYS_MEMORY_ALLOCATE, 0, pages, false);
+    if (!state->pixels) {
+        return 0;
     }
+
+    int screen = DefaultScreen(xdisplay);
+    int depth  = DefaultDepth(xdisplay, screen);
+
+    state->ximage = XCreateImage(
+        xdisplay,
+        DefaultVisual(xdisplay, screen),
+        (unsigned int)depth,
+        ZPixmap,
+        0,
+        (char*)state->pixels,
+        (unsigned int)width,
+        (unsigned int)height,
+        32,
+        (int)(width * 4)
+    );
+
+    state->gc = XCreateGC(xdisplay, (Drawable)h, 0, 0);
+
+    return state->pixels;
+}
+
+void surface_blit_pixels(Surface_Handle h) {
+    _Surface_State *state = _get_surface_state(h);
+    if (!state) return;
+
+    if (!state->pixels || !state->ximage) {
+        return;
+    }
+
+    s64 width, height;
+    if (!surface_get_framebuffer_size(h, &width, &height)) {
+        return;
+    }
+
+    Window window = (Window)state->handle;
+    glXMakeCurrent(0, 0, 0);
+    XPutImage(
+        xdisplay,
+        (Drawable)window,
+        state->gc,
+        state->ximage,
+        0, 0,
+        0, 0,
+        (unsigned int)width,
+        (unsigned int)height
+    );
+
+    XFlush(xdisplay);
+}
+
+#endif // !OSTD_HEADLESS
 
 void sys_print_stack_trace(File_Handle handle) {
     void *stack[64];
@@ -2304,6 +2339,8 @@ void sys_print_stack_trace(File_Handle handle) {
 #include <emscripten.h>
 #include <emscripten/html5.h>
 #undef bool
+
+#ifndef OSTD_HEADLESS
 
 u64 sys_query_monitors(Physical_Monitor *buffer, u64 max_count)
 {
@@ -2364,6 +2401,8 @@ bool surface_should_close(Surface_Handle s) {
     (void)s;
     return false;
 }
+
+#endif // !OSTD_HEADLESS
 
 void sys_print_stack_trace(File_Handle handle) {
     char buffer[16384];

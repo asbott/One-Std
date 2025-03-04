@@ -1497,6 +1497,8 @@ Easy_Command_Result sys_run_command_easy(string command_line);
 // Surfaces (Window)
 //////
 
+#ifndef OSTD_HEADLESS
+
 typedef void* Surface_Handle;
 
 // note(charlie)
@@ -1578,6 +1580,8 @@ void surface_blit_pixels(Surface_Handle h);
 
 bool surface_get_monitor(Surface_Handle h, Physical_Monitor *monitor);
 
+#endif // !OSTD_HEADLESS
+
 //////
 // Time
 //////
@@ -1650,7 +1654,6 @@ void sys_print_stack_trace(File_Handle handle);
         #include <Windows.h>
         #include <DbgHelp.h>
     #endif // OSTD_INCLUDE_WINDOWS
-
     // We manually declare windows functions so we don't need to bloat compilation and
     // namespace with windows.h
     #ifndef _WINDOWS_ /* This is defined in windows.h */
@@ -3970,21 +3973,24 @@ WINDOWS_IMPORT HRESULT WINAPI CreateDXGIFactory(const GUID *riid, void **ppFacto
 #endif// OS_FLAGS & OS_FLAG_WINDOWS
 
 #if OS_FLAGS & OS_FLAG_LINUX
-#if COMPILER_FLAGS & COMPILER_FLAG_GNU
-    #define _GNU_SOURCE
-#endif
-#include <X11/Xlib.h>
-#include <X11/Xutil.h>
-#include <X11/extensions/Xrandr.h>
-// For waiting for vblank. Unfortunately.
-#include <GL/gl.h>
-#include <GL/glx.h>
+    #if COMPILER_FLAGS & COMPILER_FLAG_GNU
+        #define _GNU_SOURCE
+    #endif
+    
+    #include <X11/Xlib.h>
+    #include <X11/Xutil.h>
+    #include <X11/extensions/Xrandr.h>
+    // For waiting for vblank. Unfortunately.
+    #include <GL/gl.h>
+    #include <GL/glx.h>
+    struct _XDisplay;
+    typedef struct _XDisplay Display;
+    struct wl_display;
+    typedef struct wl_display wl_display;
 #endif // OS_FLAGS & OS_FLAG_LINUX
 
-struct _XDisplay;
-typedef struct _XDisplay Display;
-struct wl_display;
-typedef struct wl_display wl_display;
+
+#ifndef OSTD_HEADLESS
 
 typedef struct _Surface_State {
     Surface_Handle handle;
@@ -4021,8 +4027,8 @@ unit_local _Surface_State *_get_surface_state(Surface_Handle h) {
     return 0;
 }
 
+#endif // !OSTD_HEADLESS
 #endif // (OS_FLAGS & OS_FLAG_HAS_WINDOW_SYSTEM)
-
 
 
 #if (OS_FLAGS & OS_FLAG_UNIX)
@@ -4439,11 +4445,23 @@ Thread_Handle sys_get_current_thread(void) {
     #pragma comment(lib, "user32")
     #pragma comment(lib, "shcore")
     #pragma comment(lib, "dbghelp")
-    #pragma comment(lib, "gdi32")
     #pragma comment(lib, "pdh")
-    #pragma comment(lib, "dxgi")
     #pragma comment(lib, "winmm")
+#ifndef OSTD_HEADLESS
+    #pragma comment(lib, "gdi32")
+    #pragma comment(lib, "dxgi")
+#endif // !OSTD_HEADLESS
+
 #endif // COMPILER_FLAGS & COMPILER_FLAG_MSC
+
+
+unit_local u64 _win_utf8_to_wide(string utf8, u16 *result, u64 result_max) {
+    u64 n = (u64)MultiByteToWideChar(CP_UTF8, 0, (LPCCH)utf8.data, (int)utf8.count, (LPWSTR)result, (int)result_max);
+    if (n < result_max) result[n] = 0;
+    return n;
+}
+
+#ifndef OSTD_HEADLESS
 
 typedef enum MONITOR_DPI_TYPE {
   MDT_EFFECTIVE_DPI = 0,
@@ -4475,11 +4493,6 @@ unit_local void _win_lazy_enable_dpi_awarness(void) {
     }
 }
 
-unit_local u64 _win_utf8_to_wide(string utf8, u16 *result, u64 result_max) {
-    u64 n = (u64)MultiByteToWideChar(CP_UTF8, 0, (LPCCH)utf8.data, (int)utf8.count, (LPWSTR)result, (int)result_max);
-    if (n < result_max) result[n] = 0;
-    return n;
-}
 
 unit_local LRESULT window_proc ( HWND hwnd,  u32 message,  WPARAM wparam,  LPARAM lparam) {
 
@@ -4502,6 +4515,8 @@ unit_local LRESULT window_proc ( HWND hwnd,  u32 message,  WPARAM wparam,  LPARA
 
     return 0;
 }
+
+#endif // !OSTD_HEADLESS
 
 
 void *sys_map_pages(u64 action, void *virtual_base, u64 number_of_pages, bool strict_base_address) {
@@ -4650,6 +4665,8 @@ System_Info sys_get_info(void) {
     return info;
 }
 
+#ifndef OSTD_HEADLESS
+
 typedef struct MonitorContext {
     Physical_Monitor *buffer;
     u64 max_count;
@@ -4754,6 +4771,8 @@ bool sys_wait_vertical_blank(Physical_Monitor monitor) {
     }
     return false;
 }
+
+#endif // !OSTD_HEADLESS
 
 File_Handle sys_get_stdout(void) {
     return (File_Handle)GetStdHandle((u32)-11);
@@ -4871,6 +4890,8 @@ Easy_Command_Result sys_run_command_easy(string command_line) {
     
     return res;
 }
+
+#ifndef OSTD_HEADLESS
 
 Surface_Handle sys_make_surface(Surface_Desc desc) {
     _Surface_State *s = _alloc_surface_state();
@@ -5083,6 +5104,8 @@ bool surface_get_monitor(Surface_Handle h, Physical_Monitor *monitor) {
 
     return false;
 }
+
+#endif // !OSTD_HEADLESS
 
 float64 sys_get_seconds_monotonic(void) {
     LARGE_INTEGER freq, counter = (LARGE_INTEGER){0};
@@ -5501,6 +5524,8 @@ void sys_set_stderr(File_Handle h) {
     _android_user_stderr_handle = (int)(u64)h;
 }
 
+#ifndef OSTD_HEADLESS
+
 Surface_Handle sys_get_surface(void) {
     return (Surface_Handle)_android_window;
 }
@@ -5562,6 +5587,8 @@ bool surface_get_monitor(Surface_Handle h, Physical_Monitor *monitor) {
     return true;
 }
 
+#endif // !OSTD_HEADLESS
+
 void sys_print_stack_trace(File_Handle handle) {
     sys_write_string(handle, STR("<Stack trace unimplemented>"));
 }
@@ -5573,6 +5600,8 @@ void sys_print_stack_trace(File_Handle handle) {
 // :Linux
 //////
 /////////////////////////////////////////////////////
+
+#ifndef OSTD_HEADLESS
 
 Display *xdisplay = 0;
 
@@ -5790,6 +5819,8 @@ bool surface_get_monitor(Surface_Handle h, Physical_Monitor *monitor) {
     return false;
 }
 
+#endif // OSTD_HEADLESS
+
 File_Handle sys_get_stdout(void) {
     return (File_Handle)(u64)STDOUT_FILENO;
 }
@@ -5807,6 +5838,8 @@ void sys_set_stderr(File_Handle h) {
 }
 
 unit_local bool _x11_initted = false;
+
+#ifndef OSTD_HEADLESS
 
 Surface_Handle sys_make_surface(Surface_Desc desc) {
         if (!_x11_initted) {
@@ -5924,74 +5957,76 @@ bool surface_get_framebuffer_size(Surface_Handle h, s64 *width, s64 *height) {
     return true;
 }
 
-    void* surface_map_pixels(Surface_Handle h) {
-        _Surface_State *state = _get_surface_state(h);
-        if (!state) return 0;
+void* surface_map_pixels(Surface_Handle h) {
+    _Surface_State *state = _get_surface_state(h);
+    if (!state) return 0;
 
-        if (state->pixels) {
-            return state->pixels;
-        }
-
-        s64 width, height;
-        if (!surface_get_framebuffer_size(h, &width, &height)) return 0;
-
-        s64 bytes_needed = width * height * 4;
-        s64 pages        = (bytes_needed + 4095) / 4096;
-
-        state->pixels = sys_map_pages(SYS_MEMORY_RESERVE | SYS_MEMORY_ALLOCATE, 0, pages, false);
-        if (!state->pixels) {
-            return 0;
-        }
-
-        int screen = DefaultScreen(xdisplay);
-        int depth  = DefaultDepth(xdisplay, screen);
-
-        state->ximage = XCreateImage(
-            xdisplay,
-            DefaultVisual(xdisplay, screen),
-            (unsigned int)depth,
-            ZPixmap,
-            0,
-            (char*)state->pixels,
-            (unsigned int)width,
-            (unsigned int)height,
-            32,
-            (int)(width * 4)
-        );
-
-        state->gc = XCreateGC(xdisplay, (Drawable)h, 0, 0);
-
+    if (state->pixels) {
         return state->pixels;
     }
 
-    void surface_blit_pixels(Surface_Handle h) {
-        _Surface_State *state = _get_surface_state(h);
-        if (!state) return;
+    s64 width, height;
+    if (!surface_get_framebuffer_size(h, &width, &height)) return 0;
 
-        if (!state->pixels || !state->ximage) {
-            return;
-        }
+    s64 bytes_needed = width * height * 4;
+    s64 pages        = (bytes_needed + 4095) / 4096;
 
-        s64 width, height;
-        if (!surface_get_framebuffer_size(h, &width, &height)) {
-            return;
-        }
-
-        Window window = (Window)state->handle;
-        glXMakeCurrent(0, 0, 0);
-        XPutImage(
-            xdisplay,
-            (Drawable)window,
-            state->gc,
-            state->ximage,
-            0, 0,
-            0, 0,
-            (unsigned int)width,
-            (unsigned int)height
-        );
-
-        XFlush(xdisplay);
+    state->pixels = sys_map_pages(SYS_MEMORY_RESERVE | SYS_MEMORY_ALLOCATE, 0, pages, false);
+    if (!state->pixels) {
+        return 0;
     }
+
+    int screen = DefaultScreen(xdisplay);
+    int depth  = DefaultDepth(xdisplay, screen);
+
+    state->ximage = XCreateImage(
+        xdisplay,
+        DefaultVisual(xdisplay, screen),
+        (unsigned int)depth,
+        ZPixmap,
+        0,
+        (char*)state->pixels,
+        (unsigned int)width,
+        (unsigned int)height,
+        32,
+        (int)(width * 4)
+    );
+
+    state->gc = XCreateGC(xdisplay, (Drawable)h, 0, 0);
+
+    return state->pixels;
+}
+
+void surface_blit_pixels(Surface_Handle h) {
+    _Surface_State *state = _get_surface_state(h);
+    if (!state) return;
+
+    if (!state->pixels || !state->ximage) {
+        return;
+    }
+
+    s64 width, height;
+    if (!surface_get_framebuffer_size(h, &width, &height)) {
+        return;
+    }
+
+    Window window = (Window)state->handle;
+    glXMakeCurrent(0, 0, 0);
+    XPutImage(
+        xdisplay,
+        (Drawable)window,
+        state->gc,
+        state->ximage,
+        0, 0,
+        0, 0,
+        (unsigned int)width,
+        (unsigned int)height
+    );
+
+    XFlush(xdisplay);
+}
+
+#endif // !OSTD_HEADLESS
 
 void sys_print_stack_trace(File_Handle handle) {
     void *stack[64];
@@ -6021,6 +6056,8 @@ void sys_print_stack_trace(File_Handle handle) {
 #include <emscripten.h>
 #include <emscripten/html5.h>
 #undef bool
+
+#ifndef OSTD_HEADLESS
 
 u64 sys_query_monitors(Physical_Monitor *buffer, u64 max_count)
 {
@@ -6081,6 +6118,8 @@ bool surface_should_close(Surface_Handle s) {
     (void)s;
     return false;
 }
+
+#endif // !OSTD_HEADLESS
 
 void sys_print_stack_trace(File_Handle handle) {
     char buffer[16384];
@@ -6392,8 +6431,7 @@ void free_arena(Arena arena) {
 
     u64 pointer_count = sys_query_mapped_regions(start, end, 0, 0);
 
-    // todo(charlie)  use a temp scratch memory here
-    Mapped_Memory_Info pointers[4096] = {0};
+    Mapped_Memory_Info *pointers = (Mapped_Memory_Info *)arena.start;
     sys_query_mapped_regions(start, end, pointers, pointer_count);
 
     u32 i;
@@ -7449,8 +7487,8 @@ bool sys_write_entire_file(string path, string data) {
 
 #ifndef OSTD_NO_GRAPHICS
 
-/* Begin include: graphics.h */
-#ifndef OGA_GRAPHICS
+/* Begin include: oga_graphics.h */
+#if !defined(OGA_GRAPHICS) && !defined(OSTD_HEADLESS)
 #define OGA_GRAPHICS
 
 #if 0
@@ -7504,7 +7542,7 @@ typedef enum Oga_Result {
     OGA_INIT_IMAGE_VIEW_ERROR_INVALID_DIMENSIONS_ENUM,
     OGA_INIT_IMAGE_VIEW_ERR_IMAGE_MEMORY_UNALIGNED,
     OGA_INIT_IMAGE_VIEW_ERR_UNMATCHED_MEMORY_REQUIREMENT,
-    OGA_INIT_IMAGE_COPY_TARGET_VIEW_ERROR_INVALID_FLAGS,
+    OGA_INIT_OPTIMAL_COPY_VIEW_ERROR_INVALID_FLAGS,
     
     OGA_INIT_RENDER_PASS_ERROR_INVALID_PROGRAM_BINDING_KIND_ENUM,
     OGA_INIT_BINDING_LIST_LAYOUT_ERROR_MISSING_STAGE_FLAGS,
@@ -7512,6 +7550,8 @@ typedef enum Oga_Result {
     OGA_PUSH_BINDING_LIST_ERROR_LAYOUT_COUNT_MISMATCH,
     
 } Oga_Result;
+
+#define OGA_LOG_VERBOSE (1 << 16)
 
 unit_local inline string oga_get_result_name(Oga_Result r) {
     switch (r) {
@@ -7545,7 +7585,7 @@ unit_local inline string oga_get_result_name(Oga_Result r) {
         case OGA_INIT_IMAGE_VIEW_ERROR_INVALID_DIMENSIONS_ENUM:         return STR("OGA_INIT_IMAGE_VIEW_ERROR_INVALID_DIMENSIONS_ENUM");
         case OGA_INIT_IMAGE_VIEW_ERR_IMAGE_MEMORY_UNALIGNED:            return STR("OGA_INIT_IMAGE_VIEW_ERR_IMAGE_MEMORY_UNALIGNED");
         case OGA_INIT_IMAGE_VIEW_ERR_UNMATCHED_MEMORY_REQUIREMENT:      return STR("OGA_INIT_IMAGE_VIEW_ERR_UNMATCHED_MEMORY_REQUIREMENT");
-        case OGA_INIT_IMAGE_COPY_TARGET_VIEW_ERROR_INVALID_FLAGS:       return STR("OGA_INIT_IMAGE_COPY_TARGET_VIEW_ERROR_INVALID_FLAGS");
+        case OGA_INIT_OPTIMAL_COPY_VIEW_ERROR_INVALID_FLAGS:       return STR("OGA_INIT_OPTIMAL_COPY_VIEW_ERROR_INVALID_FLAGS");
         case OGA_INIT_RENDER_PASS_ERROR_INVALID_PROGRAM_BINDING_KIND_ENUM: return STR("OGA_INIT_RENDER_PASS_ERROR_INVALID_PROGRAM_BINDING_KIND_ENUM");
         case OGA_INIT_BINDING_LIST_LAYOUT_ERROR_MISSING_STAGE_FLAGS:    return STR("OGA_INIT_BINDING_LIST_LAYOUT_ERROR_MISSING_STAGE_FLAGS");
         case OGA_PUSH_BINDING_LIST_ERROR_LAYOUT_COUNT_MISMATCH:         return STR("OGA_PUSH_BINDING_LIST_ERROR_LAYOUT_COUNT_MISMATCH");
@@ -7614,8 +7654,8 @@ unit_local inline string oga_get_result_message(Oga_Result r) {
             return STR("Oga_Image_View_Desc::memory_pointer offset must be aligned to Oga_Device::limits.image_memory_granularity, but it was not.");
         case OGA_INIT_IMAGE_VIEW_ERR_UNMATCHED_MEMORY_REQUIREMENT:
             return STR("Oga_Image_View_Desc::memory_pointer allocation size is not enough to meet the memory requirement for the image. To get the memory requirement for an image kind and size, use oga_get_image_memory_requirement()");
-        case OGA_INIT_IMAGE_COPY_TARGET_VIEW_ERROR_INVALID_FLAGS:
-            return STR("Oga_Image_Copy_Target_View_Desc::flags does not convey any intent.");
+        case OGA_INIT_OPTIMAL_COPY_VIEW_ERROR_INVALID_FLAGS:
+            return STR("Oga_Optimal_Copy_View_Desc::flags does not convey any intent.");
         case OGA_INIT_RENDER_PASS_ERROR_INVALID_PROGRAM_BINDING_KIND_ENUM:
             return STR("A program binding had an invalid enum value for Oga_Program_Binding_Desc::kind. See Oga_Binding_Kind for valid enum values.");
         case OGA_INIT_BINDING_LIST_LAYOUT_ERROR_MISSING_STAGE_FLAGS:
@@ -7844,6 +7884,7 @@ typedef enum Oga_Memory_Usage_ {
     OGA_MEMORY_USAGE_NONE = 0,
     OGA_MEMORY_USAGE_VERTEX_LIST = 1 << 2,
     OGA_MEMORY_USAGE_INDEX_LIST = 1 << 3,
+    // todo(charlie) rename
     OGA_MEMORY_USAGE_FAST_READONLY_DATA_BLOCK = 1 << 4,
     OGA_MEMORY_USAGE_LARGE_READWRITE_DATA_BLOCK = 1 << 5,
     OGA_MEMORY_USAGE_COPY_DST = 1 << 6,
@@ -7851,9 +7892,9 @@ typedef enum Oga_Memory_Usage_ {
     OGA_MEMORY_USAGE_IMAGE_1D = 1 << 8,
     OGA_MEMORY_USAGE_IMAGE_2D = 1 << 9,
     OGA_MEMORY_USAGE_IMAGE_3D = 1 << 10,
-    OGA_MEMORY_USAGE_FBLOCK_1D = 1 << 8,
-    OGA_MEMORY_USAGE_FBLOCK_2D = 1 << 9,
-    OGA_MEMORY_USAGE_FBLOCK_3D = 1 << 10,
+    OGA_MEMORY_USAGE_FBUFFER_1D = 1 << 8,
+    OGA_MEMORY_USAGE_FBUFFER_2D = 1 << 9,
+    OGA_MEMORY_USAGE_FBUFFER_3D = 1 << 10,
 } Oga_Memory_Usage_;
 typedef u64 Oga_Memory_Usage;
 
@@ -7908,13 +7949,13 @@ typedef struct Oga_Device_Limits {
     u64 max_fast_data_blocks_per_stage;
     u64 max_large_data_blocks_per_stage;
     u64 max_images_per_stage;
-    u64 max_fblocks_per_stage;
+    u64 max_fbuffers_per_stage;
     u64 max_samplers_per_stage;
 
     u64 max_fast_data_blocks_per_layout;
     u64 max_large_data_blocks_per_layout;
     u64 max_images_per_layout;
-    u64 max_fblocks_per_layout;
+    u64 max_fbuffers_per_layout;
     u64 max_samplers_per_layout;
 
     u64 max_memory_allocations;
@@ -7949,12 +7990,13 @@ typedef struct Oga_Device_Limits {
     Oga_Sample_Count_Flag supported_sample_counts_render_pass;
 
     Oga_Sample_Count_Flag supported_sample_counts_image_float;
-    Oga_Sample_Count_Flag supported_sample_counts_fblock_float;
+    Oga_Sample_Count_Flag supported_sample_counts_fbuffer_float;
     Oga_Sample_Count_Flag supported_sample_counts_image_int;
-    Oga_Sample_Count_Flag supported_sample_counts_fblock_int;
+    Oga_Sample_Count_Flag supported_sample_counts_fbuffer_int;
     
     u64 memory_granularity;
     u64 image_memory_granularity;
+    u64 fbuffer_memory_granularity;
 
 } Oga_Device_Limits;
 
@@ -8197,6 +8239,7 @@ void oga_uninit_program(Oga_Program *program);
 typedef enum Oga_Program_Stage_Flag_ {
     OGA_PROGRAM_STAGE_VERTEX = 1 << 1,
     OGA_PROGRAM_STAGE_FRAGMENT = 1 << 2,
+    OGA_PROGRAM_STAGE_COMPUTE = 1 << 3,
 } Oga_Program_Stage_Flag_;
 typedef u64 Oga_Program_Stage_Flag;
 
@@ -8222,6 +8265,8 @@ typedef struct Oga_Sample_Mode_Desc {
 typedef enum Oga_Binding_Kind {
     OGA_BINDING_IMAGE,
     OGA_BINDING_SAMPLE_MODE,
+    OGA_BINDING_BLOCK,
+    OGA_BINDING_FBUFFER,
     
     OGA_BINDING_ENUM_MAX
 } Oga_Binding_Kind;
@@ -8250,6 +8295,7 @@ Oga_Result oga_init_binding_list_layout(Oga_Context *context, Oga_Binding_List_L
 void oga_uninit_binding_list_layout(Oga_Binding_List_Layout *layout);
 
 struct Oga_Image_View;
+struct Oga_Block_View;
 typedef struct Oga_Binding_Desc {
     Oga_Binding_Kind kind;
     u64 binding_slot;
@@ -8262,6 +8308,11 @@ typedef struct Oga_Binding_Desc {
     // OGA_BINDING_SAMPLE_MODE
     Oga_Sample_Mode_Desc *sample_modes;
     
+    // OGA_BINDING_BLOCK
+    struct Oga_Block_View **blocks;
+    
+    // OGA_BINDING_FBUFFER
+    struct Oga_FBuffer_View **fbuffers;
     
 } Oga_Binding_Desc;
 typedef struct Oga_Binding_List_Desc {
@@ -8501,6 +8552,8 @@ void oga_uninit_vertex_list_view(Oga_Vertex_List_View *vlist);
 Oga_Result oga_init_index_list_view(Oga_Context *context, Oga_Memory_View_Desc desc, Oga_Index_List_View **ilist);
 void oga_uninit_index_list_view(Oga_Index_List_View *ilist);
 
+/// Image view
+
 typedef enum Oga_Dimensions {
     OGA_1D,
     OGA_2D,
@@ -8526,41 +8579,53 @@ typedef struct Oga_Image_View {
     bool linear_tiling;
 } Oga_Image_View;
 
-typedef enum Oga_Image_Copy_Flag_ {
-    OGA_IMAGE_COPY_DST = 1 << 1,
-    OGA_IMAGE_COPY_SRC = 1 << 2,
-} Oga_Image_Copy_Flag_;
-typedef u64 Oga_Image_Copy_Flag;
-
-
-
 Oga_Result oga_init_image_view(Oga_Context *context, Oga_Image_View_Desc desc, Oga_Image_View **image);
 void oga_uninit_image_view(Oga_Image_View *image);
 
 u64 oga_get_image_memory_requirement(Oga_Context *context, Oga_Image_View_Desc desc);
 
-typedef struct Oga_Image_Copy_Target_View_Desc {
-    Oga_Memory_Pointer memory_pointer;
-    Oga_Format format;
-    Oga_Dimensions dimensions;
-    u64 width, height, depth;
-    bool linear_tiling;
-    u64 graphics_engine_family_index;
-    Oga_Image_Copy_Flag flags;
-} Oga_Image_Copy_Target_View_Desc;
-
-typedef struct Oga_Image_Copy_Target_View {
+typedef struct Oga_FBuffer_View {
     void *id;
     Oga_Context *context;
     Oga_Memory_Pointer memory_pointer;
     u64 width, height, depth;
     Oga_Dimensions dimensions;
     bool linear_tiling;
-    Oga_Image_Copy_Flag flags;
-} Oga_Image_Copy_Target_View;
+} Oga_FBuffer_View;
 
-Oga_Result oga_init_image_copy_target_view(Oga_Context *context, Oga_Image_Copy_Target_View_Desc desc, Oga_Image_Copy_Target_View **image);
-void oga_uninit_image_copy_target_view(Oga_Image_Copy_Target_View *image);
+Oga_Result oga_init_fbuffer_view(Oga_Context *context, Oga_Image_View_Desc desc, Oga_FBuffer_View **fbuffer);
+void oga_uninit_fbuffer_view(Oga_FBuffer_View *fbuffer);
+
+/// Image copy target view
+
+typedef enum Oga_Optimal_Copy_Flag_ {
+    OGA_OPTIMAL_COPY_DST = 1 << 1,
+    OGA_OPTIMAL_COPY_SRC = 1 << 2,
+} Oga_Optimal_Copy_Flag_;
+typedef u64 Oga_Optimal_Copy_Flag;
+
+typedef struct Oga_Optimal_Copy_View_Desc {
+    Oga_Memory_Pointer memory_pointer;
+    Oga_Format format;
+    Oga_Dimensions dimensions;
+    u64 width, height, depth;
+    bool linear_tiling;
+    u64 graphics_engine_family_index;
+    Oga_Optimal_Copy_Flag flags;
+} Oga_Optimal_Copy_View_Desc;
+
+typedef struct Oga_Optimal_Copy_View {
+    void *id;
+    Oga_Context *context;
+    Oga_Memory_Pointer memory_pointer;
+    u64 width, height, depth;
+    Oga_Dimensions dimensions;
+    bool linear_tiling;
+    Oga_Optimal_Copy_Flag flags;
+} Oga_Optimal_Copy_View;
+
+Oga_Result oga_init_optimal_copy_view(Oga_Context *context, Oga_Optimal_Copy_View_Desc desc, Oga_Optimal_Copy_View **image);
+void oga_uninit_optimal_copy_view(Oga_Optimal_Copy_View *image);
 
 typedef struct Oga_Render_Image_View_Desc {
     Oga_Memory_Pointer memory_pointer;
@@ -8583,11 +8648,16 @@ typedef struct Oga_Render_Image_View {
 
 
 
+/// Read buffer view
 
-//////////
-/// Program Pointers & Layout
-
-
+typedef struct Oga_Block_View {
+    void *id;
+    Oga_Context *context;
+    Oga_Memory_Pointer memory_pointer;
+    u64 size;
+} Oga_Block_View;
+Oga_Result oga_init_block_view(Oga_Context *context, Oga_Memory_View_Desc desc, Oga_Block_View **buffer);
+void oga_uninit_block_view(Oga_Block_View *buffer);
 
 // todo(charlie) #validation
 // Keep track of all init()'s and report them here if they were not uninitted
@@ -8649,6 +8719,21 @@ typedef struct Oga_Submit_Command_List_Desc {
     Oga_Cpu_Latch *signal_cpu_latch;
 } Oga_Submit_Command_List_Desc;
 Oga_Result oga_submit_command_list(Oga_Command_List cmd, Oga_Submit_Command_List_Desc desc);
+
+typedef struct Oga_Gpu_Timestamp_Pool {
+    void *id;
+    Oga_Context *context;
+    u64 timestamp_count;
+    u64 written_timestamp_count;
+} Oga_Gpu_Timestamp_Pool;
+
+Oga_Result oga_init_gpu_timestamp_pool(Oga_Context *context, u64 timestamp_count, Oga_Gpu_Timestamp_Pool **pool);
+void oga_uninit_gpu_timestamp_pool(Oga_Gpu_Timestamp_Pool *pool);
+
+void oga_cmd_reset_timestamp_pool(Oga_Command_List cmd, Oga_Gpu_Timestamp_Pool *pool);
+void oga_cmd_write_timestamp(Oga_Command_List cmd, Oga_Gpu_Timestamp_Pool *pool);
+
+Oga_Result oga_read_timestamps(Oga_Gpu_Timestamp_Pool *pool, f64 *nanosecond_timestamps, bool wait);
 
 typedef u64 Oga_Msaa_Resolve_Mode_Flag;
 #define OGA_MSAA_RESOLVE_MODE_NONE    0
@@ -8746,13 +8831,15 @@ Oga_Result oga_cmd_draw(Oga_Command_List cmd, Oga_Draw_Desc desc);
 
 void oga_cmd_copy_linear(Oga_Command_List cmd, Oga_Memory_Pointer dst, Oga_Memory_Pointer src, u64 size);
 
-typedef struct Oga_Image_Copy_Desc {
+typedef struct Oga_Optimal_Copy_Desc {
     s64 offset_x, offset_y, offset_z;
     u64 width, height, depth;
-} Oga_Image_Copy_Desc;
-void oga_cmd_copy_linear_to_image(Oga_Command_List cmd, Oga_Image_Copy_Target_View *dst_view, Oga_Image_Copy_Desc dst_desc, Oga_Memory_Pointer src);
-void oga_cmd_copy_image_to_linear(Oga_Command_List cmd, Oga_Memory_Pointer dst, Oga_Image_Copy_Target_View *src_view, Oga_Image_Copy_Desc src_desc);
-void oga_cmd_copy_image(Oga_Command_List cmd, Oga_Image_Copy_Target_View *dst_view, Oga_Image_Copy_Desc dst_desc, Oga_Image_Copy_Target_View *src_view, Oga_Image_Copy_Desc src_desc);
+} Oga_Optimal_Copy_Desc;
+void oga_cmd_copy_linear_to_image(Oga_Command_List cmd, Oga_Optimal_Copy_View *dst_view, Oga_Optimal_Copy_Desc dst_desc, Oga_Memory_Pointer src);
+void oga_cmd_copy_image_to_linear(Oga_Command_List cmd, Oga_Memory_Pointer dst, Oga_Optimal_Copy_View *src_view, Oga_Optimal_Copy_Desc src_desc);
+void oga_cmd_copy_image(Oga_Command_List cmd, Oga_Optimal_Copy_View *dst_view, Oga_Optimal_Copy_Desc dst_desc, Oga_Optimal_Copy_View *src_view, Oga_Optimal_Copy_Desc src_desc);
+
+void oga_cmd_fill_image(Oga_Command_List cmd, Oga_Optimal_Copy_View *dst_view, float4 color);
 
 #ifdef OGA_IMPL_AUTO
     #if (OS_FLAGS & OS_FLAG_WEB)
@@ -9092,7 +9179,7 @@ inline string oga_format_str(Oga_Format f);
 //////
 /////////////////////////////////////////////////////
 
-#define OGA_OSL_TARGET OSL_TARGET_SPIRV
+#define OGA_OSL_TARGET OSL_TARGET_SPIRV_VULKAN
 
 #if COMPILER_FLAGS & COMPILER_FLAG_MSC
     #pragma comment(lib, "vendors/vulkan-1.lib")
@@ -9538,12 +9625,12 @@ unit_local VkBool32 _vk_debug_callback(
     else
         sev = RSTR("INFO");
 
-    log(0, "\n-----------------VK VALIDATION MESSAGE-----------------");
-    log(0, "Severity: %s", sev);
+    log(OGA_LOG_VERBOSE, "\n-----------------VK VALIDATION MESSAGE-----------------");
+    log(OGA_LOG_VERBOSE, "Severity: %s", sev);
     if (pCallbackData->pMessageIdName)
-        log(0, "- Message ID: %s", STR(pCallbackData->pMessageIdName));
+        log(OGA_LOG_VERBOSE, "- Message ID: %s", STR(pCallbackData->pMessageIdName));
     if (pCallbackData->pMessage)
-        log(0, "- Message: %s", STR(pCallbackData->pMessage));
+        log(OGA_LOG_VERBOSE, "- Message: %s", STR(pCallbackData->pMessage));
 
     return 0;
 }
@@ -9576,7 +9663,7 @@ unit_local VkInstance __instance = 0;
 unit_local inline VkInstance _vk_instance(void) {
 
     if (!__instance) {
-    
+        
         u32 version_major = 0;
         u32 version_minor = 0;
         u32 version_patch = 0;
@@ -9622,7 +9709,7 @@ unit_local inline VkInstance _vk_instance(void) {
             vkDestroyInstance(query_instance, 0);
         }
     
-        log(0, "Supported Vulkan Instance API version: %u.%u\n", version_major, version_minor);
+        log(OGA_LOG_VERBOSE, "Supported Vulkan Instance API version: %u.%u\n", version_major, version_minor);
 
         if (version_major >= 1 && version_minor >= 3) {
             _has_dynamic_rendering = true;
@@ -9716,9 +9803,9 @@ unit_local inline VkInstance _vk_instance(void) {
             required_extensions[i] = required_extensions[i];
         }
 
-        log(0, "Looking for extensions:");
+        log(OGA_LOG_VERBOSE, "Looking for VkInstance extensions:");
         for (u64 i = 0; i < num_required_extensions; i += 1) {
-            log(0, "\t%s", STR(required_extensions[i]));
+            log(OGA_LOG_VERBOSE, "\t%s", STR(required_extensions[i]));
         }
 
         // #Portability dynamic rendering
@@ -9742,15 +9829,15 @@ unit_local inline VkInstance _vk_instance(void) {
 
             if (match == false) {
                 any_missing = true;
-                log(0, "Missing required vulkan extension '%s'", STR(required));
-                log(0, "List of available extensions:");
+                log(OGA_LOG_VERBOSE, "Missing required vulkan extension '%s'", STR(required));
+                log(OGA_LOG_VERBOSE, "List of available extensions:");
                 for (u32 j = 0; j < num_available_extensions; j += 1) {
                     const char *available = available_extensions[j].extensionName;
-                    log(0, "\t%s", STR(available));
+                    log(OGA_LOG_VERBOSE, "\t%s", STR(available));
                 }
                     
             } else {
-                log(0, "Found '%s'..", STR(required));
+                log(OGA_LOG_VERBOSE, "Found '%s'..", STR(required));
             }
         }
 
@@ -9787,19 +9874,19 @@ unit_local inline VkInstance _vk_instance(void) {
 
             if (match == false) {
                 any_missing = true;
-                log(0, "Missing wanted vulkan validation layer '%s'", STR(wanted));
+                log(OGA_LOG_VERBOSE, "Missing wanted vulkan validation layer '%s'", STR(wanted));
                 if (num_available_layers) {
-                    log(0, "List of available validation layers:");
+                    log(OGA_LOG_VERBOSE, "List of available validation layers:");
                     for (u32 j = 0; j < num_available_layers; j += 1) {
                         const char *available = available_layers[j].layerName;
-                        log(0, "\t%s", STR(available));
+                        log(OGA_LOG_VERBOSE, "\t%s", STR(available));
                     }
                 } else {
-                    log(0, "No validation layers available");
+                    log(OGA_LOG_VERBOSE, "No validation layers available");
                 }
             } else {
                 final_layers[num_final_layers++] = wanted;
-                log(0, "Found validation layer %s", STR(wanted));
+                log(OGA_LOG_VERBOSE, "Found validation layer %s", STR(wanted));
             }
         }
 
@@ -9810,6 +9897,7 @@ unit_local inline VkInstance _vk_instance(void) {
 #endif
 
         _vk_assert1(vkCreateInstance(&create_info, 0, &__instance));
+        log(OGA_LOG_VERBOSE, "Created a vulkan instance");
 
 #ifdef DEBUG
         VkDebugUtilsMessengerCreateInfoEXT debug_create_info = (VkDebugUtilsMessengerCreateInfoEXT){0};
@@ -9830,7 +9918,9 @@ unit_local inline VkInstance _vk_instance(void) {
         PFN_vkCreateDebugUtilsMessengerEXT _vkCreateDebugUtilsMessengerEXT  = (PFN_vkCreateDebugUtilsMessengerEXT)*(PFN_vkCreateDebugUtilsMessengerEXT*)(void**)&untyped;
 
         if (_vkCreateDebugUtilsMessengerEXT(__instance, &debug_create_info, 0, &_vk_messenger) != VK_SUCCESS) {
-            log(0, "Failed creating vulkan debug messenger");
+            log(OGA_LOG_VERBOSE, "Failed creating vulkan debug messenger");
+        } else {
+            log(OGA_LOG_VERBOSE, "Created a vulkan debug messenger");
         }
 #endif // DEBUG
     }
@@ -9864,9 +9954,9 @@ unit_local void *_vk_allocate(void *ud, size_t size, size_t alignment, VkSystemA
     } else if (scope == VK_SYSTEM_ALLOCATION_SCOPE_INSTANCE) {
         scope_str = STR("Instance");
     }
-    log(0, "VK Allocation '%s'  %u bytes, %u alignment %u", scope_str, size, alignment, p);
+    log(OGA_LOG_VERBOSE, "VK Allocation '%s'  %u bytes, %u alignment %u", scope_str, size, alignment, p);
     //sys_print_stack_trace(sys_get_stdout());
-    //log(0, "------------------------------------\n");
+    //log(OGA_LOG_VERBOSE, "------------------------------------\n");
 #endif
     return p;
 }
@@ -9886,9 +9976,9 @@ unit_local void *_vk_reallocate(void *ud, void *old, size_t size, size_t alignme
     } else if (scope == VK_SYSTEM_ALLOCATION_SCOPE_INSTANCE) {
         scope_str = STR("Instance");
     }
-    log(0, "VK REallocation '%s'  %u bytes, %u alignment ", scope_str, size, alignment);
+    log(OGA_LOG_VERBOSE, "VK REallocation '%s'  %u bytes, %u alignment ", scope_str, size, alignment);
     //sys_print_stack_trace(sys_get_stdout());
-    //log(0, "------------------------------------\n");
+    //log(OGA_LOG_VERBOSE, "------------------------------------\n");
 #endif
     Allocator *allocator = (Allocator *)ud;
     return allocator->proc(ALLOCATOR_REALLOCATE, allocator->data, old, 0, size, alignment, 0);
@@ -9896,7 +9986,7 @@ unit_local void *_vk_reallocate(void *ud, void *old, size_t size, size_t alignme
 
 unit_local void _vk_deallocate(void *ud, void *old) {
 #ifdef LOG_VULKAN_ALLOCATIONS
-    log(0, "VK FREE %u", old);
+    log(OGA_LOG_VERBOSE, "VK FREE %u", old);
 #endif
     Allocator *allocator = (Allocator *)ud;
     allocator->proc(ALLOCATOR_FREE, allocator->data, old, 0, 0, 0, 0);
@@ -10082,7 +10172,7 @@ u64 oga_query_devices(Oga_Device *buffer, u64 buffer_count) {
             bool ok = _vk_select_format(depth_formats, sizeof(depth_formats)/sizeof(VkFormat), VK_IMAGE_TILING_OPTIMAL, VK_FORMAT_FEATURE_DEPTH_STENCIL_ATTACHMENT_BIT, vk_device, &vk_depth_format);
 
             if (!ok) {
-                log(0, ("WARNING: Could not find a supported depth format on this device."));
+                log(OGA_LOG_VERBOSE, ("WARNING: Could not find a supported depth format on this device."));
                 vk_depth_format = VK_FORMAT_D32_SFLOAT;
             }
 
@@ -10115,7 +10205,7 @@ u64 oga_query_devices(Oga_Device *buffer, u64 buffer_count) {
             _vk_assert2(vkCreateBuffer(dummy_device, &dummy_buffer_info, 0, &dummy_src));
             
             VkImage dummy_image_1d, dummy_image_2d, dummy_image_3d;
-            VkImage dummy_fblock_1d, dummy_fblock_2d, dummy_fblock_3d;
+            VkImage dummy_fbuffer_1d, dummy_fbuffer_2d, dummy_fbuffer_3d;
             VkImageCreateInfo dummy_image_info = (VkImageCreateInfo){0};
             dummy_image_info.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
             dummy_image_info.extent.width = props.limits.maxImageDimension1D;
@@ -10134,7 +10224,7 @@ u64 oga_query_devices(Oga_Device *buffer, u64 buffer_count) {
             _vk_assert2(vkCreateImage(dummy_device, &dummy_image_info, 0, &dummy_image_1d));
             dummy_image_info.usage = VK_IMAGE_USAGE_STORAGE_BIT;
             dummy_image_info.imageType = VK_IMAGE_TYPE_1D;
-            _vk_assert2(vkCreateImage(dummy_device, &dummy_image_info, 0, &dummy_fblock_1d));
+            _vk_assert2(vkCreateImage(dummy_device, &dummy_image_info, 0, &dummy_fbuffer_1d));
             dummy_image_info.extent.width = props.limits.maxImageDimension2D;
             dummy_image_info.extent.height = props.limits.maxImageDimension2D;
             dummy_image_info.usage = VK_IMAGE_USAGE_SAMPLED_BIT;
@@ -10142,7 +10232,7 @@ u64 oga_query_devices(Oga_Device *buffer, u64 buffer_count) {
             _vk_assert2(vkCreateImage(dummy_device, &dummy_image_info, 0, &dummy_image_2d));
             dummy_image_info.usage = VK_IMAGE_USAGE_STORAGE_BIT;
             dummy_image_info.imageType = VK_IMAGE_TYPE_2D;
-            _vk_assert2(vkCreateImage(dummy_device, &dummy_image_info, 0, &dummy_fblock_2d));
+            _vk_assert2(vkCreateImage(dummy_device, &dummy_image_info, 0, &dummy_fbuffer_2d));
             dummy_image_info.extent.width = props.limits.maxImageDimension3D;
             dummy_image_info.extent.height = props.limits.maxImageDimension3D;
             dummy_image_info.extent.depth = 4;
@@ -10151,7 +10241,7 @@ u64 oga_query_devices(Oga_Device *buffer, u64 buffer_count) {
             _vk_assert2(vkCreateImage(dummy_device, &dummy_image_info, 0, &dummy_image_3d));
             dummy_image_info.usage = VK_IMAGE_USAGE_STORAGE_BIT;
             dummy_image_info.imageType = VK_IMAGE_TYPE_3D;
-            _vk_assert2(vkCreateImage(dummy_device, &dummy_image_info, 0, &dummy_fblock_3d));
+            _vk_assert2(vkCreateImage(dummy_device, &dummy_image_info, 0, &dummy_fbuffer_3d));
             
             for (u32 j = 0; j < mem_props.memoryTypeCount; j += 1) {
                 VkMemoryType type = mem_props.memoryTypes[j];
@@ -10192,15 +10282,15 @@ u64 oga_query_devices(Oga_Device *buffer, u64 buffer_count) {
                 vkGetImageMemoryRequirements(dummy_device, dummy_image_3d, &req);
                 if (j & req.memoryTypeBits)
                     heap->supported_usage_flags |= OGA_MEMORY_USAGE_IMAGE_3D;
-                vkGetImageMemoryRequirements(dummy_device, dummy_fblock_1d, &req);
+                vkGetImageMemoryRequirements(dummy_device, dummy_fbuffer_1d, &req);
                 if (j & req.memoryTypeBits)
-                    heap->supported_usage_flags |= OGA_MEMORY_USAGE_FBLOCK_1D;
-                vkGetImageMemoryRequirements(dummy_device, dummy_fblock_2d, &req);
+                    heap->supported_usage_flags |= OGA_MEMORY_USAGE_FBUFFER_1D;
+                vkGetImageMemoryRequirements(dummy_device, dummy_fbuffer_2d, &req);
                 if (j & req.memoryTypeBits)
-                    heap->supported_usage_flags |= OGA_MEMORY_USAGE_FBLOCK_2D;
-                vkGetImageMemoryRequirements(dummy_device, dummy_fblock_3d, &req);
+                    heap->supported_usage_flags |= OGA_MEMORY_USAGE_FBUFFER_2D;
+                vkGetImageMemoryRequirements(dummy_device, dummy_fbuffer_3d, &req);
                 if (j & req.memoryTypeBits)
-                    heap->supported_usage_flags |= OGA_MEMORY_USAGE_FBLOCK_3D;
+                    heap->supported_usage_flags |= OGA_MEMORY_USAGE_FBUFFER_3D;
                     
                 device->limits.image_memory_granularity = max(device->limits.image_memory_granularity, (u64)req.alignment);
                 
@@ -10220,9 +10310,9 @@ u64 oga_query_devices(Oga_Device *buffer, u64 buffer_count) {
             vkDestroyImage(dummy_device, dummy_image_1d, 0);
             vkDestroyImage(dummy_device, dummy_image_2d, 0);
             vkDestroyImage(dummy_device, dummy_image_3d, 0);
-            vkDestroyImage(dummy_device, dummy_fblock_1d, 0);
-            vkDestroyImage(dummy_device, dummy_fblock_2d, 0);
-            vkDestroyImage(dummy_device, dummy_fblock_3d, 0);
+            vkDestroyImage(dummy_device, dummy_fbuffer_1d, 0);
+            vkDestroyImage(dummy_device, dummy_fbuffer_2d, 0);
+            vkDestroyImage(dummy_device, dummy_fbuffer_3d, 0);
             
             /////
             // Feature flags
@@ -10249,12 +10339,12 @@ u64 oga_query_devices(Oga_Device *buffer, u64 buffer_count) {
             device->limits.max_fast_data_blocks_per_stage = props.limits.maxPerStageDescriptorUniformBuffers;
             device->limits.max_large_data_blocks_per_stage = props.limits.maxPerStageDescriptorStorageBuffers;
             device->limits.max_images_per_stage = props.limits.maxPerStageDescriptorSampledImages;
-            device->limits.max_fblocks_per_stage = props.limits.maxPerStageDescriptorStorageImages;
+            device->limits.max_fbuffers_per_stage = props.limits.maxPerStageDescriptorStorageImages;
             device->limits.max_samplers_per_stage = props.limits.maxPerStageDescriptorSamplers;
             device->limits.max_fast_data_blocks_per_layout = props.limits.maxDescriptorSetUniformBuffers;
             device->limits.max_large_data_blocks_per_layout = props.limits.maxDescriptorSetStorageBuffers;
             device->limits.max_images_per_layout = props.limits.maxDescriptorSetSampledImages;
-            device->limits.max_fblocks_per_layout = props.limits.maxDescriptorSetStorageImages;
+            device->limits.max_fbuffers_per_layout = props.limits.maxDescriptorSetStorageImages;
             device->limits.max_samplers_per_layout = props.limits.maxDescriptorSetSamplers;
             device->limits.max_memory_allocations = props.limits.maxMemoryAllocationCount;
             device->limits.max_sampler_allocations = props.limits.maxSamplerAllocationCount;
@@ -10280,11 +10370,11 @@ u64 oga_query_devices(Oga_Device *buffer, u64 buffer_count) {
             for (u64 f = 1; f < 64; f = f << 1)
                 if (props.limits.sampledImageColorSampleCounts & f) device->limits.supported_sample_counts_image_float |= f;
             for (u64 f = 1; f < 64; f = f << 1)
-                if (props.limits.storageImageSampleCounts & f) device->limits.supported_sample_counts_fblock_float |= f;
+                if (props.limits.storageImageSampleCounts & f) device->limits.supported_sample_counts_fbuffer_float |= f;
             for (u64 f = 1; f < 64; f = f << 1)
                 if (props.limits.sampledImageIntegerSampleCounts & f) device->limits.supported_sample_counts_image_int |= f;
             for (u64 f = 1; f < 64; f = f << 1)
-                if (props.limits.storageImageSampleCounts & f) device->limits.supported_sample_counts_fblock_int |= f;
+                if (props.limits.storageImageSampleCounts & f) device->limits.supported_sample_counts_fbuffer_int |= f;
 
             device->limits.memory_granularity = max(device->limits.memory_granularity, (u64)props.limits.bufferImageGranularity);
             device->limits.memory_granularity = max(device->limits.memory_granularity, (u64)props.limits.minMemoryMapAlignment);
@@ -10294,6 +10384,7 @@ u64 oga_query_devices(Oga_Device *buffer, u64 buffer_count) {
             device->limits.memory_granularity = max(device->limits.memory_granularity, (u64)props.limits.optimalBufferCopyRowPitchAlignment);
             
             device->limits.image_memory_granularity = max(device->limits.image_memory_granularity, device->limits.memory_granularity);
+            device->limits.fbuffer_memory_granularity = device->limits.image_memory_granularity;
 
             /////
             // Surface formats
@@ -10372,6 +10463,8 @@ Oga_Result oga_init_context(Oga_Device target_device, Oga_Context_Desc desc, Oga
     }
     
     enabled_features.samplerAnisotropy = VK_TRUE;
+    // todo(charlie) device feature flag
+    enabled_features.fragmentStoresAndAtomics = VK_TRUE;
     
     // We need to do this because driver people simply hate programmers
     VkPhysicalDeviceCoherentMemoryFeaturesAMD device_coherent_memory_features_amd
@@ -10397,6 +10490,16 @@ Oga_Result oga_init_context(Oga_Device target_device, Oga_Context_Desc desc, Oga
     
     
     enabled_features2.features = enabled_features;
+    
+    // todo(charlie) oga context feature flags
+    VkPhysicalDeviceFragmentShaderInterlockFeaturesEXT fragment_shader_interlock
+        = (VkPhysicalDeviceFragmentShaderInterlockFeaturesEXT) {0};
+    fragment_shader_interlock.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FRAGMENT_SHADER_INTERLOCK_FEATURES_EXT;
+    fragment_shader_interlock.fragmentShaderSampleInterlock = VK_FALSE;
+    fragment_shader_interlock.fragmentShaderPixelInterlock = VK_TRUE;
+    fragment_shader_interlock.fragmentShaderShadingRateInterlock = VK_FALSE;
+    
+    device_coherent_memory_features_amd.pNext = &fragment_shader_interlock;
 
     VkDeviceQueueCreateInfo engine_infos[OGA_MAX_DEVICE_LOGICAL_ENGINE_FAMILIES] = {0};
 
@@ -10443,7 +10546,7 @@ Oga_Result oga_init_context(Oga_Device target_device, Oga_Context_Desc desc, Oga
     info.queueCreateInfoCount = (u32)engines_desc_count;
     info.pQueueCreateInfos = engine_infos;
     
-    void **pp_next = &device_coherent_memory_features_amd.pNext;
+    void **pp_next = &fragment_shader_interlock.pNext;
     
     
     internal->vk_version_major = VK_VERSION_MAJOR(props.apiVersion);
@@ -10452,7 +10555,7 @@ Oga_Result oga_init_context(Oga_Device target_device, Oga_Context_Desc desc, Oga
     
     string name = (string){target_device.device_name_length, target_device.device_name_data};
     string api = (string){target_device.api_version_length, target_device.api_version_data};
-    log(0, "Making context for device '%s', api version '%s'", name, api);
+    
     
     char **names = PushTempBuffer(char*, 32);
     if (internal->vk_version_major == 1 && internal->vk_version_minor < 3) {
@@ -10496,18 +10599,25 @@ Oga_Result oga_init_context(Oga_Device target_device, Oga_Context_Desc desc, Oga
         info.ppEnabledExtensionNames = (const char*const*)names;
         
         names[info.enabledExtensionCount++] = "VK_AMD_device_coherent_memory";
+        names[info.enabledExtensionCount++] = "VK_EXT_fragment_shader_interlock";
         internal->dynamic_rendering_is_extension = true;
     } else {
         internal->dynamic_rendering = true;
         internal->dynamic_rendering_is_extension = false;
         
         names[info.enabledExtensionCount++] = "VK_AMD_device_coherent_memory";
+        names[info.enabledExtensionCount++] = "VK_EXT_fragment_shader_interlock";
         names[info.enabledExtensionCount++] = VK_KHR_SWAPCHAIN_EXTENSION_NAME;
         info.ppEnabledExtensionNames = (const char*const*)names;
     }
     
     
-    log(0, "Dynamic rendering: %b", internal->dynamic_rendering);
+    log(OGA_LOG_VERBOSE, "Enabling %i VkDevice extensions:", info.enabledExtensionCount);
+    for (u32 i = 0; i < info.enabledExtensionCount; i += 1) {
+        log(OGA_LOG_VERBOSE, "\t%s", STR(names[i]));
+    }
+    
+    log(OGA_LOG_VERBOSE, "Dynamic rendering enabled: %b", internal->dynamic_rendering);
     
     if (internal->dynamic_rendering) {
         if (internal->dynamic_rendering_is_extension) {
@@ -10546,6 +10656,8 @@ Oga_Result oga_init_context(Oga_Device target_device, Oga_Context_Desc desc, Oga
             engine->index = (u32)engine_index;
         }
     }
+    
+    log(OGA_LOG_VERBOSE, "Initted a Oga_Context for device '%s', api version '%s'", name, api);
     
     return OGA_OK;
 }
@@ -10779,6 +10891,8 @@ Oga_Result oga_init_swapchain(Oga_Context *context, Oga_Swapchain_Desc desc, Oga
     
     (*swapchain)->context = context;
     
+    log(OGA_LOG_VERBOSE, "Initted a swapchain %ix%i", desc.width, desc.height);
+    
     return OGA_OK;
 }
 void oga_uninit_swapchain(Oga_Swapchain *swapchain) {
@@ -10920,6 +11034,13 @@ Oga_Result oga_init_binding_list_layout(Oga_Context *context, Oga_Binding_List_L
     VkDescriptorPoolSize pool_sizes[OGA_BINDING_ENUM_MAX];
     pool_sizes[OGA_BINDING_IMAGE].type = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE;
     pool_sizes[OGA_BINDING_SAMPLE_MODE].type = VK_DESCRIPTOR_TYPE_SAMPLER;
+    pool_sizes[OGA_BINDING_BLOCK].type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+    pool_sizes[OGA_BINDING_FBUFFER].type = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
+    
+    // todo(charlie) #validation
+    // - Overlapped binding slots ?
+    // - Does the layout match the shader reflection data?
+    // - Check shader reflection if a binding is used in a stage which was not specified in stage_flags
     
     VkDescriptorSetLayoutBinding *vk_bindings = PushTempBuffer(VkDescriptorSetLayoutBinding, desc.binding_count);
     for (u64 j = 0; j < desc.binding_count; j += 1) {
@@ -10928,9 +11049,17 @@ Oga_Result oga_init_binding_list_layout(Oga_Context *context, Oga_Binding_List_L
             vk_bindings[j].descriptorType = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE; 
             pool_sizes[OGA_BINDING_IMAGE].descriptorCount += (u32)desc.binding_list_count;
             break;
+        case OGA_BINDING_FBUFFER: 
+            vk_bindings[j].descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE; 
+            pool_sizes[OGA_BINDING_FBUFFER].descriptorCount += (u32)desc.binding_list_count;
+            break;
         case OGA_BINDING_SAMPLE_MODE: 
             vk_bindings[j].descriptorType = VK_DESCRIPTOR_TYPE_SAMPLER; 
             pool_sizes[OGA_BINDING_SAMPLE_MODE].descriptorCount += (u32)desc.binding_list_count;
+            break;
+        case OGA_BINDING_BLOCK: 
+            vk_bindings[j].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER; 
+            pool_sizes[OGA_BINDING_BLOCK].descriptorCount += (u32)desc.binding_list_count;
             break;
         case OGA_BINDING_ENUM_MAX: // fallthrough
         default:
@@ -10944,12 +11073,22 @@ Oga_Result oga_init_binding_list_layout(Oga_Context *context, Oga_Binding_List_L
             vk_bindings[j].stageFlags |= VK_SHADER_STAGE_VERTEX_BIT;
         if (desc.bindings[j].stage_flags & OGA_PROGRAM_STAGE_FRAGMENT)
             vk_bindings[j].stageFlags |= VK_SHADER_STAGE_FRAGMENT_BIT;
+        if (desc.bindings[j].stage_flags & OGA_PROGRAM_STAGE_COMPUTE)
+            vk_bindings[j].stageFlags |= VK_SHADER_STAGE_COMPUTE_BIT;
             
         if (vk_bindings[j].stageFlags == 0) {
             return OGA_INIT_BINDING_LIST_LAYOUT_ERROR_MISSING_STAGE_FLAGS;
         }
         
         vk_bindings[j].pImmutableSamplers = 0;
+    }
+    
+    VkDescriptorPoolSize actual_pool_sizes[OGA_BINDING_ENUM_MAX];
+    u64 actual_pool_sizes_next = 0;
+    for (u64 i = 0; i < OGA_BINDING_ENUM_MAX; i += 1) {
+        if (pool_sizes[i].descriptorCount > 0) {
+            actual_pool_sizes[actual_pool_sizes_next++] = pool_sizes[i];
+        }
     }
     
     
@@ -10960,8 +11099,8 @@ Oga_Result oga_init_binding_list_layout(Oga_Context *context, Oga_Binding_List_L
     VkDescriptorPoolCreateInfo pool_info = (VkDescriptorPoolCreateInfo){0};
     pool_info.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
     pool_info.maxSets = (u32)desc.binding_list_count;
-    pool_info.poolSizeCount = OGA_BINDING_ENUM_MAX;
-    pool_info.pPoolSizes = pool_sizes;
+    pool_info.poolSizeCount = (u32)actual_pool_sizes_next;
+    pool_info.pPoolSizes = actual_pool_sizes;
     _vk_assert2(vkCreateDescriptorPool(context->id, &pool_info, &internal->vk_allocs, &state->pool));
     
     (*layout)->bindings = (Oga_Binding_Layout_Entry_Desc*)((state)+1);
@@ -11004,6 +11143,7 @@ Oga_Result oga_push_binding_list(Oga_Binding_List_Layout *layout, Oga_Binding_Li
     // todo(charlie) #validation 
     // - check that binding list is compliant with layout
     // - check allocated_lists_count was not overflown
+    // - Notify if any item is null where a binding is expected
     
     
     VkDescriptorSetAllocateInfo info = (VkDescriptorSetAllocateInfo){0};
@@ -11016,6 +11156,8 @@ Oga_Result oga_push_binding_list(Oga_Binding_List_Layout *layout, Oga_Binding_Li
     layout->allocated_lists_count += 1;
     
     VkWriteDescriptorSet *writes = PushTempBuffer(VkWriteDescriptorSet, desc.binding_count);
+    
+    // todo(charlie) #validation
     
     for (u64 i = 0; i < desc.binding_count; i += 1) {
         writes[i] = (VkWriteDescriptorSet){0};
@@ -11036,6 +11178,32 @@ Oga_Result oga_push_binding_list(Oga_Binding_List_Layout *layout, Oga_Binding_Li
                     image_infos[j].imageView = image_state->view;
                 }
                 writes[i].pImageInfo = image_infos;
+                break;
+            }
+            case OGA_BINDING_FBUFFER: {
+                writes[i].descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
+                assert(desc.bindings[i].count);
+                VkDescriptorImageInfo *image_infos = PushTempBuffer(VkDescriptorImageInfo, desc.bindings[i].count);
+                for (u64 j = 0; j < desc.bindings[i].count; j += 1) {
+                    _Vk_Image_State* image_state = (_Vk_Image_State*)desc.bindings[i].fbuffers[j]->id;                    
+                    image_infos[j] = (VkDescriptorImageInfo){0};
+                    image_infos[j].imageLayout = VK_IMAGE_LAYOUT_GENERAL;
+                    image_infos[j].imageView = image_state->view;
+                }
+                writes[i].pImageInfo = image_infos;
+                break;
+            }
+            case OGA_BINDING_BLOCK: {
+                writes[i].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+                assert(desc.bindings[i].count);
+                
+                VkDescriptorBufferInfo *buffer_infos = PushTempBuffer(VkDescriptorBufferInfo, desc.bindings[i].count);
+                for (u64 j = 0; j < desc.bindings[i].count; j += 1) {
+                    buffer_infos[j].buffer = desc.bindings[i].blocks[j]->id;
+                    buffer_infos[j].offset = 0;
+                    buffer_infos[j].range = desc.bindings[i].blocks[j]->size;
+                }
+                writes[i].pBufferInfo = buffer_infos;
                 break;
             }
             case OGA_BINDING_SAMPLE_MODE: {
@@ -11202,7 +11370,7 @@ Oga_Result oga_init_render_passes(Oga_Context *context, Oga_Render_Pass_Desc* de
 
         if (depth_clamp_enable && !(context->device.features & OGA_DEVICE_FEATURE_DEPTH_CLAMP)) {
             depth_clamp_enable = false;
-            log(0, "Depth clamp was flagged as enabled, but device is missing feature flag OGA_RENDER_PASS_DISABLE_DEPTH_CLAMP");
+            log(OGA_LOG_VERBOSE, "Depth clamp was flagged as enabled, but device is missing feature flag OGA_RENDER_PASS_DISABLE_DEPTH_CLAMP");
         }
         
         VkPipelineRasterizationStateCreateInfo *rasterization = PushTemp(VkPipelineRasterizationStateCreateInfo);
@@ -11235,9 +11403,16 @@ Oga_Result oga_init_render_passes(Oga_Context *context, Oga_Render_Pass_Desc* de
         *depth_stencil = (VkPipelineDepthStencilStateCreateInfo){0};
         depth_stencil->sType = VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO;
         
+        // todo(charlie) allow enabling driver blending
         VkPipelineColorBlendAttachmentState *blend_attachment = PushTemp(VkPipelineColorBlendAttachmentState);
         *blend_attachment = (VkPipelineColorBlendAttachmentState){0};
-        blend_attachment->blendEnable = false;
+        //blend_attachment->blendEnable = true;
+        blend_attachment->srcColorBlendFactor = VK_BLEND_FACTOR_SRC_ALPHA;
+        blend_attachment->dstColorBlendFactor = VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA;
+        blend_attachment->colorBlendOp = VK_BLEND_OP_ADD;
+        blend_attachment->srcAlphaBlendFactor = VK_BLEND_FACTOR_ONE;
+        blend_attachment->dstAlphaBlendFactor = VK_BLEND_FACTOR_ZERO;
+        blend_attachment->alphaBlendOp = VK_BLEND_OP_ADD;
         blend_attachment->colorWriteMask = VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT | VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT;
         
         VkPipelineColorBlendStateCreateInfo *blend = PushTemp(VkPipelineColorBlendStateCreateInfo);
@@ -11245,6 +11420,10 @@ Oga_Result oga_init_render_passes(Oga_Context *context, Oga_Render_Pass_Desc* de
         blend->sType = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO;
         blend->attachmentCount = 1;
         blend->pAttachments = blend_attachment;
+        blend->blendConstants[0] = 0.0f;
+        blend->blendConstants[1] = 0.0f;
+        blend->blendConstants[2] = 0.0f;
+        blend->blendConstants[3] = 0.0f;
         
         VkDynamicState dynamic_states[] = {
             VK_DYNAMIC_STATE_VIEWPORT,
@@ -11627,18 +11806,9 @@ void oga_uninit_index_list_view(Oga_Index_List_View *ilist) {
     deallocate(a, ilist);
 }
 
-Oga_Result oga_init_image_view(Oga_Context *context, Oga_Image_View_Desc desc, Oga_Image_View **image) {
-    *image = allocate(context->state_allocator, sizeof(Oga_Image_View) + sizeof(_Vk_Image_State));
-    if (!*image) {
-        return OGA_ERROR_STATE_ALLOCATION_FAILED;
-    }
+unit_local Oga_Result _oga_make_vk_image(Oga_Context *context, _Vk_Image_State *state, Oga_Image_View_Desc desc, VkImageUsageFlags usage, VkImageLayout initial_layout) {
+    _Vk_Context_Internal *internal = (_Vk_Context_Internal*)context->internal;
 
-    **image = (Oga_Image_View){0};
-    (*image)->context = context;
-    (*image)->id = (*image)+1;
-    
-    _Vk_Image_State *state = (_Vk_Image_State*)(*image)->id;
-    
     VkImageType image_type = 0;
     switch (desc.dimensions) {
         case OGA_1D: image_type = VK_IMAGE_TYPE_1D; break;
@@ -11647,7 +11817,6 @@ Oga_Result oga_init_image_view(Oga_Context *context, Oga_Image_View_Desc desc, O
         default: return OGA_INIT_IMAGE_VIEW_ERROR_INVALID_DIMENSIONS_ENUM;
     }
     
-    _Vk_Context_Internal *internal = (_Vk_Context_Internal*)context->internal;
     VkImageCreateInfo info = (VkImageCreateInfo) {0};
     info.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
     info.imageType = image_type;
@@ -11659,7 +11828,7 @@ Oga_Result oga_init_image_view(Oga_Context *context, Oga_Image_View_Desc desc, O
     info.arrayLayers = 1;
     info.samples = VK_SAMPLE_COUNT_1_BIT;
     info.tiling = desc.linear_tiling ? VK_IMAGE_TILING_LINEAR : VK_IMAGE_TILING_OPTIMAL;
-    info.usage = VK_IMAGE_USAGE_SAMPLED_BIT;
+    info.usage = usage;
     info.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
     info.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
     
@@ -11704,7 +11873,7 @@ Oga_Result oga_init_image_view(Oga_Context *context, Oga_Image_View_Desc desc, O
     begin_info.flags |= VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
     
     _vk_assert2(vkBeginCommandBuffer(transition_cmd, &begin_info));
-     _vk_image_barrier_helper(transition_cmd, state->image, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+     _vk_image_barrier_helper(transition_cmd, state->image, VK_IMAGE_LAYOUT_UNDEFINED, initial_layout);
     _vk_assert2(vkEndCommandBuffer(transition_cmd));
     
     VkSubmitInfo submit_info = (VkSubmitInfo){0};
@@ -11741,6 +11910,23 @@ Oga_Result oga_init_image_view(Oga_Context *context, Oga_Image_View_Desc desc, O
      
     _vk_assert2(vkCreateImageView(context->id, &view_info, &internal->vk_allocs, &state->view));
     
+    return OGA_OK;
+}
+
+Oga_Result oga_init_image_view(Oga_Context *context, Oga_Image_View_Desc desc, Oga_Image_View **image) {
+    *image = allocate(context->state_allocator, sizeof(Oga_Image_View) + sizeof(_Vk_Image_State));
+    if (!*image) {
+        return OGA_ERROR_STATE_ALLOCATION_FAILED;
+    }
+
+    **image = (Oga_Image_View){0};
+    (*image)->context = context;
+    (*image)->id = (*image)+1;
+    
+    _Vk_Image_State *state = (_Vk_Image_State*)(*image)->id;
+    
+    Oga_Result res = _oga_make_vk_image(context, state, desc, VK_IMAGE_USAGE_SAMPLED_BIT, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+    if (res != OGA_OK) return res;
     
     (*image)->memory_pointer = desc.memory_pointer;
     (*image)->width = desc.width;
@@ -11764,6 +11950,45 @@ void oga_uninit_image_view(Oga_Image_View *image) {
     Allocator a = image->context->state_allocator;
     *image = (Oga_Image_View){0};
     deallocate(a, image);
+}
+
+Oga_Result oga_init_fbuffer_view(Oga_Context *context, Oga_Image_View_Desc desc, Oga_FBuffer_View **fbuffer) {
+    *fbuffer = allocate(context->state_allocator, sizeof(Oga_FBuffer_View) + sizeof(_Vk_Image_State));
+    if (!*fbuffer) {
+        return OGA_ERROR_STATE_ALLOCATION_FAILED;
+    }
+
+    **fbuffer = (Oga_FBuffer_View){0};
+    (*fbuffer)->context = context;
+    (*fbuffer)->id = (*fbuffer)+1;
+    
+    _Vk_Image_State *state = (_Vk_Image_State*)(*fbuffer)->id;
+    
+    Oga_Result res = _oga_make_vk_image(context, state, desc, VK_IMAGE_USAGE_STORAGE_BIT, VK_IMAGE_LAYOUT_GENERAL);
+    if (res != OGA_OK) return res;
+    
+    (*fbuffer)->memory_pointer = desc.memory_pointer;
+    (*fbuffer)->width = desc.width;
+    (*fbuffer)->height = desc.height;
+    (*fbuffer)->depth = desc.depth;
+    (*fbuffer)->dimensions = desc.dimensions;
+    (*fbuffer)->linear_tiling = desc.linear_tiling;
+    
+    
+    return OGA_OK;
+}
+void oga_uninit_fbuffer_view(Oga_FBuffer_View *fbuffer) {
+    _Vk_Context_Internal *internal = (_Vk_Context_Internal*)fbuffer->context->internal;
+    _vk_assert1(vkDeviceWaitIdle(fbuffer->context->id));
+    
+    _Vk_Image_State *state = (_Vk_Image_State*)fbuffer->id;
+    
+    vkDestroyImageView(fbuffer->context->id, state->view, &internal->vk_allocs);
+    vkDestroyImage(fbuffer->context->id, state->image, &internal->vk_allocs);
+    
+    Allocator a = fbuffer->context->state_allocator;
+    *fbuffer = (Oga_FBuffer_View){0};
+    deallocate(a, fbuffer);
 }
 
 u64 oga_get_image_memory_requirement(Oga_Context *context, Oga_Image_View_Desc desc) {
@@ -11803,13 +12028,13 @@ u64 oga_get_image_memory_requirement(Oga_Context *context, Oga_Image_View_Desc d
     return (u64)mem_req.size;
 }
 
-Oga_Result oga_init_image_copy_target_view(Oga_Context *context, Oga_Image_Copy_Target_View_Desc desc, Oga_Image_Copy_Target_View **image) {
-    *image = allocate(context->state_allocator, sizeof(Oga_Image_Copy_Target_View) + sizeof(_Vk_Image_State));
+Oga_Result oga_init_optimal_copy_view(Oga_Context *context, Oga_Optimal_Copy_View_Desc desc, Oga_Optimal_Copy_View **image) {
+    *image = allocate(context->state_allocator, sizeof(Oga_Optimal_Copy_View) + sizeof(_Vk_Image_State));
     if (!*image) {
         return OGA_ERROR_STATE_ALLOCATION_FAILED;
     }
 
-    **image = (Oga_Image_Copy_Target_View){0};
+    **image = (Oga_Optimal_Copy_View){0};
     (*image)->context = context;
     (*image)->id = (*image)+1;
     
@@ -11837,11 +12062,11 @@ Oga_Result oga_init_image_copy_target_view(Oga_Context *context, Oga_Image_Copy_
     info.tiling = desc.linear_tiling ? VK_IMAGE_TILING_LINEAR : VK_IMAGE_TILING_OPTIMAL;
     info.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
     info.usage = 0;
-    if (desc.flags & OGA_IMAGE_COPY_DST) info.usage |= VK_IMAGE_USAGE_TRANSFER_DST_BIT;
-    if (desc.flags & OGA_IMAGE_COPY_SRC) info.usage |= VK_IMAGE_USAGE_TRANSFER_SRC_BIT;
+    if (desc.flags & OGA_OPTIMAL_COPY_DST) info.usage |= VK_IMAGE_USAGE_TRANSFER_DST_BIT;
+    if (desc.flags & OGA_OPTIMAL_COPY_SRC) info.usage |= VK_IMAGE_USAGE_TRANSFER_SRC_BIT;
     
     if (info.usage == 0) {
-        return OGA_INIT_IMAGE_COPY_TARGET_VIEW_ERROR_INVALID_FLAGS;
+        return OGA_INIT_OPTIMAL_COPY_VIEW_ERROR_INVALID_FLAGS;
     }
     
     _vk_assert2(vkCreateImage(context->id, &info, &internal->vk_allocs, &state->image));
@@ -11908,7 +12133,7 @@ Oga_Result oga_init_image_copy_target_view(Oga_Context *context, Oga_Image_Copy_
     
     return OGA_OK;
 }
-void oga_uninit_image_copy_target_view(Oga_Image_Copy_Target_View *image) {
+void oga_uninit_optimal_copy_view(Oga_Optimal_Copy_View *image) {
      _Vk_Context_Internal *internal = (_Vk_Context_Internal*)image->context->internal;
     _vk_assert1(vkDeviceWaitIdle(image->context->id));
     
@@ -11918,8 +12143,51 @@ void oga_uninit_image_copy_target_view(Oga_Image_Copy_Target_View *image) {
     vkDestroyImage(image->context->id, state->image, &internal->vk_allocs);
     
     Allocator a = image->context->state_allocator;
-    *image = (Oga_Image_Copy_Target_View){0};
+    *image = (Oga_Optimal_Copy_View){0};
     deallocate(a, image);
+}
+
+Oga_Result oga_init_block_view(Oga_Context *context, Oga_Memory_View_Desc desc, Oga_Block_View **block) {
+    *block = allocate(context->state_allocator, sizeof(Oga_Block_View));
+    if (!*block) {
+        return OGA_ERROR_STATE_ALLOCATION_FAILED;
+    }
+
+    **block = (Oga_Block_View){0};
+    (*block)->context = context;
+    
+    _Vk_Context_Internal *internal = (_Vk_Context_Internal*)context->internal;
+    
+    VkBufferCreateInfo info = (VkBufferCreateInfo){0};
+    info.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
+    info.size = (VkDeviceSize)desc.size;
+    info.usage = VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT;
+    info.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+    
+    _vk_assert2(vkCreateBuffer(context->id, &info, &internal->vk_allocs, (VkBuffer*)&(*block)->id));
+    
+    (*block)->size = desc.size;
+    (*block)->memory_pointer = desc.memory_pointer;
+    
+    _Vk_Memory_State *mem_state = (_Vk_Memory_State*)desc.memory_pointer.id;
+    
+    if (!(context->device.memory_heaps[desc.memory_pointer.heap_index].supported_usage_flags & OGA_MEMORY_USAGE_VERTEX_LIST)) {
+        return OGA_INIT_VERTEX_LIST_VIEW_ERROR_MEMORY_LACKS_SUPPORT;
+    }
+    
+    _vk_assert2(vkBindBufferMemory(context->id, (*block)->id, mem_state->memory, desc.memory_pointer.offset));
+    
+    return OGA_OK;
+}
+void oga_uninit_block_view(Oga_Block_View *block) {
+    _Vk_Context_Internal *internal = (_Vk_Context_Internal*)block->context->internal;
+    _vk_assert1(vkDeviceWaitIdle(block->context->id));
+    
+    vkDestroyBuffer(block->context->id, block->id, &internal->vk_allocs);
+    
+    Allocator a = block->context->state_allocator;
+    *block = (Oga_Block_View){0};
+    deallocate(a, block);
 }
 
 Oga_Result oga_init_command_pool(Oga_Context *context, Oga_Command_Pool_Desc desc, Oga_Command_Pool **pool) {
@@ -12046,6 +12314,65 @@ Oga_Result oga_submit_command_list(Oga_Command_List cmd, Oga_Submit_Command_List
     _vk_assert2(vkQueueSubmit(desc.engine.id, 1, &info, desc.signal_cpu_latch ? desc.signal_cpu_latch->id : 0));
     
     return OGA_OK;    
+}
+
+Oga_Result oga_init_gpu_timestamp_pool(Oga_Context *context, u64 timestamp_count, Oga_Gpu_Timestamp_Pool **pool) {
+    *pool = allocate(context->state_allocator, sizeof(Oga_Gpu_Timestamp_Pool));
+    if (!*pool) {
+        return OGA_ERROR_STATE_ALLOCATION_FAILED;
+    }
+
+    **pool = (Oga_Gpu_Timestamp_Pool){0};
+    (*pool)->context = context;
+    
+    _Vk_Context_Internal *internal = (_Vk_Context_Internal*)context->internal;
+    
+    VkQueryPoolCreateInfo pool_info = {0};
+    pool_info.sType = VK_STRUCTURE_TYPE_QUERY_POOL_CREATE_INFO;
+    pool_info.queryType = VK_QUERY_TYPE_TIMESTAMP;
+    pool_info.queryCount = (u32)timestamp_count;
+    
+    _vk_assert2(vkCreateQueryPool(context->id, &pool_info, &internal->vk_allocs, (VkQueryPool*)&(*pool)->id));
+    
+    (*pool)->timestamp_count = timestamp_count;
+    
+    return OGA_OK;
+}
+void oga_uninit_gpu_timestamp_pool(Oga_Gpu_Timestamp_Pool *pool) {
+    _Vk_Context_Internal *internal = (_Vk_Context_Internal*)pool->context->internal;
+    _vk_assert1(vkDeviceWaitIdle(pool->context->id));
+    
+    vkDestroyQueryPool(pool->context->id, pool->id, &internal->vk_allocs);
+    
+    Allocator a = pool->context->state_allocator;
+    *pool = (Oga_Gpu_Timestamp_Pool){0};
+    deallocate(a, pool);
+}
+
+void oga_cmd_reset_timestamp_pool(Oga_Command_List cmd, Oga_Gpu_Timestamp_Pool *pool) {
+    vkCmdResetQueryPool(cmd.id, pool->id, 0, (u32)pool->timestamp_count);
+    pool->written_timestamp_count = 0;
+}
+void oga_cmd_write_timestamp(Oga_Command_List cmd, Oga_Gpu_Timestamp_Pool *pool) {
+    if (pool->written_timestamp_count >= pool->timestamp_count) return; // todo(charlie) #validation
+    
+    vkCmdWriteTimestamp(cmd.id, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, pool->id, (u32)pool->written_timestamp_count);
+    pool->written_timestamp_count += 1;
+}
+
+Oga_Result oga_read_timestamps(Oga_Gpu_Timestamp_Pool *pool, f64 *nanosecond_timestamps, bool wait) {
+    u64 *periods_buffer = PushTempBuffer(u64, pool->written_timestamp_count);
+    _vk_assert2(vkGetQueryPoolResults(pool->context->id, pool->id, 0, (u32)pool->written_timestamp_count, pool->written_timestamp_count*sizeof(u64), periods_buffer, sizeof(u64), VK_QUERY_RESULT_64_BIT | (wait ? VK_QUERY_RESULT_WAIT_BIT : 0)));
+    
+    VkPhysicalDeviceProperties props;
+    vkGetPhysicalDeviceProperties(pool->context->device.id, &props);
+    f64 nanoseconds_per_period = (f64)props.limits.timestampPeriod;
+    
+    for (u64 i = 0; i < pool->written_timestamp_count; i += 1) {
+        nanosecond_timestamps[i] = nanoseconds_per_period * (f64)periods_buffer[i];
+    }
+    
+    return OGA_OK;
 }
 
 void oga_cmd_begin_render_pass(Oga_Command_List cmd, Oga_Render_Pass *render_pass, Oga_Begin_Render_Pass_Desc desc) {
@@ -12318,7 +12645,7 @@ void oga_cmd_copy_linear(Oga_Command_List cmd, Oga_Memory_Pointer dst, Oga_Memor
     vkCmdCopyBuffer(cmd.id, src_state->raw_view, dst_state->raw_view, 1, &info);
 }
 
-void oga_cmd_copy_linear_to_image(Oga_Command_List cmd, Oga_Image_Copy_Target_View *dst_view, Oga_Image_Copy_Desc dst_desc, Oga_Memory_Pointer src) {
+void oga_cmd_copy_linear_to_image(Oga_Command_List cmd, Oga_Optimal_Copy_View *dst_view, Oga_Optimal_Copy_Desc dst_desc, Oga_Memory_Pointer src) {
 
     VkBufferImageCopy info = (VkBufferImageCopy){0};
     info.bufferOffset = (VkDeviceSize)src.offset;
@@ -12340,7 +12667,7 @@ void oga_cmd_copy_linear_to_image(Oga_Command_List cmd, Oga_Image_Copy_Target_Vi
     vkCmdCopyBufferToImage(cmd.id, src_state->raw_view, dst_state->image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &info);
     _vk_image_barrier_helper(cmd.id, dst_state->image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_GENERAL);
 }
-void oga_cmd_copy_image_to_linear(Oga_Command_List cmd, Oga_Memory_Pointer dst, Oga_Image_Copy_Target_View *src_view, Oga_Image_Copy_Desc src_desc) {
+void oga_cmd_copy_image_to_linear(Oga_Command_List cmd, Oga_Memory_Pointer dst, Oga_Optimal_Copy_View *src_view, Oga_Optimal_Copy_Desc src_desc) {
 
     VkBufferImageCopy info = (VkBufferImageCopy){0};
     info.bufferOffset = (VkDeviceSize)dst.offset;
@@ -12363,7 +12690,7 @@ void oga_cmd_copy_image_to_linear(Oga_Command_List cmd, Oga_Memory_Pointer dst, 
     _vk_image_barrier_helper(cmd.id, src_state->image, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, VK_IMAGE_LAYOUT_GENERAL);
 }
 
-void oga_cmd_copy_image(Oga_Command_List cmd, Oga_Image_Copy_Target_View *dst_view, Oga_Image_Copy_Desc dst_desc, Oga_Image_Copy_Target_View *src_view, Oga_Image_Copy_Desc src_desc) {
+void oga_cmd_copy_image(Oga_Command_List cmd, Oga_Optimal_Copy_View *dst_view, Oga_Optimal_Copy_Desc dst_desc, Oga_Optimal_Copy_View *src_view, Oga_Optimal_Copy_Desc src_desc) {
     VkImageCopy info = (VkImageCopy){0};
     
     info.srcSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
@@ -12394,7 +12721,26 @@ void oga_cmd_copy_image(Oga_Command_List cmd, Oga_Image_Copy_Target_View *dst_vi
     _vk_image_barrier_helper(cmd.id, dst_state->image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_GENERAL);
 }
 
-
+void oga_cmd_fill_image(Oga_Command_List cmd, Oga_Optimal_Copy_View *dst_view, float4 color) {
+    _Vk_Image_State *dst_state = (_Vk_Image_State*)(dst_view->id);
+    
+    VkClearColorValue vk_color;
+    vk_color.float32[0] = color.x;
+    vk_color.float32[1] = color.y;
+    vk_color.float32[2] = color.z;
+    vk_color.float32[3] = color.w;
+    
+    VkImageSubresourceRange sub = (VkImageSubresourceRange){0};
+    sub.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+    sub.baseMipLevel = 0;
+    sub.levelCount = 1;
+    sub.baseArrayLayer = 0;
+    sub.layerCount = 1;
+    
+    _vk_image_barrier_helper(cmd.id, dst_state->image, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
+    vkCmdClearColorImage(cmd.id, dst_state->image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, &vk_color, 1, &sub);
+    _vk_image_barrier_helper(cmd.id, dst_state->image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_GENERAL);
+}
 
 #undef uint8_t
 #undef int8_t
@@ -12489,10 +12835,10 @@ void oga_cmd_copy_image(Oga_Command_List cmd, Oga_Image_Copy_Target_View *dst_vi
 
 #endif // OSTD_IMPL
 
-#endif // OGA_GRAPHICS
+#endif // OGA_GRAPHICS && !OSTD_HEADLESS
 
 
-/* End include: graphics.h */
+/* End include: oga_graphics.h */
 #endif // OSTD_NO_GRAPHICS
 
 #ifndef OSTD_NO_COMPILER
@@ -12526,11 +12872,20 @@ typedef enum Osl_Result {
     OSL_UNRESOLVED_FUNCTION_OR_INTRINSIC,
     OSL_BAD_CALL_ARGUMENTS,
     OSL_NOT_A_LOGICAL_TYPE,
-    OSL_PROCEDURAL_STATEMENT_IN_NON_PROCEDURAL_BLOCK
+    OSL_PROCEDURAL_STATEMENT_IN_NON_PROCEDURAL_BLOCK,
+    OSL_TYPE_REDEFINITION,
+    OSL_NO_SUCH_MEMBER,
+    OSL_VIEW_INSTANTIATION,
+    OSL_VIEW_CAST,
+    OSL_BLOCK_TYPE_IS_NOT_STRUCT,
+    OSL_FEATURE_NOT_ENABLED,
+    OSL_UNSIZED_ARRAY_NOT_AT_END_OF_STRUCT,
+    OSL_INVALID_FBUFFER_VIEW,
+    OSL_UNIMPLEMENTED,
 } Osl_Result;
 
 typedef enum Osl_Target {
-    OSL_TARGET_SPIRV,
+    OSL_TARGET_SPIRV_VULKAN,
 } Osl_Target;
 typedef enum Osl_Program_Kind {
     OSL_PROGRAM_GPU_FRAGMENT,
@@ -12538,10 +12893,16 @@ typedef enum Osl_Program_Kind {
     OSL_PROGRAM_GPU_COMPUTE,
 } Osl_Program_Kind;
 
+typedef enum Osl_Feature_Flag_ {
+	OSL_FEATURE_INVOCATION_PIXEL_INTERLOCK = 1 << 1,
+} Osl_Feature_Flag_;
+typedef u64 Osl_Feature_Flag;
+
 typedef struct Osl_Compile_Desc {
     Osl_Target target;
     Osl_Program_Kind program_kind;
     string code_text;
+    Osl_Feature_Flag enabled_features;
 } Osl_Compile_Desc;
 
 Osl_Result osl_compile(Allocator a, Osl_Compile_Desc desc, void **pcode, u64 *pcode_size, string *err_log);
@@ -12550,6 +12911,9 @@ Osl_Result osl_compile(Allocator a, Osl_Compile_Desc desc, void **pcode, u64 *pc
 
 typedef enum Spv_Op_Code_Enum {
     OpCapability           = 17,
+    OpExtension           = 10,
+    OpExtInstImport           = 11,
+    OpExtInst           = 12,
     OpMemoryModel          = 14,
     OpEntryPoint           = 15,
     OpTypeSampledImage = 27,
@@ -12563,6 +12927,8 @@ typedef enum Spv_Op_Code_Enum {
     OpTypeFloat            = 22,
     OpTypeVector           = 23,
     OpTypeArray            = 28,
+    OpTypeRuntimeArray            = 29,
+    OpTypeStruct            = 30,
     OpExecutionMode        = 16,
     OpLabel                = 248,
     OpBranch                = 249,
@@ -12573,6 +12939,7 @@ typedef enum Spv_Op_Code_Enum {
     OpTypeSampler          = 26,
     OpVariable             = 59,
     OpDecorate             = 71,
+    OpMemberDecorate             = 72,
     OpLoad                 = 61,
     OpStore                = 62,
     OpCopyMemory           = 63,
@@ -12582,6 +12949,8 @@ typedef enum Spv_Op_Code_Enum {
     OpConstantComposite    = 44,
     OpAccessChain          = 65,
     OpImageSampleImplicitLod = 87,
+    OpImageRead = 98,
+    OpImageWrite = 99,
     OpSampledImage = 86,
     OpSNegate = 126,
     OpFNegate = 127,
@@ -12605,6 +12974,7 @@ typedef enum Spv_Op_Code_Enum {
     OpConvertUToF=112,
     OpBitcast=124,
     OpName = 5,
+    OpMemberName = 6,
     OpIEqual = 170,
     OpINotEqual = 171,
     OpFOrdEqual = 180,
@@ -12625,6 +12995,9 @@ typedef enum Spv_Op_Code_Enum {
     OpSLessThanEqual = 179,
     OpLogicalOr = 166,
     OpLogicalAnd = 167,
+    OpSelect = 169,
+    OpBeginInvocationInterlockEXT = 5364,
+    OpEndInvocationInterlockEXT = 5365,
 } Spv_Op_Code_Enum;
 
 typedef enum Spv_Execution_Model {
@@ -12655,10 +13028,14 @@ typedef enum Spv_Capability {
     SpvCapability_Float64  = 10,
     SpvCapability_Int8     = 39,
     SpvCapability_Int16    = 22,
-    SpvCapability_Int64    = 11
+    SpvCapability_Int64    = 11,
+    SpvCapability_FragmentShaderPixelInterlockEXT = 5378,
+    SpvCapability_FragmentShaderSampleInterlockEXT = 5363,
+    SpvCapability_FragmentShaderShadingRateInterlockEXT = 5372,
 } Spv_Capability;
 
 typedef enum Spv_Decoration {
+    SpvDecoration_Block    = 2,
     SpvDecoration_RowMajor    = 4,
     SpvDecoration_ColMajor    = 5,
     SpvDecoration_ArrayStride = 6,
@@ -12667,13 +13044,15 @@ typedef enum Spv_Decoration {
     SpvDecoration_Volatile    = 21,
     SpvDecoration_Location    = 30,
     SpvDecoration_Binding    = 33,
-    SpvDecoration_DescriptorSet    = 34
+    SpvDecoration_DescriptorSet    = 34,
+    SpvDecoration_Offset    = 35,
 } Spv_Decoration;
 
 typedef enum Spv_Builtin {
     SpvBuiltin_Position    = 0,
     SpvBuiltin_VertexId    = 5,
     SpvBuiltin_InstanceId    = 6,
+    SpvBuiltin_FragCoord = 15,
     SpvBuiltin_VertexIndex    = 42,
     SpvBuiltin_InstanceIndex    = 43,
 } Spv_Builtin;
@@ -12690,9 +13069,11 @@ typedef enum Osl_Type_Kind {
 	OSL_TYPE_FLOAT,
 	OSL_TYPE_COMPOSITE,
 	OSL_TYPE_ARRAY,
-	OSL_TYPE_IMAGE2D_F32V4,
+	OSL_TYPE_IMAGE2DF,
+	OSL_TYPE_FBUFFER2D,
 	OSL_TYPE_SAMPLE_MODE,
 	OSL_TYPE_BOOL,
+	OSL_TYPE_STRUCT,
 } Osl_Type_Kind;
 
 struct Osl_Type_Info;
@@ -12714,22 +13095,43 @@ typedef struct Osl_Type_Info_Image {
 	u32 sampled_type_id;
 } Osl_Type_Info_Image;
 
+typedef enum Osl_View_Type {
+	OSL_VIEW_DEFAULT,
+	OSL_VIEW_BLOCK,
+	OSL_VIEW_RGBA32F,
+	OSL_VIEW_RGBA16F,
+	OSL_VIEW_R32F,
+	OSL_VIEW_RGBA8_UNORM,
+	OSL_VIEW_RGBA8_SNORM,
+	OSL_VIEW_RGBA32U,
+	OSL_VIEW_RGBA16U,
+	OSL_VIEW_RGBA8U,
+	OSL_VIEW_R32U,
+	OSL_VIEW_RGBA32S,
+	OSL_VIEW_RGBA16S,
+	OSL_VIEW_RGBA8S,
+	OSL_VIEW_R32S,
+} Osl_View_Type;
+typedef struct Osl_Type_Info_FBuffer2D {
+	Osl_View_Type view_type;
+} Osl_Type_Info_FBuffer2D;
+
 typedef struct Osl_Type_Info_Struct {
 	
 	// todo(charlie) #memory #speed beeg
 	
-	string member_names[1024];
-	struct Osl_Type_Info *member_types[1024];
+	string member_names[128];
+	struct Osl_Type_Info *member_types[128];
+	u64 member_offsets[128];
 	u64 member_count;
-	
 	
 } Osl_Type_Info_Struct;
 
 typedef struct Osl_Type_Info {
 	Osl_Type_Kind kind;
 	u32 type_id;
-	u64 size;
 	string name;
+	u64 size;
 	
 	union {
 		Osl_Type_Info_Composite comp_type;
@@ -12737,6 +13139,7 @@ typedef struct Osl_Type_Info {
 		Osl_Type_Info_Array array_type;
 		Osl_Type_Info_Image image_type;
 		Osl_Type_Info_Struct struct_type;
+		Osl_Type_Info_FBuffer2D fbuffer2d_type;
 	} val;
 	
 } Osl_Type_Info;
@@ -12758,6 +13161,8 @@ typedef struct Spv_Converter {
 	u32 next_id;
 	u32 entry_id;
 	
+	u32 ext_glsl450_id;
+	
 	u32 id_type_void;
 	u32 id_type_void_function;
 	
@@ -12775,8 +13180,25 @@ typedef struct Spv_Converter {
     Osl_Type_Info type_f32v4;
     
     Osl_Type_Info type_bool;
+    Osl_Type_Info type_boolv2;
+    Osl_Type_Info type_boolv3;
+    Osl_Type_Info type_boolv4;
     
-    Osl_Type_Info type_image2d_f32v4;
+    Osl_Type_Info type_image2df;
+    
+    Osl_Type_Info type_fbuffer2d_rgba32f;
+    Osl_Type_Info type_fbuffer2d_rgba16f;
+    Osl_Type_Info type_fbuffer2d_r32f;
+    Osl_Type_Info type_fbuffer2d_rgba8_unorm;
+    Osl_Type_Info type_fbuffer2d_rgba8_snorm;
+    Osl_Type_Info type_fbuffer2d_rgba32u;
+    Osl_Type_Info type_fbuffer2d_rgba16u;
+    Osl_Type_Info type_fbuffer2d_rgba8u;
+    Osl_Type_Info type_fbuffer2d_r32u;
+    Osl_Type_Info type_fbuffer2d_rgba32s;
+    Osl_Type_Info type_fbuffer2d_rgba16s;
+    Osl_Type_Info type_fbuffer2d_rgba8s;
+    Osl_Type_Info type_fbuffer2d_r32s;
     
     Osl_Type_Info type_sample_mode;
     
@@ -12898,6 +13320,7 @@ typedef struct Osl_Arg_List {
 	u64 arg_count;
 } Osl_Arg_List;
 
+
 typedef struct Osl_Type_Indirection {
 	u64 array_count;
 } Osl_Type_Indirection;
@@ -12905,6 +13328,7 @@ typedef struct Osl_Type_Ident {
 	Osl_Type_Indirection indirections[8]; // Max 8 indirections
 	u64 indirection_count;
 	Osl_Token *token;
+	Osl_View_Type view_type;
 	
 	string name;
 } Osl_Type_Ident;
@@ -12922,6 +13346,7 @@ typedef enum Osl_Builtin_Kind {
 	OSL_BUILTIN_VERTEX_ID,
 	OSL_BUILTIN_INSTANCE_INDEX,
 	OSL_BUILTIN_INSTANCE_ID,
+	OSL_BUILTIN_PIXEL_COORD,
 } Osl_Builtin_Kind;
 
 struct Osl_Expr;
@@ -13030,6 +13455,7 @@ typedef struct Osl_Op {
 typedef enum Osl_Expr_Kind {
 	OSL_EXPR_OP,
 	OSL_EXPR_DECL_IDENT,
+	OSL_EXPR_ALIAS_IDENT,
 	OSL_EXPR_LITERAL_FLOAT,
 	OSL_EXPR_LITERAL_INT,
 	OSL_EXPR_TYPE_IDENT, 
@@ -13038,10 +13464,12 @@ typedef enum Osl_Expr_Kind {
 	OSL_EXPR_CALL,
 } Osl_Expr_Kind;
 
+struct Osl_Expr_Alias;
 typedef struct Osl_Expr {
     Osl_Expr_Kind kind;
 	union {
 		Osl_Value_Decl *decl;
+		struct Osl_Expr_Alias *expr_alias;
 		Osl_Op op;
 		union { u64 lit_int; f64 lit_flt; } lit;
 		Osl_Instantiation inst;
@@ -13049,17 +13477,12 @@ typedef struct Osl_Expr {
 		Osl_Access_Chain access;
 		Osl_Call call;
 	} val;
-	s64 vnum;
 } Osl_Expr;
 
-typedef enum Osl_Node_Kind {
-	OSL_NODE_BLOCK,
-    OSL_NODE_VALUE_DECL,  
-    OSL_NODE_EXPR,
-    OSL_NODE_IF_CHAIN,
-    OSL_NODE_LOOP,
-    OSL_NODE_STRUCT_DECL,
-} Osl_Node_Kind;
+typedef struct Osl_Expr_Alias {
+	string ident;
+	Osl_Expr *expr;
+} Osl_Expr_Alias;
 
 struct Osl_Node;
 typedef struct Osl_Block {
@@ -13078,6 +13501,7 @@ typedef struct Osl_If_Chain {
 	Osl_Block *blocks[128];
 	Osl_Expr *conditions[128]; // If last block is without condition, it's an else
 	u64 branch_count;
+	bool is_compile_time;
 } Osl_If_Chain;
 typedef struct Osl_Loop {
 	Osl_Block *block;
@@ -13089,6 +13513,18 @@ typedef struct Osl_Struct_Decl {
 	Osl_Block *block;
 } Osl_Struct_Decl;
 
+
+
+typedef enum Osl_Node_Kind {
+	OSL_NODE_BLOCK,
+    OSL_NODE_VALUE_DECL,  
+    OSL_NODE_EXPR,
+    OSL_NODE_IF_CHAIN,
+    OSL_NODE_LOOP,
+    OSL_NODE_STRUCT_DECL,
+    OSL_NODE_EXPR_ALIAS,
+} Osl_Node_Kind;
+
 typedef struct Osl_Node {
     Osl_Node_Kind kind;
     Osl_Token *first_token;
@@ -13099,6 +13535,7 @@ typedef struct Osl_Node {
         Osl_If_Chain if_chain;
         Osl_Loop loop;
         Osl_Struct_Decl struct_decl;
+        Osl_Expr_Alias expr_alias;
     } val;
 } Osl_Node;
 
@@ -13110,6 +13547,8 @@ unit_local Osl_Node *_osl_get_node(void *node_value) {
 typedef struct Osl_Compiler {
     string source;
     Osl_Program_Kind program_kind;
+    Osl_Feature_Flag enabled_features;
+	Osl_Target target;
 
     Arena token_arena;
     Osl_Token *tokens;
@@ -13118,8 +13557,8 @@ typedef struct Osl_Compiler {
     Arena node_arena;
     u64 total_node_count;
     
-    Arena struct_nodes_arena;
-    Osl_Struct_Decl **struct_nodes;
+    Arena struct_decls_arena;
+    Osl_Struct_Decl **struct_decls;
     u64 struct_node_count;
     
     Osl_Block top_block;
@@ -13265,7 +13704,7 @@ unit_local void spv_push_base_decls(Spv_Converter *spv) {
     
     spv->type_f32v3.kind = OSL_TYPE_COMPOSITE;
     spv->type_f32v3.name = STR("f32v3");
-    spv->type_f32v3.size = 12; // 16 ?
+    spv->type_f32v3.size = 16;
     spv->type_f32v3.val.comp_type.component_count = 3;
     spv->type_f32v3.val.comp_type.underlying = &spv->type_f32;
     spv->type_f32v3.type_id = spv_push_decl_vector(spv, &spv->const_block, spv->type_f32.type_id, 3);
@@ -13278,8 +13717,8 @@ unit_local void spv_push_base_decls(Spv_Converter *spv) {
     spv->type_f32v4.type_id = spv_push_decl_vector(spv, &spv->const_block, spv->type_f32.type_id, 4);
     
     spv->type_u32.kind = OSL_TYPE_INT;
-    spv->type_u32.name = STR("u32");
     spv->type_u32.size = 4;
+    spv->type_u32.name = STR("u32");
     spv->type_u32.val.int_type.is_signed = false;
     spv->type_u32.type_id = spv_push_decl_int(spv, &spv->const_block, 32, false);
     
@@ -13292,7 +13731,7 @@ unit_local void spv_push_base_decls(Spv_Converter *spv) {
     
     spv->type_u32v3.kind = OSL_TYPE_COMPOSITE;
     spv->type_u32v3.name = STR("u32v3");
-    spv->type_u32v3.size = 12; // 16 ?
+    spv->type_u32v3.size = 16;
     spv->type_u32v3.val.comp_type.component_count = 3;
     spv->type_u32v3.val.comp_type.underlying = &spv->type_u32;
     spv->type_u32v3.type_id = spv_push_decl_vector(spv, &spv->const_block, spv->type_u32.type_id, 3);
@@ -13319,7 +13758,7 @@ unit_local void spv_push_base_decls(Spv_Converter *spv) {
     
     spv->type_s32v3.kind = OSL_TYPE_COMPOSITE;
     spv->type_s32v3.name = STR("s32v3");
-    spv->type_s32v3.size = 12; // 16 ?
+    spv->type_s32v3.size = 16;
     spv->type_s32v3.val.comp_type.component_count = 3;
     spv->type_s32v3.val.comp_type.underlying = &spv->type_s32;
     spv->type_s32v3.type_id = spv_push_decl_vector(spv, &spv->const_block, spv->type_s32.type_id, 3);
@@ -13331,38 +13770,240 @@ unit_local void spv_push_base_decls(Spv_Converter *spv) {
     spv->type_s32v4.val.comp_type.underlying = &spv->type_s32;
     spv->type_s32v4.type_id = spv_push_decl_vector(spv, &spv->const_block, spv->type_s32.type_id, 4);
     
-    spv->type_image2d_f32v4.kind = OSL_TYPE_IMAGE2D_F32V4;
-    spv->type_image2d_f32v4.name = STR("Image2Df32v4");
-    spv->type_image2d_f32v4.size = 0;
+    spv->type_image2df.kind = OSL_TYPE_IMAGE2DF;
+    spv->type_image2df.name = STR("Image2Df");
     spv_begin_op(&spv->const_block, OpTypeImage);
-    spv->type_image2d_f32v4.type_id = spv_push_result_arg(spv, &spv->const_block);
+    spv->type_image2df.type_id = spv_push_result_arg(spv, &spv->const_block);
     spv_push_word(&spv->const_block, spv->type_f32.type_id);
     spv_push_word(&spv->const_block, 1);
     spv_push_word(&spv->const_block, 0);
     spv_push_word(&spv->const_block, 0);
     spv_push_word(&spv->const_block, 0);
-    spv_push_word(&spv->const_block, 1);
+    spv_push_word(&spv->const_block, 1); // Sampled
     spv_push_word(&spv->const_block, 0);
     spv_end_op(&spv->const_block);
     spv_begin_op(&spv->const_block, OpTypeSampledImage);
-    spv->type_image2d_f32v4.val.image_type.sampled_type_id = spv_push_result_arg(spv, &spv->const_block);
-    spv_push_word(&spv->const_block, spv->type_image2d_f32v4.type_id);
+    spv->type_image2df.val.image_type.sampled_type_id = spv_push_result_arg(spv, &spv->const_block);
+    spv_push_word(&spv->const_block, spv->type_image2df.type_id);
     spv_end_op(&spv->const_block);
+    
+    spv->type_fbuffer2d_rgba32f.kind = OSL_TYPE_FBUFFER2D;
+    spv->type_fbuffer2d_rgba32f.val.fbuffer2d_type.view_type = OSL_VIEW_RGBA32F;
+    spv->type_fbuffer2d_rgba32f.name = STR("FBuffer2D(RGBA32F)");
+    spv_begin_op(&spv->const_block, OpTypeImage);
+    spv->type_fbuffer2d_rgba32f.type_id = spv_push_result_arg(spv, &spv->const_block);
+    spv_push_word(&spv->const_block, spv->type_f32.type_id);
+    spv_push_word(&spv->const_block, 1);
+    spv_push_word(&spv->const_block, 0);
+    spv_push_word(&spv->const_block, 0);
+    spv_push_word(&spv->const_block, 0);
+    spv_push_word(&spv->const_block, 2); // Not sampled
+    spv_push_word(&spv->const_block, 1); // Rgba32f
+    spv_end_op(&spv->const_block);
+    
+    spv->type_fbuffer2d_rgba16f.kind = OSL_TYPE_FBUFFER2D;
+    spv->type_fbuffer2d_rgba16f.val.fbuffer2d_type.view_type = OSL_VIEW_RGBA16F;
+    spv->type_fbuffer2d_rgba16f.name = STR("FBuffer2D(RGBA16F)");
+    spv_begin_op(&spv->const_block, OpTypeImage);
+    spv->type_fbuffer2d_rgba16f.type_id = spv_push_result_arg(spv, &spv->const_block);
+    spv_push_word(&spv->const_block, spv->type_f32.type_id);
+    spv_push_word(&spv->const_block, 1);
+    spv_push_word(&spv->const_block, 0);
+    spv_push_word(&spv->const_block, 0);
+    spv_push_word(&spv->const_block, 0);
+    spv_push_word(&spv->const_block, 2); // Not sampled
+    spv_push_word(&spv->const_block, 2); // Rgba16f
+    spv_end_op(&spv->const_block);
+    
+    spv->type_fbuffer2d_r32f.kind = OSL_TYPE_FBUFFER2D;
+    spv->type_fbuffer2d_r32f.val.fbuffer2d_type.view_type = OSL_VIEW_R32F;
+    spv->type_fbuffer2d_r32f.name = STR("FBuffer2D(R32F)");
+    spv_begin_op(&spv->const_block, OpTypeImage);
+    spv->type_fbuffer2d_r32f.type_id = spv_push_result_arg(spv, &spv->const_block);
+    spv_push_word(&spv->const_block, spv->type_f32.type_id);
+    spv_push_word(&spv->const_block, 1);
+    spv_push_word(&spv->const_block, 0);
+    spv_push_word(&spv->const_block, 0);
+    spv_push_word(&spv->const_block, 0);
+    spv_push_word(&spv->const_block, 2); // Not sampled
+    spv_push_word(&spv->const_block, 3); // R32f
+    spv_end_op(&spv->const_block);
+    
+    spv->type_fbuffer2d_rgba8_unorm.kind = OSL_TYPE_FBUFFER2D;
+    spv->type_fbuffer2d_rgba8_unorm.val.fbuffer2d_type.view_type = OSL_VIEW_RGBA8_UNORM;
+    spv->type_fbuffer2d_rgba8_unorm.name = STR("FBuffer2D(RGBA8_UNORM)");
+    spv_begin_op(&spv->const_block, OpTypeImage);
+    spv->type_fbuffer2d_rgba8_unorm.type_id = spv_push_result_arg(spv, &spv->const_block);
+    spv_push_word(&spv->const_block, spv->type_f32.type_id);
+    spv_push_word(&spv->const_block, 1);
+    spv_push_word(&spv->const_block, 0);
+    spv_push_word(&spv->const_block, 0);
+    spv_push_word(&spv->const_block, 0);
+    spv_push_word(&spv->const_block, 2); // Not sampled
+    spv_push_word(&spv->const_block, 4); // Rgba8
+    spv_end_op(&spv->const_block);
+    
+    spv->type_fbuffer2d_rgba8_snorm.kind = OSL_TYPE_FBUFFER2D;
+    spv->type_fbuffer2d_rgba8_snorm.val.fbuffer2d_type.view_type = OSL_VIEW_RGBA8_SNORM;
+    spv->type_fbuffer2d_rgba8_snorm.name = STR("FBuffer2D(RGBA8_SNORM)");
+    spv_begin_op(&spv->const_block, OpTypeImage);
+    spv->type_fbuffer2d_rgba8_snorm.type_id = spv_push_result_arg(spv, &spv->const_block);
+    spv_push_word(&spv->const_block, spv->type_f32.type_id);
+    spv_push_word(&spv->const_block, 1);
+    spv_push_word(&spv->const_block, 0);
+    spv_push_word(&spv->const_block, 0);
+    spv_push_word(&spv->const_block, 0);
+    spv_push_word(&spv->const_block, 2); // Not sampled
+    spv_push_word(&spv->const_block, 5); // Rgba8Snorm
+    spv_end_op(&spv->const_block);
+    
+    spv->type_fbuffer2d_rgba32u.kind = OSL_TYPE_FBUFFER2D;
+    spv->type_fbuffer2d_rgba32u.val.fbuffer2d_type.view_type = OSL_VIEW_RGBA32U;
+    spv->type_fbuffer2d_rgba32u.name = STR("FBuffer2D(RGBA32U)");
+    spv_begin_op(&spv->const_block, OpTypeImage);
+    spv->type_fbuffer2d_rgba32u.type_id = spv_push_result_arg(spv, &spv->const_block);
+    spv_push_word(&spv->const_block, spv->type_u32.type_id);
+    spv_push_word(&spv->const_block, 1);
+    spv_push_word(&spv->const_block, 0);
+    spv_push_word(&spv->const_block, 0);
+    spv_push_word(&spv->const_block, 0);
+    spv_push_word(&spv->const_block, 2); // Not sampled
+    spv_push_word(&spv->const_block, 30); // Rgba32ui
+    spv_end_op(&spv->const_block);
+    
+    spv->type_fbuffer2d_rgba16u.kind = OSL_TYPE_FBUFFER2D;
+    spv->type_fbuffer2d_rgba16u.val.fbuffer2d_type.view_type = OSL_VIEW_RGBA16U;
+    spv->type_fbuffer2d_rgba16u.name = STR("FBuffer2D(RGBA16U)");
+    spv_begin_op(&spv->const_block, OpTypeImage);
+    spv->type_fbuffer2d_rgba16u.type_id = spv_push_result_arg(spv, &spv->const_block);
+    spv_push_word(&spv->const_block, spv->type_u32.type_id);
+    spv_push_word(&spv->const_block, 1);
+    spv_push_word(&spv->const_block, 0);
+    spv_push_word(&spv->const_block, 0);
+    spv_push_word(&spv->const_block, 0);
+    spv_push_word(&spv->const_block, 2); // Not sampled
+    spv_push_word(&spv->const_block, 31); // Rgba16ui
+    spv_end_op(&spv->const_block);
+    
+    spv->type_fbuffer2d_rgba8u.kind = OSL_TYPE_FBUFFER2D;
+    spv->type_fbuffer2d_rgba8u.val.fbuffer2d_type.view_type = OSL_VIEW_RGBA8U;
+    spv->type_fbuffer2d_rgba8u.name = STR("FBuffer2D(RGBA8U)");
+    spv_begin_op(&spv->const_block, OpTypeImage);
+    spv->type_fbuffer2d_rgba8u.type_id = spv_push_result_arg(spv, &spv->const_block);
+    spv_push_word(&spv->const_block, spv->type_u32.type_id);
+    spv_push_word(&spv->const_block, 1);
+    spv_push_word(&spv->const_block, 0);
+    spv_push_word(&spv->const_block, 0);
+    spv_push_word(&spv->const_block, 0);
+    spv_push_word(&spv->const_block, 2); // Not sampled
+    spv_push_word(&spv->const_block, 32); // Rgba8ui
+    spv_end_op(&spv->const_block);
+    
+    spv->type_fbuffer2d_r32u.kind = OSL_TYPE_FBUFFER2D;
+    spv->type_fbuffer2d_r32u.val.fbuffer2d_type.view_type = OSL_VIEW_R32U;
+    spv->type_fbuffer2d_r32u.name = STR("FBuffer2D(R32U)");
+    spv_begin_op(&spv->const_block, OpTypeImage);
+    spv->type_fbuffer2d_r32u.type_id = spv_push_result_arg(spv, &spv->const_block);
+    spv_push_word(&spv->const_block, spv->type_u32.type_id);
+    spv_push_word(&spv->const_block, 1);
+    spv_push_word(&spv->const_block, 0);
+    spv_push_word(&spv->const_block, 0);
+    spv_push_word(&spv->const_block, 0);
+    spv_push_word(&spv->const_block, 2); // Not sampled
+    spv_push_word(&spv->const_block, 33); // R32ui
+    spv_end_op(&spv->const_block);
+    
+    spv->type_fbuffer2d_rgba32s.kind = OSL_TYPE_FBUFFER2D;
+    spv->type_fbuffer2d_rgba32s.val.fbuffer2d_type.view_type = OSL_VIEW_RGBA32S;
+    spv->type_fbuffer2d_rgba32s.name = STR("FBuffer2D(RGBA32S)");
+    spv_begin_op(&spv->const_block, OpTypeImage);
+    spv->type_fbuffer2d_rgba32s.type_id = spv_push_result_arg(spv, &spv->const_block);
+    spv_push_word(&spv->const_block, spv->type_s32.type_id);
+    spv_push_word(&spv->const_block, 1);
+    spv_push_word(&spv->const_block, 0);
+    spv_push_word(&spv->const_block, 0);
+    spv_push_word(&spv->const_block, 0);
+    spv_push_word(&spv->const_block, 2); // Not sampled
+    spv_push_word(&spv->const_block, 21); // Rgba32i
+    spv_end_op(&spv->const_block);
+    
+    spv->type_fbuffer2d_rgba16s.kind = OSL_TYPE_FBUFFER2D;
+    spv->type_fbuffer2d_rgba16s.val.fbuffer2d_type.view_type = OSL_VIEW_RGBA16S;
+    spv->type_fbuffer2d_rgba16s.name = STR("FBuffer2D(RGBA16S)");
+    spv_begin_op(&spv->const_block, OpTypeImage);
+    spv->type_fbuffer2d_rgba16s.type_id = spv_push_result_arg(spv, &spv->const_block);
+    spv_push_word(&spv->const_block, spv->type_s32.type_id);
+    spv_push_word(&spv->const_block, 1);
+    spv_push_word(&spv->const_block, 0);
+    spv_push_word(&spv->const_block, 0);
+    spv_push_word(&spv->const_block, 0);
+    spv_push_word(&spv->const_block, 2); // Not sampled
+    spv_push_word(&spv->const_block, 22); // Rgba16i
+    spv_end_op(&spv->const_block);
+    
+    spv->type_fbuffer2d_rgba8s.kind = OSL_TYPE_FBUFFER2D;
+    spv->type_fbuffer2d_rgba8s.val.fbuffer2d_type.view_type = OSL_VIEW_RGBA8S;
+    spv->type_fbuffer2d_rgba8s.name = STR("FBuffer2D(RGBA8S)");
+    spv_begin_op(&spv->const_block, OpTypeImage);
+    spv->type_fbuffer2d_rgba8s.type_id = spv_push_result_arg(spv, &spv->const_block);
+    spv_push_word(&spv->const_block, spv->type_s32.type_id);
+    spv_push_word(&spv->const_block, 1);
+    spv_push_word(&spv->const_block, 0);
+    spv_push_word(&spv->const_block, 0);
+    spv_push_word(&spv->const_block, 0);
+    spv_push_word(&spv->const_block, 2); // Not sampled
+    spv_push_word(&spv->const_block, 23); // Rgba8i
+    spv_end_op(&spv->const_block);
+    
+    spv->type_fbuffer2d_r32s.kind = OSL_TYPE_FBUFFER2D;
+    spv->type_fbuffer2d_r32s.val.fbuffer2d_type.view_type = OSL_VIEW_R32S;
+    spv->type_fbuffer2d_r32s.name = STR("FBuffer2D(R32S)");
+    spv_begin_op(&spv->const_block, OpTypeImage);
+    spv->type_fbuffer2d_r32s.type_id = spv_push_result_arg(spv, &spv->const_block);
+    spv_push_word(&spv->const_block, spv->type_s32.type_id);
+    spv_push_word(&spv->const_block, 1);
+    spv_push_word(&spv->const_block, 0);
+    spv_push_word(&spv->const_block, 0);
+    spv_push_word(&spv->const_block, 0);
+    spv_push_word(&spv->const_block, 2); // Not sampled
+    spv_push_word(&spv->const_block, 24); // R32ui
+    spv_end_op(&spv->const_block);
+    
     
     spv->type_sample_mode.kind = OSL_TYPE_SAMPLE_MODE;
     spv->type_sample_mode.name = STR("SampleMode");
-    spv->type_sample_mode.size = 0;
     spv_begin_op(&spv->const_block, OpTypeSampler);
     spv->type_sample_mode.type_id = spv_push_result_arg(spv, &spv->const_block);
     spv_end_op(&spv->const_block);
     
-    // This is a spirv thing. I actualyl want to avoid bool types in OSL
+    // This is a spirv thing. I actually want to avoid bool types in OSL
     spv->type_bool.kind = OSL_TYPE_BOOL;
     spv->type_bool.name = STR("________bool");
-    spv->type_bool.size = 0;
+    spv->type_bool.size = 1;
     spv_begin_op(&spv->const_block, OpTypeBool);
     spv->type_bool.type_id = spv_push_result_arg(spv, &spv->const_block);
     spv_end_op(&spv->const_block);
+    
+    spv->type_boolv2.kind = OSL_TYPE_COMPOSITE;
+    spv->type_boolv2.name = STR("_boolv2");
+    spv->type_boolv2.size = 2;
+    spv->type_boolv2.val.comp_type.component_count = 2;
+    spv->type_boolv2.val.comp_type.underlying = &spv->type_bool;
+    spv->type_boolv2.type_id = spv_push_decl_vector(spv, &spv->const_block, spv->type_bool.type_id, 2);
+    
+    spv->type_boolv3.kind = OSL_TYPE_COMPOSITE;
+    spv->type_boolv3.name = STR("_boolv3");
+    spv->type_boolv3.size = 4;
+    spv->type_boolv3.val.comp_type.component_count = 3;
+    spv->type_boolv3.val.comp_type.underlying = &spv->type_bool;
+    spv->type_boolv3.type_id = spv_push_decl_vector(spv, &spv->const_block, spv->type_bool.type_id, 3);
+    
+    spv->type_boolv4.kind = OSL_TYPE_COMPOSITE;
+    spv->type_boolv4.name = STR("_boolv4");
+    spv->type_boolv4.size = 4;
+    spv->type_boolv4.val.comp_type.component_count = 4;
+    spv->type_boolv4.val.comp_type.underlying = &spv->type_bool;
+    spv->type_boolv4.type_id = spv_push_decl_vector(spv, &spv->const_block, spv->type_bool.type_id, 4);
 }
 
 unit_local u32 spv_push_decl_pointer_type(Spv_Converter *spv, Spv_Block *block, u32 type, Spv_Storage_Class storage_class) {
@@ -13374,31 +14015,6 @@ unit_local u32 spv_push_decl_pointer_type(Spv_Converter *spv, Spv_Block *block, 
     return id;
 }
 
-unit_local void spv_push_settings(Spv_Block *block, Spv_Capability *capabilities, u64 cap_count, Spv_Execution_Model exec_model, u32 *interface_items, u64 interface_count, string entry, u32 entry_point) {
-    for (u64 i = 0; i < cap_count; i++) {
-        spv_begin_op(block, OpCapability);
-        spv_push_word(block, (u32)capabilities[i]);
-        spv_end_op(block);
-    }
-    spv_begin_op(block, OpMemoryModel);
-    spv_push_word(block, 0);
-    spv_push_word(block, 1);
-    spv_end_op(block);
-    spv_begin_op(block, OpEntryPoint);
-    spv_push_word(block, (u32)exec_model);
-    spv_push_word(block, entry_point);
-    spv_push_string_arg(block, entry);
-    for (u64 i = 0; i < interface_count; i++) {
-        spv_push_word(block, interface_items[i]);
-    }
-    spv_end_op(block);
-    if (exec_model == SpvExecutionModel_Fragment) {
-        spv_begin_op(block, OpExecutionMode);
-        spv_push_word(block, entry_point);
-        spv_push_word(block, 7);
-        spv_end_op(block);
-    }
-}
 
 unit_local void spv_push_decl_variable(Spv_Converter *spv, Spv_Block *block, Spv_Storage_Class storage_class, u32 decl_type, u32 *initial_value, string name, u32 result_id) {
 	(void)spv;
@@ -13416,6 +14032,16 @@ unit_local void spv_push_decl_variable(Spv_Converter *spv, Spv_Block *block, Spv
 unit_local void spv_push_decoration(Spv_Block *block, u32 target, Spv_Decoration deco, u32 *args, u64 arg_count) {
     spv_begin_op(block, OpDecorate);
     spv_push_word(block, target);
+    spv_push_word(block, (u32)deco);
+    for (u64 i = 0; i < arg_count; i++) {
+        spv_push_word(block, args[i]);
+    }
+    spv_end_op(block);
+}
+unit_local void spv_push_member_decoration(Spv_Block *block, u32 struct_type, u32 member_index, Spv_Decoration deco, u32 *args, u64 arg_count) {
+    spv_begin_op(block, OpMemberDecorate);
+    spv_push_word(block, struct_type);
+    spv_push_word(block, member_index);
     spv_push_word(block, (u32)deco);
     for (u64 i = 0; i < arg_count; i++) {
         spv_push_word(block, args[i]);
@@ -13527,10 +14153,135 @@ unit_local u32 spv_push_op_vector_shuffle(Spv_Converter *spv, Spv_Block *block, 
 }
 
 
+unit_local string _osl_token_text(Osl_Compiler *compiler, Osl_Token *token);
+unit_local string _osl_tprint_token(Osl_Compiler *compiler, Osl_Token *token, string message);
 
+unit_local Osl_Type_Info *arrayify_type(Spv_Converter *spv, Osl_Type_Info *elem, u64 array_count) {
+	for (s64 i = (s64)spv->array_type_count-1; i >= 0; i -= 1) {
+		Osl_Type_Info *type = &spv->array_types[i];
+		if (type->val.array_type.elem_type == elem && type->val.array_type.array_count == array_count)
+			return type;
+	}
+	
+	
+	Osl_Type_Info *type = (Osl_Type_Info*)arena_push(&spv->array_type_arena, sizeof(Osl_Type_Info));
+	spv->array_type_count += 1;
+	type->kind = OSL_TYPE_ARRAY;
+	type->name = tprint("[%i]%s", array_count, elem->name);
+	type->size = elem->size*array_count;
+	type->val.array_type.array_count = array_count;
+	type->val.array_type.elem_type = elem;
+	
+	if (array_count > 0) {
+		u32 id_array_count = spv_push_decl_constant_u32(spv, &spv->const_block, spv->type_u32.type_id, (u32)array_count);
+		type->type_id = spv_push_decl_array_type(spv, &spv->const_block, elem->type_id, id_array_count);
+	} else {
+		spv_push_op_code(&spv->const_block, 3, OpTypeRuntimeArray);
+	    type->type_id = spv_push_result_arg(spv, &spv->const_block);
+	    spv_push_word(&spv->const_block, elem->type_id);
+	}
+	
+	spv_push_decoration(&spv->annotations_block, type->type_id, SpvDecoration_ArrayStride, (u32*)&type->val.array_type.elem_type->size, 1);
+	
+	return type;
+}
 
-unit_local void spv_init(Spv_Converter *spv, Osl_Compiler *compiler, u32 vnum_count) {
-	*spv = (Spv_Converter){0};
+unit_local Osl_Type_Info *_osl_resolve_type(Spv_Converter *spv, Osl_Type_Ident type_ident) {
+
+	Osl_Type_Info *type = 0;
+	if (strings_match(type_ident.name, STR("f32")) || strings_match(type_ident.name, STR("float"))) {
+		type = &spv->type_f32;
+	} else if (strings_match(type_ident.name, STR("f32v2")) || strings_match(type_ident.name, STR("float2"))) {
+		type = &spv->type_f32v2;
+	} else if (strings_match(type_ident.name, STR("f32v3")) || strings_match(type_ident.name, STR("float3"))) {
+		type = &spv->type_f32v3;
+	} else if (strings_match(type_ident.name, STR("f32v4")) || strings_match(type_ident.name, STR("float4"))) {
+		type = &spv->type_f32v4;
+	} else if (strings_match(type_ident.name, STR("u32")) || strings_match(type_ident.name, STR("uint"))) {
+		type = &spv->type_u32;
+	} else if (strings_match(type_ident.name, STR("u32v2")) || strings_match(type_ident.name, STR("uint2"))) {
+		type = &spv->type_u32v2;
+	} else if (strings_match(type_ident.name, STR("u32v3")) || strings_match(type_ident.name, STR("uint3"))) {
+		type = &spv->type_u32v3;
+	} else if (strings_match(type_ident.name, STR("u32v4")) || strings_match(type_ident.name, STR("uint4"))) {
+		type = &spv->type_u32v4;
+	} else if (strings_match(type_ident.name, STR("s32")) || strings_match(type_ident.name, STR("sint"))) {
+		type = &spv->type_s32;
+	} else if (strings_match(type_ident.name, STR("s32v2")) || strings_match(type_ident.name, STR("sint2"))) {
+		type = &spv->type_s32v2;
+	} else if (strings_match(type_ident.name, STR("s32v3")) || strings_match(type_ident.name, STR("sint3"))) {
+		type = &spv->type_s32v3;
+	} else if (strings_match(type_ident.name, STR("s32v4")) || strings_match(type_ident.name, STR("sint4"))) {
+		type = &spv->type_s32v4;
+	} else if (strings_match(type_ident.name, STR("Image2Df")) || strings_match(type_ident.name, STR("Image2D"))) {
+		type = &spv->type_image2df;
+	} else if (strings_match(type_ident.name, STR("FBuffer2D"))) {
+		switch (type_ident.view_type) {
+			case OSL_VIEW_RGBA32F:
+				type = &spv->type_fbuffer2d_rgba32f; break;
+			case OSL_VIEW_RGBA16F:
+				type = &spv->type_fbuffer2d_rgba16f; break;
+			case OSL_VIEW_R32F:
+				type = &spv->type_fbuffer2d_r32f; break;
+			case OSL_VIEW_RGBA8_UNORM:
+				type = &spv->type_fbuffer2d_rgba8_unorm; break;
+			case OSL_VIEW_RGBA8_SNORM:
+				type = &spv->type_fbuffer2d_rgba8_snorm; break;
+			case OSL_VIEW_RGBA32U:
+				type = &spv->type_fbuffer2d_rgba32u; break;
+			case OSL_VIEW_RGBA16U:
+				type = &spv->type_fbuffer2d_rgba16u; break;
+			case OSL_VIEW_RGBA8U:
+				type = &spv->type_fbuffer2d_rgba8u; break;
+			case OSL_VIEW_R32U:
+				type = &spv->type_fbuffer2d_r32u; break;
+			case OSL_VIEW_RGBA32S:
+				type = &spv->type_fbuffer2d_rgba32s; break;
+			case OSL_VIEW_RGBA16S:
+				type = &spv->type_fbuffer2d_rgba16s; break;
+			case OSL_VIEW_RGBA8S:
+				type = &spv->type_fbuffer2d_rgba8s; break;
+			case OSL_VIEW_R32S:
+				type = &spv->type_fbuffer2d_r32s; break;
+			case OSL_VIEW_DEFAULT: // fallthrough
+			case OSL_VIEW_BLOCK: // fallthrough
+			default:
+				assert(false);
+				break;
+		}
+	} else if (strings_match(type_ident.name, STR("SampleMode"))) {
+		type = &spv->type_sample_mode;
+	} else {
+		for (u64 i = 0; i < spv->struct_type_count; i += 1) {
+			Osl_Type_Info *stype = &spv->struct_types[i];
+			assert(stype->kind == OSL_TYPE_STRUCT);
+			if (strings_match(stype->name, type_ident.name)) {
+				type = stype;
+				break;
+			}
+		}
+	}
+	
+	if (type) for (u32 i = 0; i < type_ident.indirection_count; i += 1) {
+		Osl_Type_Indirection ind = type_ident.indirections[i];
+		type = arrayify_type(spv, type, ind.array_count);
+	}
+	
+	return type;
+}
+
+unit_local void _osl_done_spv(Spv_Converter *spv) {
+	free_arena(spv->settings_block.arena);
+	free_arena(spv->header_block.arena);
+	free_arena(spv->const_block.arena);
+	free_arena(spv->entry_block.arena);
+	free_arena(spv->annotations_block.arena);
+	free_arena(spv->debug_block.arena);
+	free_arena(spv->array_type_arena);
+	free_arena(spv->struct_type_arena);
+}
+unit_local Osl_Result spv_init(Spv_Converter *spv, Osl_Compiler *compiler, u32 vnum_count) {
+	memset(spv, 0, sizeof(*spv));
 	spv->compiler = compiler;
 	spv_block_init(&spv->settings_block, 1024*10);
 	spv_block_init(&spv->header_block, 1024*10);
@@ -13546,6 +14297,7 @@ unit_local void spv_init(Spv_Converter *spv, Osl_Compiler *compiler, u32 vnum_co
 	spv->struct_types = (Osl_Type_Info*)spv->struct_type_arena.start;
 	
 	spv->next_id = vnum_count;
+	spv->ext_glsl450_id = spv->next_id++;
 	spv->entry_id = spv->next_id++;
 	
 	spv_push_base_decls(spv);
@@ -13554,7 +14306,87 @@ unit_local void spv_init(Spv_Converter *spv, Osl_Compiler *compiler, u32 vnum_co
     spv_push_word(&spv->entry_block, spv->next_id++);
     spv_end_op(&spv->entry_block);
     
+    for (u64 i = 0; i < compiler->struct_node_count; i += 1) {
+    	Osl_Struct_Decl *decl = compiler->struct_decls[i];
+    	
+    	Osl_Type_Info *type = (Osl_Type_Info*)arena_push(&spv->struct_type_arena, sizeof(Osl_Type_Info));
+    	*type = (Osl_Type_Info){0};
+    	type->kind = OSL_TYPE_STRUCT;
+    	type->name = decl->ident;
+    	spv->struct_type_count += 1;
+    	Osl_Type_Info_Struct *struct_type =  &type->val.struct_type;
+    	
+		struct_type->member_count = decl->block->top_node_count;
+    	
+    	if (struct_type->member_count > 128) {
+    		compiler->err_log = _osl_tprint_token(spv->compiler, _osl_get_node(decl)->first_token, STR("Because this compiler is a prototype, the max count of struct members is limited to 128."));
+    		return compiler->result = OSL_UNIMPLEMENTED;
+    	}
+    		
+    	// First pass: make struct types exist
+    	for (u64 j = 0; j < decl->block->top_node_count; j += 1) {
+    		Osl_Node *node = decl->block->top_nodes[j];
+    		assertmsg(node->kind == OSL_NODE_VALUE_DECL, "Struct node is non-value decl");
+    		
+    		Osl_Value_Decl *vdecl = &node->val.value_decl;
+    		
+    		struct_type->member_names[j] = vdecl->ident;
+    	}
+    	
+    	// Second pass: resolve member types (they may be types of other structs declared later)
+    	u64 offset = 0;
+    	for (u64 j = 0; j < struct_type->member_count; j += 1) {
+    		Osl_Node *node = decl->block->top_nodes[j];
+    		
+    		Osl_Value_Decl *vdecl = &node->val.value_decl;
+    		
+    		
+    		struct_type->member_types[j] = _osl_resolve_type(spv, vdecl->type_ident);
+    		Osl_Type_Info *member_type = struct_type->member_types[j];
+    		if (!member_type) {
+    			string a = _osl_tprint_token(compiler, vdecl->type_ident.token, STR("Undefined type used in member declaration"));
+    			string b = _osl_tprint_token(compiler, _osl_get_node(decl)->first_token, STR("... Member of this struct"));
+    			compiler->err_log = tprint("%s%s", a, b);
+    			return compiler->result = OSL_UNRESOLVED_TYPE;
+    		}
+    		
+    		if (member_type->kind == OSL_TYPE_ARRAY && member_type->val.array_type.array_count == 0) {
+    			if (j != struct_type->member_count-1) {
+    				compiler->err_log = _osl_tprint_token(compiler, vdecl->type_ident.token, STR("Unsized arrays must only appear as the last member of a struct. This does not."));
+    				return compiler->result = OSL_UNSIZED_ARRAY_NOT_AT_END_OF_STRUCT;
+    			}
+    		} else {
+    			assertmsgs(member_type->size, _osl_tprint_token(compiler, _osl_get_node(vdecl)->first_token, STR("This member type size is zero. This shouldn't be possible.")));
+    		}
+    		
+    		
+    		struct_type->member_offsets[j] = offset;
+    		// todo(charlie) #memory #speed alignment, padding, std140
+    		offset += member_type->size;
+    	}
+    	
+    	
+    	spv_begin_op(&spv->const_block, OpTypeStruct);
+    	type->type_id = spv_push_result_arg(spv, &spv->const_block);
+    	for (u64 j = 0; j < struct_type->member_count; j += 1) {
+    		spv_push_word(&spv->const_block, struct_type->member_types[j]->type_id);
+    	}
+    	spv_end_op(&spv->const_block);
+    	spv_push_decoration(&spv->annotations_block, type->type_id, SpvDecoration_Block, 0, 0);
+    	
+	    for (u64 j = 0; j < struct_type->member_count; j += 1) {
+	    	spv_push_member_decoration(&spv->annotations_block, type->type_id, (u32)j, SpvDecoration_Offset, (u32*)&struct_type->member_offsets[j], 1);
+	    	
+	    	spv_begin_op(&spv->debug_block, OpMemberName);
+			spv_push_word(&spv->debug_block, type->type_id);
+			spv_push_word(&spv->debug_block, (u32)j);
+			spv_push_string_arg(&spv->debug_block, struct_type->member_names[j]);
+			spv_end_op(&spv->debug_block);
+	    }
+    }
     
+    
+    return OSL_OK;
 }
 
 unit_local Spv_Block *spv_finalize(Spv_Converter *spv) {
@@ -13562,9 +14394,7 @@ unit_local Spv_Block *spv_finalize(Spv_Converter *spv) {
 	spv_push_op_code(&spv->entry_block, 1, (u16)OpReturn);
 
 	spv_push_header(&spv->header_block, spv->next_id);
-	Spv_Capability caps[] = {
-		SpvCapability_Shader
-	};
+	
 	Spv_Execution_Model exec_model = 0;
 	switch (spv->compiler->program_kind) {
 	case OSL_PROGRAM_GPU_VERTEX: {
@@ -13597,7 +14427,62 @@ unit_local Spv_Block *spv_finalize(Spv_Converter *spv) {
 		}
 	}
 	
-	spv_push_settings(&spv->settings_block, caps, sizeof(caps)/sizeof(caps[0]), exec_model, interface, interface_count, STR("main"), spv->entry_id);
+	Spv_Capability caps[512];
+	u64 cap_count = 0;
+	
+	string exts[512];
+	u64 ext_count = 0;
+	
+	caps[cap_count++] = SpvCapability_Shader;
+	
+	if (spv->compiler->enabled_features & OSL_FEATURE_INVOCATION_PIXEL_INTERLOCK) {
+		caps[cap_count++] = SpvCapability_FragmentShaderPixelInterlockEXT;
+		exts[ext_count++] = STR("SPV_EXT_fragment_shader_interlock");
+	}
+
+
+	for (u64 i = 0; i < cap_count; i++) {
+        spv_begin_op(&spv->settings_block, OpCapability);
+        spv_push_word(&spv->settings_block, (u32)caps[i]);
+        spv_end_op(&spv->settings_block);
+    }
+    for (u64 i = 0; i < ext_count; i++) {
+	    spv_begin_op(&spv->settings_block, OpExtension);
+	    spv_push_string_arg(&spv->settings_block, exts[i]);
+	    spv_end_op(&spv->settings_block);
+    }
+	if (spv->compiler->target == OSL_TARGET_SPIRV_VULKAN) {
+		spv_begin_op(&spv->settings_block, OpExtInstImport);
+		spv_push_word(&spv->settings_block, spv->ext_glsl450_id);
+		spv_push_string_arg(&spv->settings_block, STR("GLSL.std.450"));
+		spv_end_op(&spv->settings_block);
+	}
+    spv_begin_op(&spv->settings_block, OpMemoryModel);
+    spv_push_word(&spv->settings_block, 0);
+    spv_push_word(&spv->settings_block, 1);
+    spv_end_op(&spv->settings_block);
+    spv_begin_op(&spv->settings_block, OpEntryPoint);
+    spv_push_word(&spv->settings_block, (u32)exec_model);
+    spv_push_word(&spv->settings_block, spv->entry_id);
+    spv_push_string_arg(&spv->settings_block, STR("main"));
+    for (u64 i = 0; i < interface_count; i++) {
+        spv_push_word(&spv->settings_block, interface[i]);
+    }
+    spv_end_op(&spv->settings_block);
+    if (exec_model == SpvExecutionModel_Fragment) {
+        spv_begin_op(&spv->settings_block, OpExecutionMode);
+        spv_push_word(&spv->settings_block, spv->entry_id);
+        spv_push_word(&spv->settings_block, 7); /* OriginUpperLeft */
+        spv_end_op(&spv->settings_block);
+        
+        if (spv->compiler->enabled_features & OSL_FEATURE_INVOCATION_PIXEL_INTERLOCK) {
+	        spv_begin_op(&spv->settings_block, OpExecutionMode);
+	        spv_push_word(&spv->settings_block, spv->entry_id);
+	        spv_push_word(&spv->settings_block, 5366); /* PixelInterlockOrderedEXT */
+	        spv_end_op(&spv->settings_block);
+        }
+    }
+	
 	
 	// Push array types to const block
 	
@@ -13620,72 +14505,7 @@ unit_local Spv_Block *spv_finalize(Spv_Converter *spv) {
 	
 	return &spv->header_block;
 }
-unit_local string _osl_token_text(Osl_Compiler *compiler, Osl_Token *token);
-unit_local string _osl_tprint_token(Osl_Compiler *compiler, Osl_Token *token, string message);
 
-unit_local Osl_Type_Info *arrayify_type(Spv_Converter *spv, Osl_Type_Info *elem, u64 array_count) {
-	for (s64 i = (s64)spv->array_type_count-1; i >= 0; i -= 1) {
-		Osl_Type_Info *type = &spv->array_types[i];
-		if (type->val.array_type.elem_type == elem && type->val.array_type.array_count == array_count)
-			return type;
-	}
-	
-	u32 id_array_count = spv_push_decl_constant_u32(spv, &spv->const_block, spv->type_u32.type_id, (u32)array_count);
-	
-	Osl_Type_Info *type = (Osl_Type_Info*)arena_push(&spv->array_type_arena, sizeof(Osl_Type_Info));
-	spv->array_type_count += 1;
-	type->kind = OSL_TYPE_ARRAY;
-	type->type_id = spv_push_decl_array_type(spv, &spv->const_block, elem->type_id, id_array_count);
-	type->size = array_count*elem->size;
-	type->name = tprint("[%i]%s", array_count, elem->name);
-	type->val.array_type.array_count = array_count;
-	type->val.array_type.elem_type = elem;
-	
-	
-	
-	return type;
-}
-
-unit_local Osl_Type_Info *_osl_resolve_type(Spv_Converter *spv, Osl_Type_Ident type_ident) {
-
-	Osl_Type_Info *type = 0;
-	if (strings_match(type_ident.name, STR("f32")) || strings_match(type_ident.name, STR("float"))) {
-		type = &spv->type_f32;
-	} else if (strings_match(type_ident.name, STR("f32v2")) || strings_match(type_ident.name, STR("float2"))) {
-		type = &spv->type_f32v2;
-	} else if (strings_match(type_ident.name, STR("f32v3")) || strings_match(type_ident.name, STR("float3"))) {
-		type = &spv->type_f32v3;
-	} else if (strings_match(type_ident.name, STR("f32v4")) || strings_match(type_ident.name, STR("float4"))) {
-		type = &spv->type_f32v4;
-	} else if (strings_match(type_ident.name, STR("u32")) || strings_match(type_ident.name, STR("uint"))) {
-		type = &spv->type_u32;
-	} else if (strings_match(type_ident.name, STR("u32v2")) || strings_match(type_ident.name, STR("uint2"))) {
-		type = &spv->type_u32v2;
-	} else if (strings_match(type_ident.name, STR("u32v3")) || strings_match(type_ident.name, STR("uint3"))) {
-		type = &spv->type_u32v3;
-	} else if (strings_match(type_ident.name, STR("u32v4")) || strings_match(type_ident.name, STR("uint4"))) {
-		type = &spv->type_u32v4;
-	} else if (strings_match(type_ident.name, STR("s32")) || strings_match(type_ident.name, STR("sint"))) {
-		type = &spv->type_s32;
-	} else if (strings_match(type_ident.name, STR("s32v2")) || strings_match(type_ident.name, STR("sint2"))) {
-		type = &spv->type_s32v2;
-	} else if (strings_match(type_ident.name, STR("s32v3")) || strings_match(type_ident.name, STR("sint3"))) {
-		type = &spv->type_s32v3;
-	} else if (strings_match(type_ident.name, STR("s32v4")) || strings_match(type_ident.name, STR("sint4"))) {
-		type = &spv->type_s32v4;
-	} else if (strings_match(type_ident.name, STR("Image2Df32v4")) || strings_match(type_ident.name, STR("Image2Dfloat4"))) {
-		type = &spv->type_image2d_f32v4;
-	} else if (strings_match(type_ident.name, STR("SampleMode"))) {
-		type = &spv->type_sample_mode;
-	}
-	
-	for (u32 i = 0; i < type_ident.indirection_count; i += 1) {
-		Osl_Type_Indirection ind = type_ident.indirections[i];
-		type = arrayify_type(spv, type, ind.array_count);
-	}
-	
-	return type;
-}
 unit_local bool _osl_can_expr_have_storage(Osl_Expr *expr) {
 	if (expr->kind == OSL_EXPR_DECL_IDENT) 
 		return true;
@@ -13750,7 +14570,7 @@ unit_local Osl_Result spv_emit_expr(Spv_Converter *spv, Spv_Block *block, Osl_Ex
 			
 			if (op1_type != op2_type && !((op->op_kind == OSL_OP_MUL || op->op_kind == OSL_OP_DIV) && (is_vector_v_scalar || is_scalar_v_vector))) {
 				string a = _osl_tprint_token(spv->compiler, op->op_token, STR("Cannot perform this operations on these types ..."));
-				string b = _osl_tprint_token(spv->compiler, _osl_get_node(op->lhs)->first_token, tprint("... Left hand side is of tyoe '%s' ... ", op1_type->name));
+				string b = _osl_tprint_token(spv->compiler, _osl_get_node(op->lhs)->first_token, tprint("... Left hand side is of type '%s' ... ", op1_type->name));
 				string c = _osl_tprint_token(spv->compiler, _osl_get_node(op->rhs)->first_token, tprint("... Right hand side is of type '%s'", op2_type->name));
 				spv->compiler->err_log = tprint("%s\n%s\n%s", a, b, c);
 				return spv->compiler->result = OSL_UNRESOLVED_TYPE;
@@ -14358,8 +15178,6 @@ unit_local Osl_Result spv_emit_expr(Spv_Converter *spv, Spv_Block *block, Osl_Ex
 		break;
 	}
 	case OSL_EXPR_ACCESS_CHAIN: {
-		
-		
 		Osl_Access_Chain *access = &expr->val.access;
 		
 		bool accessing_storage = _osl_can_expr_have_storage(access->base_expr);
@@ -14382,7 +15200,12 @@ unit_local Osl_Result spv_emit_expr(Spv_Converter *spv, Spv_Block *block, Osl_Ex
 			case OSL_STORAGE_DEFAULT: base_storage_class = SpvStorageClass_Private; break;
 			case OSL_STORAGE_INPUT:   base_storage_class = SpvStorageClass_Input;   break;
 			case OSL_STORAGE_OUTPUT:  base_storage_class = SpvStorageClass_Output;  break;
-			case OSL_STORAGE_BINDING: base_storage_class = SpvStorageClass_UniformConstant; break;
+			case OSL_STORAGE_BINDING: 
+				if (base_type->kind == OSL_TYPE_IMAGE2DF || base_type->kind == OSL_TYPE_FBUFFER2D || base_type->kind == OSL_TYPE_SAMPLE_MODE)
+					base_storage_class = SpvStorageClass_UniformConstant;
+				else
+					base_storage_class = SpvStorageClass_Uniform;
+				break;
 			default:
 				assert(false);
 				break;
@@ -14408,22 +15231,19 @@ unit_local Osl_Result spv_emit_expr(Spv_Converter *spv, Spv_Block *block, Osl_Ex
 				u32 arg;
 				Osl_Expr *index_expr = access->items[i].val.index;
 				
-				if (index_expr->kind == OSL_EXPR_LITERAL_INT) {
-					arg = (u32)index_expr->val.lit.lit_int;
-					if (accessing_storage) {
-						// todo(charlie) constants
-						arg = spv_push_decl_constant_u32(spv, &spv->const_block, spv->type_u32.type_id,  arg);
-					}
-				} else {
-					Osl_Type_Info *arg_type;
-					Osl_Result index_res = spv_emit_expr(spv, block, index_expr, &arg, &arg_type, false);
-					if (index_res != OSL_OK) return index_res;
-					assert(arg); assert(arg_type);
-					
-					if (arg_type->kind != OSL_TYPE_INT) {
-						spv->compiler->err_log = _osl_tprint_token(spv->compiler, _osl_get_node(index_expr)->first_token, tprint("Invalid subscript argument expression of type '%s', expected integer expression", arg_type->name));
-						return spv->compiler->result = OSL_INVALID_SUBSCRIPT;
-					}
+				Osl_Type_Info *arg_type;
+				Osl_Result index_res = spv_emit_expr(spv, block, index_expr, &arg, &arg_type, false);
+				if (index_res != OSL_OK) return index_res;
+				assert(arg); assert(arg_type);
+				
+				if (arg_type->kind != OSL_TYPE_INT) {
+					spv->compiler->err_log = _osl_tprint_token(spv->compiler, _osl_get_node(index_expr)->first_token, tprint("Invalid subscript argument expression of type '%s', expected integer expression", arg_type->name));
+					return spv->compiler->result = OSL_INVALID_SUBSCRIPT;
+				}
+				
+				if (last_type->val.array_type.array_count && index_expr->kind == OSL_EXPR_LITERAL_INT && index_expr->val.lit.lit_int >= last_type->val.array_type.array_count) {
+					spv->compiler->err_log = _osl_tprint_token(spv->compiler, _osl_get_node(index_expr)->first_token, tprint("Subscript evaluated to %i is out of bands for array type %s", index_expr->val.lit.lit_int, last_type->name));
+					return spv->compiler->result = OSL_INVALID_SUBSCRIPT;
 				}
 				
 				args[arg_count++] = arg;
@@ -14433,8 +15253,8 @@ unit_local Osl_Result spv_emit_expr(Spv_Converter *spv, Spv_Block *block, Osl_Ex
 			} else {
 				string member_name = access->items[i].val.name;
 				
-				if (last_type->kind != OSL_TYPE_COMPOSITE) {
-					spv->compiler->err_log = _osl_tprint_token(spv->compiler, access->items[i].token, tprint("Invalid member access for non-composite type '%s'", last_type->name));
+				if (last_type->kind != OSL_TYPE_COMPOSITE && last_type->kind != OSL_TYPE_STRUCT) {
+					spv->compiler->err_log = _osl_tprint_token(spv->compiler, access->items[i].token, tprint("Type '%s' has no members, but it is being accessed here as if it does.", last_type->name));
 					return spv->compiler->result = OSL_INVALID_SUBSCRIPT;
 				}
 				
@@ -14556,6 +15376,28 @@ unit_local Osl_Result spv_emit_expr(Spv_Converter *spv, Spv_Block *block, Osl_Ex
 							return spv->compiler->result = OSL_SWIZZLE_USED_AS_STORAGE;
 						}
 					}
+				} else if (last_type->kind == OSL_TYPE_STRUCT) {
+					Osl_Type_Info_Struct *struct_type = &last_type->val.struct_type;
+					s64 member_index = -1;
+					for (u64 j = 0; j < struct_type->member_count; j += 1) {
+						if (strings_match(member_name, struct_type->member_names[j])) {
+							member_index = (s64)j;
+							break;
+						}
+					}
+					if (member_index == -1) {
+						spv->compiler->err_log = _osl_tprint_token(spv->compiler, access->items[i].token, tprint("Nu such member '%s' in struct '%s'", member_name, last_type->name));
+						return spv->compiler->result = OSL_NO_SUCH_MEMBER;
+					}
+					
+					u32 arg = (u32)member_index;
+					if (accessing_storage) {
+						arg = spv_push_decl_constant_u32(spv, &spv->const_block, spv->type_u32.type_id, arg);
+					}
+					args[arg_count++] = arg;
+					
+					last_type = struct_type->member_types[member_index];
+					
 				} else assert(false);
 			}
 		}
@@ -14594,6 +15436,11 @@ unit_local Osl_Result spv_emit_expr(Spv_Converter *spv, Spv_Block *block, Osl_Ex
 	
 		*result_id = spv_push_decl_constant_u32(spv, &spv->const_block, spv->type_u32.type_id, (u32)expr->val.lit.lit_int);
 		*type = &spv->type_u32;
+		break;
+	}
+	case OSL_EXPR_ALIAS_IDENT: {
+		Osl_Result res = spv_emit_expr(spv, block, expr->val.expr_alias->expr, result_id, type, in_memory);
+		if (res) return res;
 		break;
 	}
 	case OSL_EXPR_DECL_IDENT: {
@@ -14639,7 +15486,7 @@ unit_local Osl_Result spv_emit_expr(Spv_Converter *spv, Spv_Block *block, Osl_Ex
 			res = spv_emit_expr(spv, block, call->arg_list.args[2], &arg_ids[2], &arg_types[2], false);
 			if (res != OSL_OK) return res;
 			
-			if (arg_types[0] != &spv->type_image2d_f32v4 || arg_types[1] != &spv->type_sample_mode || arg_types[2] != &spv->type_f32v2) {
+			if (arg_types[0] != &spv->type_image2df || arg_types[1] != &spv->type_sample_mode || arg_types[2] != &spv->type_f32v2) {
 				spv->compiler->err_log = _osl_tprint_token(spv->compiler, _osl_get_node(expr)->first_token, tprint("Bad argument types (%s, %s, %s). Intrinsic signature is 'xxx sample(image: ImageXDxxx, sample_mode: SampleMode, uv: f32v2)'", arg_types[0]->name, arg_types[1]->name, arg_types[2]->name));
 				return spv->compiler->result = OSL_BAD_CALL_ARGUMENTS;
 			}
@@ -14660,7 +15507,384 @@ unit_local Osl_Result spv_emit_expr(Spv_Converter *spv, Spv_Block *block, Osl_Ex
 			
 			*type = &spv->type_f32v4;
 			
+		} else if (strings_match(call->ident, STR("fbuffer_fetch"))) {
+			
+			if (call->arg_list.arg_count != 2) {
+				spv->compiler->err_log = _osl_tprint_token(spv->compiler, _osl_get_node(expr)->first_token, STR("Bad number of arguments. Intrinsic signature is 'fbuffer_fetch :: (src: FBufferX, coords: s32vX) -> x32v4'"));
+				return spv->compiler->result = OSL_BAD_CALL_ARGUMENTS;
+			}
+			
+			u32 arg_ids[2];
+			Osl_Type_Info *arg_types[2];
+			
+			Osl_Result res = spv_emit_expr(spv, block, call->arg_list.args[0], &arg_ids[0], &arg_types[0], false);
+			if (res != OSL_OK) return res;
+			res = spv_emit_expr(spv, block, call->arg_list.args[1], &arg_ids[1], &arg_types[1], false);
+			if (res != OSL_OK) return res;
+			
+			if (arg_types[0]->kind != OSL_TYPE_FBUFFER2D || arg_types[1] != &spv->type_s32v2) {
+				spv->compiler->err_log = _osl_tprint_token(spv->compiler, _osl_get_node(expr)->first_token, tprint("Bad argument types (%s, %s). Intrinsic signature is 'fbuffer_fetch :: (src: FBufferX, coords: s32vX) -> x32v4'", arg_types[0]->name, arg_types[1]->name));
+				return spv->compiler->result = OSL_BAD_CALL_ARGUMENTS;
+			}
+			
+			spv_push_op_code(block, 5, OpImageRead);
+			spv_push_word(block, spv->type_f32v4.type_id);
+			*result_id = spv_push_result_arg(spv, block);
+			spv_push_word(block, arg_ids[0]);
+			spv_push_word(block, arg_ids[1]);
+			
+			*type = &spv->type_f32v4;
+			
+		} else if (strings_match(call->ident, STR("fbuffer_store"))) {
+			
+			if (call->arg_list.arg_count != 3) {
+				spv->compiler->err_log = _osl_tprint_token(spv->compiler, _osl_get_node(expr)->first_token, STR("Bad number of arguments. Intrinsic signature is 'fbuffer_store :: (src: FBufferX, coords: s32vX, data: x32v4)'"));
+				return spv->compiler->result = OSL_BAD_CALL_ARGUMENTS;
+			}
+			
+			u32 arg_ids[3];
+			Osl_Type_Info *arg_types[3];
+			
+			Osl_Result res = spv_emit_expr(spv, block, call->arg_list.args[0], &arg_ids[0], &arg_types[0], false);
+			if (res != OSL_OK) return res;
+			res = spv_emit_expr(spv, block, call->arg_list.args[1], &arg_ids[1], &arg_types[1], false);
+			if (res != OSL_OK) return res;
+			res = spv_emit_expr(spv, block, call->arg_list.args[2], &arg_ids[2], &arg_types[2], false);
+			if (res != OSL_OK) return res;
+			
+			if (arg_types[0]->kind != OSL_TYPE_FBUFFER2D || arg_types[1] != &spv->type_s32v2 || arg_types[2] != &spv->type_f32v4) {
+				spv->compiler->err_log = _osl_tprint_token(spv->compiler, _osl_get_node(expr)->first_token, tprint("Bad argument types (%s, %s, %s). Intrinsic signature is 'fbuffer_store :: (src: FBufferX, coords: s32vX, data: x32v4)'", arg_types[0]->name, arg_types[1]->name, arg_types[2]->name));
+				return spv->compiler->result = OSL_BAD_CALL_ARGUMENTS;
+			}
+			
+			spv_push_op_code(block, 4, OpImageWrite);
+			spv_push_word(block, arg_ids[0]);
+			spv_push_word(block, arg_ids[1]);
+			spv_push_word(block, arg_ids[2]);
+			
+			*type = &spv->type_f32v4;
+			
+		} else if (strings_match(call->ident, STR("invocationPixelInterlockBegin"))) {
+			if (!(spv->compiler->enabled_features & OSL_FEATURE_INVOCATION_PIXEL_INTERLOCK)) {
+				spv->compiler->err_log = _osl_tprint_token(spv->compiler, _osl_get_node(expr)->first_token, STR("This requires features OSL_FEATURE_INVOCATION_PIXEL_INTERLOCK flag to be enabled, but it was not passed in Osl_Compile_Desc::enabled_features."));
+				return spv->compiler->result = OSL_FEATURE_NOT_ENABLED;
+			}
+			spv_push_op_code(block, 1, OpBeginInvocationInterlockEXT);
+		} else if (strings_match(call->ident, STR("invocationPixelInterlockEnd"))) {
+			spv_push_op_code(block, 1, OpEndInvocationInterlockEXT);
+		} else if (strings_match(call->ident, STR("round"))) {
+			if (call->arg_list.arg_count != 1) {
+				spv->compiler->err_log = _osl_tprint_token(spv->compiler, _osl_get_node(expr)->first_token, STR("Bad number of arguments. Intrinsic signature is 'round :: (x: FloatType) -> FloatType'"));
+				return spv->compiler->result = OSL_BAD_CALL_ARGUMENTS;
+			}
+			
+			Osl_Expr *arg = call->arg_list.args[0];
+			u32 arg_id;
+			Osl_Type_Info *arg_type;
+			
+			Osl_Result res = spv_emit_expr(spv, block, arg, &arg_id, &arg_type, false);
+			if (res != OSL_OK) return res;
+			
+			Osl_Type_Info *underlying = arg_type;
+			
+			if (arg_type->kind == OSL_TYPE_COMPOSITE) underlying = arg_type->val.comp_type.underlying;
+			
+			if (underlying->kind != OSL_TYPE_FLOAT) {
+				spv->compiler->err_log = _osl_tprint_token(spv->compiler, _osl_get_node(arg)->first_token, tprint("Bad argument type. Expected a float type, got '%s'. Intrinsic signature is 'round :: (x: FloatType) -> FloatType'", arg_type->name));
+				return spv->compiler->result = OSL_BAD_CALL_ARGUMENTS;
+			}
+			
+			*type = arg_type;
+			
+			if (spv->compiler->target == OSL_TARGET_SPIRV_VULKAN) {
+				
+				spv_begin_op(block, OpExtInst);
+				spv_push_word(block, arg_type->type_id);
+				*result_id = spv_push_result_arg(spv, block);
+				spv_push_word(block, spv->ext_glsl450_id);
+				spv_push_word(block, 1); // OpRound
+				spv_push_word(block, arg_id);
+				spv_end_op(block);
+				
+			} else {
+				u32 const_half_id = spv_push_decl_constant_f32(spv, &spv->const_block, spv->type_f32.type_id, 0.5f);
+				u32 const_zero_id = spv_push_decl_constant_f32(spv, &spv->const_block, spv->type_f32.type_id, 0.0f);
+				
+			    Osl_Type_Info *int_type = &spv->type_s32;
+			    u32 bool_type = spv->type_bool.type_id;
+			    
+				if (arg_type->kind == OSL_TYPE_COMPOSITE) {
+					u32 comps_half[4] = {const_half_id, const_half_id, const_half_id, const_half_id};
+					const_half_id = spv_push_op_composite_construct(spv, block, arg_type->type_id, comps_half, arg_type->val.comp_type.component_count);
+					u32 comps_zero[4] = {const_zero_id, const_zero_id, const_zero_id, const_zero_id};
+					const_zero_id = spv_push_op_composite_construct(spv, block, arg_type->type_id, comps_zero, arg_type->val.comp_type.component_count);
+					
+					if (arg_type->val.comp_type.component_count == 2) {
+						int_type = &spv->type_s32v2;
+						bool_type = spv->type_boolv2.type_id;
+					} else if (arg_type->val.comp_type.component_count == 3) {
+						int_type = &spv->type_s32v3;
+						bool_type = spv->type_boolv3.type_id;
+					} else if (arg_type->val.comp_type.component_count == 4) {
+						int_type = &spv->type_s32v4;
+						bool_type = spv->type_boolv4.type_id;
+					} else assert(false);
+				}
+				
+				// Add 0.5 to arg
+				spv_push_op_code(block, 5, OpFAdd);
+				spv_push_word(block, arg_type->type_id);
+			    u32 arg_plus_half_id = spv_push_result_arg(spv, block);
+			    spv_push_word(block, arg_id);
+			    spv_push_word(block, const_half_id);
+			    
+			    // neg arg
+			    spv_push_op_code(block, 4, OpFNegate);
+			    spv_push_word(block, arg_type->type_id);
+			    u32 neg_id = spv_push_result_arg(spv, block);
+			    spv_push_word(block, arg_id);
+			    
+			    // add 0.5 to neg arg
+			    spv_push_op_code(block, 5, OpFAdd);
+				spv_push_word(block, arg_type->type_id);
+			    u32 neg_plus_half_id = spv_push_result_arg(spv, block);
+			    spv_push_word(block, neg_id);
+			    spv_push_word(block, const_half_id);
+			    
+			    // Truncate arg to int
+				spv_push_op_code(block, 4, OpConvertFToS);
+				spv_push_word(block, int_type->type_id);
+			    u32 arg_trunc = spv_push_result_arg(spv, block);
+			    spv_push_word(block, arg_plus_half_id);
+			    
+			    // Truncate neg to int
+				spv_push_op_code(block, 4, OpConvertFToS);
+				spv_push_word(block, int_type->type_id);
+			    u32 neg_trunc = spv_push_result_arg(spv, block);
+			    spv_push_word(block, neg_plus_half_id);
+			    
+			    // Convert arg back to float
+				spv_push_op_code(block, 4, OpConvertSToF);
+				spv_push_word(block, arg_type->type_id);
+			    u32 arg_rounded = spv_push_result_arg(spv, block);
+			    spv_push_word(block, arg_trunc);
+			    
+			    // Convert neg back to float
+				spv_push_op_code(block, 4, OpConvertSToF);
+				spv_push_word(block, arg_type->type_id);
+			    u32 neg_rounded = spv_push_result_arg(spv, block);
+			    spv_push_word(block, neg_trunc);
+			    
+			    // neg neg
+				spv_push_op_code(block, 4, OpFNegate);
+				spv_push_word(block, arg_type->type_id);
+			    u32 neg_neg_rounded = spv_push_result_arg(spv, block);
+			    spv_push_word(block, neg_rounded);
+			    
+			    
+			    
+				spv_push_op_code(block, 5, OpFOrdGreaterThanEqual);
+				spv_push_word(block, bool_type);
+			    u32 mask = spv_push_result_arg(spv, block);
+			    spv_push_word(block, arg_id);
+			    spv_push_word(block, const_zero_id);
+			    
+				spv_push_op_code(block, 6, OpSelect);
+				spv_push_word(block, arg_type->type_id);
+			    *result_id = spv_push_result_arg(spv, block);
+			    spv_push_word(block, mask);
+			    spv_push_word(block, arg_rounded);
+			    spv_push_word(block, neg_neg_rounded);
+			}
+			
+		} else if (strings_match(call->ident, STR("floor"))) {
+			
+			if (call->arg_list.arg_count != 1) {
+				spv->compiler->err_log = _osl_tprint_token(spv->compiler, _osl_get_node(expr)->first_token, STR("Bad number of arguments. Intrinsic signature is 'round :: (x: FloatType) -> FloatType'"));
+				return spv->compiler->result = OSL_BAD_CALL_ARGUMENTS;
+			}
+			
+			Osl_Expr *arg = call->arg_list.args[0];
+			u32 arg_id;
+			Osl_Type_Info *arg_type;
+			
+			Osl_Result res = spv_emit_expr(spv, block, arg, &arg_id, &arg_type, false);
+			if (res != OSL_OK) return res;
+			
+			Osl_Type_Info *underlying = arg_type;
+			
+			if (arg_type->kind == OSL_TYPE_COMPOSITE) underlying = arg_type->val.comp_type.underlying;
+			
+			if (underlying->kind != OSL_TYPE_FLOAT) {
+				spv->compiler->err_log = _osl_tprint_token(spv->compiler, _osl_get_node(arg)->first_token, tprint("Bad argument type. Expected a float type, got '%s'. Intrinsic signature is 'round :: (x: FloatType) -> FloatType'", arg_type->name));
+				return spv->compiler->result = OSL_BAD_CALL_ARGUMENTS;
+			}
+			
+			if (spv->compiler->target == OSL_TARGET_SPIRV_VULKAN) {
+				
+				spv_begin_op(block, OpExtInst);
+				spv_push_word(block, arg_type->type_id);
+				*result_id = spv_push_result_arg(spv, block);
+				spv_push_word(block, spv->ext_glsl450_id);
+				spv_push_word(block, 8); // OpFloor
+				spv_push_word(block, arg_id);
+				spv_end_op(block);
+				
+			} else {
+			
+				u32 const_one_id = spv_push_decl_constant_u32(spv, &spv->const_block, spv->type_s32.type_id, 1);
+				u32 const_zero_id = spv_push_decl_constant_f32(spv, &spv->const_block, spv->type_f32.type_id, 0.0f);
+				
+			    Osl_Type_Info *int_type = &spv->type_s32;
+			    u32 bool_type = spv->type_bool.type_id;
+			    
+				if (arg_type->kind == OSL_TYPE_COMPOSITE) {
+					u32 comps_one[4] = {const_one_id, const_one_id, const_one_id, const_one_id};
+					const_one_id = spv_push_op_composite_construct(spv, block, spv->type_s32.type_id, comps_one, arg_type->val.comp_type.component_count);
+					u32 comps_zero[4] = {const_zero_id, const_zero_id, const_zero_id, const_zero_id};
+					const_zero_id = spv_push_op_composite_construct(spv, block, spv->type_f32.type_id, comps_zero, arg_type->val.comp_type.component_count);
+					
+					if (arg_type->val.comp_type.component_count == 2) {
+						int_type = &spv->type_s32v2;
+						bool_type = spv->type_boolv2.type_id;
+					} else if (arg_type->val.comp_type.component_count == 3) {
+						int_type = &spv->type_s32v3;
+						bool_type = spv->type_boolv3.type_id;
+					} else if (arg_type->val.comp_type.component_count == 4) {
+						int_type = &spv->type_s32v4;
+						bool_type = spv->type_boolv4.type_id;
+					} else assert(false);
+				}
+			    
+			    // Truncate arg to int
+				spv_push_op_code(block, 4, OpConvertFToS);
+				spv_push_word(block, int_type->type_id);
+			    u32 arg_trunc = spv_push_result_arg(spv, block);
+			    spv_push_word(block, arg_id);
+			    
+			    // Trunc minus one
+				spv_push_op_code(block, 5, OpISub);
+				spv_push_word(block, int_type->type_id);
+			    u32 arg_trunc_minus_one = spv_push_result_arg(spv, block);
+			    spv_push_word(block, arg_trunc);
+			    spv_push_word(block, const_one_id);
+			    
+				spv_push_op_code(block, 5, OpFOrdLessThan);
+				spv_push_word(block, bool_type);
+			    u32 less_cond = spv_push_result_arg(spv, block);
+			    spv_push_word(block, arg_id);
+			    spv_push_word(block, const_zero_id);
+			    
+			    spv_push_op_code(block, 6, OpSelect);
+				spv_push_word(block, int_type->type_id);
+			    u32 selected_trunc = spv_push_result_arg(spv, block);
+			    spv_push_word(block, less_cond);
+			    spv_push_word(block, arg_trunc_minus_one);
+			    spv_push_word(block, arg_trunc);
+			    
+			    // Convert selected_trunc back to float
+				spv_push_op_code(block, 4, OpConvertSToF);
+				spv_push_word(block, arg_type->type_id);
+			    *result_id = spv_push_result_arg(spv, block);
+			    spv_push_word(block, selected_trunc);
+		    }
+		    *type = arg_type;
+			
+		} else if (strings_match(call->ident, STR("ceil"))) {
+			if (call->arg_list.arg_count != 1) {
+				spv->compiler->err_log = _osl_tprint_token(spv->compiler, _osl_get_node(expr)->first_token, STR("Bad number of arguments. Intrinsic signature is 'round :: (x: FloatType) -> FloatType'"));
+				return spv->compiler->result = OSL_BAD_CALL_ARGUMENTS;
+			}
+			
+			Osl_Expr *arg = call->arg_list.args[0];
+			u32 arg_id;
+			Osl_Type_Info *arg_type;
+			
+			Osl_Result res = spv_emit_expr(spv, block, arg, &arg_id, &arg_type, false);
+			if (res != OSL_OK) return res;
+			
+			Osl_Type_Info *underlying = arg_type;
+			
+			if (arg_type->kind == OSL_TYPE_COMPOSITE) underlying = arg_type->val.comp_type.underlying;
+			
+			if (underlying->kind != OSL_TYPE_FLOAT) {
+				spv->compiler->err_log = _osl_tprint_token(spv->compiler, _osl_get_node(arg)->first_token, tprint("Bad argument type. Expected a float type, got '%s'. Intrinsic signature is 'round :: (x: FloatType) -> FloatType'", arg_type->name));
+				return spv->compiler->result = OSL_BAD_CALL_ARGUMENTS;
+			}
+			if (spv->compiler->target == OSL_TARGET_SPIRV_VULKAN) {
+				
+				spv_begin_op(block, OpExtInst);
+				spv_push_word(block, arg_type->type_id);
+				*result_id = spv_push_result_arg(spv, block);
+				spv_push_word(block, spv->ext_glsl450_id);
+				spv_push_word(block, 9); // OpCeil
+				spv_push_word(block, arg_id);
+				spv_end_op(block);
+				
+			} else {
+			
+				u32 const_one_id = spv_push_decl_constant_u32(spv, &spv->const_block, spv->type_s32.type_id, 1);
+				u32 const_zero_id = spv_push_decl_constant_f32(spv, &spv->const_block, spv->type_f32.type_id, 0.0f);
+				
+			    Osl_Type_Info *int_type = &spv->type_s32;
+			    u32 bool_type = spv->type_bool.type_id;
+			    
+				if (arg_type->kind == OSL_TYPE_COMPOSITE) {
+					u32 comps_one[4] = {const_one_id, const_one_id, const_one_id, const_one_id};
+					const_one_id = spv_push_op_composite_construct(spv, block, spv->type_s32.type_id, comps_one, arg_type->val.comp_type.component_count);
+					u32 comps_zero[4] = {const_zero_id, const_zero_id, const_zero_id, const_zero_id};
+					const_zero_id = spv_push_op_composite_construct(spv, block, spv->type_f32.type_id, comps_zero, arg_type->val.comp_type.component_count);
+					
+					if (arg_type->val.comp_type.component_count == 2) {
+						int_type = &spv->type_s32v2;
+						bool_type = spv->type_boolv2.type_id;
+					} else if (arg_type->val.comp_type.component_count == 3) {
+						int_type = &spv->type_s32v3;
+						bool_type = spv->type_boolv3.type_id;
+					} else if (arg_type->val.comp_type.component_count == 4) {
+						int_type = &spv->type_s32v4;
+						bool_type = spv->type_boolv4.type_id;
+					} else assert(false);
+				}
+			    
+			    // Truncate arg to int
+				spv_push_op_code(block, 4, OpConvertFToS);
+				spv_push_word(block, int_type->type_id);
+			    u32 arg_trunc = spv_push_result_arg(spv, block);
+			    spv_push_word(block, arg_id);
+			    
+			    // Trunc plus one
+				spv_push_op_code(block, 5, OpIAdd);
+				spv_push_word(block, int_type->type_id);
+			    u32 arg_trunc_plus_one = spv_push_result_arg(spv, block);
+			    spv_push_word(block, arg_trunc);
+			    spv_push_word(block, const_one_id);
+			    
+				spv_push_op_code(block, 5, OpFOrdGreaterThan);
+				spv_push_word(block, bool_type);
+			    u32 less_cond = spv_push_result_arg(spv, block);
+			    spv_push_word(block, arg_id);
+			    spv_push_word(block, const_zero_id);
+			    
+			    spv_push_op_code(block, 6, OpSelect);
+				spv_push_word(block, int_type->type_id);
+			    u32 selected_trunc = spv_push_result_arg(spv, block);
+			    spv_push_word(block, less_cond);
+			    spv_push_word(block, arg_trunc_plus_one);
+			    spv_push_word(block, arg_trunc);
+			    
+			    // Convert selected_trunc back to float
+				spv_push_op_code(block, 4, OpConvertSToF);
+				spv_push_word(block, arg_type->type_id);
+			    *result_id = spv_push_result_arg(spv, block);
+			    spv_push_word(block, selected_trunc);
+		    }
+		    *type = arg_type;
 		} else {
+			if (!(spv->compiler->enabled_features & OSL_FEATURE_INVOCATION_PIXEL_INTERLOCK)) {
+				spv->compiler->err_log = _osl_tprint_token(spv->compiler, _osl_get_node(expr)->first_token, STR("This requires features OSL_FEATURE_INVOCATION_PIXEL_INTERLOCK flag to be enabled, but it was not passed in Osl_Compile_Desc::enabled_features."));
+				return spv->compiler->result = OSL_FEATURE_NOT_ENABLED;
+			}
 			spv->compiler->err_log = _osl_tprint_token(spv->compiler, _osl_get_node(expr)->first_token, STR("Could not resolve this to a function or intrinsic, but it is being used in a function call."));
 			return spv->compiler->result = OSL_UNRESOLVED_FUNCTION_OR_INTRINSIC;
 		}
@@ -14675,8 +15899,6 @@ unit_local Osl_Result spv_emit_expr(Spv_Converter *spv, Spv_Block *block, Osl_Ex
 	
 	}
 	
-	assert(*result_id);
-	assert(*type);
 	return OSL_OK;
 }
 
@@ -14693,6 +15915,9 @@ unit_local Osl_Result spv_emit_node(Spv_Converter *spv, Spv_Block *block, Osl_No
 	case OSL_NODE_STRUCT_DECL: {
 		break;
 	}
+	case OSL_NODE_EXPR_ALIAS: {
+		break;
+	}
 	case OSL_NODE_VALUE_DECL: {
 		
 		Osl_Value_Decl *decl = &node->val.value_decl;
@@ -14704,8 +15929,16 @@ unit_local Osl_Result spv_emit_node(Spv_Converter *spv, Spv_Block *block, Osl_No
 			return spv->compiler->result = OSL_UNRESOLVED_TYPE;
 		}
 		
+		
 		u32 type_id = decl_type->type_id;
 		assert(type_id);
+		
+		if (decl->type_ident.view_type == OSL_VIEW_BLOCK) {
+			if (decl_type->kind != OSL_TYPE_STRUCT) {
+				spv->compiler->err_log = _osl_tprint_token(spv->compiler, decl->type_ident.token, STR("BlockView's must have a struct type as the interpretation type."));
+				return spv->compiler->result = OSL_BLOCK_TYPE_IS_NOT_STRUCT;
+			}
+		}
 		
 		spv_begin_op(&spv->debug_block, OpName);
 		spv_push_word(&spv->debug_block, (u32)decl->vnum);
@@ -14720,7 +15953,12 @@ unit_local Osl_Result spv_emit_node(Spv_Converter *spv, Spv_Block *block, Osl_No
 				
 			case OSL_STORAGE_INPUT:  storage_class = SpvStorageClass_Input; break;
 			case OSL_STORAGE_OUTPUT: storage_class = SpvStorageClass_Output; break;
-			case OSL_STORAGE_BINDING: storage_class = SpvStorageClass_UniformConstant; break;
+			case OSL_STORAGE_BINDING: 
+				if (decl_type->kind == OSL_TYPE_IMAGE2DF || decl_type->kind == OSL_TYPE_FBUFFER2D || decl_type->kind == OSL_TYPE_SAMPLE_MODE)
+					storage_class = SpvStorageClass_UniformConstant;
+				else
+					storage_class = SpvStorageClass_Uniform;
+				break;
 			
 			case OSL_STORAGE_DEFAULT: // fallthrough
 			default: assert(false); break;
@@ -14802,6 +16040,11 @@ unit_local Osl_Result spv_emit_node(Spv_Converter *spv, Spv_Block *block, Osl_No
 		}
 		case OSL_BUILTIN_INSTANCE_INDEX: {
 			u32 arg = SpvBuiltin_InstanceIndex;
+			spv_push_decoration(&spv->annotations_block, (u32)decl->vnum, SpvDecoration_Builtin, &arg, 1); 
+			break;
+		}
+		case OSL_BUILTIN_PIXEL_COORD: {
+			u32 arg = SpvBuiltin_FragCoord;
 			spv_push_decoration(&spv->annotations_block, (u32)decl->vnum, SpvDecoration_Builtin, &arg, 1); 
 			break;
 		}
@@ -14996,7 +16239,6 @@ unit_local Osl_Result spv_emit_node(Spv_Converter *spv, Spv_Block *block, Osl_No
 		Osl_Type_Info *__;
 		Osl_Result res = spv_emit_expr(spv, block, &node->val.expr, &_, &__, false);
 		if (res != OSL_OK) return res;
-		assert(_); assert(__);
 		
 		break;
 	}
@@ -15189,7 +16431,7 @@ unit_local bool _osl_exp_token_msg(Osl_Compiler *compiler, Osl_Token *token, Osl
 	return true;
 }
 unit_local inline bool _osl_can_be_start_of_expr(Osl_Token *token) {
-	return token->kind == OSL_TOKEN_KIND_IDENTIFIER
+	return (token->kind == OSL_TOKEN_KIND_IDENTIFIER && (token+1)->kind != OSL_TOKEN_KIND_IDENTIFIER)
 	    || token->kind == '-'
 	    || token->kind == '('
 	    ;
@@ -15199,51 +16441,117 @@ unit_local Osl_Expr *_osl_parse_expr(Osl_Compiler *compiler, Osl_Block *block, O
 unit_local Osl_Result _osl_parse_type_ident(Osl_Compiler *compiler, Osl_Block *block, Osl_Token *first, Osl_Token **done_token, Osl_Type_Ident *result) {
 	*result = (Osl_Type_Ident) {0};
 	result->token = first;
-	if (first->kind == OSL_TOKEN_KIND_IDENTIFIER) {
-		result->name = (string) { first->length, compiler->source.data + first->source_pos };
+	string first_text = (string) { first->length, compiler->source.data + first->source_pos };
+	if (first->kind == OSL_TOKEN_KIND_IDENTIFIER && !strings_match(STR("BlockView"), first_text) && !strings_match(STR("FBuffer2D"), first_text)) {
+		result->name = first_text;
 		*done_token = first+1;
 		return OSL_OK;
-	} 
+	}
 	
-	
-	Osl_Token *next = first;
-	
-	while (next->kind == OSL_TOKEN_KIND_LBRACKET) {
+	if (strings_match(STR("BlockView"), first_text)) {
+		if (!_osl_exp_token(compiler, first+1, OSL_TOKEN_KIND_LPAREN))
+			return compiler->result;
+		if (!_osl_exp_token(compiler, first+2, OSL_TOKEN_KIND_IDENTIFIER))
+			return compiler->result;
+		if (!_osl_exp_token(compiler, first+3, OSL_TOKEN_KIND_RPAREN))
+			return compiler->result;
 		
-		if (result->indirection_count >= 8) {
-			compiler->err_log = _osl_tprint_token(compiler, next, STR("The max number of type indirections is 8. This exceeds that."));
-			return compiler->result = OSL_EXCEED_MAX_TYPE_INDIRECTIONS;
+		Osl_Token *type_token = first+2;
+		
+		result->view_type = OSL_VIEW_BLOCK;
+		result->name = (string) { type_token->length, compiler->source.data + type_token->source_pos };
+		
+		*done_token = first+4;
+	} else if (strings_match(STR("FBuffer2D"), first_text)) {
+		if (!_osl_exp_token(compiler, first+1, OSL_TOKEN_KIND_LPAREN))
+			return compiler->result;
+		if (!_osl_exp_token(compiler, first+2, OSL_TOKEN_KIND_IDENTIFIER))
+			return compiler->result;
+		if (!_osl_exp_token(compiler, first+3, OSL_TOKEN_KIND_RPAREN))
+			return compiler->result;
+		
+		Osl_Token *view_token = first+2;
+		
+		result->name = first_text;
+		
+		
+		string view_text = _osl_token_text(compiler, view_token);
+		if (strings_match(view_text, STR("RGBA32F")))
+			result->view_type = OSL_VIEW_RGBA32F;
+		else if (strings_match(view_text, STR("RGBA16F")))
+			result->view_type = OSL_VIEW_RGBA16F;
+		else if (strings_match(view_text, STR("R32F")))
+			result->view_type = OSL_VIEW_R32F;
+		else if (strings_match(view_text, STR("RGBA8_UNORM")))
+			result->view_type = OSL_VIEW_RGBA8_UNORM;
+		else if (strings_match(view_text, STR("RGBA8_SNORM")))
+			result->view_type = OSL_VIEW_RGBA8_SNORM;
+		else if (strings_match(view_text, STR("RGBA32U")))
+			result->view_type = OSL_VIEW_RGBA32U;
+		else if (strings_match(view_text, STR("RGBA16U")))
+			result->view_type = OSL_VIEW_RGBA16U;
+		else if (strings_match(view_text, STR("RGBA8U")))
+			result->view_type = OSL_VIEW_RGBA8U;
+		else if (strings_match(view_text, STR("R32U")))
+			result->view_type = OSL_VIEW_R32U;
+		else if (strings_match(view_text, STR("RGBA32S")))
+			result->view_type = OSL_VIEW_RGBA32S;
+		else if (strings_match(view_text, STR("RGBA16S")))
+			result->view_type = OSL_VIEW_RGBA16S;
+		else if (strings_match(view_text, STR("RGBA8S")))
+			result->view_type = OSL_VIEW_RGBA8S;
+		else if (strings_match(view_text, STR("R32S")))
+			result->view_type = OSL_VIEW_R32S;
+		else {
+			compiler->err_log = _osl_tprint_token(compiler, view_token, STR("This is not a valid FBuffer view type. It must be one of the following: RGBA32F, RGBA16F, R32F, RGBA8_UNORM, RGBA8_SNORM, RGBA32U, RGBA16U, RGBA8U, R32U, RGBA32S, RGBA16S, RGBA8S, R32S"));
+			return compiler->result = OSL_INVALID_FBUFFER_VIEW;
 		}
 		
-		Osl_Token *count_tok = next+1;
+		*done_token = first+4;
+	} else {
+		Osl_Token *next = first;
 		
-		Osl_Token *close_bracket;
-		Osl_Expr *count_expr = _osl_parse_expr(compiler, block, count_tok, &close_bracket);
-		
-		// todo(charlie) parse expression and try to resolve it to an int otherwise err
-		// Or maybe just make _osl_parse_expr resolve any literal ops and return a result literal instead ?
-		if (count_expr->kind != OSL_EXPR_LITERAL_INT) {
-			compiler->err_log = _osl_tprint_token(compiler, count_tok, STR("Expected a single integer literal. Compile-time expressions are not yet available."));
-			return compiler->result = OSL_UNEXPECTED_TOKEN;
+		while (next->kind == OSL_TOKEN_KIND_LBRACKET) {
+			
+			if (result->indirection_count >= 8) {
+				compiler->err_log = _osl_tprint_token(compiler, next, STR("The max number of type indirections is 8. This exceeds that."));
+				return compiler->result = OSL_EXCEED_MAX_TYPE_INDIRECTIONS;
+			}
+			
+			Osl_Token *count_tok = next+1;
+			
+			if (count_tok->kind == '?') {
+				if (!_osl_exp_token(compiler, count_tok+1, OSL_TOKEN_KIND_RBRACKET)) {
+					return compiler->result;
+				}
+				result->indirections[result->indirection_count++].array_count = 0;
+				next = count_tok+2;
+			} else {
+				Osl_Token *close_bracket;
+				Osl_Expr *count_expr = _osl_parse_expr(compiler, block, count_tok, &close_bracket);
+				if (!count_expr) return compiler->result;
+				
+				if (!_osl_exp_token(compiler, close_bracket, OSL_TOKEN_KIND_RBRACKET)) {
+					return compiler->result;
+				}
+				
+				
+				result->indirections[result->indirection_count++].array_count = count_expr->val.lit.lit_int;
+				next = close_bracket+1;
+			}
+			
+			
 		}
 		
-		if (!_osl_exp_token(compiler, close_bracket, OSL_TOKEN_KIND_RBRACKET)) {
+		if (!_osl_exp_token_msg(compiler, next, OSL_TOKEN_KIND_IDENTIFIER, STR("Expected a type identifier"))) {
 			return compiler->result;
 		}
 		
+		result->name = (string) { next->length, compiler->source.data + next->source_pos };
 		
-		result->indirections[result->indirection_count++].array_count = count_expr->val.lit.lit_int;
-		
-		next = close_bracket+1;
+		*done_token = next+1;
 	}
 	
-	if (!_osl_exp_token_msg(compiler, next, OSL_TOKEN_KIND_IDENTIFIER, STR("Expected a type identifier"))) {
-		return compiler->result;
-	}
-	
-	result->name = (string) { next->length, compiler->source.data + next->source_pos };
-	
-	*done_token = next+1;
 	
 	assert(result->token);
 	return OSL_OK;
@@ -15348,6 +16656,9 @@ unit_local Osl_Node *_osl_make_node(Osl_Compiler *compiler, Osl_Block *block, Os
 	    case OSL_NODE_STRUCT_DECL:
     		*impl_node = &node->val.struct_decl;
 	    	break;
+	    case OSL_NODE_EXPR_ALIAS:
+    		*impl_node = &node->val.expr_alias;
+	    	break;
 	    default: assert(false); break;
     }
     return node;
@@ -15374,7 +16685,6 @@ unit_local Osl_Expr *_osl_parse_one_expr(Osl_Compiler *compiler, Osl_Block *bloc
 		} else {
 			Osl_Expr *op_expr;
 			_osl_make_node(compiler, block, expr_start, OSL_NODE_EXPR, (void**)&op_expr);
-			op_expr->vnum = -1;
 			op_expr->kind = OSL_EXPR_OP;
 			
 			op_expr->val.op.op_kind = OSL_OP_UNARY_NEGATE;
@@ -15397,7 +16707,6 @@ unit_local Osl_Expr *_osl_parse_one_expr(Osl_Compiler *compiler, Osl_Block *bloc
 		} else {
 			Osl_Expr *op_expr;
 			_osl_make_node(compiler, block, expr_start, OSL_NODE_EXPR, (void**)&op_expr);
-			op_expr->vnum = -1;
 			op_expr->kind = OSL_EXPR_OP;
 			
 			op_expr->val.op.op_kind = OSL_OP_UNARY_NAUGHT;
@@ -15421,7 +16730,6 @@ unit_local Osl_Expr *_osl_parse_one_expr(Osl_Compiler *compiler, Osl_Block *bloc
 	} else {
 	
 		_osl_make_node(compiler, block, expr_start, OSL_NODE_EXPR, (void**)&expr);
-		expr->vnum = -1;
 		
 		string expr_ident = (string) { expr_start->length, compiler->source.data+expr_start->source_pos };
 		if (expr_start->kind == OSL_TOKEN_KIND_IDENTIFIER) {
@@ -15444,6 +16752,11 @@ unit_local Osl_Expr *_osl_parse_one_expr(Osl_Compiler *compiler, Osl_Block *bloc
 				Osl_Result type_res = _osl_parse_type_ident(compiler, block, expr_start, done_token, &inst->type_ident);
 				if (type_res != OSL_OK) return 0;
 				
+				if (inst->type_ident.view_type != OSL_VIEW_DEFAULT) {
+					compiler->err_log = _osl_tprint_token(compiler, inst->type_ident.token, STR("Cannot instantiate View types, this doesn't make any sense."));
+					compiler->result = OSL_VIEW_INSTANTIATION;
+					return 0;
+				}
 				
 				Osl_Result res = _osl_parse_arg_list(compiler, block, list_end, &expr_start[2], done_token, &inst->list);
 				if (res != OSL_OK) return 0;
@@ -15478,7 +16791,6 @@ unit_local Osl_Expr *_osl_parse_one_expr(Osl_Compiler *compiler, Osl_Block *bloc
 							Osl_Value_Decl *decl = &node->val.value_decl;
 							if (strings_match(expr_ident, decl->ident)) {
 								expr->val.decl = decl;
-								expr->vnum = decl->vnum;
 								break;
 							}
 						}
@@ -15487,9 +16799,33 @@ unit_local Osl_Expr *_osl_parse_one_expr(Osl_Compiler *compiler, Osl_Block *bloc
 				}
 				
 				if (!expr->val.decl) {
+					expr->kind = OSL_EXPR_ALIAS_IDENT;
+					next_block = block;
+					while (next_block) {
+						for (u64 j = 0; j < next_block->node_count; j += 1) {
+							Osl_Node *node = next_block->nodes[j];
+							
+							if (node->kind == OSL_NODE_EXPR_ALIAS) {
+								Osl_Expr_Alias *alias = &node->val.expr_alias;
+								if (strings_match(expr_ident, alias->ident)) {
+									expr->val.expr_alias = alias;
+									break;
+								}
+							}
+						}
+						next_block = next_block->parent;
+					}
+				}
+				
+				if (!expr->val.decl && !expr->val.expr_alias) {
 					if (left_op != 0xFFFF && left_op == OSL_OP_CAST) {
 						expr->kind = OSL_EXPR_TYPE_IDENT;
 						Osl_Result type_res = _osl_parse_type_ident(compiler, block, expr_start, done_token, &expr->val.type_ident);
+						if (expr->val.type_ident.view_type != OSL_VIEW_DEFAULT) {
+							compiler->err_log = _osl_tprint_token(compiler, expr->val.type_ident.token, STR("Cast to a View type. This doesn't make any sense."));
+							compiler->result = OSL_VIEW_CAST;
+							return 0;
+						}
 						if (type_res != OSL_OK) return 0;
 						assert(expr->val.type_ident.token);
 					} else {
@@ -15525,7 +16861,6 @@ unit_local Osl_Expr *_osl_parse_one_expr(Osl_Compiler *compiler, Osl_Block *bloc
 		
 		Osl_Expr *parent_expr;
 		_osl_make_node(compiler, block, expr_start, OSL_NODE_EXPR, (void**)&parent_expr);
-		parent_expr->vnum = -1;
 		parent_expr->kind = OSL_EXPR_ACCESS_CHAIN;
 		
 		Osl_Access_Chain *access = &parent_expr->val.access;
@@ -15713,7 +17048,6 @@ unit_local Osl_Expr *_osl_parse_expr_rec(Osl_Compiler *compiler, Osl_Block *bloc
 		
 		Osl_Expr *parent_op;
 		_osl_make_node(compiler, block, expr_start, OSL_NODE_EXPR, (void**)&parent_op);
-		parent_op->vnum = -1;
 		parent_op->kind = OSL_EXPR_OP;
 		parent_op->val.op.op_kind = rop;
 		parent_op->val.op.op_token = op_token;
@@ -15786,7 +17120,6 @@ unit_local Osl_Expr *_osl_parse_expr(Osl_Compiler *compiler, Osl_Block *block, O
 			if (resolved_expr) return resolved_expr;
 			
 			_osl_make_node(compiler, block, expr_start, OSL_NODE_EXPR, (void**)&next_op);
-			next_op->vnum = -1;
 			next_op->kind = OSL_EXPR_OP;
 			next_op->val.op.op_kind = rop;
 			next_op->val.op.op_token = op_token;
@@ -15798,7 +17131,6 @@ unit_local Osl_Expr *_osl_parse_expr(Osl_Compiler *compiler, Osl_Block *block, O
 			if (resolved_expr) return resolved_expr;
 			
 			_osl_make_node(compiler, block, expr_start, OSL_NODE_EXPR, (void**)&next_op);
-			next_op->vnum = -1;
 			next_op->kind = OSL_EXPR_OP;
 			next_op->val.op.op_kind = rop;
 			next_op->val.op.op_token = op_token;
@@ -15835,11 +17167,18 @@ unit_local Osl_Result _osl_parse_some(Osl_Compiler *compiler, Osl_Block *block, 
 unit_local Osl_Result _osl_parse_one(Osl_Compiler *compiler, Osl_Block *block, Osl_Token *current, Osl_Token **done_token) {
 	Osl_Token *first = current;
 	Osl_Token *next = ++current;
-	if (block->is_procedural && strings_match(_osl_token_text(compiler, first), STR("if"))) {
+	if (block->is_procedural && (strings_match(_osl_token_text(compiler, first), STR("if"))
+							 || (first->kind == '#' && strings_match(_osl_token_text(compiler, next), STR("if"))))) {
 	
+		
 		Osl_If_Chain *if_chain;
 		Osl_Node *n = _osl_make_node(compiler, block, first, OSL_NODE_IF_CHAIN, (void**)&if_chain);
         
+		if (first->kind == '#') {
+			if_chain->is_compile_time = true;
+			next = ++current;
+		}
+		
         Osl_Expr *first_cond = _osl_parse_expr(compiler, block, next, &current);
         if (!first_cond) return compiler->result;
         
@@ -15976,7 +17315,19 @@ unit_local Osl_Result _osl_parse_one(Osl_Compiler *compiler, Osl_Block *block, O
 			_osl_make_node(compiler, block, current, OSL_NODE_STRUCT_DECL, (void**)&struct_decl);
         	
 	        struct_decl->ident = _osl_token_text(compiler, first);
-        	arena_push_copy(&compiler->struct_nodes_arena, &struct_decl, sizeof(void*));
+	        struct_decl->block = struct_block;
+	        
+	        for (u64 i = 0; i < compiler->struct_node_count; i += 1) {
+		    	Osl_Struct_Decl *decl = compiler->struct_decls[i];
+		    	if (strings_match(decl->ident, struct_decl->ident)) {
+		    		string a = _osl_tprint_token(compiler, _osl_get_node(struct_decl)->first_token, STR("Redefinition of type name ..."));
+		    		string b = _osl_tprint_token(compiler, _osl_get_node(decl)->first_token, STR("... Previous definition was here"));
+		    		compiler->err_log = tprint("%s%s", a, b);
+		    		return compiler->result = OSL_TYPE_REDEFINITION;
+		    	}
+		    }
+	        
+        	arena_push_copy(&compiler->struct_decls_arena, &struct_decl, sizeof(void*));
         	compiler->struct_node_count += 1;
         	
     	} else {
@@ -16051,7 +17402,7 @@ unit_local Osl_Result _osl_parse_one(Osl_Compiler *compiler, Osl_Block *block, O
 				}
         	} else if ((compiler->program_kind == OSL_PROGRAM_GPU_VERTEX
         		   || compiler->program_kind == OSL_PROGRAM_GPU_FRAGMENT)
-        		   && strings_match(decoration_string, STR("Binding"))) {
+        		   && strings_match(decoration_string, STR("UniformBinding"))) {
         		decl->storage_class = OSL_STORAGE_BINDING;
         		Osl_Result res = _osl_parse_arg_list(compiler, block, OSL_TOKEN_KIND_RPAREN, ++current, &current, &decl->storage_args);
 				if (res != OSL_OK) return compiler->result;
@@ -16086,6 +17437,10 @@ unit_local Osl_Result _osl_parse_one(Osl_Compiler *compiler, Osl_Block *block, O
         		decl->builtin_kind = OSL_BUILTIN_INSTANCE_INDEX;
         		decl->storage_class = OSL_STORAGE_INPUT;
         		current += 1;
+        	} else if (compiler->program_kind == OSL_PROGRAM_GPU_FRAGMENT && strings_match(decoration_string, STR("PixelCoord"))) {
+        		decl->builtin_kind = OSL_BUILTIN_PIXEL_COORD;
+        		decl->storage_class = OSL_STORAGE_INPUT;
+        		current += 1;
         	} else {
         		compiler->err_log = _osl_tprint_token(compiler, deco_token, STR("Invalid declaration class token"));
         		compiler->result = OSL_BAD_DECL_CLASS;
@@ -16117,6 +17472,7 @@ unit_local Osl_Result _osl_parse_one(Osl_Compiler *compiler, Osl_Block *block, O
 			string b = _osl_tprint_token(compiler, _osl_get_node(block)->first_token, STR("... This is where the current procedural block starts"));
 			compiler->err_log = tprint("%s%s", a, b);
 			return compiler->result = OSL_PROCEDURAL_STATEMENT_IN_NON_PROCEDURAL_BLOCK;
+		
 		}
 		Osl_Expr *expr = _osl_parse_expr(compiler, block, first, &current);
         if (!expr) {
@@ -16128,11 +17484,14 @@ unit_local Osl_Result _osl_parse_one(Osl_Compiler *compiler, Osl_Block *block, O
         	return compiler->result;
         }
         block->top_nodes[block->top_node_count++] = _osl_get_node(expr);
+	} else if (first->kind == OSL_TOKEN_KIND_IDENTIFIER && (first+1)->kind == OSL_TOKEN_KIND_IDENTIFIER && ((first+2)->kind == ';' || (first+2)->kind == '=')) {
+    	compiler->err_log = _osl_tprint_token(compiler, first, STR("This looks like a C-style value declaration. But this is not C. Variable are declared like: `var: Type;`"));
+        return compiler->result =  OSL_UNEXPECTED_TOKEN;
 	} else {
+		
 		string s = block->is_procedural ? STR("procedural") : STR("non-procedural");
     	compiler->err_log = _osl_tprint_token(compiler, first, tprint("Unable to infer intent with this token in %s block", s));
-        compiler->result =  OSL_UNEXPECTED_TOKEN;
-    	return compiler->result;
+        return compiler->result =  OSL_UNEXPECTED_TOKEN;
     }
     
     *done_token = current;
@@ -16149,6 +17508,14 @@ unit_local Osl_Result _osl_parse_some(Osl_Compiler *compiler, Osl_Block *block, 
     return compiler->result;
 }
 
+unit_local void _osl_done_compiler(Osl_Compiler *compiler) {
+	free_arena(compiler->token_arena);
+	free_arena(compiler->node_arena);
+	free_arena(compiler->struct_decls_arena);
+}
+
+
+
 Osl_Result osl_compile(Allocator a, Osl_Compile_Desc desc, void **pcode, u64 *pcode_size, string *err_log) {
     (void)a;
     (void)pcode;
@@ -16158,11 +17525,13 @@ Osl_Result osl_compile(Allocator a, Osl_Compile_Desc desc, void **pcode, u64 *pc
     compiler->source = string_replace(get_temp(), desc.code_text, STR("\t"), STR(""));
     compiler->next_vnum = 1;
     compiler->program_kind = desc.program_kind;
+    compiler->enabled_features = desc.enabled_features;
+    compiler->target = desc.target;
     compiler->token_arena = make_arena(1024*1024*1024*69, 1024*100);
     compiler->tokens = (Osl_Token*)compiler->token_arena.start;
     compiler->node_arena = make_arena(1024*1024*1024*69, 1024*100);
-    compiler->struct_nodes_arena = make_arena(1024*1024*1024*69, 1024*100);
-    compiler->struct_nodes = (Osl_Struct_Decl**)compiler->struct_nodes_arena.start;
+    compiler->struct_decls_arena = make_arena(1024*1024*1024*69, 1024*100);
+    compiler->struct_decls = (Osl_Struct_Decl**)compiler->struct_decls_arena.start;
     compiler->result = OSL_OK;
     compiler->top_block.is_procedural = true;
     
@@ -16170,21 +17539,67 @@ Osl_Result osl_compile(Allocator a, Osl_Compile_Desc desc, void **pcode, u64 *pc
     
     Osl_Token *_;
     
-    _osl_parse_some(compiler, &compiler->top_block, compiler->tokens, &_, OSL_TOKEN_KIND_EOF);
+    Osl_Expr *true_expr;
+    _osl_make_node(compiler, &compiler->top_block, compiler->tokens, OSL_NODE_EXPR, (void**)&true_expr);
+    true_expr->kind = OSL_EXPR_LITERAL_INT;
+    true_expr->val.lit.lit_int = 1;
+    Osl_Expr *false_expr;
+    _osl_make_node(compiler, &compiler->top_block, compiler->tokens, OSL_NODE_EXPR, (void**)&false_expr);
+    false_expr->kind = OSL_EXPR_LITERAL_INT;
+    false_expr->val.lit.lit_int = 0;
     
-    switch (desc.target) {
-        case OSL_TARGET_SPIRV:
-            break;
-        default:
-            assert(false); break;
-    }
+    Osl_Expr_Alias *stage_vertex_alias;
+    Osl_Node *vnode = _osl_make_node(compiler, &compiler->top_block, compiler->tokens, OSL_NODE_EXPR_ALIAS, (void**)&stage_vertex_alias);
+    stage_vertex_alias->ident = STR("STAGE_VERTEX");
+    stage_vertex_alias->expr = false_expr;
+    
+    Osl_Expr_Alias *stage_fragment_alias;
+    Osl_Node *fnode = _osl_make_node(compiler, &compiler->top_block, compiler->tokens, OSL_NODE_EXPR_ALIAS, (void**)&stage_fragment_alias);
+    stage_fragment_alias->ident = STR("STAGE_FRAGMENT");
+    stage_fragment_alias->expr = false_expr;
+    
+    Osl_Expr_Alias *stage_compute_alias;
+    Osl_Node *cnode = _osl_make_node(compiler, &compiler->top_block, compiler->tokens, OSL_NODE_EXPR_ALIAS, (void**)&stage_compute_alias);
+    stage_compute_alias->ident = STR("STAGE_COMPUTE");
+    stage_compute_alias->expr = false_expr;
+    
+    switch (compiler->program_kind) {
+	case OSL_PROGRAM_GPU_VERTEX: {
+		stage_vertex_alias->expr = true_expr;
+		break;
+	}
+	case OSL_PROGRAM_GPU_FRAGMENT: {
+		stage_fragment_alias->expr = true_expr;
+		break;
+	}
+	case OSL_PROGRAM_GPU_COMPUTE: {
+		stage_compute_alias->expr = true_expr;
+		break;
+	}
+	default: {
+		assert(false);
+		break;
+	}
+	}
+	
+	compiler->top_block.top_nodes[compiler->top_block.top_node_count++] = vnode;
+	compiler->top_block.top_nodes[compiler->top_block.top_node_count++] = fnode;
+	compiler->top_block.top_nodes[compiler->top_block.top_node_count++] = cnode;
+    
+    _osl_parse_some(compiler, &compiler->top_block, compiler->tokens, &_, OSL_TOKEN_KIND_EOF);
     
     if (compiler->result != OSL_OK) {
         if (err_log) *err_log = compiler->err_log;
     } else {
     
     	Spv_Converter *spv = PushTemp(Spv_Converter);
-    	spv_init(spv, compiler, (u32)compiler->next_vnum);
+    	Osl_Result res = spv_init(spv, compiler, (u32)compiler->next_vnum);
+    	if (res != OSL_OK) {
+    		if (err_log) *err_log = compiler->err_log;
+    		_osl_done_compiler(compiler);
+    		_osl_done_spv(spv);
+    		return res;
+    	}
     	
     	for (u64 i = 0; i < compiler->top_block.top_node_count; i += 1) {
     		Osl_Node *n = compiler->top_block.top_nodes[i];
@@ -16198,9 +17613,11 @@ Osl_Result osl_compile(Allocator a, Osl_Compile_Desc desc, void **pcode, u64 *pc
     	
 		if (compiler->result == OSL_OK) {
 	    	Spv_Block *block = spv_finalize(spv);
-	    	*pcode = block->data;
 	    	*pcode_size = block->count;
+	    	*pcode = allocate(a, block->count);
+	    	memcpy(*pcode, block->data, block->count);
 		}
+		_osl_done_spv(spv);
     }
     
     if (compiler->result != OSL_OK) {

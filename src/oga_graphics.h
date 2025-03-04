@@ -1,4 +1,4 @@
-#ifndef OGA_GRAPHICS
+#if !defined(OGA_GRAPHICS) && !defined(OSTD_HEADLESS)
 #define OGA_GRAPHICS
 
 #if 0
@@ -53,7 +53,7 @@ typedef enum Oga_Result {
     OGA_INIT_IMAGE_VIEW_ERROR_INVALID_DIMENSIONS_ENUM,
     OGA_INIT_IMAGE_VIEW_ERR_IMAGE_MEMORY_UNALIGNED,
     OGA_INIT_IMAGE_VIEW_ERR_UNMATCHED_MEMORY_REQUIREMENT,
-    OGA_INIT_IMAGE_COPY_TARGET_VIEW_ERROR_INVALID_FLAGS,
+    OGA_INIT_OPTIMAL_COPY_VIEW_ERROR_INVALID_FLAGS,
     
     OGA_INIT_RENDER_PASS_ERROR_INVALID_PROGRAM_BINDING_KIND_ENUM,
     OGA_INIT_BINDING_LIST_LAYOUT_ERROR_MISSING_STAGE_FLAGS,
@@ -61,6 +61,8 @@ typedef enum Oga_Result {
     OGA_PUSH_BINDING_LIST_ERROR_LAYOUT_COUNT_MISMATCH,
     
 } Oga_Result;
+
+#define OGA_LOG_VERBOSE (1 << 16)
 
 unit_local inline string oga_get_result_name(Oga_Result r) {
     switch (r) {
@@ -94,7 +96,7 @@ unit_local inline string oga_get_result_name(Oga_Result r) {
         case OGA_INIT_IMAGE_VIEW_ERROR_INVALID_DIMENSIONS_ENUM:         return STR("OGA_INIT_IMAGE_VIEW_ERROR_INVALID_DIMENSIONS_ENUM");
         case OGA_INIT_IMAGE_VIEW_ERR_IMAGE_MEMORY_UNALIGNED:            return STR("OGA_INIT_IMAGE_VIEW_ERR_IMAGE_MEMORY_UNALIGNED");
         case OGA_INIT_IMAGE_VIEW_ERR_UNMATCHED_MEMORY_REQUIREMENT:      return STR("OGA_INIT_IMAGE_VIEW_ERR_UNMATCHED_MEMORY_REQUIREMENT");
-        case OGA_INIT_IMAGE_COPY_TARGET_VIEW_ERROR_INVALID_FLAGS:       return STR("OGA_INIT_IMAGE_COPY_TARGET_VIEW_ERROR_INVALID_FLAGS");
+        case OGA_INIT_OPTIMAL_COPY_VIEW_ERROR_INVALID_FLAGS:       return STR("OGA_INIT_OPTIMAL_COPY_VIEW_ERROR_INVALID_FLAGS");
         case OGA_INIT_RENDER_PASS_ERROR_INVALID_PROGRAM_BINDING_KIND_ENUM: return STR("OGA_INIT_RENDER_PASS_ERROR_INVALID_PROGRAM_BINDING_KIND_ENUM");
         case OGA_INIT_BINDING_LIST_LAYOUT_ERROR_MISSING_STAGE_FLAGS:    return STR("OGA_INIT_BINDING_LIST_LAYOUT_ERROR_MISSING_STAGE_FLAGS");
         case OGA_PUSH_BINDING_LIST_ERROR_LAYOUT_COUNT_MISMATCH:         return STR("OGA_PUSH_BINDING_LIST_ERROR_LAYOUT_COUNT_MISMATCH");
@@ -163,8 +165,8 @@ unit_local inline string oga_get_result_message(Oga_Result r) {
             return STR("Oga_Image_View_Desc::memory_pointer offset must be aligned to Oga_Device::limits.image_memory_granularity, but it was not.");
         case OGA_INIT_IMAGE_VIEW_ERR_UNMATCHED_MEMORY_REQUIREMENT:
             return STR("Oga_Image_View_Desc::memory_pointer allocation size is not enough to meet the memory requirement for the image. To get the memory requirement for an image kind and size, use oga_get_image_memory_requirement()");
-        case OGA_INIT_IMAGE_COPY_TARGET_VIEW_ERROR_INVALID_FLAGS:
-            return STR("Oga_Image_Copy_Target_View_Desc::flags does not convey any intent.");
+        case OGA_INIT_OPTIMAL_COPY_VIEW_ERROR_INVALID_FLAGS:
+            return STR("Oga_Optimal_Copy_View_Desc::flags does not convey any intent.");
         case OGA_INIT_RENDER_PASS_ERROR_INVALID_PROGRAM_BINDING_KIND_ENUM:
             return STR("A program binding had an invalid enum value for Oga_Program_Binding_Desc::kind. See Oga_Binding_Kind for valid enum values.");
         case OGA_INIT_BINDING_LIST_LAYOUT_ERROR_MISSING_STAGE_FLAGS:
@@ -393,6 +395,7 @@ typedef enum Oga_Memory_Usage_ {
     OGA_MEMORY_USAGE_NONE = 0,
     OGA_MEMORY_USAGE_VERTEX_LIST = 1 << 2,
     OGA_MEMORY_USAGE_INDEX_LIST = 1 << 3,
+    // todo(charlie) rename
     OGA_MEMORY_USAGE_FAST_READONLY_DATA_BLOCK = 1 << 4,
     OGA_MEMORY_USAGE_LARGE_READWRITE_DATA_BLOCK = 1 << 5,
     OGA_MEMORY_USAGE_COPY_DST = 1 << 6,
@@ -400,9 +403,9 @@ typedef enum Oga_Memory_Usage_ {
     OGA_MEMORY_USAGE_IMAGE_1D = 1 << 8,
     OGA_MEMORY_USAGE_IMAGE_2D = 1 << 9,
     OGA_MEMORY_USAGE_IMAGE_3D = 1 << 10,
-    OGA_MEMORY_USAGE_FBLOCK_1D = 1 << 8,
-    OGA_MEMORY_USAGE_FBLOCK_2D = 1 << 9,
-    OGA_MEMORY_USAGE_FBLOCK_3D = 1 << 10,
+    OGA_MEMORY_USAGE_FBUFFER_1D = 1 << 8,
+    OGA_MEMORY_USAGE_FBUFFER_2D = 1 << 9,
+    OGA_MEMORY_USAGE_FBUFFER_3D = 1 << 10,
 } Oga_Memory_Usage_;
 typedef u64 Oga_Memory_Usage;
 
@@ -457,13 +460,13 @@ typedef struct Oga_Device_Limits {
     u64 max_fast_data_blocks_per_stage;
     u64 max_large_data_blocks_per_stage;
     u64 max_images_per_stage;
-    u64 max_fblocks_per_stage;
+    u64 max_fbuffers_per_stage;
     u64 max_samplers_per_stage;
 
     u64 max_fast_data_blocks_per_layout;
     u64 max_large_data_blocks_per_layout;
     u64 max_images_per_layout;
-    u64 max_fblocks_per_layout;
+    u64 max_fbuffers_per_layout;
     u64 max_samplers_per_layout;
 
     u64 max_memory_allocations;
@@ -498,12 +501,13 @@ typedef struct Oga_Device_Limits {
     Oga_Sample_Count_Flag supported_sample_counts_render_pass;
 
     Oga_Sample_Count_Flag supported_sample_counts_image_float;
-    Oga_Sample_Count_Flag supported_sample_counts_fblock_float;
+    Oga_Sample_Count_Flag supported_sample_counts_fbuffer_float;
     Oga_Sample_Count_Flag supported_sample_counts_image_int;
-    Oga_Sample_Count_Flag supported_sample_counts_fblock_int;
+    Oga_Sample_Count_Flag supported_sample_counts_fbuffer_int;
     
     u64 memory_granularity;
     u64 image_memory_granularity;
+    u64 fbuffer_memory_granularity;
 
 } Oga_Device_Limits;
 
@@ -746,6 +750,7 @@ void oga_uninit_program(Oga_Program *program);
 typedef enum Oga_Program_Stage_Flag_ {
     OGA_PROGRAM_STAGE_VERTEX = 1 << 1,
     OGA_PROGRAM_STAGE_FRAGMENT = 1 << 2,
+    OGA_PROGRAM_STAGE_COMPUTE = 1 << 3,
 } Oga_Program_Stage_Flag_;
 typedef u64 Oga_Program_Stage_Flag;
 
@@ -771,6 +776,8 @@ typedef struct Oga_Sample_Mode_Desc {
 typedef enum Oga_Binding_Kind {
     OGA_BINDING_IMAGE,
     OGA_BINDING_SAMPLE_MODE,
+    OGA_BINDING_BLOCK,
+    OGA_BINDING_FBUFFER,
     
     OGA_BINDING_ENUM_MAX
 } Oga_Binding_Kind;
@@ -799,6 +806,7 @@ Oga_Result oga_init_binding_list_layout(Oga_Context *context, Oga_Binding_List_L
 void oga_uninit_binding_list_layout(Oga_Binding_List_Layout *layout);
 
 struct Oga_Image_View;
+struct Oga_Block_View;
 typedef struct Oga_Binding_Desc {
     Oga_Binding_Kind kind;
     u64 binding_slot;
@@ -811,6 +819,11 @@ typedef struct Oga_Binding_Desc {
     // OGA_BINDING_SAMPLE_MODE
     Oga_Sample_Mode_Desc *sample_modes;
     
+    // OGA_BINDING_BLOCK
+    struct Oga_Block_View **blocks;
+    
+    // OGA_BINDING_FBUFFER
+    struct Oga_FBuffer_View **fbuffers;
     
 } Oga_Binding_Desc;
 typedef struct Oga_Binding_List_Desc {
@@ -1050,6 +1063,8 @@ void oga_uninit_vertex_list_view(Oga_Vertex_List_View *vlist);
 Oga_Result oga_init_index_list_view(Oga_Context *context, Oga_Memory_View_Desc desc, Oga_Index_List_View **ilist);
 void oga_uninit_index_list_view(Oga_Index_List_View *ilist);
 
+/// Image view
+
 typedef enum Oga_Dimensions {
     OGA_1D,
     OGA_2D,
@@ -1075,41 +1090,53 @@ typedef struct Oga_Image_View {
     bool linear_tiling;
 } Oga_Image_View;
 
-typedef enum Oga_Image_Copy_Flag_ {
-    OGA_IMAGE_COPY_DST = 1 << 1,
-    OGA_IMAGE_COPY_SRC = 1 << 2,
-} Oga_Image_Copy_Flag_;
-typedef u64 Oga_Image_Copy_Flag;
-
-
-
 Oga_Result oga_init_image_view(Oga_Context *context, Oga_Image_View_Desc desc, Oga_Image_View **image);
 void oga_uninit_image_view(Oga_Image_View *image);
 
 u64 oga_get_image_memory_requirement(Oga_Context *context, Oga_Image_View_Desc desc);
 
-typedef struct Oga_Image_Copy_Target_View_Desc {
-    Oga_Memory_Pointer memory_pointer;
-    Oga_Format format;
-    Oga_Dimensions dimensions;
-    u64 width, height, depth;
-    bool linear_tiling;
-    u64 graphics_engine_family_index;
-    Oga_Image_Copy_Flag flags;
-} Oga_Image_Copy_Target_View_Desc;
-
-typedef struct Oga_Image_Copy_Target_View {
+typedef struct Oga_FBuffer_View {
     void *id;
     Oga_Context *context;
     Oga_Memory_Pointer memory_pointer;
     u64 width, height, depth;
     Oga_Dimensions dimensions;
     bool linear_tiling;
-    Oga_Image_Copy_Flag flags;
-} Oga_Image_Copy_Target_View;
+} Oga_FBuffer_View;
 
-Oga_Result oga_init_image_copy_target_view(Oga_Context *context, Oga_Image_Copy_Target_View_Desc desc, Oga_Image_Copy_Target_View **image);
-void oga_uninit_image_copy_target_view(Oga_Image_Copy_Target_View *image);
+Oga_Result oga_init_fbuffer_view(Oga_Context *context, Oga_Image_View_Desc desc, Oga_FBuffer_View **fbuffer);
+void oga_uninit_fbuffer_view(Oga_FBuffer_View *fbuffer);
+
+/// Image copy target view
+
+typedef enum Oga_Optimal_Copy_Flag_ {
+    OGA_OPTIMAL_COPY_DST = 1 << 1,
+    OGA_OPTIMAL_COPY_SRC = 1 << 2,
+} Oga_Optimal_Copy_Flag_;
+typedef u64 Oga_Optimal_Copy_Flag;
+
+typedef struct Oga_Optimal_Copy_View_Desc {
+    Oga_Memory_Pointer memory_pointer;
+    Oga_Format format;
+    Oga_Dimensions dimensions;
+    u64 width, height, depth;
+    bool linear_tiling;
+    u64 graphics_engine_family_index;
+    Oga_Optimal_Copy_Flag flags;
+} Oga_Optimal_Copy_View_Desc;
+
+typedef struct Oga_Optimal_Copy_View {
+    void *id;
+    Oga_Context *context;
+    Oga_Memory_Pointer memory_pointer;
+    u64 width, height, depth;
+    Oga_Dimensions dimensions;
+    bool linear_tiling;
+    Oga_Optimal_Copy_Flag flags;
+} Oga_Optimal_Copy_View;
+
+Oga_Result oga_init_optimal_copy_view(Oga_Context *context, Oga_Optimal_Copy_View_Desc desc, Oga_Optimal_Copy_View **image);
+void oga_uninit_optimal_copy_view(Oga_Optimal_Copy_View *image);
 
 typedef struct Oga_Render_Image_View_Desc {
     Oga_Memory_Pointer memory_pointer;
@@ -1132,11 +1159,16 @@ typedef struct Oga_Render_Image_View {
 
 
 
+/// Read buffer view
 
-//////////
-/// Program Pointers & Layout
-
-
+typedef struct Oga_Block_View {
+    void *id;
+    Oga_Context *context;
+    Oga_Memory_Pointer memory_pointer;
+    u64 size;
+} Oga_Block_View;
+Oga_Result oga_init_block_view(Oga_Context *context, Oga_Memory_View_Desc desc, Oga_Block_View **buffer);
+void oga_uninit_block_view(Oga_Block_View *buffer);
 
 // todo(charlie) #validation
 // Keep track of all init()'s and report them here if they were not uninitted
@@ -1198,6 +1230,21 @@ typedef struct Oga_Submit_Command_List_Desc {
     Oga_Cpu_Latch *signal_cpu_latch;
 } Oga_Submit_Command_List_Desc;
 Oga_Result oga_submit_command_list(Oga_Command_List cmd, Oga_Submit_Command_List_Desc desc);
+
+typedef struct Oga_Gpu_Timestamp_Pool {
+    void *id;
+    Oga_Context *context;
+    u64 timestamp_count;
+    u64 written_timestamp_count;
+} Oga_Gpu_Timestamp_Pool;
+
+Oga_Result oga_init_gpu_timestamp_pool(Oga_Context *context, u64 timestamp_count, Oga_Gpu_Timestamp_Pool **pool);
+void oga_uninit_gpu_timestamp_pool(Oga_Gpu_Timestamp_Pool *pool);
+
+void oga_cmd_reset_timestamp_pool(Oga_Command_List cmd, Oga_Gpu_Timestamp_Pool *pool);
+void oga_cmd_write_timestamp(Oga_Command_List cmd, Oga_Gpu_Timestamp_Pool *pool);
+
+Oga_Result oga_read_timestamps(Oga_Gpu_Timestamp_Pool *pool, f64 *nanosecond_timestamps, bool wait);
 
 typedef u64 Oga_Msaa_Resolve_Mode_Flag;
 #define OGA_MSAA_RESOLVE_MODE_NONE    0
@@ -1295,13 +1342,15 @@ Oga_Result oga_cmd_draw(Oga_Command_List cmd, Oga_Draw_Desc desc);
 
 void oga_cmd_copy_linear(Oga_Command_List cmd, Oga_Memory_Pointer dst, Oga_Memory_Pointer src, u64 size);
 
-typedef struct Oga_Image_Copy_Desc {
+typedef struct Oga_Optimal_Copy_Desc {
     s64 offset_x, offset_y, offset_z;
     u64 width, height, depth;
-} Oga_Image_Copy_Desc;
-void oga_cmd_copy_linear_to_image(Oga_Command_List cmd, Oga_Image_Copy_Target_View *dst_view, Oga_Image_Copy_Desc dst_desc, Oga_Memory_Pointer src);
-void oga_cmd_copy_image_to_linear(Oga_Command_List cmd, Oga_Memory_Pointer dst, Oga_Image_Copy_Target_View *src_view, Oga_Image_Copy_Desc src_desc);
-void oga_cmd_copy_image(Oga_Command_List cmd, Oga_Image_Copy_Target_View *dst_view, Oga_Image_Copy_Desc dst_desc, Oga_Image_Copy_Target_View *src_view, Oga_Image_Copy_Desc src_desc);
+} Oga_Optimal_Copy_Desc;
+void oga_cmd_copy_linear_to_image(Oga_Command_List cmd, Oga_Optimal_Copy_View *dst_view, Oga_Optimal_Copy_Desc dst_desc, Oga_Memory_Pointer src);
+void oga_cmd_copy_image_to_linear(Oga_Command_List cmd, Oga_Memory_Pointer dst, Oga_Optimal_Copy_View *src_view, Oga_Optimal_Copy_Desc src_desc);
+void oga_cmd_copy_image(Oga_Command_List cmd, Oga_Optimal_Copy_View *dst_view, Oga_Optimal_Copy_Desc dst_desc, Oga_Optimal_Copy_View *src_view, Oga_Optimal_Copy_Desc src_desc);
+
+void oga_cmd_fill_image(Oga_Command_List cmd, Oga_Optimal_Copy_View *dst_view, float4 color);
 
 #ifdef OGA_IMPL_AUTO
     #if (OS_FLAGS & OS_FLAG_WEB)
@@ -1641,7 +1690,7 @@ inline string oga_format_str(Oga_Format f);
 //////
 /////////////////////////////////////////////////////
 
-#define OGA_OSL_TARGET OSL_TARGET_SPIRV
+#define OGA_OSL_TARGET OSL_TARGET_SPIRV_VULKAN
 
 #if COMPILER_FLAGS & COMPILER_FLAG_MSC
     #pragma comment(lib, "vendors/vulkan-1.lib")
@@ -1719,5 +1768,5 @@ inline string oga_format_str(Oga_Format f);
 
 #endif // OSTD_IMPL
 
-#endif // OGA_GRAPHICS
+#endif // OGA_GRAPHICS && !OSTD_HEADLESS
 

@@ -8,15 +8,20 @@ VS_Out :: struct {
 
 in: VS_Out $Input(0);
 
+Data :: struct {
+	tint: f32v4;
+}
+
+
 out_color: f32v4 $Output(0);
 
 sample_mode: SampleMode $UniformBinding(0);
 image: Image2Df $UniformBinding(1);
+data: BlockView(Data) $UniformBinding(2);
 
 image_color: f32v4 = sample(image, sample_mode, in.uv);
 
-out_color = image_color;
-
+out_color = image_color * data.tint;
 
 
 

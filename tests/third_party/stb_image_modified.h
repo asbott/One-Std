@@ -1,13 +1,54 @@
 
 /*
-   MODIFIED TO NOT DEPEND ON LIBC
+   MODIFIED TO NOT DEPEND ON LIBC and compile with ostd.
+   
+   // If you only include the header and link to the sources, then there are no problems to use
+   // the vanilla header.
+   // But I wanted to include the source code directly in my ostd tests, but the sources use
+   // a lot of libc stuff which conflicts with ostd, so I had to make some modifications.
    
    see all #modified
 */
 
 
-
-
+// all this is #modified
+#define STBI_NO_SIMD // until ostd has simd bindings we need to do this
+#define STB_IMAGE_IMPLEMENTATION
+#define STBI_NO_STDIO
+#define STBI_ASSERT(x) assertmsg(x, "STBI assertion failed")
+#define STBI_MALLOC(sz) arena_push(&stb_arena, (u64)((((sz)+7) & ~(7))))
+#define STBI_FREE(p) 
+#define STBI_REALLOC(p, nsz) ostd_stbi_realloc(p, nsz, nsz)
+#define STBI_REALLOC_SIZED(p, osz, nsz) ostd_stbi_realloc(p, osz, nsz)
+#ifdef __clang__
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wcast-qual"
+#pragma clang diagnostic ignored "-Wcast-align"
+#pragma clang diagnostic ignored "-Wsign-conversion"
+#pragma clang diagnostic ignored "-Wunused-parameter"
+#pragma clang diagnostic ignored "-Wdisabled-macro-expansion"
+#pragma clang diagnostic ignored "-Wdouble-promotion"
+#pragma clang diagnostic ignored "-Wswitch-default"
+#pragma clang diagnostic ignored "-Wimplicit-int-conversion"
+#pragma clang diagnostic ignored "-Wimplicit-fallthrough"
+#endif
+#define NULL 0
+#define INT_MAX S32_MAX
+#define INT_MIN S32_MIN
+#define UINT_MAX U32_MAX
+#define SHRT_MAX S16_MAX
+#define SHRT_MIN S16_MIN
+#define pow powf64
+#define ldexp(x, y) get_power_of_two_f64((f64)x, (u64)y)
+#define strncmp memcmp
+#define strcmp c_style_strcmp
+#define strtol(str, endp, base) (long int)string_to_signed_int(STR(str), (int)base, 0)
+unit_local Arena stb_arena; 
+unit_local void *ostd_stbi_realloc(void *p, u64 oz, u64 sz) {
+    void *n = STBI_MALLOC(sz);
+    if (p) memcpy(n, p, min((u64)(sz), oz));
+    return n;
+}
 
 
 
@@ -8007,3 +8048,20 @@ ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
 WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 ------------------------------------------------------------------------------
 */
+
+
+// #modified
+#undef NULL
+#undef INT_MAX
+#undef INT_MIN
+#undef UINT_MAX
+#undef SHRT_MAX
+#undef SHRT_MIN
+#undef pow
+#undef ldexp
+#undef strncmp
+#undef strcmp
+#undef strtol
+#ifdef __clang__
+#pragma clang diagnostic pop
+#endif

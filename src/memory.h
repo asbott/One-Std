@@ -178,8 +178,7 @@ void free_arena(Arena arena) {
 
     u64 pointer_count = sys_query_mapped_regions(start, end, 0, 0);
 
-    // todo(charlie)  use a temp scratch memory here
-    Mapped_Memory_Info pointers[4096] = {0};
+    Mapped_Memory_Info *pointers = (Mapped_Memory_Info *)arena.start;
     sys_query_mapped_regions(start, end, pointers, pointer_count);
 
     u32 i;

@@ -10,6 +10,8 @@
 //#include "../ostd_single_header.h"
 #include "../src/ostd.h"
 
+// Until ostd has png decoding, we use a modified version of stb_image which compiles with ostd.
+// To use third party libraries
 #include "third_party/stb_image_modified.h"
 
 unit_local bool inline check_oga_result(Oga_Result result) {
@@ -22,6 +24,10 @@ unit_local bool inline check_oga_result(Oga_Result result) {
     }
     return true;
 }
+
+typedef struct Data {
+    float4 tint;
+} Data;
 
 int main(void) {
 
@@ -135,7 +141,7 @@ int main(void) {
     bool vert_src_ok = sys_read_entire_file(get_temp(), STR("tests/shaders/basic.vert.osl"), &vert_src);
     assert(vert_src_ok);
     
-    bool frag_src_ok = sys_read_entire_file(get_temp(), STR("tests/shaders/image.frag.osl"), &frag_src);
+    bool frag_src_ok = sys_read_entire_file(get_temp(), STR("tests/shaders/image_and_block.frag.osl"), &frag_src);
     assert(frag_src_ok);
     
     Osl_Compile_Desc vert_desc = (Osl_Compile_Desc){0};
@@ -147,6 +153,7 @@ int main(void) {
     frag_desc.code_text = frag_src;
     frag_desc.target = OGA_OSL_TARGET;
     frag_desc.program_kind = OSL_PROGRAM_GPU_FRAGMENT;
+    frag_desc.enabled_features = OSL_FEATURE_INVOCATION_PIXEL_INTERLOCK;
     
     string compile_err;
     Osl_Result compile_result;
@@ -178,7 +185,7 @@ int main(void) {
     sys_write_entire_file(STR("test.frag.spv"), (string){frag_code_size, (u8*)frag_code});
     
     //////
-    // Vertex & Index List + Image
+    // Vertex & Index List, Image & Data Block
     /////
     
     struct { float4 pos; float3 col; float2 uv; } verts[] = {
@@ -207,6 +214,13 @@ int main(void) {
     
     Oga_Memory_Pointer mem = (Oga_Memory_Pointer){0};
     
+    // We will allocate separate memory for the block, because we will want it to be 
+    // persistently mapped (reflected) in cpu memory so we can update it each frame for
+    // realtime effects. Note that this means we are constantly writing to GPU which is
+    // slow. It is fine in a trivial 2D example like this, but in the real world you might
+    // want to try a more GPU-driven approach.
+    Oga_Memory_Pointer reflected_mem = (Oga_Memory_Pointer){0};
+    
     // Memory views needs to start at memory_granularity to guarantee all alignment requirements are met
     // and no aliasing occurs.
     // Image memory views needs to start at image_memory_granularity
@@ -218,6 +232,7 @@ int main(void) {
      
     u64 index_alloc_size  = sizeof(indices);
     u64 index_offset = align_next(vertex_alloc_size, granularity);
+     
     
     // We fill out the image desc here because we need it to know beforehand what the memory
     // requirement is for the image. If we do not meed to memory requirement (which is not always
@@ -242,19 +257,33 @@ int main(void) {
     u64 alloc_size = image_staging_offset + image_alloc_size;
     
     // Allocate the memory
+    
     Oga_Memory_Property_Flag mem_props = OGA_MEMORY_PROPERTY_GPU_LOCAL | OGA_MEMORY_PROPERTY_GPU_TO_CPU_MAPPABLE;
-    Oga_Memory_Usage mem_usage = OGA_MEMORY_USAGE_VERTEX_LIST | OGA_MEMORY_USAGE_INDEX_LIST | OGA_MEMORY_USAGE_IMAGE_2D;
+    Oga_Memory_Usage mem_usage = 
+        OGA_MEMORY_USAGE_VERTEX_LIST 
+      | OGA_MEMORY_USAGE_INDEX_LIST 
+      | OGA_MEMORY_USAGE_IMAGE_2D; 
     if (!check_oga_result(oga_allocate_memory(context, alloc_size, mem_props, mem_usage, &mem)))
         return 1;
         
-    // Vertex pointer should point to the start of the allocated memory, while the index pointer should
-    // point to after the vertex memory, image pointer to after index memory.
     
-    Oga_Memory_Pointer vertex_ptr, index_ptr, image_ptr, image_staging_ptr;
+    u64 block_alloc_size  = sizeof(Data);
+    u64 block_offset = 0;
+    mem_props = OGA_MEMORY_PROPERTY_GPU_LOCAL | OGA_MEMORY_PROPERTY_GPU_TO_CPU_MAPPABLE | OGA_MEMORY_PROPERTY_GPU_TO_CPU_REFLECTED;
+    mem_usage = OGA_MEMORY_USAGE_FAST_READONLY_DATA_BLOCK;
+    if (!check_oga_result(oga_allocate_memory(context, block_alloc_size, mem_props, mem_usage, &reflected_mem)))
+        return 1;
+        
+    // Offset pointers
+    
+    Oga_Memory_Pointer vertex_ptr, index_ptr, image_ptr, image_staging_ptr, block_ptr;
+    
     oga_memory_offset(mem, (s64)vertex_offset, &vertex_ptr);
     oga_memory_offset(mem, (s64)index_offset, &index_ptr);
     oga_memory_offset(mem, (s64)image_offset, &image_ptr);
     oga_memory_offset(mem, (s64)image_staging_offset, &image_staging_ptr);
+    
+    oga_memory_offset(reflected_mem, (s64)block_offset, &block_ptr);
     
     // Map the memory and write to it, then unmap it
     // This is simple enough for our lists because they expect regual, linear memory.
@@ -267,11 +296,20 @@ int main(void) {
     memcpy((u8*)mapped_memory+image_staging_offset, img_data, (u64)width*(u64)height*4); // Copy image into the staging memory
     oga_unmap_memory(mem);
     
+    // Map the gpu data block to our Data*, which we can write directly to and it will
+    // get written to the GPU memory.
+    Data *gpu_data;
+    if (!check_oga_result(oga_map_memory(reflected_mem, sizeof(Data), (void**)&gpu_data)))
+        return 1;
+    
+    gpu_data->tint = f4(1, 0, 0, 1);
+    
     // Create the memory views
     
     Oga_Vertex_List_View *vlist = 0;
     Oga_Index_List_View *ilist = 0;
     Oga_Image_View *image = 0;
+    Oga_Block_View *block = 0;
     
     Oga_Memory_View_Desc vlist_desc = (Oga_Memory_View_Desc){0};
     vlist_desc.memory_pointer = vertex_ptr;
@@ -288,6 +326,12 @@ int main(void) {
     // Now we can complete the image_desc
     image_desc.memory_pointer = image_ptr;
     if (!check_oga_result(oga_init_image_view(context, image_desc, &image)))
+        return 1;
+        
+    Oga_Memory_View_Desc block_desc = (Oga_Memory_View_Desc){0};
+    block_desc.memory_pointer = block_ptr;
+    block_desc.size = sizeof(Data);
+    if (!check_oga_result(oga_init_block_view(context, block_desc, &block)))
         return 1;
     
     // Now we need to convert the staged raw image memory to image-optimal storage
@@ -363,7 +407,7 @@ int main(void) {
     vertex_layout_desc.attributes[vertex_layout_desc.attribute_count].type = OGA_VERTEX_ATTRIBUTE_TYPE_F32V2;
     vertex_layout_desc.attribute_count += 1;
     
-    Oga_Binding_Layout_Entry_Desc layout_bindings[2];
+    Oga_Binding_Layout_Entry_Desc layout_bindings[3];
     layout_bindings[0].kind = OGA_BINDING_SAMPLE_MODE;
     layout_bindings[0].binding_slot = 0;
     layout_bindings[0].binding_count = 1;
@@ -374,11 +418,16 @@ int main(void) {
     layout_bindings[1].binding_count = 1;
     layout_bindings[1].stage_flags = OGA_PROGRAM_STAGE_FRAGMENT;
     
+    layout_bindings[2].kind = OGA_BINDING_BLOCK;
+    layout_bindings[2].binding_slot = 2;
+    layout_bindings[2].binding_count = 1;
+    layout_bindings[2].stage_flags = OGA_PROGRAM_STAGE_FRAGMENT;
+    
     Oga_Binding_List_Layout *binding_layout = 0;
     Oga_Binding_List_Layout_Desc binding_layout_desc = (Oga_Binding_List_Layout_Desc){0};
     binding_layout_desc.bindings = layout_bindings;
     binding_layout_desc.binding_count = sizeof(layout_bindings)/sizeof(layout_bindings[0]);
-    binding_layout_desc.binding_list_count = 3; // Frames in flight. We really only need one because it doesn't change. But this is what you could do if your descriptor sets were changing over frames.
+    binding_layout_desc.binding_list_count = 3; // Frames in flight. 
     if (!check_oga_result(oga_init_binding_list_layout(context, binding_layout_desc, &binding_layout)))
         return 1;
     
@@ -390,7 +439,7 @@ int main(void) {
     sample_mode.address_mode_u = OGA_SAMPLE_ADDRESS_MODE_CLAMP_TO_EDGE;
     sample_mode.address_mode_v = OGA_SAMPLE_ADDRESS_MODE_CLAMP_TO_EDGE;
     
-    Oga_Binding_Desc bindings[2] = {0};
+    Oga_Binding_Desc bindings[3] = {0};
     bindings[0].kind = OGA_BINDING_SAMPLE_MODE;
     bindings[0].count = 1;
     bindings[0].binding_slot = 0;
@@ -402,6 +451,12 @@ int main(void) {
     bindings[1].binding_slot = 1;
     bindings[1].array_index = 0;
     bindings[1].images = &image;
+    
+    bindings[2].kind = OGA_BINDING_BLOCK;
+    bindings[2].count = 1;
+    bindings[2].binding_slot = 2;
+    bindings[2].array_index = 0;
+    bindings[2].blocks = &block;
     
     Oga_Binding_List_Desc binding_list_desc = (Oga_Binding_List_Desc){0};
     binding_list_desc.bindings = bindings;
@@ -489,6 +544,12 @@ int main(void) {
             running = false;
         }
 #endif // RUNNING_TESTS
+        
+        ///
+        // Update the gpu data through the mapped memory
+        // Make the color shift between red and normal
+        gpu_data->tint = f4(1, (f32)fmod_cycling(sys_get_seconds_monotonic(), 1.0), (f32)fmod_cycling(sys_get_seconds_monotonic(), 1.0), 1);
+        
         
         // Wait for frame to be ready, then reset it
         oga_wait_latch(cmd_latches[frame_index]);
@@ -590,10 +651,13 @@ int main(void) {
     oga_uninit_gpu_latch(commands_done_latches[0]);
     oga_uninit_gpu_latch(commands_done_latches[1]);
     oga_uninit_gpu_latch(commands_done_latches[2]);
+    oga_uninit_block_view(block);
     oga_uninit_image_view(image);
     oga_uninit_index_list_view(ilist);
     oga_uninit_vertex_list_view(vlist);
     oga_deallocate_memory(mem);
+    oga_unmap_memory(reflected_mem);
+    oga_deallocate_memory(reflected_mem);
     oga_uninit_render_pass(render_pass);
     oga_uninit_binding_list_layout(binding_layout);
     oga_uninit_program(vert_program);
