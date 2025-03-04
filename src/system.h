@@ -255,6 +255,8 @@ void sys_print_stack_trace(File_Handle handle);
     #endif // _WINDOWS_
 #endif// OS_FLAGS & OS_FLAG_WINDOWS
 
+#ifndef OSTD_HEADLESS
+
 #if OS_FLAGS & OS_FLAG_LINUX
     #if COMPILER_FLAGS & COMPILER_FLAG_GNU
         #define _GNU_SOURCE
@@ -273,7 +275,6 @@ void sys_print_stack_trace(File_Handle handle);
 #endif // OS_FLAGS & OS_FLAG_LINUX
 
 
-#ifndef OSTD_HEADLESS
 
 typedef struct _Surface_State {
     Surface_Handle handle;
