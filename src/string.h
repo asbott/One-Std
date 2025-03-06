@@ -49,10 +49,18 @@ unit_local inline bool string_contains(string s, string sub) {
     return false;
 }
 
+unit_local inline string string_slice(string s, u64 index, u64 count) {
+    return (string){ s.data+index, count };
+}
+
 unit_local inline bool string_starts_with(string s, string sub) {
     if (sub.count > s.count) return false;
     
     return memcmp(s.data, sub.data, (u32)sub.count) == 0;
+}
+unit_local inline bool string_ends_with(string s, string sub) {
+    if (sub.count > s.count) return false;
+    return strings_match(sub, string_slice(s, s.count-sub.count, sub.count));
 }
 
 unit_local s64 string_find_index_from_left(string s, string sub) {
