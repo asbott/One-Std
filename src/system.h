@@ -383,8 +383,6 @@ unit_local _Surface_State *_get_surface_state(Surface_Handle h) {
 //////
 /////////////////////////////////////////////////////
 
-#if (OS_FLAGS & OS_FLAG_LINUX)
-#endif
 #define _GNU_SOURCE
 #define _POSIX_C_SOURCE
 
@@ -402,6 +400,10 @@ unit_local _Surface_State *_get_surface_state(Surface_Handle h) {
 #include <arpa/inet.h>
 #include <sys/socket.h>
 #include <unistd.h>
+
+#if (OS_FLAGS & OS_FLAG_LINUX)
+#include <execinfo.h>
+#endif
 
 #undef bool
 
