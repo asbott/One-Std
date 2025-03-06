@@ -8,15 +8,33 @@
 #ifndef __EMSCRIPTEN__
 #include <intrin.h>
 #include <immintrin.h>
+#else
+#include <wasm_simd128.h>
 #endif
 
 #undef log
-
 #undef min
 #undef max
 #undef __crt_va_start
 #undef __crt_va_arg
 #undef __crt_va_end
+#undef UINT8_MIN
+#undef UINT8_MAX
+#undef INT8_MIN
+#undef INT8_MAX
+#undef UINT16_MIN
+#undef UINT16_MAX
+#undef INT16_MIN
+#undef INT16_MAX
+#undef UINT32_MIN
+#undef UINT32_MAX
+#undef INT32_MIN
+#undef INT32_MAX
+#undef UINT64_MIN
+#undef UINT64_MAX
+#undef INT64_MIN
+#undef INT64_MAX
+#undef bool
 
 #define OSTD_IMPL
 #define OSTD_NO_GRAPHICS
