@@ -5,10 +5,10 @@
 #pragma clang diagnostic ignored "-Wunsafe-buffer-usage"
 #endif
 
-
-
+#ifndef __EMSCRIPTEN__
 #include <intrin.h>
 #include <immintrin.h>
+#endif
 
 #undef log
 
