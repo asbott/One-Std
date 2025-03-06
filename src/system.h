@@ -825,20 +825,18 @@ Socket_Result sys_socket_accept(Socket sock, Socket *accepted, u64 timeout_ms) {
     tv.tv_sec  = (long)(timeout_ms / 1000);
     tv.tv_usec = (long)((timeout_ms % 1000) * 1000);
 
-    int select_result = select(sock + 1, &readfds, NULL, NULL, &tv);
+    int select_result = select((int)sock + 1, &readfds, NULL, NULL, &tv);
     if (select_result == 0) {
-        // Timeout occurred
         return SOCKET_TIMED_OUT;
     }
     if (select_result < 0) {
-        // Error in select()
         return SOCKET_PROTOCOL_ERROR;
     }
 
     // Socket is ready for reading (an incoming connection)
     struct sockaddr_in addr;
     socklen_t addr_len = sizeof(addr);
-    int client = accept(sock, (struct sockaddr*)&addr, &addr_len);
+    int client = accept((int)sock, (struct sockaddr*)&addr, &addr_len);
     if (client < 0) {
         if (errno == EWOULDBLOCK || errno == EAGAIN)
             return SOCKET_IN_PROGRESS;
@@ -2836,7 +2834,6 @@ void sys_print_stack_trace(File_Handle handle) {
 #undef abs
 #include <emscripten.h>
 #include <emscripten/html5.h>
-#include <emscripten/wasm_worker.h>
 #include <emscripten/threading_legacy.h>
 #define abs(x) ((x) < 0 ? -(x) : (x))
 #undef bool
