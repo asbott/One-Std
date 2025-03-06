@@ -36,3 +36,5 @@ test.vert.spv
 test.frag.spv
 
 tests/test_result
+
+*index.*

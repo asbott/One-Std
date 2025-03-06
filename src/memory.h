@@ -34,6 +34,7 @@ inline void deallocatef(Allocator a, void *p, u64 flags);
 
 inline string string_allocate(Allocator a, u64 n);
 inline void string_deallocate(Allocator a, string s);
+inline string string_copy(Allocator a, string s);
 
 /////
 // Arena
@@ -99,7 +100,7 @@ inline void string_deallocate(Allocator a, string s) {
 
 inline string string_copy(Allocator a, string s) {
     string new_s = string_allocate(a, s.count);
-    memcpy(new_s.data, s.data, s.count);
+    memcpy(new_s.data, s.data, (sys_uint)s.count);
     return new_s;
 }
 
@@ -139,7 +140,7 @@ Arena make_arena(u64 reserved_size, u64 initial_allocated_size) {
     assert(reserved_size >= initial_allocated_size);
 
 #if OS_FLAGS & OS_FLAG_EMSCRIPTEN
-    assertmsg(reserved_size == initial_allocated_size, STR("Emscripten does not support reserved-only memory allocations. Arena initial allocation size must match reserved_size"));
+    assertmsg(reserved_size == initial_allocated_size, "Emscripten does not support reserved-only memory allocations. Arena initial allocation size must match reserved_size");
 #endif // OS_FLAGS & OS_FLAG_EMSCRIPTEN
 
     System_Info info = sys_get_info();
@@ -220,7 +221,7 @@ void *arena_push(Arena *arena, u64 size) {
 
 void *arena_push_copy(Arena *arena, void *src, u64 size) {
     void *dst = arena_push(arena, size);
-    memcpy(dst, src, size);
+    memcpy(dst, src, (sys_uint)size);
     return dst;
 }
 

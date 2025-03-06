@@ -2,7 +2,7 @@
 
 # One Standard Library
 
-The only C99 library you will ever need, with the aim of targetting all modern platforms, and making portable low-level programming sane.
+The only SINGLE-HEADER C99 library you will ever need, with the aim of targetting all modern platforms, and making portable low-level programming sane.
 
 - One Graphics API (OGA)
 - One Standard (shader) Language (OSL)
@@ -42,11 +42,12 @@ The verbosity of Vulkan/D3D12, but with a well-designed API and completely cross
 Currently targets:
     - Vulkan
     
-Upcoming:
-    - WebGPU
-    - D3D12
-    - Metal
-    - Console Graphics API's (Need dev kits. Would be closed-source and only given to licensed entities.)
+Upcoming Targets:
+ - WebGPU
+ - Console Graphics API's (Need dev kits. Would be closed-source and only given to licensed entities.)
+ - D3D12
+ - Metal
+ - CPU (Software Rendering)
 
 ## OSL
 
@@ -57,11 +58,11 @@ A dead-simple GPU programming language that doesn't pretend that it's anything e
 Currently targets:
     - SPIR-V
 
-Upcoming:
-    - WebGPU Shading Language
-    - HLSL or DXIL not sure yet (maybe both?)
-    - Metal
-    - Console Graphics API's (Need dev kits. Would be closed-source and only given to licensed entities.)
+Upcoming Targets:
+ - WebGPU Shading Language
+ - HLSL or DXIL not sure yet (maybe both?)
+ - Metal
+ - Console Shading Languages (Need dev kits. Would be closed-source and only given to licensed entities.)
     
 ## System API
 
@@ -74,29 +75,23 @@ TBD
 ## Current State
 
 The idea is to target all modern platforms:
-    - Windows
-    - Linux
-    - MacOS
-    - Android
-    - iOS
-    - Web
-    - Consoles (Once I manage to get licensed. Would be closed-source and only given to licensed entities.)
+ - Android
+ - iOS
+ - Consoles (Once I manage to get licensed. Would be closed-source and only given to licensed entities.)
+ - Web
+ - Windows
+ - MacOS
+ - Linux
 
 At the moment I mostly test on Windows, but every now and then I do a round of maintenance for Linux, Android & Web.
 
 OGA currently only targets Vulkan, which means the OSL shader compiler currently targets SPIR-V.
 
-Upcoming:
-    - A more complete OSL
-    - OGA & OSL Targets
-        - WebGPU + WebGPU Shading Language (for using graphics in web)
-        - Metal + Metal Shading Language
-        - D3D12 + DXIL or HLSL (not sure yet)
-
-## Quick Guide
+## Quick Start Guide
 
 1. Download `ostd_single_header.h`
 2. `#include "ostd_single_header.h"`
+3. If you want to use OGA with Vulkan backend, make sure <vulkan/vulkan.h> is in the include path.
 
 
 By default, if `OSTD_IMPL` is defined, the graphics API will be implemented with a software

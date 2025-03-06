@@ -574,19 +574,19 @@ string string_replace(Allocator a, string s, string sub, string replacement) {
             
             while (out_index + replacement.count >= temp_string.count) {
                 string new_temp_string = string_allocate(get_temp(), temp_string.count * 2);
-                memcpy(new_temp_string.data, temp_string.data, temp_string.count);
+                memcpy(new_temp_string.data, temp_string.data, (sys_uint)temp_string.count);
                 temp_string = new_temp_string;
             }
 
             if (replacement.count > 0) {
-                memcpy(temp_string.data + out_index, replacement.data, replacement.count);
+                memcpy(temp_string.data + out_index, replacement.data, (sys_uint)replacement.count);
             }
             out_index += replacement.count;
             i += sub.count;
         } else {
             while (out_index >= temp_string.count) {
                 string new_temp_string = string_allocate(get_temp(), temp_string.count * 2);
-                memcpy(new_temp_string.data, temp_string.data, temp_string.count);
+                memcpy(new_temp_string.data, temp_string.data, (sys_uint)temp_string.count);
                 temp_string = new_temp_string;
             }
             temp_string.data[out_index++] = s.data[i++];
@@ -594,7 +594,7 @@ string string_replace(Allocator a, string s, string sub, string replacement) {
     }
 
     string final_string = string_allocate(a, out_index);
-    memcpy(final_string.data, temp_string.data, out_index);
+    memcpy(final_string.data, temp_string.data, (sys_uint)out_index);
 
     return final_string;
 }

@@ -82,20 +82,45 @@ int main(void) {
 	
 	u8 buffer[4096];
 	
+	f64 start_time = sys_get_seconds_monotonic();
+    (void)start_time;
+    
 	while (true) {
+		reset_temporary_storage();
 		
+		
+		u64 accept_timeout = U64_MAX;
+		
+#ifdef RUNNING_TESTS
+		sys_set_socket_blocking_timeout(listen_socket, TESTING_DURATION*1000);
+		accept_timeout = TESTING_DURATION*1000;
+#endif // RUNNING_TESTS
+		
+	    print("sys_socket_accept...\n");
 		Socket client_sock;
-		r = sys_socket_accept(listen_socket, &client_sock);
+		r = sys_socket_accept(listen_socket, &client_sock, accept_timeout);
 		if (r != SOCKET_OK) {
 			print("sys_socket_accept error\n");
+#ifdef RUNNING_TESTS
+            return 0;
+#else
 			return (int)r;
+#endif
 		}
+		
+#ifdef RUNNING_TESTS
+        sys_set_socket_blocking_timeout(client_sock, TESTING_DURATION*1000);
+		if (sys_get_seconds_monotonic()-start_time > TESTING_DURATION) {
+            break;
+        }
+#endif // RUNNING_TESTS
+		
 		
 		print("Someone connected\n");
 		
 		memset(buffer, 0, sizeof(buffer));
 		u64 received = 0;
-		print("Waiting recv\n");
+	    print("sys_socket_recv...\n");
 		r = sys_socket_recv(client_sock, buffer, sizeof(buffer)-1, &received);
 		print("recv\n");
 		if (r != SOCKET_OK) {
@@ -104,38 +129,53 @@ int main(void) {
 		}
 		print("We received something\n");
 		
+#ifdef RUNNING_TESTS
+		if (sys_get_seconds_monotonic()-start_time > TESTING_DURATION) {
+            break;
+        }
+#endif // RUNNING_TESTS
+		
 		if (received > 9) {
-			Request req = parse_request(buffer);
-			
-			if (strings_match(req.path, STR("/"))) {
-				print("Requested static http: (%s: '%s')\n", req.method, req.path);
-				
-			    string res_text = STR("Hello there");
-			    int status = 200;
-			    
-			    string res = tprint(
-			    	"HTTP/1.1 %d OK\r\n"
-		             "Content-Type: %s\r\n"
-		             "Content-Length: %i\r\n"
-		             "\r\n%s",
-		             status, STR("text/html"), res_text.count, res_text);
-			    
-			    u64 sent;
-			    sys_socket_send(client_sock, res.data, res.count, &sent);
-			    
-			    assert(sent == res.count);
-			    
-			} else {
-				print("Unexpected message: (%s: '%s')\n", req.method, req.path);
-			}
-		} else {
-			string weird = (string) { sizeof(received), buffer };
-			print("Received weird stuff: %s\n", weird);
-		}
+            Request req = parse_request(buffer);
+
+            if (strings_match(req.path, STR("/"))) {
+                print("Requested static http: (%s: '%s')\n", req.method, req.path);
+
+                int status = 200;
+                
+                string res_body;
+                bool file_ok = sys_read_entire_file(get_temp(), STR("../static_html/index.html"), &res_body);
+                
+                if (!file_ok) {
+                	status = 404;
+                	res_body = STR("index.html not found");
+                }
+
+                string res = tprint(
+                 "HTTP/1.1 %i OK\r\n"
+                 "Content-Type: %s\r\n"
+                 "Content-Length: %i\r\n"
+                 "\r\n%s",
+                 status, STR("text/html"), res_body.count, res_body);
+
+                u64 sent;
+                sys_socket_send(client_sock, res.data, res.count, &sent);
+
+                assert(sent == res.count);
+
+                print("Sent:\n%s\n", res);
+
+            } else {
+                print("Unexpected message: (%s: '%s')\n", req.method, req.path);
+            }
+        } else {
+                string weird = (string) { sizeof(received), buffer };
+                print("Received weird stuff: %s\n", weird);
+        }
 		
 		sys_socket_close(client_sock);
 	}
 	
-	return 0;
+	//return 0;
 }
 

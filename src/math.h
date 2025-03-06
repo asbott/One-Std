@@ -57,7 +57,7 @@ unit_local inline f64 ceil64(f64 f) {
 } while (0)
 
 
-inline float64 fmod_cycling(float64 x, float64 y) {
+unit_local inline float64 fmod_cycling(float64 x, float64 y) {
     if (y == 0.0) {
         return 0.0;
     }
@@ -113,12 +113,6 @@ unit_local inline float64 atan2(float64 y, float64 x) {
            (y > 0) ? PI / 2 :
            (y < 0) ? -PI / 2 : 0.0;
 }
-
-// Natural logarithm
-float32 ln32(float32 x);
-float64 ln64(float64 x);
-u64 powu(u64 x, u64 e);
-f64 powf64(f64 x, f64 e);
 
 #define f2_expand(v) (v).x, (v).y
 #define f3_expand(v) (v).x, (v).y, (v).z
@@ -220,7 +214,7 @@ typedef float4x32 float4;
 
 
 
-inline float32 ln32(float32 x) {
+unit_local inline float32 ln32(float32 x) {
     u32 bx = * (u32 *) (&x);
     u32 ex = bx >> 23;
     s32 t = (s32)ex-(s32)127;
@@ -229,7 +223,7 @@ inline float32 ln32(float32 x) {
     return -1.49278f+(2.11263f+(-0.729104f+0.10969f*x)*x)*x+0.6931471806f*(float32)t;
 }
 
-inline float64 ln64(float64 x) {
+unit_local inline float64 ln64(float64 x) {
     u64 bx = *(u64 *)(&x); // Read float64 bits
     u64 ex = bx >> 52; // Extract exponent (11 bits)
     s32 t = (s32)ex - 1023; // Adjust for float64 bias
@@ -240,7 +234,7 @@ inline float64 ln64(float64 x) {
 
 
 
-inline u64 powu(u64 x, u64 e) {
+unit_local inline u64 powu(u64 x, u64 e) {
     if (e == 0) return 1;
     u64 result = x;
     for (u64 i = 0; i < e-1; i += 1) {
@@ -248,7 +242,7 @@ inline u64 powu(u64 x, u64 e) {
     }
     return result;
 }
-inline f64 powf64(f64 x, f64 e) {
+unit_local inline f64 powf64(f64 x, f64 e) {
     if (e == 0) return 1;
     f64 result = x;
     for (f64 i = 0; i < e-1; i += 1) {
@@ -257,7 +251,7 @@ inline f64 powf64(f64 x, f64 e) {
     return result;
 }
 
-inline float32 sqrt32(float32 n) {
+unit_local inline float32 sqrt32(float32 n) {
     if (n < 0.0f) {
         return -1.0f;
     }
@@ -281,7 +275,7 @@ inline float32 sqrt32(float32 n) {
     return x;
 }
 
-inline float64 sqrt64(float64 n) {
+unit_local inline float64 sqrt64(float64 n) {
     if (n < 0.0) {
         return -1.0;
     }
@@ -305,13 +299,13 @@ inline float64 sqrt64(float64 n) {
     return x;
 }
 
-inline float2x32 f2x32(float32 x, float32 y)                       { return (float2x32){x, y}; }
-inline float3x32 f3x32(float32 x, float32 y, float32 z)            { return (float3x32){x, y, z}; }
-inline float4x32 f4x32(float32 x, float32 y, float32 z, float32 w) { return (float4x32){x, y, z, w}; }
+unit_local inline float2x32 f2x32(float32 x, float32 y)                       { return (float2x32){x, y}; }
+unit_local inline float3x32 f3x32(float32 x, float32 y, float32 z)            { return (float3x32){x, y, z}; }
+unit_local inline float4x32 f4x32(float32 x, float32 y, float32 z, float32 w) { return (float4x32){x, y, z, w}; }
 
-inline float2x32 f2x32_scalar(float32 a) { return (float2x32){a, a}; }
-inline float3x32 f3x32_scalar(float32 a) { return (float3x32){a, a, a}; }
-inline float4x32 f4x32_scalar(float32 a) { return (float4x32){a, a, a, a}; }
+unit_local inline float2x32 f2x32_scalar(float32 a) { return (float2x32){a, a}; }
+unit_local inline float3x32 f3x32_scalar(float32 a) { return (float3x32){a, a, a}; }
+unit_local inline float4x32 f4x32_scalar(float32 a) { return (float4x32){a, a, a, a}; }
 
 unit_local const float2x32 f2x32_one = {1, 1};
 unit_local const float3x32 f3x32_one = {1, 1, 1};
@@ -321,41 +315,41 @@ unit_local const float2x32 f2x32_zero = {0, 0};
 unit_local const float3x32 f3x32_zero = {0, 0, 0};
 unit_local const float4x32 f4x32_zero = {0, 0, 0, 0};
 
-inline float2x32 f2x32_add(float2x32 a, float2x32 b)  { return f2x32(a.x+b.x, a.y+b.y); }
-inline float3x32 f3x32_add(float3x32 a, float3x32 b)  { return f3x32(a.x+b.x, a.y+b.y, a.z+b.z); }
-inline float4x32 f4x32_add(float4x32 a, float4x32 b)  { return f4x32(a.x+b.x, a.y+b.y, a.z+b.z, a.w+b.w); }
+unit_local inline float2x32 f2x32_add(float2x32 a, float2x32 b)  { return f2x32(a.x+b.x, a.y+b.y); }
+unit_local inline float3x32 f3x32_add(float3x32 a, float3x32 b)  { return f3x32(a.x+b.x, a.y+b.y, a.z+b.z); }
+unit_local inline float4x32 f4x32_add(float4x32 a, float4x32 b)  { return f4x32(a.x+b.x, a.y+b.y, a.z+b.z, a.w+b.w); }
 
-inline float2x32 f2x32_sub(float2x32 a, float2x32 b)  { return f2x32(a.x-b.x, a.y-b.y); }
-inline float3x32 f3x32_sub(float3x32 a, float3x32 b)  { return f3x32(a.x-b.x, a.y-b.y, a.z-b.z); }
-inline float4x32 f4x32_sub(float4x32 a, float4x32 b)  { return f4x32(a.x-b.x, a.y-b.y, a.z-b.z, a.w-b.w); }
+unit_local inline float2x32 f2x32_sub(float2x32 a, float2x32 b)  { return f2x32(a.x-b.x, a.y-b.y); }
+unit_local inline float3x32 f3x32_sub(float3x32 a, float3x32 b)  { return f3x32(a.x-b.x, a.y-b.y, a.z-b.z); }
+unit_local inline float4x32 f4x32_sub(float4x32 a, float4x32 b)  { return f4x32(a.x-b.x, a.y-b.y, a.z-b.z, a.w-b.w); }
 
-inline float2x32 f2x32_mul(float2x32 a, float2x32 b)  { return f2x32(a.x*b.x, a.y*b.y); }
-inline float3x32 f3x32_mul(float3x32 a, float3x32 b)  { return f3x32(a.x*b.x, a.y*b.y, a.z*b.z); }
-inline float4x32 f4x32_mul(float4x32 a, float4x32 b)  { return f4x32(a.x*b.x, a.y*b.y, a.z*b.z, a.w*b.w); }
+unit_local inline float2x32 f2x32_mul(float2x32 a, float2x32 b)  { return f2x32(a.x*b.x, a.y*b.y); }
+unit_local inline float3x32 f3x32_mul(float3x32 a, float3x32 b)  { return f3x32(a.x*b.x, a.y*b.y, a.z*b.z); }
+unit_local inline float4x32 f4x32_mul(float4x32 a, float4x32 b)  { return f4x32(a.x*b.x, a.y*b.y, a.z*b.z, a.w*b.w); }
 
-inline float2x32 f2x32_mulf32(float2x32 a, float32 s) { return f2x32_mul(a, f2x32(s, s)); }
-inline float3x32 f3x32_mulf32(float3x32 a, float32 s) { return f3x32_mul(a, f3x32(s, s, s)); }
-inline float4x32 f4x32_mulf32(float4x32 a, float32 s) { return f4x32_mul(a, f4x32(s, s, s, s)); }
+unit_local inline float2x32 f2x32_mulf32(float2x32 a, float32 s) { return f2x32_mul(a, f2x32(s, s)); }
+unit_local inline float3x32 f3x32_mulf32(float3x32 a, float32 s) { return f3x32_mul(a, f3x32(s, s, s)); }
+unit_local inline float4x32 f4x32_mulf32(float4x32 a, float32 s) { return f4x32_mul(a, f4x32(s, s, s, s)); }
 
-inline float2x32 f2x32_div(float2x32 a, float2x32 b)  { return f2x32(a.x/b.x, a.y/b.y); }
-inline float3x32 f3x32_div(float3x32 a, float3x32 b)  { return f3x32(a.x/b.x, a.y/b.y, a.z/b.z); }
-inline float4x32 f4x32_div(float4x32 a, float4x32 b)  { return f4x32(a.x/b.x, a.y/b.y, a.z/b.z, a.w/b.w); }
+unit_local inline float2x32 f2x32_div(float2x32 a, float2x32 b)  { return f2x32(a.x/b.x, a.y/b.y); }
+unit_local inline float3x32 f3x32_div(float3x32 a, float3x32 b)  { return f3x32(a.x/b.x, a.y/b.y, a.z/b.z); }
+unit_local inline float4x32 f4x32_div(float4x32 a, float4x32 b)  { return f4x32(a.x/b.x, a.y/b.y, a.z/b.z, a.w/b.w); }
 
-inline float2x32 f2x32_divf32(float2x32 a, float32 s) { return f2x32_div(a, f2x32(s, s)); }
-inline float3x32 f3x32_divf32(float3x32 a, float32 s) { return f3x32_div(a, f3x32(s, s, s)); }
-inline float4x32 f4x32_divf32(float4x32 a, float32 s) { return f4x32_div(a, f4x32(s, s, s, s)); }
+unit_local inline float2x32 f2x32_divf32(float2x32 a, float32 s) { return f2x32_div(a, f2x32(s, s)); }
+unit_local inline float3x32 f3x32_divf32(float3x32 a, float32 s) { return f3x32_div(a, f3x32(s, s, s)); }
+unit_local inline float4x32 f4x32_divf32(float4x32 a, float32 s) { return f4x32_div(a, f4x32(s, s, s, s)); }
 
-inline float32 f2x32_lensq(float2x32 a) { return a.x*a.x + a.y*a.y; }
-inline float32 f3x32_lensq(float3x32 a) { return a.x * a.x + a.y * a.y + a.z * a.z; }
-inline float32 f4x32_lensq(float4x32 a) { return a.x * a.x + a.y * a.y + a.z * a.z + a.w * a.w; }
+unit_local inline float32 f2x32_lensq(float2x32 a) { return a.x*a.x + a.y*a.y; }
+unit_local inline float32 f3x32_lensq(float3x32 a) { return a.x * a.x + a.y * a.y + a.z * a.z; }
+unit_local inline float32 f4x32_lensq(float4x32 a) { return a.x * a.x + a.y * a.y + a.z * a.z + a.w * a.w; }
 
-inline float32 f2x32_len(float2x32 a) { return sqrt32(a.x*a.x + a.y*a.y); }
-inline float32 f3x32_len(float3x32 a) { return sqrt32(a.x * a.x + a.y * a.y + a.z * a.z); }
-inline float32 f4x32_len(float4x32 a) { return sqrt32(a.x * a.x + a.y * a.y + a.z * a.z + a.w * a.w); }
+unit_local inline float32 f2x32_len(float2x32 a) { return sqrt32(a.x*a.x + a.y*a.y); }
+unit_local inline float32 f3x32_len(float3x32 a) { return sqrt32(a.x * a.x + a.y * a.y + a.z * a.z); }
+unit_local inline float32 f4x32_len(float4x32 a) { return sqrt32(a.x * a.x + a.y * a.y + a.z * a.z + a.w * a.w); }
 
-inline float32 f2x32_average(float2x32 a) { return (a.x+a.y)/2.0f; }
-inline float32 f3x32_average(float3x32 a) { return (a.x + a.y + a.z) / 3.0f; }
-inline float32 f4x32_average(float4x32 a) { return (a.x + a.y + a.z + a.w) / 4.0f; }
+unit_local inline float32 f2x32_average(float2x32 a) { return (a.x+a.y)/2.0f; }
+unit_local inline float32 f3x32_average(float3x32 a) { return (a.x + a.y + a.z) / 3.0f; }
+unit_local inline float32 f4x32_average(float4x32 a) { return (a.x + a.y + a.z + a.w) / 4.0f; }
 
 #if defined(__GNUC__) || defined(__GNUG__)
 #pragma GCC diagnostic push
@@ -367,9 +361,9 @@ inline float32 f4x32_average(float4x32 a) { return (a.x + a.y + a.z + a.w) / 4.0
 #pragma clang diagnostic ignored "-Wfloat-equal"
 #endif // __clang__
 
-inline float2x32 f2x32_normalize(float2x32 a) { return f2x32_lensq(a) == 0 ? f2x32_scalar(0) : f2x32_divf32(a, f2x32_len(a)); }
-inline float3x32 f3x32_normalize(float3x32 a) { return f3x32_lensq(a) == 0 ? f3x32_scalar(0) : f3x32_divf32(a, f3x32_len(a)); }
-inline float4x32 f4x32_normalize(float4x32 a) { return f4x32_lensq(a) == 0 ? f4x32_scalar(0) : f4x32_divf32(a, f4x32_len(a)); }
+unit_local inline float2x32 f2x32_normalize(float2x32 a) { return f2x32_lensq(a) == 0 ? f2x32_scalar(0) : f2x32_divf32(a, f2x32_len(a)); }
+unit_local inline float3x32 f3x32_normalize(float3x32 a) { return f3x32_lensq(a) == 0 ? f3x32_scalar(0) : f3x32_divf32(a, f3x32_len(a)); }
+unit_local inline float4x32 f4x32_normalize(float4x32 a) { return f4x32_lensq(a) == 0 ? f4x32_scalar(0) : f4x32_divf32(a, f4x32_len(a)); }
 
 #if defined(__GNUC__) || defined(__GNUG__)
 #pragma GCC diagnostic pop
@@ -379,12 +373,12 @@ inline float4x32 f4x32_normalize(float4x32 a) { return f4x32_lensq(a) == 0 ? f4x
 #pragma clang diagnostic pop
 #endif // __clang__
 
-inline float32 f2x32_dot(float2x32 a, float2x32 b) { return a.x * b.x + a.y * b.y; }
-inline float32 f3x32_dot(float3x32 a, float3x32 b) { return a.x * b.x + a.y * b.y + a.z * b.z; }
-inline float32 f4x32_dot(float4x32 a, float4x32 b) { return a.x * b.x + a.y * b.y + a.z * b.z + a.w * b.w; }
+unit_local inline float32 f2x32_dot(float2x32 a, float2x32 b) { return a.x * b.x + a.y * b.y; }
+unit_local inline float32 f3x32_dot(float3x32 a, float3x32 b) { return a.x * b.x + a.y * b.y + a.z * b.z; }
+unit_local inline float32 f4x32_dot(float4x32 a, float4x32 b) { return a.x * b.x + a.y * b.y + a.z * b.z + a.w * b.w; }
 
-inline float32 f2x32_perp(float2x32 a, float2x32 b) { return (a.x * b.y) - (a.y * b.x); }
-inline float3x32 f3x32_cross(float3x32 a, float3x32 b) { return f3x32((a.y*b.z)-(a.z*b.y), (a.z*b.x)-(a.x*b.z), (a.x*b.y)-(a.y*b.x)); }
+unit_local inline float32 f2x32_perp(float2x32 a, float2x32 b) { return (a.x * b.y) - (a.y * b.x); }
+unit_local inline float3x32 f3x32_cross(float3x32 a, float3x32 b) { return f3x32((a.y*b.z)-(a.z*b.y), (a.z*b.x)-(a.x*b.z), (a.x*b.y)-(a.y*b.x)); }
 
 
 // Column major
@@ -392,7 +386,7 @@ typedef struct Matrix4 {
     float32 data[4][4];
 } Matrix4;
 
-inline Matrix4 m4_scalar(float32 scalar) {
+unit_local inline Matrix4 m4_scalar(float32 scalar) {
     Matrix4 m = (Matrix4){0};
     m.data[0][0] = scalar; 
     m.data[1][1] = scalar; 
@@ -401,23 +395,23 @@ inline Matrix4 m4_scalar(float32 scalar) {
     return m;
 }
 
-inline Matrix4 m4_identity(void) { return m4_scalar(1.0); }
+unit_local inline Matrix4 m4_identity(void) { return m4_scalar(1.0); }
 
-inline Matrix4 m4_make_translation(float3 translation) {
+unit_local inline Matrix4 m4_make_translation(float3 translation) {
     Matrix4 m = m4_identity();    
     *(float3*)m.data[3] = translation;
     
     return m;
 }
 
-inline Matrix4 m4_translate(Matrix4 m, float3 translation) {
+unit_local inline Matrix4 m4_translate(Matrix4 m, float3 translation) {
     m.data[3][0] = translation.x;
     m.data[3][1] = translation.y;
     m.data[3][2] = translation.z;
     return m;
 }
 
-inline float m4_trace(Matrix4 m) {
+unit_local inline float m4_trace(Matrix4 m) {
     float a = m.data[0][0];
     a += m.data[1][1];
     a += m.data[2][2];
@@ -426,7 +420,7 @@ inline float m4_trace(Matrix4 m) {
     return a;
 }
 
-inline Matrix4 m4_add(Matrix4 m0, Matrix4 m1) {
+unit_local inline Matrix4 m4_add(Matrix4 m0, Matrix4 m1) {
     *(float4*)m0.data[0] = f4_add(*(float4*)m0.data[0], *(float4*)m1.data[0]);
     *(float4*)m0.data[1] = f4_add(*(float4*)m0.data[1], *(float4*)m1.data[1]);
     *(float4*)m0.data[2] = f4_add(*(float4*)m0.data[2], *(float4*)m1.data[2]);
@@ -435,7 +429,7 @@ inline Matrix4 m4_add(Matrix4 m0, Matrix4 m1) {
     return m0;
 }
 
-inline Matrix4 m4_make_scale(float3 scalars) {
+unit_local inline Matrix4 m4_make_scale(float3 scalars) {
     Matrix4 m = m4_identity();
     *(float4*)m.data[0] = f4_mulf(*(float4*)m.data[0], scalars.x);
     *(float4*)m.data[1] = f4_mulf(*(float4*)m.data[1], scalars.y);
@@ -444,7 +438,7 @@ inline Matrix4 m4_make_scale(float3 scalars) {
     return m;
 }
 
-inline Matrix4 m4_scalef(Matrix4 m, float32 scalar) {
+unit_local inline Matrix4 m4_scalef(Matrix4 m, float32 scalar) {
     *(float4*)m.data[0] = f4_mulf(*(float4*)m.data[0], scalar);
     *(float4*)m.data[1] = f4_mulf(*(float4*)m.data[1], scalar);
     *(float4*)m.data[2] = f4_mulf(*(float4*)m.data[2], scalar);
@@ -452,14 +446,14 @@ inline Matrix4 m4_scalef(Matrix4 m, float32 scalar) {
     
     return m;
 }
-inline Matrix4 m4_scale(Matrix4 m, float3 scalars) {
+unit_local inline Matrix4 m4_scale(Matrix4 m, float3 scalars) {
     *(float4*)m.data[0] = f4_mulf(*(float4*)m.data[0], scalars.x);
     *(float4*)m.data[1] = f4_mulf(*(float4*)m.data[1], scalars.y);
     *(float4*)m.data[2] = f4_mulf(*(float4*)m.data[2], scalars.z);
     
     return m;
 }
-inline Matrix4 m4_scale_f4(Matrix4 m, float4 scalars) {
+unit_local inline Matrix4 m4_scale_f4(Matrix4 m, float4 scalars) {
     *(float4*)m.data[0] = f4_mulf(*(float4*)m.data[0], scalars.x);
     *(float4*)m.data[1] = f4_mulf(*(float4*)m.data[1], scalars.y);
     *(float4*)m.data[2] = f4_mulf(*(float4*)m.data[2], scalars.z);
@@ -499,7 +493,7 @@ unit_local inline Matrix4 m4_make_rotation_z(float rad) {
     }};
 }
 
-inline Matrix4 m4_transpose(Matrix4 m) {
+unit_local inline Matrix4 m4_transpose(Matrix4 m) {
     Matrix4 tm = m;
     
     // Diagonal is copied over, but swap each side of it
@@ -523,7 +517,7 @@ inline Matrix4 m4_transpose(Matrix4 m) {
     return tm;
 } 
 
-inline Matrix4 m4_mulm4(Matrix4 m0, Matrix4 m1) {
+unit_local inline Matrix4 m4_mulm4(Matrix4 m0, Matrix4 m1) {
 /*
         m = m0 * m1
         
@@ -561,7 +555,7 @@ inline Matrix4 m4_mulm4(Matrix4 m0, Matrix4 m1) {
     return m;
 }
 
-inline float4 m4_mulf4(Matrix4 m0, float4 m1) {
+unit_local inline float4 m4_mulf4(Matrix4 m0, float4 m1) {
     Matrix4 tm0 = m4_transpose(m0);
     
     float4 f;
@@ -577,7 +571,7 @@ inline float4 m4_mulf4(Matrix4 m0, float4 m1) {
 // but nevertheless useful and makes sense to a game developer.
 // It just fills in the z w components to 0 1 if missing.
 // This only makes sense in games.
-inline float3 m4_mulf3_trunc(Matrix4 m0, float3 m1) {
+unit_local inline float3 m4_mulf3_trunc(Matrix4 m0, float3 m1) {
     Matrix4 tm0 = m4_transpose(m0);
     
     float3 f;
@@ -587,7 +581,7 @@ inline float3 m4_mulf3_trunc(Matrix4 m0, float3 m1) {
     
     return f;
 } 
-inline float2 m4_mulf2_trunc(Matrix4 m0, float2 m1) {
+unit_local inline float2 m4_mulf2_trunc(Matrix4 m0, float2 m1) {
     Matrix4 tm0 = m4_transpose(m0);
     
     float2 f;
@@ -597,7 +591,7 @@ inline float2 m4_mulf2_trunc(Matrix4 m0, float2 m1) {
     return f;
 } 
 
-inline f64 get_power_of_two_f64(f64 x, u64 exp) {
+unit_local inline f64 get_power_of_two_f64(f64 x, u64 exp) {
     return x * (f64)(1ULL << exp);
 }
 

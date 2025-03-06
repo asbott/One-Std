@@ -540,6 +540,7 @@ typedef struct Oga_Device {
     u8 device_name_data[256];
     u64 device_name_length;
 
+    u64 vendor_id;
     string vendor_name;
     u32 driver_version_raw;
 

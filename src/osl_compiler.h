@@ -734,7 +734,7 @@ unit_local void spv_block_init(Spv_Block *block, u64 initial_capacity) {
 
 unit_local void spv_push_bytes(Spv_Block *block, void *bytes, u64 count) {
     void *backing = arena_push(&block->arena, count);
-    memcpy(backing, bytes, count);
+    memcpy(backing, bytes, (sys_uint)count);
     block->count += count;
 }
 
@@ -3561,7 +3561,7 @@ unit_local string _osl_tprint_token(Osl_Compiler *compiler, Osl_Token *token, st
 	memset(space.data, '-', pos_in_line);
 	
 	string arrows = string_allocate(get_temp(), token->length);
-	memset(arrows.data, '^', token->length);
+	memset(arrows.data, '^', (sys_uint)token->length);
 	
 	string kind_str = _osl_stringify_token_kind(token->kind);
 	return tprint("Line %u, Token '%s' (%s): %s\n    %s\n    %s%s\n", line_counter, token_str, kind_str, message, line, space, arrows);
@@ -4394,8 +4394,8 @@ unit_local Osl_Result _osl_parse_one(Osl_Compiler *compiler, Osl_Block *block, O
         	if (is_literal && cond->val.lit.lit_int == 0) {
         		if_chain->branch_count -= 1;
         		if (i < (s64)if_chain->branch_count) {
-        			memmove(&if_chain->conditions[i], &if_chain->conditions[i+1], (if_chain->branch_count-(u64)i) * sizeof(void*));
-        			memmove(&if_chain->blocks[i], &if_chain->blocks[i+1], (if_chain->branch_count-(u64)i) * sizeof(void*));
+        			memmove(&if_chain->conditions[i], &if_chain->conditions[i+1], (sys_uint)(if_chain->branch_count-(u64)i) * sizeof(void*));
+        			memmove(&if_chain->blocks[i], &if_chain->blocks[i+1], (sys_uint)(if_chain->branch_count-(u64)i) * sizeof(void*));
         		}
         		i -= 1;
         	} else {
@@ -4770,7 +4770,7 @@ Osl_Result osl_compile(Allocator a, Osl_Compile_Desc desc, void **pcode, u64 *pc
 	    	Spv_Block *block = spv_finalize(spv);
 	    	*pcode_size = block->count;
 	    	*pcode = allocate(a, block->count);
-	    	memcpy(*pcode, block->data, block->count);
+	    	memcpy(*pcode, block->data, (sys_uint)block->count);
 		}
 		_osl_done_spv(spv);
     }

@@ -647,9 +647,9 @@ void test_sys1(void) {
         void *addr2 = (u8*)addr1 + page_count*info.page_size;
         void *end = (u8*)addr2 + page_count*info.page_size;
 
-        void *mem0 = sys_map_pages(SYS_MEMORY_RESERVE | SYS_MEMORY_ALLOCATE, addr0, 4, true);
-        void *mem1 = sys_map_pages(SYS_MEMORY_RESERVE | SYS_MEMORY_ALLOCATE, addr1, 4, true);
-        void *mem2 = sys_map_pages(SYS_MEMORY_RESERVE | SYS_MEMORY_ALLOCATE, addr2, 4, true);
+        void *mem0 = sys_map_pages(SYS_MEMORY_RESERVE | SYS_MEMORY_ALLOCATE, addr0, page_count, true);
+        void *mem1 = sys_map_pages(SYS_MEMORY_RESERVE | SYS_MEMORY_ALLOCATE, addr1, page_count, true);
+        void *mem2 = sys_map_pages(SYS_MEMORY_RESERVE | SYS_MEMORY_ALLOCATE, addr2, page_count, true);
 
         assert(mem0);
         assert(mem1);
@@ -668,9 +668,9 @@ void test_sys1(void) {
         assert(pointers[1].base == addr1);
         assert(pointers[2].base == addr2);
 
-        assert(pointers[0].page_count == 4);
-        assert(pointers[1].page_count == 4);
-        assert(pointers[2].page_count == 4);
+        assert(pointers[0].page_count == page_count);
+        assert(pointers[1].page_count == page_count);
+        assert(pointers[2].page_count == page_count);
     }
 #endif // !(OS_FLAGS & OS_FLAG_EMSCRIPTEN)
 

@@ -138,12 +138,13 @@ u32 sys_convert_address_string(string address);
 Socket_Result sys_socket_init(Socket *socket, Socket_Domain domain, Socket_Type type, Socket_Protocol protocol);
 Socket_Result sys_socket_bind(Socket socket, u32 address, u16 port);
 Socket_Result sys_socket_listen(Socket socket, s64 backlog);
-Socket_Result sys_socket_accept(Socket socket, Socket *accepted);
+Socket_Result sys_socket_accept(Socket socket, Socket *accepted, u64 timeout_ms);
 Socket_Result sys_socket_connect(Socket sock, u32 address, u16 port, Socket_Domain domain);
 Socket_Result sys_socket_send(Socket socket, void *data, u64 length, u64 *sent);
 Socket_Result sys_socket_recv(Socket socket, void *buffer, u64 length, u64 *sent);
 Socket_Result sys_socket_close(Socket socket);
 Socket_Result sys_socket_set_blocking(Socket *socket, bool blocking);
+Socket_Result sys_set_socket_blocking_timeout(Socket socket, u64 ms);
 
 //////
 // Surfaces (Window)
@@ -383,9 +384,9 @@ unit_local _Surface_State *_get_surface_state(Surface_Handle h) {
 /////////////////////////////////////////////////////
 
 #if (OS_FLAGS & OS_FLAG_LINUX)
+#endif
 #define _GNU_SOURCE
 #define _POSIX_C_SOURCE
-#endif
 
 // todo(charlie) dynamically link & manually  define some stuff to minimize namespace bloat here
 #include <unistd.h>
@@ -395,7 +396,7 @@ unit_local _Surface_State *_get_surface_state(Surface_Handle h) {
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <errno.h>
-#include <execinfo.h>
+//#include <execinfo.h>
 #include <fcntl.h>
 #include <netinet/in.h>
 #include <arpa/inet.h>
@@ -431,7 +432,24 @@ unit_local void _unix_add_mapped_region(void *start, u64 page_count) {
         _unix_mapped_region_buffers_allocated_count = info.page_size/sizeof(_Mapped_Region_Desc_Buffer);
         _unix_mapped_region_buffers_count = 0;
     }
+    
+    // First, see if this is already mapped (we might be allocating reserved memory)
+    for (u64 i = 0; i < _unix_mapped_region_buffers_count; i += 1) {
+        _Mapped_Region_Desc_Buffer buffer = _unix_mapped_region_buffers[i];
+        assert(buffer.regions);
+        assert(buffer.count);
 
+        for (u32 j = 0; j < buffer.count; j += 1) {
+            _Mapped_Region_Desc *region = buffer.regions + j;
+            
+            void *end = (u8*)region->start + region->page_count*info.page_size;
+            
+            if ((u64)start >= (u64)region->start && (u64)start < (u64)end) {
+                return;
+            }
+        }
+    }
+    
     for (u64 i = 0; i < _unix_mapped_region_buffers_count; i += 1) {
         _Mapped_Region_Desc_Buffer buffer = _unix_mapped_region_buffers[i];
         assert(buffer.regions);
@@ -483,7 +501,7 @@ unit_local void _unix_add_mapped_region(void *start, u64 page_count) {
 
     buffer->regions[0].taken = true;
     buffer->regions[0].start = start;
-    buffer->regions[0].page_count = (u32)page_count;
+    buffer->regions[0].page_count = (sys_uint)page_count;
 }
 
 unit_local _Mapped_Region_Desc *_unix_find_mapped_region(void *start) {
@@ -584,6 +602,10 @@ bool sys_deallocate_pages(void *address, u64 number_of_pages) {
 u64 sys_query_mapped_regions(void *start, void *end, Mapped_Memory_Info *result, u64 result_count) {
     u64 counter = 0;
     if (!result) result_count = U64_MAX;
+    
+    System_Info info = sys_get_info();
+    
+    start = (void*)(((u64)start + info.page_size-1) & ~(info.page_size-1));
 
     for (u64 i = 0; i < _unix_mapped_region_buffers_count; i += 1) {
         _Mapped_Region_Desc_Buffer buffer = _unix_mapped_region_buffers[i];
@@ -610,80 +632,8 @@ u64 sys_query_mapped_regions(void *start, void *end, Mapped_Memory_Info *result,
 }
 
 void *sys_find_mappable_range(u64 page_count) {
-    System_Info info = sys_get_info();
-    u64 amount_in_bytes = page_count * info.page_size;
-
-    File_Handle maps = sys_open_file(STR("/proc/self/maps"), FILE_OPEN_READ);
-    if (!maps) {
-        sys_write_string(sys_get_stdout(), STR("Could not open /proc/self/maps\n"));
-        return 0;
-    }
-
-    char buffer[256];
-    char line[256];
-    u64 last_end = 0x0000100000000000;
-    u64 line_length = 0;
-
-    while (true) {
-        s64 bytes_read = sys_read(maps, buffer, sizeof(buffer));
-        if (bytes_read <= 0) {
-            break;
-        }
-
-        for (s64 i = 0; i < bytes_read; ++i) {
-            if (buffer[i] == '\n' || line_length >= sizeof(line) - 1) {
-                line[line_length] = '\0';
-
-                u64 start = 0, end = 0;
-                bool parsing_failed = false;
-
-                char *p = line;
-                while (*p && *p != '-') {
-                    if (*p >= '0' && *p <= '9') {
-                        start = (start << 4) | (*p - '0');
-                    } else if (*p >= 'a' && *p <= 'f') {
-                        start = (start << 4) | (*p - 'a' + 10);
-                    } else {
-                        parsing_failed = true;
-                        break;
-                    }
-                    ++p;
-                }
-
-                if (!parsing_failed && *p == '-') {
-                    ++p;
-                    while (*p && *p != ' ') {
-                        if (*p >= '0' && *p <= '9') {
-                            end = (end << 4) | (*p - '0');
-                        } else if (*p >= 'a' && *p <= 'f') {
-                            end = (end << 4) | (*p - 'a' + 10);
-                        } else {
-                            parsing_failed = true;
-                            break;
-                        }
-                        ++p;
-                    }
-                } else {
-                    parsing_failed = true;
-                }
-
-                if (!parsing_failed && start >= last_end + amount_in_bytes) {
-                    u64 aligned_base = (last_end + info.granularity - 1) & ~(info.granularity - 1);
-                    if (aligned_base + amount_in_bytes <= start) {
-                        sys_close(maps);
-                        return (void *)aligned_base;
-                    }
-                }
-
-                last_end = end;
-                line_length = 0;
-            } else {
-                line[line_length++] = buffer[i];
-            }
-        }
-    }
-
-    sys_close(maps);
+    (void)page_count;
+    assertmsg(false, "sys_find_mappable_range unimplemented on linux"); // todo(charlie)
     return 0;
 }
 
@@ -717,7 +667,7 @@ void sys_close(File_Handle h) {
 File_Handle sys_open_file(string path, File_Open_Flags flags) {
     char cpath[MAX_PATH_LENGTH];
     u64 path_len = min(path.count, MAX_PATH_LENGTH - 1);
-    memcpy(cpath, path.data, path_len);
+    memcpy(cpath, path.data, (sys_uint)path_len);
     cpath[path_len] = 0;
 
     int unix_flags = 0;
@@ -749,11 +699,9 @@ u64 sys_get_file_size(File_Handle f) {
         return 0;
     }
     return (u64)file_stat.st_size;
-
-    long int a = sizeof(long);
 }
 
-int _to_win_sock_err(Socket_Result r) {
+unit_local int _to_win_sock_err(Socket_Result r) {
     switch(r) {
         case SOCKET_OK:                  return 0;
         case SOCKET_DISCONNECTED:        return ECONNRESET;
@@ -777,7 +725,7 @@ int _to_win_sock_err(Socket_Result r) {
 u32 sys_convert_address_string(string address) {
     assert(address.count < 1024);
     char addr_str[1024] = {0};
-    memcpy(addr_str, address.data, address.count);
+    memcpy(addr_str, address.data, (sys_uint)address.count);
     addr_str[address.count] = '\0';
     return inet_addr(addr_str);
 }
@@ -866,10 +814,29 @@ Socket_Result sys_socket_listen(Socket sock, s64 backlog) {
     return SOCKET_OK;
 }
 
-Socket_Result sys_socket_accept(Socket sock, Socket *accepted) {
+Socket_Result sys_socket_accept(Socket sock, Socket *accepted, u64 timeout_ms) {
+    fd_set readfds;
+    FD_ZERO(&readfds);
+    FD_SET(sock, &readfds);
+
+    struct timeval tv;
+    tv.tv_sec  = (long)(timeout_ms / 1000);
+    tv.tv_usec = (long)((timeout_ms % 1000) * 1000);
+
+    int select_result = select(sock + 1, &readfds, NULL, NULL, &tv);
+    if (select_result == 0) {
+        // Timeout occurred
+        return SOCKET_TIMED_OUT;
+    }
+    if (select_result < 0) {
+        // Error in select()
+        return SOCKET_PROTOCOL_ERROR;
+    }
+
+    // Socket is ready for reading (an incoming connection)
     struct sockaddr_in addr;
     socklen_t addr_len = sizeof(addr);
-    int client = accept((int)sock, (struct sockaddr*)&addr, &addr_len);
+    int client = accept(sock, (struct sockaddr*)&addr, &addr_len);
     if (client < 0) {
         if (errno == EWOULDBLOCK || errno == EAGAIN)
             return SOCKET_IN_PROGRESS;
@@ -907,7 +874,7 @@ Socket_Result sys_socket_connect(Socket sock, u32 address, u16 port, Socket_Doma
 }
 
 Socket_Result sys_socket_send(Socket sock, void *data, u64 length, u64 *sent) {
-    ssize_t result = send((int)sock, data, length, 0);
+    ssize_t result = send((int)sock, data, (sys_uint)length, 0);
     if (result < 0) {
         if (errno == EWOULDBLOCK || errno == EAGAIN) {
             if (sent)
@@ -922,7 +889,7 @@ Socket_Result sys_socket_send(Socket sock, void *data, u64 length, u64 *sent) {
 }
 
 Socket_Result sys_socket_recv(Socket sock, void *buffer, u64 length, u64 *received) {
-    ssize_t result = recv((int)sock, buffer, length, 0);
+    ssize_t result = recv((int)sock, buffer, (sys_uint)length, 0);
     if (result < 0) {
         if (errno == EWOULDBLOCK || errno == EAGAIN) {
             if (received)
@@ -961,6 +928,14 @@ Socket_Result sys_socket_set_blocking(Socket *sock, bool blocking) {
     return SOCKET_OK;
 }
 
+Socket_Result sys_set_socket_blocking_timeout(Socket socket, u64 ms) {
+    struct timeval tv;
+    tv.tv_sec = 0;
+    tv.tv_usec = (sys_int)ms*1000;
+    setsockopt((int)socket, SOL_SOCKET, SO_RCVTIMEO, (const char*)&tv, sizeof(tv));
+    return SOCKET_OK;
+}
+
 double sys_get_seconds_monotonic(void) {
     struct timespec ts;
     clock_gettime(CLOCK_MONOTONIC, &ts);
@@ -968,7 +943,8 @@ double sys_get_seconds_monotonic(void) {
 }
 
 void sys_set_thread_affinity_mask(Thread_Handle thread, u64 bits) {
-#if OS_FLAGS & OS_FLAG_ANDROID
+#if (OS_FLAGS & OS_FLAG_ANDROID) || (OS_FLAGS & OS_FLAG_EMSCRIPTEN)
+    (void)thread; (void)bits;
     return;
 #else
     cpu_set_t cpuset;
@@ -979,8 +955,8 @@ void sys_set_thread_affinity_mask(Thread_Handle thread, u64 bits) {
             CPU_SET(i, &cpuset);
         }
     }
-
-    sched_setaffinity((pthread_t)thread, sizeof(cpu_set_t), &cpuset);
+    
+    pthread_setaffinity_np((pthread_t)thread, sizeof(cpu_set_t), &cpuset);
 #endif
 }
 
@@ -1485,7 +1461,7 @@ static Socket_Result _ensure_winsock_initialized(void) {
     return SOCKET_OK;
 }
 
-int _to_win_sock_err(Socket_Result r) {
+unit_local int _to_win_sock_err(Socket_Result r) {
     switch(r) {
         case SOCKET_OK: return 0;
         case SOCKET_DISCONNECTED: return WSAECONNRESET;
@@ -1603,7 +1579,23 @@ Socket_Result sys_socket_listen(Socket sock, s64 backlog) {
     return SOCKET_OK;
 }
 
-Socket_Result sys_socket_accept(Socket sock, Socket *accepted) {
+Socket_Result sys_socket_accept(Socket sock, Socket *accepted, u64 timeout_ms) {
+    fd_set readfds;
+    FD_ZERO(&readfds);
+    FD_SET(sock, &readfds);
+
+    struct timeval tv;
+    tv.tv_sec  = (long)(timeout_ms / 1000);
+    tv.tv_usec = (long)((timeout_ms % 1000) * 1000);
+
+    int select_result = select(0, &readfds, 0, 0, &tv);
+    if (select_result == 0) {
+        return SOCKET_TIMED_OUT;
+    }
+    if (select_result == SOCKET_ERROR) {
+        return SOCKET_PROTOCOL_ERROR;
+    }
+    
     struct sockaddr_in addr;
     int addr_len = sizeof(addr);
     SOCKET client = accept((SOCKET)sock, (struct sockaddr*)&addr, &addr_len);
@@ -1617,33 +1609,6 @@ Socket_Result sys_socket_accept(Socket sock, Socket *accepted) {
     return SOCKET_OK;
 }
 
-Socket_Result sys_socket_connect(Socket sock, u32 address, u16 port, Socket_Domain domain) {
-    if (domain != SOCKET_DOMAIN_IPV4)
-        return SOCKET_INVALID_ADDRESS;
-
-    struct sockaddr_in addr_in;
-    addr_in.sin_family = AF_INET;
-    addr_in.sin_port = htons(port);
-    addr_in.sin_addr.s_addr = address;
-    if (addr_in.sin_addr.s_addr == INADDR_NONE)
-        return SOCKET_INVALID_ADDRESS;
-
-    int result = connect((SOCKET)sock, (struct sockaddr*)&addr_in, sizeof(addr_in));
-    if (result == SOCKET_ERROR) {
-        int err = WSAGetLastError();
-        if (err == WSAEWOULDBLOCK)
-            return SOCKET_IN_PROGRESS;
-        if (err == WSAETIMEDOUT)
-            return SOCKET_TIMED_OUT;
-        if (err == WSAECONNREFUSED)
-            return SOCKET_CONNECTION_REFUSED;
-        if (err == WSAEALREADY)
-            return SOCKET_ALREADY_CONNECTED;
-        return SOCKET_PROTOCOL_ERROR;
-    }
-    return SOCKET_OK;
-}
-
 Socket_Result sys_socket_send(Socket sock, void *data, u64 length, u64 *sent) {
     int result = send((SOCKET)sock, (const char*)data, (int)length, 0);
     if (result == SOCKET_ERROR) {
@@ -1653,6 +1618,8 @@ Socket_Result sys_socket_send(Socket sock, void *data, u64 length, u64 *sent) {
                 *sent = 0;
             return SOCKET_IN_PROGRESS;
         }
+        if (err == WSAETIMEDOUT)
+            return SOCKET_TIMED_OUT;
         return SOCKET_PROTOCOL_ERROR;
     }
     if (sent)
@@ -1669,6 +1636,8 @@ Socket_Result sys_socket_recv(Socket sock, void *buffer, u64 length, u64 *receiv
                 *received = 0;
             return SOCKET_IN_PROGRESS;
         }
+        if (err == WSAETIMEDOUT)
+            return SOCKET_TIMED_OUT;
         return SOCKET_PROTOCOL_ERROR;
     } else if (result == 0) {
         if (received)
@@ -1692,6 +1661,11 @@ Socket_Result sys_socket_set_blocking(Socket *sock, bool blocking) {
     int result = ioctlsocket((SOCKET)(*sock), (long)FIONBIO, &mode);
     if (result != NO_ERROR)
         return SOCKET_PROTOCOL_ERROR;
+    return SOCKET_OK;
+}
+Socket_Result sys_set_socket_blocking_timeout(Socket socket, u64 ms) {
+    setsockopt(socket, SOL_SOCKET, SO_RCVTIMEO, (char*)&ms, sizeof(ms));
+    setsockopt(socket, SOL_SOCKET, SO_SNDTIMEO, (char*)&ms, sizeof(ms));
     return SOCKET_OK;
 }
 
@@ -2857,9 +2831,17 @@ void sys_print_stack_trace(File_Handle handle) {
 //////
 /////////////////////////////////////////////////////
 
+#undef abs
 #include <emscripten.h>
 #include <emscripten/html5.h>
+#include <emscripten/wasm_worker.h>
+#include <emscripten/threading_legacy.h>
+#define abs(x) ((x) < 0 ? -(x) : (x))
 #undef bool
+
+unit_local u64 __rdtsc(void) {
+    return (u64)(emscripten_get_now()*1000.0);
+}
 
 #ifndef OSTD_HEADLESS
 
@@ -2896,10 +2878,18 @@ u64 sys_query_monitors(Physical_Monitor *buffer, u64 max_count)
 
     return 1;
 }
+bool surface_get_monitor(Surface_Handle h, Physical_Monitor *monitor) {
+    (void)h;
+    sys_query_monitors(monitor, 1);
+    return true;
+}
+
+#endif // !OSTD_HEADLESS
 
 File_Handle sys_get_stdout(void) {
     return (File_Handle)1;
 }
+
 File_Handle sys_get_stderr(void) {
     return (File_Handle)2;
 }
@@ -2911,6 +2901,7 @@ void sys_set_stderr(File_Handle h) {
     (void)h;
 }
 
+#ifndef OSTD_HEADLESS
 Surface_Handle sys_get_surface(void) {
     return (Surface_Handle)69; // todo(charlie) revisit
 }
@@ -2923,7 +2914,120 @@ bool surface_should_close(Surface_Handle s) {
     return false;
 }
 
+typedef struct _Em_Canvas_Size_Result {
+    int success;
+    int w;
+    int h;
+} _Em_Canvas_Size_Result;
+
+unit_local void _em_get_canvas_size_main_thread(void *arg) {
+    _Em_Canvas_Size_Result *result = (_Em_Canvas_Size_Result *)arg;
+    int w, h_int;
+    if (emscripten_get_canvas_element_size("#canvas", &w, &h_int) == EMSCRIPTEN_RESULT_SUCCESS) {
+        result->w = w;
+        result->h = h_int;
+        result->success = 1;
+    } else {
+        result->success = 0;
+    }
+}
+
+bool surface_get_framebuffer_size(Surface_Handle h, s64 *width, s64 *height) {
+    (void)h;
+    _Em_Canvas_Size_Result result = {0};
+    
+    emscripten_sync_run_in_main_runtime_thread(EM_FUNC_SIG_VI, _em_get_canvas_size_main_thread, &result);
+    if (!result.success)
+        return false;
+   
+    *width = result.w;
+    *height = result.h;
+    return true;
+}
+
+static uint32_t *_em_pixel_buffer = NULL;
+static size_t _em_pixel_buffer_size = 0;
+// Allocate (or reallocate) a static pixel buffer to match the canvas size.
+void* surface_map_pixels(Surface_Handle h) {
+    (void)h;
+    s64 width, height;
+    if (!surface_get_framebuffer_size(h, &width, &height))
+        return 0;
+    size_t required = (size_t)width * (size_t)height;
+    if (required > _em_pixel_buffer_size) {
+        if (_em_pixel_buffer) {
+            sys_unmap_pages(_em_pixel_buffer);
+        }
+        
+        u64 size = required * 4;
+        u64 pages = (size+4096)/4096;
+        _em_pixel_buffer = sys_map_pages(SYS_MEMORY_RESERVE | SYS_MEMORY_ALLOCATE, 0, pages, false);
+        _em_pixel_buffer_size = required;
+    }
+    return _em_pixel_buffer;
+}
+
+unit_local char _em_surface_blit_pixels_script[8196] = {0};
+    #pragma clang diagnostic ignored "-Wmissing-noreturn"
+unit_local void main_thread_surface_blit_pixels(void) {
+    char *script = _em_surface_blit_pixels_script;
+    emscripten_run_script(script);
+}
+
+void surface_blit_pixels(Surface_Handle h) {
+    (void)h;
+    s64 width, height;
+    if (!surface_get_framebuffer_size(h, &width, &height))
+        return;
+
+    const char *format = 
+        "var canvas = document.getElementById('canvas');"
+        "if (canvas) {"
+            "var ctx = canvas.getContext('2d');"
+            "var imageData = ctx.createImageData(%i, %i);"
+            "var numBytes = %i * %i * 4;"
+            "var ptr = %i;"
+            "var pixels = HEAPU8.subarray(ptr, ptr + numBytes);"
+            "imageData.data.set(pixels);"
+            "ctx.putImageData(imageData, 0, 0);"
+        "}";
+
+    int w = (int)width;
+    int h_int = (int)height;
+    
+    #pragma clang diagnostic ignored "-Wformat-nonliteral"
+    extern int snprintf(char*restrict, unsigned long, const char*restrict, ...);
+    int script_len = snprintf(NULL, 0, format, w, h_int, w, h_int, (int)_em_pixel_buffer) + 1;
+    assert(script_len < (int)sizeof(_em_surface_blit_pixels_script));
+    snprintf(_em_surface_blit_pixels_script, (unsigned long)script_len, format, w, h_int, w, h_int, (int)_em_pixel_buffer);
+
+    emscripten_sync_run_in_main_runtime_thread(EM_FUNC_SIG_V, main_thread_surface_blit_pixels, _em_surface_blit_pixels_script);
+}
+
+unit_local volatile s32 _em_frame_ready = 0;
+unit_local EM_BOOL animation_frame_callback(double time, void *userData) {
+    (void)time;
+    (void)userData;
+    _em_frame_ready = 1;
+    return EM_TRUE;
+}
+unit_local void _em_main_thread_wait_animation_frame(void) {
+    _em_frame_ready = 0;
+    emscripten_request_animation_frame(animation_frame_callback, NULL);
+    
+    while (!_em_frame_ready) {
+        // whatevs web is dumb
+         _em_frame_ready = true;
+    }
+}
+bool sys_wait_vertical_blank(Physical_Monitor monitor) {
+    (void)monitor;
+    emscripten_sync_run_in_main_runtime_thread(EM_FUNC_SIG_V, _em_main_thread_wait_animation_frame);
+    return true;
+}
+
 #endif // !OSTD_HEADLESS
+
 
 void sys_print_stack_trace(File_Handle handle) {
     char buffer[16384];

@@ -1,7 +1,7 @@
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wdeclaration-after-statement"
 #pragma clang diagnostic ignored "-Wreserved-macro-identifier"
-#ifdef _MSC_VER
+#if defined(_MSC_VER) || defined(__EMSCRIPTEN__)
 #pragma clang diagnostic ignored "-Wunsafe-buffer-usage"
 #endif
 
@@ -9,6 +9,9 @@
 
 #include <intrin.h>
 #include <immintrin.h>
+
+#undef log
+
 #undef min
 #undef max
 #undef __crt_va_start
@@ -17,9 +20,8 @@
 
 #define OSTD_IMPL
 #define OSTD_NO_GRAPHICS
-//#include "../src/ostd.h"
-#include "../ostd_single_header.h"
-
+#include "../src/ostd.h"
+//#include "../ostd_single_header.h"
 
 
 typedef struct Scanline {
@@ -31,8 +33,8 @@ typedef struct Scanline {
 
 int main(void) {
 	//sys_set_thread_affinity_mask(sys_get_current_thread(), 1);
-	sys_set_local_process_priority_level(SYS_PRIORITY_HIGH);
-	sys_set_thread_priority_level(sys_get_current_thread(), SYS_PRIORITY_HIGH);
+	//sys_set_local_process_priority_level(SYS_PRIORITY_HIGH);
+	//sys_set_thread_priority_level(sys_get_current_thread(), SYS_PRIORITY_HIGH);
 
 #if OS_FLAGS & OS_FLAG_HAS_WINDOW_SYSTEM
 	Surface_Handle surface = sys_make_surface(DEFAULT(Surface_Desc));
@@ -89,7 +91,7 @@ int main(void) {
 		assert(pixels);
 		assert((u64)pixels % 32 == 0);
 
-		memset(pixels, 0x00, (u64)(width*height*4));
+		memset(pixels, 0x00, (sys_uint)(width*height*4));
 
 		float frag_x = (2.0f/(float)width);
 		float frag_y = (1.0f/(float)height);
@@ -284,6 +286,9 @@ int main(void) {
 					f32 lgf = (f32)lg;
 					f32 lbf = (f32)lb;
 					
+					volatile u64 cyc_px0 = __rdtsc();
+					
+#if !(OS_FLAGS & OS_FLAG_WEB)
 					__m256 accr256 = _mm256_set_ps(lrf+stepr*7,lrf+stepr*6,lrf+stepr*5,lrf+stepr*4,lrf+stepr*3,lrf+stepr*2,lrf+stepr*1,lrf+stepr*0);
 					__m256 accg256 = _mm256_set_ps(lgf+stepg*7,lgf+stepg*6,lgf+stepg*5,lgf+stepg*4,lgf+stepg*3,lgf+stepg*2,lgf+stepg*1,lgf+stepg*0);
 					__m256 accb256 = _mm256_set_ps(lbf+stepb*7,lbf+stepb*6,lbf+stepb*5,lbf+stepb*4,lbf+stepb*3,lbf+stepb*2,lbf+stepb*1,lbf+stepb*0);
@@ -295,7 +300,6 @@ int main(void) {
 					__m256i cmp_vec_base  = _mm256_set_epi32(7, 6, 5, 4, 3, 2, 1, 0);
 					
 					s32 vpx = vpx0;
-					volatile u64 cyc_px0 = __rdtsc();
 					for (; vpx < vpx1; vpx += 8) {
 						
 						u32 *start = pixels + yindex + vpx;
@@ -333,6 +337,61 @@ int main(void) {
 						
 						
 					}
+#else // !(OS_FLAGS & OS_FLAG_WEB)
+					v128_t accr = wasm_f32x4_make(lrf + stepr * 0,
+				                                  lrf + stepr * 1,
+				                                  lrf + stepr * 2,
+				                                  lrf + stepr * 3);
+				    v128_t accg = wasm_f32x4_make(lgf + stepg * 0,
+				                                  lgf + stepg * 1,
+				                                  lgf + stepg * 2,
+				                                  lgf + stepg * 3);
+				    v128_t accb = wasm_f32x4_make(lbf + stepb * 0,
+				                                  lbf + stepb * 1,
+				                                  lbf + stepb * 2,
+				                                  lbf + stepb * 3);
+				
+				    v128_t stepr128 = wasm_f32x4_splat(stepr * 4);
+				    v128_t stepg128 = wasm_f32x4_splat(stepg * 4);
+				    v128_t stepb128 = wasm_f32x4_splat(stepb * 4);
+				
+				    v128_t cmp_vec_base = wasm_i32x4_make(0, 1, 2, 3);
+				
+				    for (int vpx = vpx0; vpx < vpx1; vpx += 4) {
+				        u32 *start = pixels + yindex + vpx;
+				
+				        v128_t aacc = wasm_i32x4_splat((s32)0xff000000);
+				
+				        v128_t racc = wasm_i32x4_trunc_sat_f32x4(accr);
+				        racc = wasm_i32x4_shl(racc, 16);
+				
+				        v128_t gacc = wasm_i32x4_trunc_sat_f32x4(accg);
+				        gacc = wasm_i32x4_shl(gacc, 8);
+				
+				        v128_t bacc = wasm_i32x4_trunc_sat_f32x4(accb);
+				
+				        v128_t rgba = wasm_v128_or(aacc, racc);
+				        rgba = wasm_v128_or(rgba, gacc);
+				        rgba = wasm_v128_or(rgba, bacc);
+				
+				        v128_t vpx_vec = wasm_i32x4_splat(vpx);
+				        v128_t cmp_vec = wasm_i32x4_add(cmp_vec_base, vpx_vec);
+				        v128_t threshold = wasm_i32x4_splat(vpx1);
+				
+				        v128_t mask = wasm_i32x4_gt(threshold, cmp_vec);
+				
+				        v128_t dst = wasm_v128_load(start);
+				        v128_t allOnes = wasm_i32x4_splat(-1);
+				        v128_t not_mask = wasm_v128_xor(mask, allOnes);
+				        v128_t blended = wasm_v128_or(wasm_v128_and(mask, rgba),
+				                                      wasm_v128_and(not_mask, dst));
+				        wasm_v128_store(start, blended);
+				
+				        accr = wasm_f32x4_add(accr, stepr128);
+				        accg = wasm_f32x4_add(accg, stepg128);
+				        accb = wasm_f32x4_add(accb, stepb128);
+				    }
+#endif // (OS_FLAGS & OS_FLAG_WEB)
 					volatile u64 cyc_px1 = __rdtsc();
 					volatile u64 cyc_px = cyc_px1-cyc_px0;
 					cyc_pixels += cyc_px;
@@ -386,7 +445,6 @@ int main(void) {
 		float64 ms = (tt1-tt0)*1000.0;
 		print("%fms\n", ms);
 
-		// This waits exactly until vblank happened, letting you do 100% smooth frame pacing.
 		sys_wait_vertical_blank(monitor);
 		surface_blit_pixels(surface);
 

@@ -6,7 +6,7 @@
 
 #define OSTD_IMPL
 #define OSTD_NO_GRAPHICS
-#include "../ostd_single_header.h"
+#include "../src/ostd.h"
 
 int main(void) {
 
@@ -22,23 +22,21 @@ int main(void) {
 
 	while (!surface_should_close(surface)) {
 
-
 		s64 width, height;
 		assert(surface_get_framebuffer_size(surface, &width, &height));
-
+		
 		u32 *pixels = (u32*)surface_map_pixels(surface);
 		assert(pixels);
+		
+		memset(pixels, 0x00, (sys_uint)((u64)width*(u64)height*4));
 
-		memset(pixels, 0x00, (u64)width*(u64)height*4);
-
-		for (s64 x = 100; x < 300; x += 1) {
-			for (s64 y = 50; y < 150; y += 1) {
+		for (s64 x = 200; x < 450; x += 1) {
+			for (s64 y = 100; y < 250; y += 1) {
 				pixels[y*width+x] = 0xffffffff;
 			}
 		}
 
 		surface_blit_pixels(surface);
-
 		surface_poll_events(surface);
 		
 #ifdef RUNNING_TESTS

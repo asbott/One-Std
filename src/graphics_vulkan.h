@@ -14,16 +14,6 @@
 #include <vulkan/vulkan.h>
 
 
-
-// For syntax highligthing
-#if 0
-#include "ostd.h"
-// noconcat
-#include "../vendors/vulkan/vulkan.h"
-#endif
-
-
-
 // We manually include the vulkan-specific headers, otherwise vulkan.h will include windows.h
 #if OS_FLAGS & OS_FLAG_WINDOWS
 // noconcat
@@ -588,7 +578,6 @@ unit_local inline VkInstance _vk_instance(void) {
         "VK_MVK_ios_surface",
         "VK_KHR_portability_enumeration",
         "VK_KHR_get_physical_device_properties2",
-        "VK_AMD_device_coherent_memory",
     };
     create_info.flags |= VK_INSTANCE_CREATE_ENUMERATE_PORTABILITY_BIT_KHR;
 #elif OS_FLAGS & OS_FLAG_ANDROID
@@ -598,7 +587,6 @@ unit_local inline VkInstance _vk_instance(void) {
 #endif
         VK_KHR_SURFACE_EXTENSION_NAME,
         VK_KHR_ANDROID_SURFACE_EXTENSION_NAME,
-        "VK_AMD_device_coherent_memory",
         "VK_KHR_get_physical_device_properties2"
     };
 
@@ -934,6 +922,7 @@ u64 oga_query_devices(Oga_Device *buffer, u64 buffer_count) {
             // Stuff
             memcpy(device->device_name_data, props.deviceName, min(sizeof(device->device_name_data), sizeof(props.deviceName)));
             device->device_name_length = c_style_strlen((const char*)device->device_name_data);
+            device->vendor_id = (u64)props.vendorID;
             device->vendor_name = _str_vendor_id(props.vendorID);
             device->driver_version_raw = props.driverVersion;
             device->driver_version_length = _format_driver_version(props.vendorID, props.driverVersion, device->driver_version_data, sizeof(device->driver_version_data));
@@ -1407,14 +1396,20 @@ Oga_Result oga_init_context(Oga_Device target_device, Oga_Context_Desc desc, Oga
         
         info.ppEnabledExtensionNames = (const char*const*)names;
         
-        names[info.enabledExtensionCount++] = "VK_AMD_device_coherent_memory";
+        // todo(charlie) feature flags
+        if (target_device.vendor_id == VENDOR_ID_AMD) {
+            names[info.enabledExtensionCount++] = "VK_AMD_device_coherent_memory";
+        }
         names[info.enabledExtensionCount++] = "VK_EXT_fragment_shader_interlock";
         internal->dynamic_rendering_is_extension = true;
     } else {
         internal->dynamic_rendering = true;
         internal->dynamic_rendering_is_extension = false;
         
-        names[info.enabledExtensionCount++] = "VK_AMD_device_coherent_memory";
+        // todo(charlie) feature flags
+        if (target_device.vendor_id == VENDOR_ID_AMD) {
+            names[info.enabledExtensionCount++] = "VK_AMD_device_coherent_memory";
+        }
         names[info.enabledExtensionCount++] = "VK_EXT_fragment_shader_interlock";
         names[info.enabledExtensionCount++] = VK_KHR_SWAPCHAIN_EXTENSION_NAME;
         info.ppEnabledExtensionNames = (const char*const*)names;

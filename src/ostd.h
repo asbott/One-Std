@@ -20,7 +20,7 @@
 #ifdef __EMSCRIPTEN__
 #pragma clang diagnostic ignored "-Wpadded"
 #endif // __EMSCRIPTEN__
-#ifdef _MSC_VER
+#if defined(_MSC_VER) || defined(__EMSCRIPTEN__)
 #pragma clang diagnostic ignored "-Wunsafe-buffer-usage"
 #endif
 #endif // __clang__

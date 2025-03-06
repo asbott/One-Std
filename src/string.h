@@ -52,7 +52,7 @@ unit_local inline bool string_contains(string s, string sub) {
 unit_local inline bool string_starts_with(string s, string sub) {
     if (sub.count > s.count) return false;
     
-    return memcmp(s.data, sub.data, sub.count) == 0;
+    return memcmp(s.data, sub.data, (u32)sub.count) == 0;
 }
 
 unit_local s64 string_find_index_from_left(string s, string sub) {

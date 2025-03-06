@@ -1,0 +1,33 @@
+<html lang="en-us">
+		<head>
+		<meta charset="utf-8">
+		<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+		<title>Emscripten-Generated Code</title>
+		<style>body {
+  font-family: arial;
+  margin: 0;
+  padding: none;
+}
+
+/* the canvas *must not* have any border or padding, or mouse coords will be wrong */
+canvas.emscripten { border: 0px none; background-color: black; width: 100%; height: 100%; }
+
+</style>
+	</head>
+  <body>
+    <!--<div class="emscripten" id="status">Exception thrown, see JavaScript console</div>-->
+
+    <!--<div class="emscripten">
+      <progress value="0" max="1" id="progress" hidden=""></progress>
+    </div>-->
+
+  <div class="emscripten_border">
+      <canvas class="emscripten" id="canvas" width=1920 height=1080 oncontextmenu="event.preventDefault()" tabindex="-1"></canvas>
+</div>
+    
+    <!--<textarea id="output" rows="8"></textarea>-->
+
+  {{{ SCRIPT }}}
+  
+
+</body></html>

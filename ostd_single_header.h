@@ -23,7 +23,7 @@
 #ifdef __EMSCRIPTEN__
 #pragma clang diagnostic ignored "-Wpadded"
 #endif // __EMSCRIPTEN__
-#ifdef _MSC_VER
+#if defined(_MSC_VER) || defined(__EMSCRIPTEN__)
 #pragma clang diagnostic ignored "-Wunsafe-buffer-usage"
 #endif
 #endif // __clang__
@@ -337,8 +337,13 @@ typedef u64 sys_uint;
 #define SYS_INT_MAX SYS_S64_MAX
 #define SYS_UINT_MAX SYS_U64_MAX
 #else
+#if OS_FLAGS & OS_FLAG_EMSCRIPTEN
+typedef signed long sys_int;
+typedef unsigned long sys_uint;
+#else
 typedef s32 sys_int;
 typedef u32 sys_uint;
+#endif
 #define SYS_INT_MAX S32_MAX
 #define SYS_UINT_MAX U32_MAX
 #endif
@@ -764,7 +769,7 @@ unit_local inline f64 ceil64(f64 f) {
 } while (0)
 
 
-inline float64 fmod_cycling(float64 x, float64 y) {
+unit_local inline float64 fmod_cycling(float64 x, float64 y) {
     if (y == 0.0) {
         return 0.0;
     }
@@ -820,12 +825,6 @@ unit_local inline float64 atan2(float64 y, float64 x) {
            (y > 0) ? PI / 2 :
            (y < 0) ? -PI / 2 : 0.0;
 }
-
-// Natural logarithm
-float32 ln32(float32 x);
-float64 ln64(float64 x);
-u64 powu(u64 x, u64 e);
-f64 powf64(f64 x, f64 e);
 
 #define f2_expand(v) (v).x, (v).y
 #define f3_expand(v) (v).x, (v).y, (v).z
@@ -927,7 +926,7 @@ typedef float4x32 float4;
 
 
 
-inline float32 ln32(float32 x) {
+unit_local inline float32 ln32(float32 x) {
     u32 bx = * (u32 *) (&x);
     u32 ex = bx >> 23;
     s32 t = (s32)ex-(s32)127;
@@ -936,7 +935,7 @@ inline float32 ln32(float32 x) {
     return -1.49278f+(2.11263f+(-0.729104f+0.10969f*x)*x)*x+0.6931471806f*(float32)t;
 }
 
-inline float64 ln64(float64 x) {
+unit_local inline float64 ln64(float64 x) {
     u64 bx = *(u64 *)(&x); // Read float64 bits
     u64 ex = bx >> 52; // Extract exponent (11 bits)
     s32 t = (s32)ex - 1023; // Adjust for float64 bias
@@ -947,7 +946,7 @@ inline float64 ln64(float64 x) {
 
 
 
-inline u64 powu(u64 x, u64 e) {
+unit_local inline u64 powu(u64 x, u64 e) {
     if (e == 0) return 1;
     u64 result = x;
     for (u64 i = 0; i < e-1; i += 1) {
@@ -955,7 +954,7 @@ inline u64 powu(u64 x, u64 e) {
     }
     return result;
 }
-inline f64 powf64(f64 x, f64 e) {
+unit_local inline f64 powf64(f64 x, f64 e) {
     if (e == 0) return 1;
     f64 result = x;
     for (f64 i = 0; i < e-1; i += 1) {
@@ -964,7 +963,7 @@ inline f64 powf64(f64 x, f64 e) {
     return result;
 }
 
-inline float32 sqrt32(float32 n) {
+unit_local inline float32 sqrt32(float32 n) {
     if (n < 0.0f) {
         return -1.0f;
     }
@@ -988,7 +987,7 @@ inline float32 sqrt32(float32 n) {
     return x;
 }
 
-inline float64 sqrt64(float64 n) {
+unit_local inline float64 sqrt64(float64 n) {
     if (n < 0.0) {
         return -1.0;
     }
@@ -1012,13 +1011,13 @@ inline float64 sqrt64(float64 n) {
     return x;
 }
 
-inline float2x32 f2x32(float32 x, float32 y)                       { return (float2x32){x, y}; }
-inline float3x32 f3x32(float32 x, float32 y, float32 z)            { return (float3x32){x, y, z}; }
-inline float4x32 f4x32(float32 x, float32 y, float32 z, float32 w) { return (float4x32){x, y, z, w}; }
+unit_local inline float2x32 f2x32(float32 x, float32 y)                       { return (float2x32){x, y}; }
+unit_local inline float3x32 f3x32(float32 x, float32 y, float32 z)            { return (float3x32){x, y, z}; }
+unit_local inline float4x32 f4x32(float32 x, float32 y, float32 z, float32 w) { return (float4x32){x, y, z, w}; }
 
-inline float2x32 f2x32_scalar(float32 a) { return (float2x32){a, a}; }
-inline float3x32 f3x32_scalar(float32 a) { return (float3x32){a, a, a}; }
-inline float4x32 f4x32_scalar(float32 a) { return (float4x32){a, a, a, a}; }
+unit_local inline float2x32 f2x32_scalar(float32 a) { return (float2x32){a, a}; }
+unit_local inline float3x32 f3x32_scalar(float32 a) { return (float3x32){a, a, a}; }
+unit_local inline float4x32 f4x32_scalar(float32 a) { return (float4x32){a, a, a, a}; }
 
 unit_local const float2x32 f2x32_one = {1, 1};
 unit_local const float3x32 f3x32_one = {1, 1, 1};
@@ -1028,41 +1027,41 @@ unit_local const float2x32 f2x32_zero = {0, 0};
 unit_local const float3x32 f3x32_zero = {0, 0, 0};
 unit_local const float4x32 f4x32_zero = {0, 0, 0, 0};
 
-inline float2x32 f2x32_add(float2x32 a, float2x32 b)  { return f2x32(a.x+b.x, a.y+b.y); }
-inline float3x32 f3x32_add(float3x32 a, float3x32 b)  { return f3x32(a.x+b.x, a.y+b.y, a.z+b.z); }
-inline float4x32 f4x32_add(float4x32 a, float4x32 b)  { return f4x32(a.x+b.x, a.y+b.y, a.z+b.z, a.w+b.w); }
+unit_local inline float2x32 f2x32_add(float2x32 a, float2x32 b)  { return f2x32(a.x+b.x, a.y+b.y); }
+unit_local inline float3x32 f3x32_add(float3x32 a, float3x32 b)  { return f3x32(a.x+b.x, a.y+b.y, a.z+b.z); }
+unit_local inline float4x32 f4x32_add(float4x32 a, float4x32 b)  { return f4x32(a.x+b.x, a.y+b.y, a.z+b.z, a.w+b.w); }
 
-inline float2x32 f2x32_sub(float2x32 a, float2x32 b)  { return f2x32(a.x-b.x, a.y-b.y); }
-inline float3x32 f3x32_sub(float3x32 a, float3x32 b)  { return f3x32(a.x-b.x, a.y-b.y, a.z-b.z); }
-inline float4x32 f4x32_sub(float4x32 a, float4x32 b)  { return f4x32(a.x-b.x, a.y-b.y, a.z-b.z, a.w-b.w); }
+unit_local inline float2x32 f2x32_sub(float2x32 a, float2x32 b)  { return f2x32(a.x-b.x, a.y-b.y); }
+unit_local inline float3x32 f3x32_sub(float3x32 a, float3x32 b)  { return f3x32(a.x-b.x, a.y-b.y, a.z-b.z); }
+unit_local inline float4x32 f4x32_sub(float4x32 a, float4x32 b)  { return f4x32(a.x-b.x, a.y-b.y, a.z-b.z, a.w-b.w); }
 
-inline float2x32 f2x32_mul(float2x32 a, float2x32 b)  { return f2x32(a.x*b.x, a.y*b.y); }
-inline float3x32 f3x32_mul(float3x32 a, float3x32 b)  { return f3x32(a.x*b.x, a.y*b.y, a.z*b.z); }
-inline float4x32 f4x32_mul(float4x32 a, float4x32 b)  { return f4x32(a.x*b.x, a.y*b.y, a.z*b.z, a.w*b.w); }
+unit_local inline float2x32 f2x32_mul(float2x32 a, float2x32 b)  { return f2x32(a.x*b.x, a.y*b.y); }
+unit_local inline float3x32 f3x32_mul(float3x32 a, float3x32 b)  { return f3x32(a.x*b.x, a.y*b.y, a.z*b.z); }
+unit_local inline float4x32 f4x32_mul(float4x32 a, float4x32 b)  { return f4x32(a.x*b.x, a.y*b.y, a.z*b.z, a.w*b.w); }
 
-inline float2x32 f2x32_mulf32(float2x32 a, float32 s) { return f2x32_mul(a, f2x32(s, s)); }
-inline float3x32 f3x32_mulf32(float3x32 a, float32 s) { return f3x32_mul(a, f3x32(s, s, s)); }
-inline float4x32 f4x32_mulf32(float4x32 a, float32 s) { return f4x32_mul(a, f4x32(s, s, s, s)); }
+unit_local inline float2x32 f2x32_mulf32(float2x32 a, float32 s) { return f2x32_mul(a, f2x32(s, s)); }
+unit_local inline float3x32 f3x32_mulf32(float3x32 a, float32 s) { return f3x32_mul(a, f3x32(s, s, s)); }
+unit_local inline float4x32 f4x32_mulf32(float4x32 a, float32 s) { return f4x32_mul(a, f4x32(s, s, s, s)); }
 
-inline float2x32 f2x32_div(float2x32 a, float2x32 b)  { return f2x32(a.x/b.x, a.y/b.y); }
-inline float3x32 f3x32_div(float3x32 a, float3x32 b)  { return f3x32(a.x/b.x, a.y/b.y, a.z/b.z); }
-inline float4x32 f4x32_div(float4x32 a, float4x32 b)  { return f4x32(a.x/b.x, a.y/b.y, a.z/b.z, a.w/b.w); }
+unit_local inline float2x32 f2x32_div(float2x32 a, float2x32 b)  { return f2x32(a.x/b.x, a.y/b.y); }
+unit_local inline float3x32 f3x32_div(float3x32 a, float3x32 b)  { return f3x32(a.x/b.x, a.y/b.y, a.z/b.z); }
+unit_local inline float4x32 f4x32_div(float4x32 a, float4x32 b)  { return f4x32(a.x/b.x, a.y/b.y, a.z/b.z, a.w/b.w); }
 
-inline float2x32 f2x32_divf32(float2x32 a, float32 s) { return f2x32_div(a, f2x32(s, s)); }
-inline float3x32 f3x32_divf32(float3x32 a, float32 s) { return f3x32_div(a, f3x32(s, s, s)); }
-inline float4x32 f4x32_divf32(float4x32 a, float32 s) { return f4x32_div(a, f4x32(s, s, s, s)); }
+unit_local inline float2x32 f2x32_divf32(float2x32 a, float32 s) { return f2x32_div(a, f2x32(s, s)); }
+unit_local inline float3x32 f3x32_divf32(float3x32 a, float32 s) { return f3x32_div(a, f3x32(s, s, s)); }
+unit_local inline float4x32 f4x32_divf32(float4x32 a, float32 s) { return f4x32_div(a, f4x32(s, s, s, s)); }
 
-inline float32 f2x32_lensq(float2x32 a) { return a.x*a.x + a.y*a.y; }
-inline float32 f3x32_lensq(float3x32 a) { return a.x * a.x + a.y * a.y + a.z * a.z; }
-inline float32 f4x32_lensq(float4x32 a) { return a.x * a.x + a.y * a.y + a.z * a.z + a.w * a.w; }
+unit_local inline float32 f2x32_lensq(float2x32 a) { return a.x*a.x + a.y*a.y; }
+unit_local inline float32 f3x32_lensq(float3x32 a) { return a.x * a.x + a.y * a.y + a.z * a.z; }
+unit_local inline float32 f4x32_lensq(float4x32 a) { return a.x * a.x + a.y * a.y + a.z * a.z + a.w * a.w; }
 
-inline float32 f2x32_len(float2x32 a) { return sqrt32(a.x*a.x + a.y*a.y); }
-inline float32 f3x32_len(float3x32 a) { return sqrt32(a.x * a.x + a.y * a.y + a.z * a.z); }
-inline float32 f4x32_len(float4x32 a) { return sqrt32(a.x * a.x + a.y * a.y + a.z * a.z + a.w * a.w); }
+unit_local inline float32 f2x32_len(float2x32 a) { return sqrt32(a.x*a.x + a.y*a.y); }
+unit_local inline float32 f3x32_len(float3x32 a) { return sqrt32(a.x * a.x + a.y * a.y + a.z * a.z); }
+unit_local inline float32 f4x32_len(float4x32 a) { return sqrt32(a.x * a.x + a.y * a.y + a.z * a.z + a.w * a.w); }
 
-inline float32 f2x32_average(float2x32 a) { return (a.x+a.y)/2.0f; }
-inline float32 f3x32_average(float3x32 a) { return (a.x + a.y + a.z) / 3.0f; }
-inline float32 f4x32_average(float4x32 a) { return (a.x + a.y + a.z + a.w) / 4.0f; }
+unit_local inline float32 f2x32_average(float2x32 a) { return (a.x+a.y)/2.0f; }
+unit_local inline float32 f3x32_average(float3x32 a) { return (a.x + a.y + a.z) / 3.0f; }
+unit_local inline float32 f4x32_average(float4x32 a) { return (a.x + a.y + a.z + a.w) / 4.0f; }
 
 #if defined(__GNUC__) || defined(__GNUG__)
 #pragma GCC diagnostic push
@@ -1074,9 +1073,9 @@ inline float32 f4x32_average(float4x32 a) { return (a.x + a.y + a.z + a.w) / 4.0
 #pragma clang diagnostic ignored "-Wfloat-equal"
 #endif // __clang__
 
-inline float2x32 f2x32_normalize(float2x32 a) { return f2x32_lensq(a) == 0 ? f2x32_scalar(0) : f2x32_divf32(a, f2x32_len(a)); }
-inline float3x32 f3x32_normalize(float3x32 a) { return f3x32_lensq(a) == 0 ? f3x32_scalar(0) : f3x32_divf32(a, f3x32_len(a)); }
-inline float4x32 f4x32_normalize(float4x32 a) { return f4x32_lensq(a) == 0 ? f4x32_scalar(0) : f4x32_divf32(a, f4x32_len(a)); }
+unit_local inline float2x32 f2x32_normalize(float2x32 a) { return f2x32_lensq(a) == 0 ? f2x32_scalar(0) : f2x32_divf32(a, f2x32_len(a)); }
+unit_local inline float3x32 f3x32_normalize(float3x32 a) { return f3x32_lensq(a) == 0 ? f3x32_scalar(0) : f3x32_divf32(a, f3x32_len(a)); }
+unit_local inline float4x32 f4x32_normalize(float4x32 a) { return f4x32_lensq(a) == 0 ? f4x32_scalar(0) : f4x32_divf32(a, f4x32_len(a)); }
 
 #if defined(__GNUC__) || defined(__GNUG__)
 #pragma GCC diagnostic pop
@@ -1086,12 +1085,12 @@ inline float4x32 f4x32_normalize(float4x32 a) { return f4x32_lensq(a) == 0 ? f4x
 #pragma clang diagnostic pop
 #endif // __clang__
 
-inline float32 f2x32_dot(float2x32 a, float2x32 b) { return a.x * b.x + a.y * b.y; }
-inline float32 f3x32_dot(float3x32 a, float3x32 b) { return a.x * b.x + a.y * b.y + a.z * b.z; }
-inline float32 f4x32_dot(float4x32 a, float4x32 b) { return a.x * b.x + a.y * b.y + a.z * b.z + a.w * b.w; }
+unit_local inline float32 f2x32_dot(float2x32 a, float2x32 b) { return a.x * b.x + a.y * b.y; }
+unit_local inline float32 f3x32_dot(float3x32 a, float3x32 b) { return a.x * b.x + a.y * b.y + a.z * b.z; }
+unit_local inline float32 f4x32_dot(float4x32 a, float4x32 b) { return a.x * b.x + a.y * b.y + a.z * b.z + a.w * b.w; }
 
-inline float32 f2x32_perp(float2x32 a, float2x32 b) { return (a.x * b.y) - (a.y * b.x); }
-inline float3x32 f3x32_cross(float3x32 a, float3x32 b) { return f3x32((a.y*b.z)-(a.z*b.y), (a.z*b.x)-(a.x*b.z), (a.x*b.y)-(a.y*b.x)); }
+unit_local inline float32 f2x32_perp(float2x32 a, float2x32 b) { return (a.x * b.y) - (a.y * b.x); }
+unit_local inline float3x32 f3x32_cross(float3x32 a, float3x32 b) { return f3x32((a.y*b.z)-(a.z*b.y), (a.z*b.x)-(a.x*b.z), (a.x*b.y)-(a.y*b.x)); }
 
 
 // Column major
@@ -1099,7 +1098,7 @@ typedef struct Matrix4 {
     float32 data[4][4];
 } Matrix4;
 
-inline Matrix4 m4_scalar(float32 scalar) {
+unit_local inline Matrix4 m4_scalar(float32 scalar) {
     Matrix4 m = (Matrix4){0};
     m.data[0][0] = scalar; 
     m.data[1][1] = scalar; 
@@ -1108,23 +1107,23 @@ inline Matrix4 m4_scalar(float32 scalar) {
     return m;
 }
 
-inline Matrix4 m4_identity(void) { return m4_scalar(1.0); }
+unit_local inline Matrix4 m4_identity(void) { return m4_scalar(1.0); }
 
-inline Matrix4 m4_make_translation(float3 translation) {
+unit_local inline Matrix4 m4_make_translation(float3 translation) {
     Matrix4 m = m4_identity();    
     *(float3*)m.data[3] = translation;
     
     return m;
 }
 
-inline Matrix4 m4_translate(Matrix4 m, float3 translation) {
+unit_local inline Matrix4 m4_translate(Matrix4 m, float3 translation) {
     m.data[3][0] = translation.x;
     m.data[3][1] = translation.y;
     m.data[3][2] = translation.z;
     return m;
 }
 
-inline float m4_trace(Matrix4 m) {
+unit_local inline float m4_trace(Matrix4 m) {
     float a = m.data[0][0];
     a += m.data[1][1];
     a += m.data[2][2];
@@ -1133,7 +1132,7 @@ inline float m4_trace(Matrix4 m) {
     return a;
 }
 
-inline Matrix4 m4_add(Matrix4 m0, Matrix4 m1) {
+unit_local inline Matrix4 m4_add(Matrix4 m0, Matrix4 m1) {
     *(float4*)m0.data[0] = f4_add(*(float4*)m0.data[0], *(float4*)m1.data[0]);
     *(float4*)m0.data[1] = f4_add(*(float4*)m0.data[1], *(float4*)m1.data[1]);
     *(float4*)m0.data[2] = f4_add(*(float4*)m0.data[2], *(float4*)m1.data[2]);
@@ -1142,7 +1141,7 @@ inline Matrix4 m4_add(Matrix4 m0, Matrix4 m1) {
     return m0;
 }
 
-inline Matrix4 m4_make_scale(float3 scalars) {
+unit_local inline Matrix4 m4_make_scale(float3 scalars) {
     Matrix4 m = m4_identity();
     *(float4*)m.data[0] = f4_mulf(*(float4*)m.data[0], scalars.x);
     *(float4*)m.data[1] = f4_mulf(*(float4*)m.data[1], scalars.y);
@@ -1151,7 +1150,7 @@ inline Matrix4 m4_make_scale(float3 scalars) {
     return m;
 }
 
-inline Matrix4 m4_scalef(Matrix4 m, float32 scalar) {
+unit_local inline Matrix4 m4_scalef(Matrix4 m, float32 scalar) {
     *(float4*)m.data[0] = f4_mulf(*(float4*)m.data[0], scalar);
     *(float4*)m.data[1] = f4_mulf(*(float4*)m.data[1], scalar);
     *(float4*)m.data[2] = f4_mulf(*(float4*)m.data[2], scalar);
@@ -1159,14 +1158,14 @@ inline Matrix4 m4_scalef(Matrix4 m, float32 scalar) {
     
     return m;
 }
-inline Matrix4 m4_scale(Matrix4 m, float3 scalars) {
+unit_local inline Matrix4 m4_scale(Matrix4 m, float3 scalars) {
     *(float4*)m.data[0] = f4_mulf(*(float4*)m.data[0], scalars.x);
     *(float4*)m.data[1] = f4_mulf(*(float4*)m.data[1], scalars.y);
     *(float4*)m.data[2] = f4_mulf(*(float4*)m.data[2], scalars.z);
     
     return m;
 }
-inline Matrix4 m4_scale_f4(Matrix4 m, float4 scalars) {
+unit_local inline Matrix4 m4_scale_f4(Matrix4 m, float4 scalars) {
     *(float4*)m.data[0] = f4_mulf(*(float4*)m.data[0], scalars.x);
     *(float4*)m.data[1] = f4_mulf(*(float4*)m.data[1], scalars.y);
     *(float4*)m.data[2] = f4_mulf(*(float4*)m.data[2], scalars.z);
@@ -1206,7 +1205,7 @@ unit_local inline Matrix4 m4_make_rotation_z(float rad) {
     }};
 }
 
-inline Matrix4 m4_transpose(Matrix4 m) {
+unit_local inline Matrix4 m4_transpose(Matrix4 m) {
     Matrix4 tm = m;
     
     // Diagonal is copied over, but swap each side of it
@@ -1230,7 +1229,7 @@ inline Matrix4 m4_transpose(Matrix4 m) {
     return tm;
 } 
 
-inline Matrix4 m4_mulm4(Matrix4 m0, Matrix4 m1) {
+unit_local inline Matrix4 m4_mulm4(Matrix4 m0, Matrix4 m1) {
 /*
         m = m0 * m1
         
@@ -1268,7 +1267,7 @@ inline Matrix4 m4_mulm4(Matrix4 m0, Matrix4 m1) {
     return m;
 }
 
-inline float4 m4_mulf4(Matrix4 m0, float4 m1) {
+unit_local inline float4 m4_mulf4(Matrix4 m0, float4 m1) {
     Matrix4 tm0 = m4_transpose(m0);
     
     float4 f;
@@ -1284,7 +1283,7 @@ inline float4 m4_mulf4(Matrix4 m0, float4 m1) {
 // but nevertheless useful and makes sense to a game developer.
 // It just fills in the z w components to 0 1 if missing.
 // This only makes sense in games.
-inline float3 m4_mulf3_trunc(Matrix4 m0, float3 m1) {
+unit_local inline float3 m4_mulf3_trunc(Matrix4 m0, float3 m1) {
     Matrix4 tm0 = m4_transpose(m0);
     
     float3 f;
@@ -1294,7 +1293,7 @@ inline float3 m4_mulf3_trunc(Matrix4 m0, float3 m1) {
     
     return f;
 } 
-inline float2 m4_mulf2_trunc(Matrix4 m0, float2 m1) {
+unit_local inline float2 m4_mulf2_trunc(Matrix4 m0, float2 m1) {
     Matrix4 tm0 = m4_transpose(m0);
     
     float2 f;
@@ -1304,7 +1303,7 @@ inline float2 m4_mulf2_trunc(Matrix4 m0, float2 m1) {
     return f;
 } 
 
-inline f64 get_power_of_two_f64(f64 x, u64 exp) {
+unit_local inline f64 get_power_of_two_f64(f64 x, u64 exp) {
     return x * (f64)(1ULL << exp);
 }
 
@@ -1397,7 +1396,18 @@ unit_local inline bool string_contains(string s, string sub) {
 unit_local inline bool string_starts_with(string s, string sub) {
     if (sub.count > s.count) return false;
     
-    return memcmp(s.data, sub.data, sub.count) == 0;
+    return memcmp(s.data, sub.data, (u32)sub.count) == 0;
+}
+
+unit_local s64 string_find_index_from_left(string s, string sub) {
+    
+    for (u64 i = 0; i < s.count-sub.count; i += 1) {
+        
+        if (strings_match((string){sub.count, s.data+i}, sub)) {
+            return (s64)i;
+        }
+    }
+    return -1;
 }
 
 /* End include: string.h */
@@ -1492,6 +1502,65 @@ typedef struct Easy_Command_Result {
     bool process_start_success;
 } Easy_Command_Result;
 Easy_Command_Result sys_run_command_easy(string command_line);
+
+typedef u64 Socket;
+
+typedef enum Socket_Result {
+    SOCKET_OK = 0,
+
+    SOCKET_DISCONNECTED,
+    SOCKET_NOT_INITIALIZED,
+    SOCKET_NOACCESS,
+    SOCKET_IN_PROGRESS,
+    SOCKET_NOT_A_SOCKET,
+    
+    SOCKET_INVALID_ADDRESS,
+    SOCKET_TIMED_OUT,
+    SOCKET_CONNECTION_REFUSED,
+    SOCKET_CONNECTION_RESET,
+    SOCKET_ALREADY_CONNECTED,
+    SOCKET_ADDRESS_IN_USE,
+    SOCKET_NETWORK_UNREACHABLE,
+    SOCKET_HOST_UNREACHABLE,
+    SOCKET_PROTOCOL_ERROR,
+} Socket_Result;
+
+
+typedef enum Socket_Domain {
+    SOCKET_DOMAIN_IPV4,
+    SOCKET_DOMAIN_BLUETOOTH,
+    SOCKET_DOMAIN_APPLETALK,
+#if OS_FLAGS & OS_FLAG_UNIX
+    SOCKET_DOMAIN_UNIX,
+#endif
+
+} Socket_Domain;
+
+typedef enum Socket_Type {
+    SOCKET_TYPE_STREAM,
+    SOCKET_TYPE_DGRAM,
+    SOCKET_TYPE_RAW,
+    SOCKET_TYPE_RDM,
+    SOCKET_TYPE_SEQPACKET,
+} Socket_Type;
+
+typedef enum Socket_Protocol {
+    SOCKET_PROTOCOL_TCP,
+    SOCKET_PROTOCOL_UDP,
+} Socket_Protocol;
+
+u32 sys_convert_address_string(string address);
+
+Socket_Result sys_socket_init(Socket *socket, Socket_Domain domain, Socket_Type type, Socket_Protocol protocol);
+Socket_Result sys_socket_bind(Socket socket, u32 address, u16 port);
+Socket_Result sys_socket_listen(Socket socket, s64 backlog);
+Socket_Result sys_socket_accept(Socket socket, Socket *accepted, u64 timeout_ms);
+Socket_Result sys_socket_connect(Socket sock, u32 address, u16 port, Socket_Domain domain);
+Socket_Result sys_socket_send(Socket socket, void *data, u64 length, u64 *sent);
+Socket_Result sys_socket_recv(Socket socket, void *buffer, u64 length, u64 *sent);
+Socket_Result sys_socket_close(Socket socket);
+Socket_Result sys_socket_set_blocking(Socket *socket, bool blocking);
+Socket_Result sys_set_socket_blocking_timeout(Socket socket, u64 ms);
 
 //////
 // Surfaces (Window)
@@ -3968,8 +4037,446 @@ unit_local const HRESULT DXGI_ERROR_NOT_FOUND = 0x887A0002;
 WINDOWS_IMPORT HRESULT WINAPI CreateDXGIFactory(const GUID *riid, void **ppFactory);
 
 
+
+
+
+
+
+#define WSABASEERR 10000
+#define WSAEINTR                         10004L
+#define WSAEBADF                         10009L
+#define WSAEACCES                        10013L
+#define WSAEFAULT                        10014L
+#define WSAEINVAL                        10022L
+#define WSAEMFILE                        10024L
+#define WSAEWOULDBLOCK                   10035L
+#define WSAEINPROGRESS                   10036L
+#define WSAEALREADY                      10037L
+#define WSAENOTSOCK                      10038L
+#define WSAEDESTADDRREQ                  10039L
+#define WSAEMSGSIZE                      10040L
+#define WSAEPROTOTYPE                    10041L
+#define WSAENOPROTOOPT                   10042L
+#define WSAEPROTONOSUPPORT               10043L
+#define WSAESOCKTNOSUPPORT               10044L
+#define WSAEOPNOTSUPP                    10045L
+#define WSAEPFNOSUPPORT                  10046L
+#define WSAEAFNOSUPPORT                  10047L
+#define WSAEADDRINUSE                    10048L
+#define WSAEADDRNOTAVAIL                 10049L
+#define WSAENETDOWN                      10050L
+#define WSAENETUNREACH                   10051L
+#define WSAENETRESET                     10052L
+#define WSAECONNABORTED                  10053L
+#define WSAECONNRESET                    10054L
+#define WSAENOBUFS                       10055L
+#define WSAEISCONN                       10056L
+#define WSAENOTCONN                      10057L
+#define WSAESHUTDOWN                     10058L
+#define WSAETOOMANYREFS                  10059L
+#define WSAETIMEDOUT                     10060L
+#define WSAECONNREFUSED                  10061L
+#define WSAELOOP                         10062L
+#define WSAENAMETOOLONG                  10063L
+#define WSAEHOSTDOWN                     10064L
+#define WSAEHOSTUNREACH                  10065L
+#define WSAENOTEMPTY                     10066L
+#define WSAEPROCLIM                      10067L
+#define WSAEUSERS                        10068L
+#define WSAEDQUOT                        10069L
+#define WSAESTALE                        10070L
+#define WSAEREMOTE                       10071L
+#define WSASYSNOTREADY                   10091L
+#define WSAVERNOTSUPPORTED               10092L
+#define WSANOTINITIALISED                10093L
+#define WSAEDISCON                       10101L
+#define WSAENOMORE                       10102L
+#define WSAECANCELLED                    10103L
+#define WSAEINVALIDPROCTABLE             10104L
+#define WSAEINVALIDPROVIDER              10105L
+#define WSAEPROVIDERFAILEDINIT           10106L
+#define WSASYSCALLFAILURE                10107L
+#define WSASERVICE_NOT_FOUND             10108L
+#define WSATYPE_NOT_FOUND                10109L
+#define WSA_E_NO_MORE                    10110L
+#define WSA_E_CANCELLED                  10111L
+#define WSAEREFUSED                      10112L
+#define WSAHOST_NOT_FOUND                11001L
+#define WSATRY_AGAIN                     11002L
+#define WSANO_RECOVERY                   11003L
+#define WSANO_DATA                       11004L
+#define WSA_QOS_RECEIVERS                11005L
+#define WSA_QOS_SENDERS                  11006L
+#define WSA_QOS_NO_SENDERS               11007L
+#define WSA_QOS_NO_RECEIVERS             11008L
+#define WSA_QOS_REQUEST_CONFIRMED        11009L
+#define WSA_QOS_ADMISSION_FAILURE        11010L
+#define WSA_QOS_POLICY_FAILURE           11011L
+#define WSA_QOS_BAD_STYLE                11012L
+#define WSA_QOS_BAD_OBJECT               11013L
+#define WSA_QOS_TRAFFIC_CTRL_ERROR       11014L
+#define WSA_QOS_GENERIC_ERROR            11015L
+#define WSA_QOS_ESERVICETYPE             11016L
+#define WSA_QOS_EFLOWSPEC                11017L
+#define WSA_QOS_EPROVSPECBUF             11018L
+#define WSA_QOS_EFILTERSTYLE             11019L
+#define WSA_QOS_EFILTERTYPE              11020L
+#define WSA_QOS_EFILTERCOUNT             11021L
+#define WSA_QOS_EOBJLENGTH               11022L
+#define WSA_QOS_EFLOWCOUNT               11023L
+#define WSA_QOS_EUNKOWNPSOBJ             11024L
+#define WSA_QOS_EPOLICYOBJ               11025L
+#define WSA_QOS_EFLOWDESC                11026L
+#define WSA_QOS_EPSFLOWSPEC              11027L
+#define WSA_QOS_EPSFILTERSPEC            11028L
+#define WSA_QOS_ESDMODEOBJ               11029L
+#define WSA_QOS_ESHAPERATEOBJ            11030L
+#define WSA_QOS_RESERVED_PETYPE          11031L
+#define WSA_SECURE_HOST_NOT_FOUND        11032L
+#define WSA_IPSEC_NAME_POLICY_ERROR      11033L
+
+#define WSADESCRIPTION_LEN      256
+#define WSASYS_STATUS_LEN       128
+
+typedef UINT_PTR        SOCKET;
+
+typedef struct WSAData {
+        WORD                    wVersion;
+        WORD                    wHighVersion;
+#ifdef _WIN64
+        unsigned short          iMaxSockets;
+        unsigned short          iMaxUdpDg;
+        char *              lpVendorInfo;
+        char                    szDescription[WSADESCRIPTION_LEN+1];
+        char                    szSystemStatus[WSASYS_STATUS_LEN+1];
+#else
+        char                    szDescription[WSADESCRIPTION_LEN+1];
+        char                    szSystemStatus[WSASYS_STATUS_LEN+1];
+        unsigned short          iMaxSockets;
+        unsigned short          iMaxUdpDg;
+        char *              lpVendorInfo;
+#endif
+} WSADATA;
+
+typedef WSADATA *LPWSADATA;
+
+WINDOWS_IMPORT int WINAPI WSAStartup( WORD      wVersionRequired, LPWSADATA lpWSAData);
+
+/*
+ * Address families.
+ */
+#define AF_UNSPEC       0               /* unspecified */
+#define AF_UNIX         1               /* local to host (pipes, portals) */
+#define AF_INET         2               /* internetwork: UDP, TCP, etc. */
+#define AF_IMPLINK      3               /* arpanet imp addresses */
+#define AF_PUP          4               /* pup protocols: e.g. BSP */
+#define AF_CHAOS        5               /* mit CHAOS protocols */
+#define AF_IPX          6               /* IPX and SPX */
+#define AF_NS           6               /* XEROX NS protocols */
+#define AF_ISO          7               /* ISO protocols */
+#define AF_OSI          AF_ISO          /* OSI is ISO */
+#define AF_ECMA         8               /* european computer manufacturers */
+#define AF_DATAKIT      9               /* datakit protocols */
+#define AF_CCITT        10              /* CCITT protocols, X.25 etc */
+#define AF_SNA          11              /* IBM SNA */
+#define AF_DECnet       12              /* DECnet */
+#define AF_DLI          13              /* Direct data link interface */
+#define AF_LAT          14              /* LAT */
+#define AF_HYLINK       15              /* NSC Hyperchannel */
+#define AF_APPLETALK    16              /* AppleTalk */
+#define AF_NETBIOS      17              /* NetBios-style addresses */
+#define AF_VOICEVIEW    18              /* VoiceView */
+#define AF_FIREFOX      19              /* FireFox */
+#define AF_UNKNOWN1     20              /* Somebody is using this! */
+#define AF_BAN          21              /* Banyan */
+
+#define AF_MAX          22
+
+/*
+ * Types
+ */
+#define SOCK_STREAM     1               /* stream socket */
+#define SOCK_DGRAM      2               /* datagram socket */
+#define SOCK_RAW        3               /* raw-protocol interface */
+#define SOCK_RDM        4               /* reliably-delivered message */
+#define SOCK_SEQPACKET  5               /* sequenced packet stream */
+
+
+#define IPPROTO_IP              0               /* dummy for IP */
+#define IPPROTO_ICMP            1               /* control message protocol */
+#define IPPROTO_IGMP            2               /* group management protocol */
+#define IPPROTO_GGP             3               /* gateway^2 (deprecated) */
+#define IPPROTO_TCP             6               /* tcp */
+#define IPPROTO_PUP             12              /* pup */
+#define IPPROTO_UDP             17              /* user datagram protocol */
+#define IPPROTO_IDP             22              /* xns idp */
+#define IPPROTO_ND              77              /* UNOFFICIAL net disk proto */
+
+#define IPPROTO_RAW             255             /* raw IP packet */
+#define IPPROTO_MAX             256
+
+
+
+
+
+           
+typedef struct in_addr {
+        union {
+                struct { UCHAR s_b1,s_b2,s_b3,s_b4; } S_un_b;
+                struct { USHORT s_w1,s_w2; } S_un_w;
+                ULONG S_addr;
+        } S_un;
+#define s_addr  S_un.S_addr /* can be used for most tcp & ip code */
+#define s_host  S_un.S_un_b.s_b2    // host on imp
+#define s_net   S_un.S_un_b.s_b1    // network
+#define s_imp   S_un.S_un_w.s_w2    // imp
+#define s_impno S_un.S_un_b.s_b4    // imp #
+#define s_lh    S_un.S_un_b.s_b3    // logical host
+} IN_ADDR, *PIN_ADDR,  *LPIN_ADDR;
+
+    
+#define INVALID_SOCKET  (SOCKET)(~0)
+#define SOCKET_ERROR            (-1)
+    
+  typedef struct sockaddr_in SOCKADDR_IN;
+typedef struct sockaddr_in *PSOCKADDR_IN;
+typedef struct sockaddr_in *LPSOCKADDR_IN;
+
+typedef USHORT ADDRESS_FAMILY;
+
+typedef struct sockaddr_in {
+
+#if(_WIN32_WINNT < 0x0600)
+    short   sin_family;
+#else //(_WIN32_WINNT < 0x0600)
+    ADDRESS_FAMILY sin_family;
+#endif //(_WIN32_WINNT < 0x0600)
+
+    USHORT sin_port;
+    IN_ADDR sin_addr;
+    CHAR sin_zero[8];
+} SOCKADDR_IN, *PSOCKADDR_IN;
+
+struct sockaddr {
+        USHORT sa_family;              /* address family */
+        char    sa_data[14];            /* up to 14 bytes of direct address */
+};
+
+
+WINDOWS_IMPORT
+SOCKET
+WINAPI
+socket(
+    int af,
+    int type,
+    int protocol
+    );
+    
+WINDOWS_IMPORT
+USHORT
+WINAPI
+htons(
+    USHORT hostshort
+    );
+WINDOWS_IMPORT
+USHORT
+WINAPI
+htonl(
+   USHORT hostlong
+    );
+        
+WINDOWS_IMPORT
+int
+WINAPI
+bind(
+     SOCKET s,
+    const struct sockaddr * name,
+     int namelen
+    );
+    
+WINDOWS_IMPORT
+int
+WINAPI
+WSAGetLastError(
+    void
+    );    
+
+WINDOWS_IMPORT
+int
+WINAPI
+listen(
+     SOCKET s,
+     int backlog
+    );
+
+WINDOWS_IMPORT
+SOCKET
+WINAPI
+accept(
+    SOCKET s,
+    struct sockaddr * addr,
+    int * addrlen
+    );
+    
+
+WINDOWS_IMPORT
+unsigned long
+WINAPI
+inet_addr(
+     const char * cp
+    );
+    
+#define INADDR_NONE             0xffffffff
+
+
+WINDOWS_IMPORT
+int
+WINAPI
+connect(
+    SOCKET s,
+    const struct sockaddr * name,
+    int namelen
+    );
+
+
+WINDOWS_IMPORT
+int
+WINAPI
+send(
+    SOCKET s,
+    const char * buf,
+    int len,
+    int flags
+    );
+    
+WINDOWS_IMPORT
+int
+WINAPI
+recv(
+    SOCKET s,
+    char * buf,
+    int len,
+    int flags
+    );
+
+
+
+WINDOWS_IMPORT
+int
+WINAPI
+closesocket(
+    SOCKET s
+    );
+
+WINDOWS_IMPORT
+int
+WINAPI
+ioctlsocket(
+     SOCKET s,
+     long cmd,
+    unsigned long * argp
+    );
+    
+
+#define IOCPARM_MASK    0x7f            /* parameters must be < 128 bytes */
+#define IOC_VOID        0x20000000      /* no parameters */
+#define IOC_OUT         0x40000000      /* copy out parameters */
+#define IOC_IN          0x80000000      /* copy in parameters */
+#define IOC_INOUT       (IOC_IN|IOC_OUT)
+#define _IO(x,y)        (IOC_VOID|((x)<<8)|(y))
+
+#define _IOR(x,y,t)     (IOC_OUT|(((long)sizeof(t)&IOCPARM_MASK)<<16)|((x)<<8)|(y))
+
+#define _IOW(x,y,t)     (IOC_IN|(((long)sizeof(t)&IOCPARM_MASK)<<16)|((x)<<8)|(y))
+#define FIONREAD    _IOR('f', 127, unsigned long) /* get # bytes to read */
+#define FIONBIO     _IOW('f', 126, unsigned long) /* set/clear non-blocking i/o */
+#define FIOASYNC    _IOW('f', 125, unsigned long) /* set/clear async i/o */
+
+#define NO_ERROR 0L                                                 // dderror
+
+int setsockopt (
+                           SOCKET s,
+                           int level,
+                           int optname,
+                           const char * optval,
+                           int optlen);
+                           
+#define SOL_SOCKET      0xffff          /* options for socket level */
+
+#define SO_SNDBUF       0x1001          /* send buffer size */
+#define SO_RCVBUF       0x1002          /* receive buffer size */
+#define SO_SNDLOWAT     0x1003          /* send low-water mark */
+#define SO_RCVLOWAT     0x1004          /* receive low-water mark */
+#define SO_SNDTIMEO     0x1005          /* send timeout */
+#define SO_RCVTIMEO     0x1006          /* receive timeout */
+#define SO_ERROR        0x1007          /* get error status and clear */
+#define SO_TYPE         0x1008          /* get socket type */
+
+#define FD_SETSIZE      64
+
+#define FD_CLR(fd, set) do { \
+    u_int __i; \
+    for (__i = 0; __i < ((fd_set *)(set))->fd_count ; __i++) { \
+        if (((fd_set *)(set))->fd_array[__i] == fd) { \
+            while (__i < ((fd_set *)(set))->fd_count-1) { \
+                ((fd_set *)(set))->fd_array[__i] = \
+                    ((fd_set *)(set))->fd_array[__i+1]; \
+                __i++; \
+            } \
+            ((fd_set *)(set))->fd_count--; \
+            break; \
+        } \
+    } \
+} while(0)
+
+#define FD_SET(fd, set) do { \
+    if (((fd_set *)(set))->fd_count < FD_SETSIZE) \
+        ((fd_set *)(set))->fd_array[((fd_set *)(set))->fd_count++]=(fd);\
+} while(0)
+
+#define FD_ZERO(set) (((fd_set *)(set))->fd_count=0)
+
+#define FD_ISSET(fd, set) __WSAFDIsSet((SOCKET)(fd), (fd_set *)(set))
+
+/*
+ * Structure used in select() call, taken from the BSD file sys/time.h.
+ */
+struct timeval {
+        long    tv_sec;         /* seconds */
+        long    tv_usec;        /* and microseconds */
+};
+
+/*
+ * Operations on timevals.
+ *
+ * NB: timercmp does not work for >= or <=.
+ */
+#define timerisset(tvp)         ((tvp)->tv_sec || (tvp)->tv_usec)
+#define timercmp(tvp, uvp, cmp) \
+        ((tvp)->tv_sec cmp (uvp)->tv_sec || \
+         (tvp)->tv_sec == (uvp)->tv_sec && (tvp)->tv_usec cmp (uvp)->tv_usec)
+#define timerclear(tvp)         (tvp)->tv_sec = (tvp)->tv_usec = 0
+
+typedef struct fd_set {
+        unsigned int   fd_count;               /* how many are SET? */
+        SOCKET  fd_array[FD_SETSIZE];   /* an array of SOCKETs */
+} fd_set;
+
+WINDOWS_IMPORT
+int
+WINAPI
+select(
+    int nfds,
+    fd_set * readfds,
+    fd_set * writefds,
+    fd_set * exceptfds,
+    const struct timeval * timeout
+    );
+    
+
 /* End include: windows_loader.h */
     #endif // _WINDOWS_
+    
 #endif// OS_FLAGS & OS_FLAG_WINDOWS
 
 #ifndef OSTD_HEADLESS
@@ -4041,21 +4548,25 @@ unit_local _Surface_State *_get_surface_state(Surface_Handle h) {
 /////////////////////////////////////////////////////
 
 #if (OS_FLAGS & OS_FLAG_LINUX)
+#endif
 #define _GNU_SOURCE
 #define _POSIX_C_SOURCE
-#endif
 
 // todo(charlie) dynamically link & manually  define some stuff to minimize namespace bloat here
 #include <unistd.h>
 #include <sched.h>
 #include <pthread.h>
-
 #include <sys/mman.h>
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <errno.h>
-#include <execinfo.h>
+//#include <execinfo.h>
 #include <fcntl.h>
+#include <netinet/in.h>
+#include <arpa/inet.h>
+#include <sys/socket.h>
+#include <unistd.h>
+
 #undef bool
 
 typedef struct _Mapped_Region_Desc {
@@ -4085,7 +4596,24 @@ unit_local void _unix_add_mapped_region(void *start, u64 page_count) {
         _unix_mapped_region_buffers_allocated_count = info.page_size/sizeof(_Mapped_Region_Desc_Buffer);
         _unix_mapped_region_buffers_count = 0;
     }
+    
+    // First, see if this is already mapped (we might be allocating reserved memory)
+    for (u64 i = 0; i < _unix_mapped_region_buffers_count; i += 1) {
+        _Mapped_Region_Desc_Buffer buffer = _unix_mapped_region_buffers[i];
+        assert(buffer.regions);
+        assert(buffer.count);
 
+        for (u32 j = 0; j < buffer.count; j += 1) {
+            _Mapped_Region_Desc *region = buffer.regions + j;
+            
+            void *end = (u8*)region->start + region->page_count*info.page_size;
+            
+            if ((u64)start >= (u64)region->start && (u64)start < (u64)end) {
+                return;
+            }
+        }
+    }
+    
     for (u64 i = 0; i < _unix_mapped_region_buffers_count; i += 1) {
         _Mapped_Region_Desc_Buffer buffer = _unix_mapped_region_buffers[i];
         assert(buffer.regions);
@@ -4137,7 +4665,7 @@ unit_local void _unix_add_mapped_region(void *start, u64 page_count) {
 
     buffer->regions[0].taken = true;
     buffer->regions[0].start = start;
-    buffer->regions[0].page_count = (u32)page_count;
+    buffer->regions[0].page_count = (sys_uint)page_count;
 }
 
 unit_local _Mapped_Region_Desc *_unix_find_mapped_region(void *start) {
@@ -4238,6 +4766,10 @@ bool sys_deallocate_pages(void *address, u64 number_of_pages) {
 u64 sys_query_mapped_regions(void *start, void *end, Mapped_Memory_Info *result, u64 result_count) {
     u64 counter = 0;
     if (!result) result_count = U64_MAX;
+    
+    System_Info info = sys_get_info();
+    
+    start = (void*)(((u64)start + info.page_size-1) & ~(info.page_size-1));
 
     for (u64 i = 0; i < _unix_mapped_region_buffers_count; i += 1) {
         _Mapped_Region_Desc_Buffer buffer = _unix_mapped_region_buffers[i];
@@ -4264,80 +4796,8 @@ u64 sys_query_mapped_regions(void *start, void *end, Mapped_Memory_Info *result,
 }
 
 void *sys_find_mappable_range(u64 page_count) {
-    System_Info info = sys_get_info();
-    u64 amount_in_bytes = page_count * info.page_size;
-
-    File_Handle maps = sys_open_file(STR("/proc/self/maps"), FILE_OPEN_READ);
-    if (!maps) {
-        sys_write_string(sys_get_stdout(), STR("Could not open /proc/self/maps\n"));
-        return 0;
-    }
-
-    char buffer[256];
-    char line[256];
-    u64 last_end = 0x0000100000000000;
-    u64 line_length = 0;
-
-    while (true) {
-        s64 bytes_read = sys_read(maps, buffer, sizeof(buffer));
-        if (bytes_read <= 0) {
-            break;
-        }
-
-        for (s64 i = 0; i < bytes_read; ++i) {
-            if (buffer[i] == '\n' || line_length >= sizeof(line) - 1) {
-                line[line_length] = '\0';
-
-                u64 start = 0, end = 0;
-                bool parsing_failed = false;
-
-                char *p = line;
-                while (*p && *p != '-') {
-                    if (*p >= '0' && *p <= '9') {
-                        start = (start << 4) | (*p - '0');
-                    } else if (*p >= 'a' && *p <= 'f') {
-                        start = (start << 4) | (*p - 'a' + 10);
-                    } else {
-                        parsing_failed = true;
-                        break;
-                    }
-                    ++p;
-                }
-
-                if (!parsing_failed && *p == '-') {
-                    ++p;
-                    while (*p && *p != ' ') {
-                        if (*p >= '0' && *p <= '9') {
-                            end = (end << 4) | (*p - '0');
-                        } else if (*p >= 'a' && *p <= 'f') {
-                            end = (end << 4) | (*p - 'a' + 10);
-                        } else {
-                            parsing_failed = true;
-                            break;
-                        }
-                        ++p;
-                    }
-                } else {
-                    parsing_failed = true;
-                }
-
-                if (!parsing_failed && start >= last_end + amount_in_bytes) {
-                    u64 aligned_base = (last_end + info.granularity - 1) & ~(info.granularity - 1);
-                    if (aligned_base + amount_in_bytes <= start) {
-                        sys_close(maps);
-                        return (void *)aligned_base;
-                    }
-                }
-
-                last_end = end;
-                line_length = 0;
-            } else {
-                line[line_length++] = buffer[i];
-            }
-        }
-    }
-
-    sys_close(maps);
+    (void)page_count;
+    assertmsg(false, "sys_find_mappable_range unimplemented on linux"); // todo(charlie)
     return 0;
 }
 
@@ -4371,7 +4831,7 @@ void sys_close(File_Handle h) {
 File_Handle sys_open_file(string path, File_Open_Flags flags) {
     char cpath[MAX_PATH_LENGTH];
     u64 path_len = min(path.count, MAX_PATH_LENGTH - 1);
-    memcpy(cpath, path.data, path_len);
+    memcpy(cpath, path.data, (sys_uint)path_len);
     cpath[path_len] = 0;
 
     int unix_flags = 0;
@@ -4403,8 +4863,241 @@ u64 sys_get_file_size(File_Handle f) {
         return 0;
     }
     return (u64)file_stat.st_size;
+}
 
-    long int a = sizeof(long);
+unit_local int _to_win_sock_err(Socket_Result r) {
+    switch(r) {
+        case SOCKET_OK:                  return 0;
+        case SOCKET_DISCONNECTED:        return ECONNRESET;
+        case SOCKET_NOT_INITIALIZED:     return EINVAL;
+        case SOCKET_NOACCESS:            return EACCES;
+        case SOCKET_IN_PROGRESS:         return EWOULDBLOCK;
+        case SOCKET_NOT_A_SOCKET:        return ENOTSOCK;
+        case SOCKET_INVALID_ADDRESS:     return EFAULT;
+        case SOCKET_TIMED_OUT:           return ETIMEDOUT;
+        case SOCKET_CONNECTION_REFUSED:  return ECONNREFUSED;
+        case SOCKET_CONNECTION_RESET:    return ECONNRESET;
+        case SOCKET_ALREADY_CONNECTED:   return EISCONN;
+        case SOCKET_ADDRESS_IN_USE:      return EADDRINUSE;
+        case SOCKET_NETWORK_UNREACHABLE: return ENETUNREACH;
+        case SOCKET_HOST_UNREACHABLE:    return EHOSTUNREACH;
+        case SOCKET_PROTOCOL_ERROR:      return EPROTONOSUPPORT;
+        default:                         return -1;
+    }
+}
+
+u32 sys_convert_address_string(string address) {
+    assert(address.count < 1024);
+    char addr_str[1024] = {0};
+    memcpy(addr_str, address.data, (sys_uint)address.count);
+    addr_str[address.count] = '\0';
+    return inet_addr(addr_str);
+}
+
+Socket_Result sys_socket_init(Socket *s, Socket_Domain domain, Socket_Type type, Socket_Protocol protocol) {
+    int af = 0;
+    switch(domain) {
+        case SOCKET_DOMAIN_IPV4:
+            af = AF_INET;
+            break;
+        case SOCKET_DOMAIN_BLUETOOTH:
+            return SOCKET_INVALID_ADDRESS;
+        case SOCKET_DOMAIN_APPLETALK:
+            return SOCKET_INVALID_ADDRESS;
+#if OS_FLAGS & OS_FLAG_UNIX
+        case SOCKET_DOMAIN_UNIX:
+            return SOCKET_INVALID_ADDRESS;
+#endif
+        default:
+            return SOCKET_PROTOCOL_ERROR;
+    }
+    
+    int sock_type = 0;
+    switch(type) {
+        case SOCKET_TYPE_STREAM:
+            sock_type = SOCK_STREAM;
+            break;
+        case SOCKET_TYPE_DGRAM:
+            sock_type = SOCK_DGRAM;
+            break;
+        case SOCKET_TYPE_RAW:
+            sock_type = SOCK_RAW;
+            break;
+        case SOCKET_TYPE_RDM:
+            sock_type = SOCK_RDM;
+            break;
+        case SOCKET_TYPE_SEQPACKET:
+            sock_type = SOCK_SEQPACKET;
+            break;
+        default:
+            return SOCKET_PROTOCOL_ERROR;
+    }
+    
+    int proto = 0;
+    switch(protocol) {
+        case SOCKET_PROTOCOL_TCP:
+            proto = IPPROTO_TCP;
+            break;
+        case SOCKET_PROTOCOL_UDP:
+            proto = IPPROTO_UDP;
+            break;
+        default:
+            return SOCKET_PROTOCOL_ERROR;
+    }
+    
+    int sock = socket(af, sock_type, proto);
+    if (sock < 0) {
+        return SOCKET_PROTOCOL_ERROR;
+    }
+    *s = (Socket)sock;
+    return SOCKET_OK;
+}
+
+Socket_Result sys_socket_bind(Socket sock, u32 address, u16 port) {
+    struct sockaddr_in addr;
+    addr.sin_family = AF_INET;
+    addr.sin_port = htons(port);
+    addr.sin_addr.s_addr = htonl((u16)address);
+    int result = bind((int)sock, (struct sockaddr*)&addr, sizeof(addr));
+    if (result < 0) {
+        int err = errno;
+        switch(err) {
+            case EADDRINUSE: return SOCKET_ADDRESS_IN_USE;
+            case EACCES:     return SOCKET_NOACCESS;
+            default:         return SOCKET_PROTOCOL_ERROR;
+        }
+    }
+    return SOCKET_OK;
+}
+
+Socket_Result sys_socket_listen(Socket sock, s64 backlog) {
+    int result = listen((int)sock, (int)backlog);
+    if (result < 0) {
+        return SOCKET_PROTOCOL_ERROR;
+    }
+    return SOCKET_OK;
+}
+
+Socket_Result sys_socket_accept(Socket sock, Socket *accepted, u64 timeout_ms) {
+    fd_set readfds;
+    FD_ZERO(&readfds);
+    FD_SET(sock, &readfds);
+
+    struct timeval tv;
+    tv.tv_sec  = (long)(timeout_ms / 1000);
+    tv.tv_usec = (long)((timeout_ms % 1000) * 1000);
+
+    int select_result = select(sock + 1, &readfds, NULL, NULL, &tv);
+    if (select_result == 0) {
+        // Timeout occurred
+        return SOCKET_TIMED_OUT;
+    }
+    if (select_result < 0) {
+        // Error in select()
+        return SOCKET_PROTOCOL_ERROR;
+    }
+
+    // Socket is ready for reading (an incoming connection)
+    struct sockaddr_in addr;
+    socklen_t addr_len = sizeof(addr);
+    int client = accept(sock, (struct sockaddr*)&addr, &addr_len);
+    if (client < 0) {
+        if (errno == EWOULDBLOCK || errno == EAGAIN)
+            return SOCKET_IN_PROGRESS;
+        return SOCKET_PROTOCOL_ERROR;
+    }
+    *accepted = (Socket)client;
+    return SOCKET_OK;
+}
+
+Socket_Result sys_socket_connect(Socket sock, u32 address, u16 port, Socket_Domain domain) {
+    if (domain != SOCKET_DOMAIN_IPV4)
+        return SOCKET_INVALID_ADDRESS;
+    
+    struct sockaddr_in addr_in;
+    addr_in.sin_family = AF_INET;
+    addr_in.sin_port = htons(port);
+    addr_in.sin_addr.s_addr = address;
+    if (addr_in.sin_addr.s_addr == INADDR_NONE)
+        return SOCKET_INVALID_ADDRESS;
+    
+    int result = connect((int)sock, (struct sockaddr*)&addr_in, sizeof(addr_in));
+    if (result < 0) {
+        int err = errno;
+        if (err == EINPROGRESS || err == EWOULDBLOCK)
+            return SOCKET_IN_PROGRESS;
+        if (err == ETIMEDOUT)
+            return SOCKET_TIMED_OUT;
+        if (err == ECONNREFUSED)
+            return SOCKET_CONNECTION_REFUSED;
+        if (err == EALREADY)
+            return SOCKET_ALREADY_CONNECTED;
+        return SOCKET_PROTOCOL_ERROR;
+    }
+    return SOCKET_OK;
+}
+
+Socket_Result sys_socket_send(Socket sock, void *data, u64 length, u64 *sent) {
+    ssize_t result = send((int)sock, data, (sys_uint)length, 0);
+    if (result < 0) {
+        if (errno == EWOULDBLOCK || errno == EAGAIN) {
+            if (sent)
+                *sent = 0;
+            return SOCKET_IN_PROGRESS;
+        }
+        return SOCKET_PROTOCOL_ERROR;
+    }
+    if (sent)
+        *sent = result > 0 ? (u64)result : 0;
+    return SOCKET_OK;
+}
+
+Socket_Result sys_socket_recv(Socket sock, void *buffer, u64 length, u64 *received) {
+    ssize_t result = recv((int)sock, buffer, (sys_uint)length, 0);
+    if (result < 0) {
+        if (errno == EWOULDBLOCK || errno == EAGAIN) {
+            if (received)
+                *received = 0;
+            return SOCKET_IN_PROGRESS;
+        }
+        return SOCKET_PROTOCOL_ERROR;
+    } else if (result == 0) {
+        if (received)
+            *received = 0;
+        return SOCKET_DISCONNECTED;
+    }
+    if (received)
+        *received = result > 0 ? (u64)result : 0;
+    return SOCKET_OK;
+}
+
+Socket_Result sys_socket_close(Socket sock) {
+    int result = close((int)sock);
+    if (result < 0)
+        return SOCKET_PROTOCOL_ERROR;
+    return SOCKET_OK;
+}
+
+Socket_Result sys_socket_set_blocking(Socket *sock, bool blocking) {
+    int fd = (int)(*sock);
+    int flags = fcntl(fd, F_GETFL, 0);
+    if (flags < 0)
+        return SOCKET_PROTOCOL_ERROR;
+    if (!blocking)
+        flags |= O_NONBLOCK;
+    else
+        flags &= ~O_NONBLOCK;
+    if (fcntl(fd, F_SETFL, flags) < 0)
+        return SOCKET_PROTOCOL_ERROR;
+    return SOCKET_OK;
+}
+
+Socket_Result sys_set_socket_blocking_timeout(Socket socket, u64 ms) {
+    struct timeval tv;
+    tv.tv_sec = 0;
+    tv.tv_usec = (sys_int)ms*1000;
+    setsockopt((int)socket, SOL_SOCKET, SO_RCVTIMEO, (const char*)&tv, sizeof(tv));
+    return SOCKET_OK;
 }
 
 double sys_get_seconds_monotonic(void) {
@@ -4414,7 +5107,8 @@ double sys_get_seconds_monotonic(void) {
 }
 
 void sys_set_thread_affinity_mask(Thread_Handle thread, u64 bits) {
-#if OS_FLAGS & OS_FLAG_ANDROID
+#if (OS_FLAGS & OS_FLAG_ANDROID) || (OS_FLAGS & OS_FLAG_EMSCRIPTEN)
+    (void)thread; (void)bits;
     return;
 #else
     cpu_set_t cpuset;
@@ -4425,8 +5119,8 @@ void sys_set_thread_affinity_mask(Thread_Handle thread, u64 bits) {
             CPU_SET(i, &cpuset);
         }
     }
-
-    sched_setaffinity((pthread_t)thread, sizeof(cpu_set_t), &cpuset);
+    
+    pthread_setaffinity_np((pthread_t)thread, sizeof(cpu_set_t), &cpuset);
 #endif
 }
 
@@ -4451,6 +5145,7 @@ Thread_Handle sys_get_current_thread(void) {
     #pragma comment(lib, "dbghelp")
     #pragma comment(lib, "pdh")
     #pragma comment(lib, "winmm")
+    #pragma comment(lib, "ws2_32.lib")
 #ifndef OSTD_HEADLESS
     #pragma comment(lib, "gdi32")
     #pragma comment(lib, "dxgi")
@@ -4893,6 +5588,249 @@ Easy_Command_Result sys_run_command_easy(string command_line) {
     res.process_start_success = true;
     
     return res;
+}
+
+inline unit_local int _to_winsock_err(Socket_Result r) {
+    switch(r) {
+        case SOCKET_OK: return 0;
+        case SOCKET_DISCONNECTED: return WSAECONNRESET;
+        case SOCKET_NOT_INITIALIZED: return WSANOTINITIALISED;
+        case SOCKET_NOACCESS: return WSAEACCES;
+        case SOCKET_IN_PROGRESS: return WSAEWOULDBLOCK;
+        case SOCKET_NOT_A_SOCKET: return WSAENOTSOCK;
+        case SOCKET_INVALID_ADDRESS: return WSAEFAULT;
+        case SOCKET_TIMED_OUT: return WSAETIMEDOUT;
+        case SOCKET_CONNECTION_REFUSED: return WSAECONNREFUSED;
+        case SOCKET_CONNECTION_RESET: return WSAECONNRESET;
+        case SOCKET_ALREADY_CONNECTED: return WSAEISCONN;
+        case SOCKET_ADDRESS_IN_USE: return WSAEADDRINUSE;
+        case SOCKET_NETWORK_UNREACHABLE: return WSAENETUNREACH;
+        case SOCKET_HOST_UNREACHABLE: return WSAEHOSTUNREACH;
+        case SOCKET_PROTOCOL_ERROR: return WSAEPROTONOSUPPORT;
+        default: return -1;
+    }
+}
+
+
+static Socket_Result _ensure_winsock_initialized(void) {
+    static bool winsock_initialized = false;
+    if (!winsock_initialized) {
+        WSADATA wsaData;
+        int result = WSAStartup(2 | (2 << 8), &wsaData);
+        if (result != 0) {
+            return SOCKET_NOT_INITIALIZED;
+        }
+        winsock_initialized = true;
+    }
+    return SOCKET_OK;
+}
+
+unit_local int _to_win_sock_err(Socket_Result r) {
+    switch(r) {
+        case SOCKET_OK: return 0;
+        case SOCKET_DISCONNECTED: return WSAECONNRESET;
+        case SOCKET_NOT_INITIALIZED: return WSANOTINITIALISED;
+        case SOCKET_NOACCESS: return WSAEACCES;
+        case SOCKET_IN_PROGRESS: return WSAEWOULDBLOCK;
+        case SOCKET_NOT_A_SOCKET: return WSAENOTSOCK;
+        case SOCKET_INVALID_ADDRESS: return WSAEFAULT;
+        case SOCKET_TIMED_OUT: return WSAETIMEDOUT;
+        case SOCKET_CONNECTION_REFUSED: return WSAECONNREFUSED;
+        case SOCKET_CONNECTION_RESET: return WSAECONNRESET;
+        case SOCKET_ALREADY_CONNECTED: return WSAEISCONN;
+        case SOCKET_ADDRESS_IN_USE: return WSAEADDRINUSE;
+        case SOCKET_NETWORK_UNREACHABLE: return WSAENETUNREACH;
+        case SOCKET_HOST_UNREACHABLE: return WSAEHOSTUNREACH;
+        case SOCKET_PROTOCOL_ERROR: return WSAEPROTONOSUPPORT;
+        default: return -1;
+    }
+}
+
+u32 sys_convert_address_string(string address) {
+    assert(address.count < 1024);
+    char addr_str[1024] = {0};
+    memcpy(addr_str, address.data, address.count);
+    addr_str[address.count] = '\0';
+    return inet_addr(addr_str);
+}
+
+Socket_Result sys_socket_init(Socket *s, Socket_Domain domain, Socket_Type type, Socket_Protocol protocol) {
+    Socket_Result init_res = _ensure_winsock_initialized();
+    if (init_res != SOCKET_OK)
+        return init_res;
+
+    int af = 0;
+    switch (domain) {
+        case SOCKET_DOMAIN_IPV4:
+            af = AF_INET;
+            break;
+        case SOCKET_DOMAIN_BLUETOOTH:
+            // todo(charlie)
+            return SOCKET_INVALID_ADDRESS;
+        case SOCKET_DOMAIN_APPLETALK:
+            return SOCKET_INVALID_ADDRESS;
+#if OS_FLAGS & OS_FLAG_UNIX
+        case SOCKET_DOMAIN_UNIX:
+            return SOCKET_INVALID_ADDRESS;
+#endif
+        default:
+            return SOCKET_PROTOCOL_ERROR;
+    }
+
+    int sock_type = 0;
+    switch (type) {
+        case SOCKET_TYPE_STREAM:
+            sock_type = SOCK_STREAM;
+            break;
+        case SOCKET_TYPE_DGRAM:
+            sock_type = SOCK_DGRAM;
+            break;
+        case SOCKET_TYPE_RAW:
+            sock_type = SOCK_RAW;
+            break;
+        case SOCKET_TYPE_RDM:
+            sock_type = SOCK_RDM;
+            break;
+        case SOCKET_TYPE_SEQPACKET:
+            sock_type = SOCK_SEQPACKET;
+            break;
+        default:
+            return SOCKET_PROTOCOL_ERROR;
+    }
+
+    int proto = 0;
+    switch (protocol) {
+        case SOCKET_PROTOCOL_TCP:
+            proto = IPPROTO_TCP;
+            break;
+        case SOCKET_PROTOCOL_UDP:
+            proto = IPPROTO_UDP;
+            break;
+        default:
+            return SOCKET_PROTOCOL_ERROR;
+    }
+
+    SOCKET win_sock = socket(af, sock_type, proto);
+    if (win_sock == INVALID_SOCKET) {
+        return SOCKET_PROTOCOL_ERROR;
+    }
+    *s = (Socket)win_sock;
+    return SOCKET_OK;
+}
+
+Socket_Result sys_socket_bind(Socket sock, u32 address, u16 port) {
+    struct sockaddr_in addr;
+    addr.sin_family = AF_INET;
+    addr.sin_port = htons(port);
+    addr.sin_addr.s_addr = htonl((u16)address);
+    int result = bind((SOCKET)sock, (struct sockaddr*)&addr, sizeof(addr));
+    if (result == SOCKET_ERROR) {
+        int err = WSAGetLastError();
+        switch(err) {
+            case WSAEADDRINUSE: return SOCKET_ADDRESS_IN_USE;
+            case WSAEACCES:   return SOCKET_NOACCESS;
+            default:         return SOCKET_PROTOCOL_ERROR;
+        }
+    }
+    return SOCKET_OK;
+}
+
+Socket_Result sys_socket_listen(Socket sock, s64 backlog) {
+    int result = listen((SOCKET)sock, (int)backlog);
+    if (result == SOCKET_ERROR) {
+        return SOCKET_PROTOCOL_ERROR;
+    }
+    return SOCKET_OK;
+}
+
+Socket_Result sys_socket_accept(Socket sock, Socket *accepted, u64 timeout_ms) {
+    fd_set readfds;
+    FD_ZERO(&readfds);
+    FD_SET(sock, &readfds);
+
+    struct timeval tv;
+    tv.tv_sec  = (long)(timeout_ms / 1000);
+    tv.tv_usec = (long)((timeout_ms % 1000) * 1000);
+
+    int select_result = select(0, &readfds, 0, 0, &tv);
+    if (select_result == 0) {
+        return SOCKET_TIMED_OUT;
+    }
+    if (select_result == SOCKET_ERROR) {
+        return SOCKET_PROTOCOL_ERROR;
+    }
+    
+    struct sockaddr_in addr;
+    int addr_len = sizeof(addr);
+    SOCKET client = accept((SOCKET)sock, (struct sockaddr*)&addr, &addr_len);
+    if (client == INVALID_SOCKET) {
+        int err = WSAGetLastError();
+        if (err == WSAEWOULDBLOCK)
+            return SOCKET_IN_PROGRESS;
+        return SOCKET_PROTOCOL_ERROR;
+    }
+    *accepted = (Socket)client;
+    return SOCKET_OK;
+}
+
+Socket_Result sys_socket_send(Socket sock, void *data, u64 length, u64 *sent) {
+    int result = send((SOCKET)sock, (const char*)data, (int)length, 0);
+    if (result == SOCKET_ERROR) {
+        int err = WSAGetLastError();
+        if (err == WSAEWOULDBLOCK) {
+            if (sent)
+                *sent = 0;
+            return SOCKET_IN_PROGRESS;
+        }
+        if (err == WSAETIMEDOUT)
+            return SOCKET_TIMED_OUT;
+        return SOCKET_PROTOCOL_ERROR;
+    }
+    if (sent)
+        *sent = result > 0 ? (u64)result : 0;
+    return SOCKET_OK;
+}
+
+Socket_Result sys_socket_recv(Socket sock, void *buffer, u64 length, u64 *received) {
+    int result = recv((SOCKET)sock, (char*)buffer, (int)length, 0);
+    if (result == SOCKET_ERROR) {
+        int err = WSAGetLastError();
+        if (err == WSAEWOULDBLOCK) {
+            if (received)
+                *received = 0;
+            return SOCKET_IN_PROGRESS;
+        }
+        if (err == WSAETIMEDOUT)
+            return SOCKET_TIMED_OUT;
+        return SOCKET_PROTOCOL_ERROR;
+    } else if (result == 0) {
+        if (received)
+            *received = 0;
+        return SOCKET_DISCONNECTED;
+    }
+    if (received)
+        *received = result > 0 ? (u64)result : 0;
+    return SOCKET_OK;
+}
+
+Socket_Result sys_socket_close(Socket sock) {
+    int result = closesocket((SOCKET)sock);
+    if (result == SOCKET_ERROR)
+        return SOCKET_PROTOCOL_ERROR;
+    return SOCKET_OK;
+}
+
+Socket_Result sys_socket_set_blocking(Socket *sock, bool blocking) {
+    unsigned long mode = blocking ? 0 : 1;
+    int result = ioctlsocket((SOCKET)(*sock), (long)FIONBIO, &mode);
+    if (result != NO_ERROR)
+        return SOCKET_PROTOCOL_ERROR;
+    return SOCKET_OK;
+}
+Socket_Result sys_set_socket_blocking_timeout(Socket socket, u64 ms) {
+    setsockopt(socket, SOL_SOCKET, SO_RCVTIMEO, (char*)&ms, sizeof(ms));
+    setsockopt(socket, SOL_SOCKET, SO_SNDTIMEO, (char*)&ms, sizeof(ms));
+    return SOCKET_OK;
 }
 
 #ifndef OSTD_HEADLESS
@@ -6057,9 +6995,17 @@ void sys_print_stack_trace(File_Handle handle) {
 //////
 /////////////////////////////////////////////////////
 
+#undef abs
 #include <emscripten.h>
 #include <emscripten/html5.h>
+#include <emscripten/wasm_worker.h>
+#include <emscripten/threading_legacy.h>
+#define abs(x) ((x) < 0 ? -(x) : (x))
 #undef bool
+
+unit_local u64 __rdtsc(void) {
+    return (u64)(emscripten_get_now()*1000.0);
+}
 
 #ifndef OSTD_HEADLESS
 
@@ -6096,10 +7042,18 @@ u64 sys_query_monitors(Physical_Monitor *buffer, u64 max_count)
 
     return 1;
 }
+bool surface_get_monitor(Surface_Handle h, Physical_Monitor *monitor) {
+    (void)h;
+    sys_query_monitors(monitor, 1);
+    return true;
+}
+
+#endif // !OSTD_HEADLESS
 
 File_Handle sys_get_stdout(void) {
     return (File_Handle)1;
 }
+
 File_Handle sys_get_stderr(void) {
     return (File_Handle)2;
 }
@@ -6111,6 +7065,7 @@ void sys_set_stderr(File_Handle h) {
     (void)h;
 }
 
+#ifndef OSTD_HEADLESS
 Surface_Handle sys_get_surface(void) {
     return (Surface_Handle)69; // todo(charlie) revisit
 }
@@ -6123,7 +7078,120 @@ bool surface_should_close(Surface_Handle s) {
     return false;
 }
 
+typedef struct _Em_Canvas_Size_Result {
+    int success;
+    int w;
+    int h;
+} _Em_Canvas_Size_Result;
+
+unit_local void _em_get_canvas_size_main_thread(void *arg) {
+    _Em_Canvas_Size_Result *result = (_Em_Canvas_Size_Result *)arg;
+    int w, h_int;
+    if (emscripten_get_canvas_element_size("#canvas", &w, &h_int) == EMSCRIPTEN_RESULT_SUCCESS) {
+        result->w = w;
+        result->h = h_int;
+        result->success = 1;
+    } else {
+        result->success = 0;
+    }
+}
+
+bool surface_get_framebuffer_size(Surface_Handle h, s64 *width, s64 *height) {
+    (void)h;
+    _Em_Canvas_Size_Result result = {0};
+    
+    emscripten_sync_run_in_main_runtime_thread(EM_FUNC_SIG_VI, _em_get_canvas_size_main_thread, &result);
+    if (!result.success)
+        return false;
+   
+    *width = result.w;
+    *height = result.h;
+    return true;
+}
+
+static uint32_t *_em_pixel_buffer = NULL;
+static size_t _em_pixel_buffer_size = 0;
+// Allocate (or reallocate) a static pixel buffer to match the canvas size.
+void* surface_map_pixels(Surface_Handle h) {
+    (void)h;
+    s64 width, height;
+    if (!surface_get_framebuffer_size(h, &width, &height))
+        return 0;
+    size_t required = (size_t)width * (size_t)height;
+    if (required > _em_pixel_buffer_size) {
+        if (_em_pixel_buffer) {
+            sys_unmap_pages(_em_pixel_buffer);
+        }
+        
+        u64 size = required * 4;
+        u64 pages = (size+4096)/4096;
+        _em_pixel_buffer = sys_map_pages(SYS_MEMORY_RESERVE | SYS_MEMORY_ALLOCATE, 0, pages, false);
+        _em_pixel_buffer_size = required;
+    }
+    return _em_pixel_buffer;
+}
+
+unit_local char _em_surface_blit_pixels_script[8196] = {0};
+    #pragma clang diagnostic ignored "-Wmissing-noreturn"
+unit_local void main_thread_surface_blit_pixels(void) {
+    char *script = _em_surface_blit_pixels_script;
+    emscripten_run_script(script);
+}
+
+void surface_blit_pixels(Surface_Handle h) {
+    (void)h;
+    s64 width, height;
+    if (!surface_get_framebuffer_size(h, &width, &height))
+        return;
+
+    const char *format = 
+        "var canvas = document.getElementById('canvas');"
+        "if (canvas) {"
+            "var ctx = canvas.getContext('2d');"
+            "var imageData = ctx.createImageData(%i, %i);"
+            "var numBytes = %i * %i * 4;"
+            "var ptr = %i;"
+            "var pixels = HEAPU8.subarray(ptr, ptr + numBytes);"
+            "imageData.data.set(pixels);"
+            "ctx.putImageData(imageData, 0, 0);"
+        "}";
+
+    int w = (int)width;
+    int h_int = (int)height;
+    
+    #pragma clang diagnostic ignored "-Wformat-nonliteral"
+    extern int snprintf(char*restrict, unsigned long, const char*restrict, ...);
+    int script_len = snprintf(NULL, 0, format, w, h_int, w, h_int, (int)_em_pixel_buffer) + 1;
+    assert(script_len < (int)sizeof(_em_surface_blit_pixels_script));
+    snprintf(_em_surface_blit_pixels_script, (unsigned long)script_len, format, w, h_int, w, h_int, (int)_em_pixel_buffer);
+
+    emscripten_sync_run_in_main_runtime_thread(EM_FUNC_SIG_V, main_thread_surface_blit_pixels, _em_surface_blit_pixels_script);
+}
+
+unit_local volatile s32 _em_frame_ready = 0;
+unit_local EM_BOOL animation_frame_callback(double time, void *userData) {
+    (void)time;
+    (void)userData;
+    _em_frame_ready = 1;
+    return EM_TRUE;
+}
+unit_local void _em_main_thread_wait_animation_frame(void) {
+    _em_frame_ready = 0;
+    emscripten_request_animation_frame(animation_frame_callback, NULL);
+    
+    while (!_em_frame_ready) {
+        // whatevs web is dumb
+         _em_frame_ready = true;
+    }
+}
+bool sys_wait_vertical_blank(Physical_Monitor monitor) {
+    (void)monitor;
+    emscripten_sync_run_in_main_runtime_thread(EM_FUNC_SIG_V, _em_main_thread_wait_animation_frame);
+    return true;
+}
+
 #endif // !OSTD_HEADLESS
+
 
 void sys_print_stack_trace(File_Handle handle) {
     char buffer[16384];
@@ -6134,6 +7202,20 @@ void sys_print_stack_trace(File_Handle handle) {
 #endif // OS_FLAGS & XXXXX
 
 #endif // OSTD_IMPL
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 /* End include: system.h */
@@ -6291,6 +7373,7 @@ inline void deallocatef(Allocator a, void *p, u64 flags);
 
 inline string string_allocate(Allocator a, u64 n);
 inline void string_deallocate(Allocator a, string s);
+inline string string_copy(Allocator a, string s);
 
 /////
 // Arena
@@ -6356,7 +7439,7 @@ inline void string_deallocate(Allocator a, string s) {
 
 inline string string_copy(Allocator a, string s) {
     string new_s = string_allocate(a, s.count);
-    memcpy(new_s.data, s.data, s.count);
+    memcpy(new_s.data, s.data, (sys_uint)s.count);
     return new_s;
 }
 
@@ -6396,7 +7479,7 @@ Arena make_arena(u64 reserved_size, u64 initial_allocated_size) {
     assert(reserved_size >= initial_allocated_size);
 
 #if OS_FLAGS & OS_FLAG_EMSCRIPTEN
-    assertmsg(reserved_size == initial_allocated_size, STR("Emscripten does not support reserved-only memory allocations. Arena initial allocation size must match reserved_size"));
+    assertmsg(reserved_size == initial_allocated_size, "Emscripten does not support reserved-only memory allocations. Arena initial allocation size must match reserved_size");
 #endif // OS_FLAGS & OS_FLAG_EMSCRIPTEN
 
     System_Info info = sys_get_info();
@@ -6477,7 +7560,7 @@ void *arena_push(Arena *arena, u64 size) {
 
 void *arena_push_copy(Arena *arena, void *src, u64 size) {
     void *dst = arena_push(arena, size);
-    memcpy(dst, src, size);
+    memcpy(dst, src, (sys_uint)size);
     return dst;
 }
 
@@ -7412,19 +8495,19 @@ string string_replace(Allocator a, string s, string sub, string replacement) {
             
             while (out_index + replacement.count >= temp_string.count) {
                 string new_temp_string = string_allocate(get_temp(), temp_string.count * 2);
-                memcpy(new_temp_string.data, temp_string.data, temp_string.count);
+                memcpy(new_temp_string.data, temp_string.data, (sys_uint)temp_string.count);
                 temp_string = new_temp_string;
             }
 
             if (replacement.count > 0) {
-                memcpy(temp_string.data + out_index, replacement.data, replacement.count);
+                memcpy(temp_string.data + out_index, replacement.data, (sys_uint)replacement.count);
             }
             out_index += replacement.count;
             i += sub.count;
         } else {
             while (out_index >= temp_string.count) {
                 string new_temp_string = string_allocate(get_temp(), temp_string.count * 2);
-                memcpy(new_temp_string.data, temp_string.data, temp_string.count);
+                memcpy(new_temp_string.data, temp_string.data, (sys_uint)temp_string.count);
                 temp_string = new_temp_string;
             }
             temp_string.data[out_index++] = s.data[i++];
@@ -7432,7 +8515,7 @@ string string_replace(Allocator a, string s, string sub, string replacement) {
     }
 
     string final_string = string_allocate(a, out_index);
-    memcpy(final_string.data, temp_string.data, out_index);
+    memcpy(final_string.data, temp_string.data, (sys_uint)out_index);
 
     return final_string;
 }
@@ -8033,6 +9116,7 @@ typedef struct Oga_Device {
     u8 device_name_data[256];
     u64 device_name_length;
 
+    u64 vendor_id;
     string vendor_name;
     u32 driver_version_raw;
 
@@ -9783,7 +10867,6 @@ unit_local inline VkInstance _vk_instance(void) {
         "VK_MVK_ios_surface",
         "VK_KHR_portability_enumeration",
         "VK_KHR_get_physical_device_properties2",
-        "VK_AMD_device_coherent_memory",
     };
     create_info.flags |= VK_INSTANCE_CREATE_ENUMERATE_PORTABILITY_BIT_KHR;
 #elif OS_FLAGS & OS_FLAG_ANDROID
@@ -9793,7 +10876,6 @@ unit_local inline VkInstance _vk_instance(void) {
 #endif
         VK_KHR_SURFACE_EXTENSION_NAME,
         VK_KHR_ANDROID_SURFACE_EXTENSION_NAME,
-        "VK_AMD_device_coherent_memory",
         "VK_KHR_get_physical_device_properties2"
     };
 
@@ -10129,6 +11211,7 @@ u64 oga_query_devices(Oga_Device *buffer, u64 buffer_count) {
             // Stuff
             memcpy(device->device_name_data, props.deviceName, min(sizeof(device->device_name_data), sizeof(props.deviceName)));
             device->device_name_length = c_style_strlen((const char*)device->device_name_data);
+            device->vendor_id = (u64)props.vendorID;
             device->vendor_name = _str_vendor_id(props.vendorID);
             device->driver_version_raw = props.driverVersion;
             device->driver_version_length = _format_driver_version(props.vendorID, props.driverVersion, device->driver_version_data, sizeof(device->driver_version_data));
@@ -10602,14 +11685,20 @@ Oga_Result oga_init_context(Oga_Device target_device, Oga_Context_Desc desc, Oga
         
         info.ppEnabledExtensionNames = (const char*const*)names;
         
-        names[info.enabledExtensionCount++] = "VK_AMD_device_coherent_memory";
+        // todo(charlie) feature flags
+        if (target_device.vendor_id == VENDOR_ID_AMD) {
+            names[info.enabledExtensionCount++] = "VK_AMD_device_coherent_memory";
+        }
         names[info.enabledExtensionCount++] = "VK_EXT_fragment_shader_interlock";
         internal->dynamic_rendering_is_extension = true;
     } else {
         internal->dynamic_rendering = true;
         internal->dynamic_rendering_is_extension = false;
         
-        names[info.enabledExtensionCount++] = "VK_AMD_device_coherent_memory";
+        // todo(charlie) feature flags
+        if (target_device.vendor_id == VENDOR_ID_AMD) {
+            names[info.enabledExtensionCount++] = "VK_AMD_device_coherent_memory";
+        }
         names[info.enabledExtensionCount++] = "VK_EXT_fragment_shader_interlock";
         names[info.enabledExtensionCount++] = VK_KHR_SWAPCHAIN_EXTENSION_NAME;
         info.ppEnabledExtensionNames = (const char*const*)names;
@@ -13583,7 +14672,7 @@ unit_local void spv_block_init(Spv_Block *block, u64 initial_capacity) {
 
 unit_local void spv_push_bytes(Spv_Block *block, void *bytes, u64 count) {
     void *backing = arena_push(&block->arena, count);
-    memcpy(backing, bytes, count);
+    memcpy(backing, bytes, (sys_uint)count);
     block->count += count;
 }
 
@@ -16410,7 +17499,7 @@ unit_local string _osl_tprint_token(Osl_Compiler *compiler, Osl_Token *token, st
 	memset(space.data, '-', pos_in_line);
 	
 	string arrows = string_allocate(get_temp(), token->length);
-	memset(arrows.data, '^', token->length);
+	memset(arrows.data, '^', (sys_uint)token->length);
 	
 	string kind_str = _osl_stringify_token_kind(token->kind);
 	return tprint("Line %u, Token '%s' (%s): %s\n    %s\n    %s%s\n", line_counter, token_str, kind_str, message, line, space, arrows);
@@ -17243,8 +18332,8 @@ unit_local Osl_Result _osl_parse_one(Osl_Compiler *compiler, Osl_Block *block, O
         	if (is_literal && cond->val.lit.lit_int == 0) {
         		if_chain->branch_count -= 1;
         		if (i < (s64)if_chain->branch_count) {
-        			memmove(&if_chain->conditions[i], &if_chain->conditions[i+1], (if_chain->branch_count-(u64)i) * sizeof(void*));
-        			memmove(&if_chain->blocks[i], &if_chain->blocks[i+1], (if_chain->branch_count-(u64)i) * sizeof(void*));
+        			memmove(&if_chain->conditions[i], &if_chain->conditions[i+1], (sys_uint)(if_chain->branch_count-(u64)i) * sizeof(void*));
+        			memmove(&if_chain->blocks[i], &if_chain->blocks[i+1], (sys_uint)(if_chain->branch_count-(u64)i) * sizeof(void*));
         		}
         		i -= 1;
         	} else {
@@ -17619,7 +18708,7 @@ Osl_Result osl_compile(Allocator a, Osl_Compile_Desc desc, void **pcode, u64 *pc
 	    	Spv_Block *block = spv_finalize(spv);
 	    	*pcode_size = block->count;
 	    	*pcode = allocate(a, block->count);
-	    	memcpy(*pcode, block->data, block->count);
+	    	memcpy(*pcode, block->data, (sys_uint)block->count);
 		}
 		_osl_done_spv(spv);
     }

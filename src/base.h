@@ -306,8 +306,13 @@ typedef u64 sys_uint;
 #define SYS_INT_MAX SYS_S64_MAX
 #define SYS_UINT_MAX SYS_U64_MAX
 #else
+#if OS_FLAGS & OS_FLAG_EMSCRIPTEN
+typedef signed long sys_int;
+typedef unsigned long sys_uint;
+#else
 typedef s32 sys_int;
 typedef u32 sys_uint;
+#endif
 #define SYS_INT_MAX S32_MAX
 #define SYS_UINT_MAX U32_MAX
 #endif

@@ -2665,3 +2665,82 @@ ioctlsocket(
 
 #define NO_ERROR 0L                                                 // dderror
 
+int setsockopt (
+                           SOCKET s,
+                           int level,
+                           int optname,
+                           const char * optval,
+                           int optlen);
+                           
+#define SOL_SOCKET      0xffff          /* options for socket level */
+
+#define SO_SNDBUF       0x1001          /* send buffer size */
+#define SO_RCVBUF       0x1002          /* receive buffer size */
+#define SO_SNDLOWAT     0x1003          /* send low-water mark */
+#define SO_RCVLOWAT     0x1004          /* receive low-water mark */
+#define SO_SNDTIMEO     0x1005          /* send timeout */
+#define SO_RCVTIMEO     0x1006          /* receive timeout */
+#define SO_ERROR        0x1007          /* get error status and clear */
+#define SO_TYPE         0x1008          /* get socket type */
+
+#define FD_SETSIZE      64
+
+#define FD_CLR(fd, set) do { \
+    u_int __i; \
+    for (__i = 0; __i < ((fd_set *)(set))->fd_count ; __i++) { \
+        if (((fd_set *)(set))->fd_array[__i] == fd) { \
+            while (__i < ((fd_set *)(set))->fd_count-1) { \
+                ((fd_set *)(set))->fd_array[__i] = \
+                    ((fd_set *)(set))->fd_array[__i+1]; \
+                __i++; \
+            } \
+            ((fd_set *)(set))->fd_count--; \
+            break; \
+        } \
+    } \
+} while(0)
+
+#define FD_SET(fd, set) do { \
+    if (((fd_set *)(set))->fd_count < FD_SETSIZE) \
+        ((fd_set *)(set))->fd_array[((fd_set *)(set))->fd_count++]=(fd);\
+} while(0)
+
+#define FD_ZERO(set) (((fd_set *)(set))->fd_count=0)
+
+#define FD_ISSET(fd, set) __WSAFDIsSet((SOCKET)(fd), (fd_set *)(set))
+
+/*
+ * Structure used in select() call, taken from the BSD file sys/time.h.
+ */
+struct timeval {
+        long    tv_sec;         /* seconds */
+        long    tv_usec;        /* and microseconds */
+};
+
+/*
+ * Operations on timevals.
+ *
+ * NB: timercmp does not work for >= or <=.
+ */
+#define timerisset(tvp)         ((tvp)->tv_sec || (tvp)->tv_usec)
+#define timercmp(tvp, uvp, cmp) \
+        ((tvp)->tv_sec cmp (uvp)->tv_sec || \
+         (tvp)->tv_sec == (uvp)->tv_sec && (tvp)->tv_usec cmp (uvp)->tv_usec)
+#define timerclear(tvp)         (tvp)->tv_sec = (tvp)->tv_usec = 0
+
+typedef struct fd_set {
+        unsigned int   fd_count;               /* how many are SET? */
+        SOCKET  fd_array[FD_SETSIZE];   /* an array of SOCKETs */
+} fd_set;
+
+WINDOWS_IMPORT
+int
+WINAPI
+select(
+    int nfds,
+    fd_set * readfds,
+    fd_set * writefds,
+    fd_set * exceptfds,
+    const struct timeval * timeout
+    );
+    
