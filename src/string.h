@@ -50,7 +50,7 @@ unit_local inline bool string_contains(string s, string sub) {
 }
 
 unit_local inline string string_slice(string s, u64 index, u64 count) {
-    return (string){ s.data+index, count };
+    return (string){ count, s.data+index };
 }
 
 unit_local inline bool string_starts_with(string s, string sub) {
