@@ -1,17 +1,35 @@
-#if 0
-#include "ostd.h" // For syntax highlighting.
-#endif
+#ifndef _PRINT_H
+#define _PRINT_H
+
+#ifndef _BASE_H
+#include "base.h"
+#endif // _BASE_H
+#ifndef _STRING_H
+#include "string.h"
+#endif // _STRING_H
+#ifndef _MEMORY_H
+#include "memory.h"
+#endif // _MEMORY_H
+#ifndef _VAR_ARGS_H
+#include "var_args.h"
+#endif // _VAR_ARGS_H
+#ifndef _SYSTEM_1_H
+#include "system1.h"
+#endif // _SYSTEM_1_H
+#ifndef _MATH_H
+#include "math.h" // need this for ln64 for formatting int
+#endif // _MATH_H
 
 /*
 
     TODO:
 
         - Specify int base
-            %ib16 - base 16
+            %i16  - base 16
         - Padding, 0 padding
-            %i-4   "   5"
+            %4-i   "   5"
                    "  81"
-            %i4    "5   "
+            %i-4   "5   "
                    "81  "
             %i04   "0005"
                    "0081"
@@ -21,7 +39,7 @@
 
             %f04.3 "0001.123""
 
-        - Null terminated string %s0 or %cs or %ns
+        - Null terminated string is %s0
 
         - Stack-backed buffered print() (instead of temporary allocation)
 
@@ -41,9 +59,9 @@ u64 format_signed_int(s64 x, int base, void *buffer, u64 buffer_size);
 u64 format_unsigned_int(u64 x, int base, void *buffer, u64 buffer_size);
 u64 format_float(float64 x, int decimal_places, void *buffer, u64 buffer_size);
 
-unit_local u64 string_to_unsigned_int(string str, int base, bool *success);
-unit_local s64 string_to_signed_int(string str, int base, bool *success);
-unit_local float64 string_to_float(string str, bool *success);
+u64 string_to_unsigned_int(string str, int base, bool *success);
+s64 string_to_signed_int(string str, int base, bool *success);
+float64 string_to_float(string str, bool *success);
 
 //////
 // Printing
@@ -434,7 +452,7 @@ u64 format_float(float64 x, int decimal_places, void *buffer, u64 buffer_size) {
     return written;
 }
 
-unit_local u64 string_to_unsigned_int(string str, int base, bool *success)
+u64 string_to_unsigned_int(string str, int base, bool *success)
 {
     u64 value = 0;
     if (base < 2 || base > 36) {
@@ -482,7 +500,7 @@ unit_local u64 string_to_unsigned_int(string str, int base, bool *success)
     return value;
 }
 
-unit_local s64 string_to_signed_int(string str, int base, bool *success)
+s64 string_to_signed_int(string str, int base, bool *success)
 {
     u8 *p = str.data;
 
@@ -509,7 +527,7 @@ unit_local s64 string_to_signed_int(string str, int base, bool *success)
     return signed_val;
 }
 
-unit_local float64 string_to_float(string str, bool *success)
+float64 string_to_float(string str, bool *success)
 {
     u8 *p = str.data;
 
@@ -562,6 +580,9 @@ unit_local float64 string_to_float(string str, bool *success)
 Logger_Proc logger = 0;
 
 // todo(charlie) move to appropriate file
+// There probably needs to be a string_utilities file or something because this function needs
+// the memory module, but the string module must come before the memory module because the system
+// module must come before the memory module because it uses strings. 
 string string_replace(Allocator a, string s, string sub, string replacement) {
     if (s.count < sub.count) return (string){0};
 
@@ -603,3 +624,4 @@ string string_replace(Allocator a, string s, string sub, string replacement) {
 #endif // OSTD_IMPL
 
 
+#endif // _PRINT_H

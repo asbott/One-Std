@@ -8,7 +8,7 @@ INCLUDE_PATTERN = re.compile(r'^\s*#\s*include\s*[<"]([^">]+)[">]')
 # Set to keep track of included files to prevent multiple inclusions
 included_files = set()
 
-def resolve_includes(file_path, base_dir, skip_next=False):
+def resolve_includes(input_filename, file_path, base_dir, skip_next=False):
     """
     Recursively resolves #include directives in the given file.
 
@@ -48,7 +48,7 @@ def resolve_includes(file_path, base_dir, skip_next=False):
             else:
                 # Handle only local includes; adjust as needed for system includes
                 if line.strip().startswith('#include "'):
-                    include_content = resolve_includes(include_file, os.path.dirname(normalized_path))
+                    include_content = resolve_includes(input_filename, include_file, os.path.dirname(normalized_path))
                     if include_content != '':
                         resolved_content.append(f'\n/* Begin include: {include_file} */\n')
                         resolved_content.append(include_content)
@@ -71,12 +71,16 @@ def main():
     base_dir = os.path.dirname(os.path.abspath(input_file))
     input_filename = os.path.basename(input_file)
 
-    resolved = resolve_includes(input_filename, base_dir)
+    resolved = resolve_includes(input_filename, input_filename, base_dir)
 
     with open(output_file, 'w') as f:
-        f.write("#ifndef OSTD_SINGLE_HEADER\n#define OSTD_SINGLE_HEADER\n\n");
+        guard_start = f"#ifndef _ONE_{input_filename[0:len(input_filename)-2].upper()}_H\n#define _ONE_{input_filename[0:len(input_filename)-2].upper()}_H\n\n"
+        guard_end = f"#endif // _ONE_{input_filename[0:len(input_filename)-2].upper()}_H\n"
+        f.write(open(f'{base_dir}/ignore_warnings.h').read())
+        f.write(guard_start)
         f.write(resolved)
-        f.write("#endif // OSTD_SINGLE_HEADER\n");
+        f.write(guard_end)
+        f.write(open(f'{base_dir}/unignore_warnings.h').read())
 
     print(f"Resolved includes written to {output_file}")
 

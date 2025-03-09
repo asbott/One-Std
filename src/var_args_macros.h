@@ -1,3 +1,6 @@
+#ifndef _VAR_ARGS_MACROS_H
+#define _VAR_ARGS_MACROS_H
+
 #define MAX_VAR_ARGS 70
 
 #define PP_NARG(...) PP_ARG_N(__VA_ARGS__, PP_RSEQ_N())
@@ -229,3 +232,5 @@
 
 #define MAKE_WRAPPED_CALL(TARGET, ...) \
     _WRAP_ARGS_DISPATCH(PP_NARG(__VA_ARGS__), TARGET, __VA_ARGS__)
+
+#endif // _VAR_ARGS_MACROS_H

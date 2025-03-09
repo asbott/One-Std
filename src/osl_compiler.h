@@ -1,7 +1,22 @@
 
-#if 0
-#include "ostd.h"
-#endif
+#ifndef _OSL_COMPILER_H
+#define _OSL_COMPILER_H
+
+#ifndef _BASE_H
+#include "base.h"
+#endif // _BASE_H
+#ifndef _STRING_H
+#include "string.h"
+#endif // _STRING_H
+#ifndef _MEMORY_H
+#include "memory.h"
+#endif // _MEMORY_H
+#ifndef _SYSTEM_1_H
+#include "system1.h"
+#endif // _SYSTEM_1_H
+#ifndef _PRINT_H
+#include "print.h"
+#endif // _PRINT_H
 
 typedef enum Osl_Result {
     OSL_OK,
@@ -3714,7 +3729,7 @@ unit_local Osl_Result _osl_parse_type_ident(Osl_Compiler *compiler, Osl_Block *b
 
 unit_local Osl_Result _osl_parse_arg_list(Osl_Compiler *compiler, Osl_Block *block, Osl_Token_Kind close_token, Osl_Token *start, Osl_Token **done_token, Osl_Arg_List *list) {
 	*list = (Osl_Arg_List){0};
-	
+	assert(list->arg_count == 0); // todo(charlie) tcc compiler bug causes crash here. Maybe we can work around it?
 	Osl_Token_Kind open_token = 0;
 	if (close_token == OSL_TOKEN_KIND_RPAREN) {
 		open_token = OSL_TOKEN_KIND_LPAREN;
@@ -3739,7 +3754,7 @@ unit_local Osl_Result _osl_parse_arg_list(Osl_Compiler *compiler, Osl_Block *blo
 	while (next->kind != OSL_TOKEN_KIND_EOF && next->kind != close_token) {
 
 		next += 1;
-		assertmsg(list->arg_count < 128, "Exceeding max allowed argument count of 128");
+		assertmsgs(list->arg_count < 128, _osl_tprint_token(compiler, next, tprint("Exceeding max allowed argument count of 128 (%i)", list->arg_count)));
 		
 		
 		Osl_Token *sub_expr_start = next;
@@ -4782,3 +4797,6 @@ Osl_Result osl_compile(Allocator a, Osl_Compile_Desc desc, void **pcode, u64 *pc
 }
 
 #endif // OSTD_IMPL
+
+
+#endif // _OSL_COMPILER_H

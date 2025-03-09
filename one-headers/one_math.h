@@ -1,8 +1,505 @@
+// I try to compile with -pedantic and -Weverything, but get really dumb warnings like these,
+// so I have to ignore them.
+#if defined(__GNUC__) || defined(__GNUG__)
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wattributes"
+#pragma GCC diagnostic ignored "-Wunused-function"
+#pragma GCC diagnostic ignored "-Wunused-macros"
+#pragma GCC diagnostic ignored "-Wunused-const-variable"
+#endif
+#ifdef __clang__
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wattributes"
+#pragma clang diagnostic ignored "-Wreserved-identifier"
+#pragma clang diagnostic ignored "-Wdeclaration-after-statement"
+#pragma clang diagnostic ignored "-Wcovered-switch-default"
+#pragma clang diagnostic ignored "-Wcast-align"
+#pragma clang diagnostic ignored "-Wunused-function"
+#pragma clang diagnostic ignored "-Wunused-macros"
+#pragma clang diagnostic ignored "-Wunused-const-variable"
+#if __STDC_VERSION__ == 202311
+#pragma clang diagnostic ignored "-Wpre-c23-compat"
+#endif
+#ifdef __EMSCRIPTEN__
+#pragma clang diagnostic ignored "-Wpadded"
+#endif // __EMSCRIPTEN__
+#if defined(_MSC_VER) || defined(__EMSCRIPTEN__)
+#pragma clang diagnostic ignored "-Wunsafe-buffer-usage"
+#endif
+#endif // __clang__
+#ifndef _ONE_MATH_H
+#define _ONE_MATH_H
+
+#ifndef _MATH_H
+#define _MATH_H
+
+#ifndef _BASE_H
+
+/* Begin include: base.h */
+
+#ifndef _BASE_H
+#define _BASE_H
+
+
+/*
+            Compiler
+*/
+
+#define COMPILER_FLAG_CLANG       (1 << 0)
+#define COMPILER_FLAG_GNU         (1 << 1)
+#define COMPILER_FLAG_MSC         (1 << 2)
+#define COMPILER_FLAG_INTEL       (1 << 3)
+#define COMPILER_FLAG_TCC         (1 << 4)
+#define COMPILER_FLAG_EMSCRIPTEN  (1 << 5)
+#define COMPILER_FLAG_PGI         (1 << 6)
+#define COMPILER_FLAG_SUNPRO      (1 << 7)
+#define COMPILER_FLAG_CLANG_GNU   (1 << 8)
+
+#ifdef __clang__
+    #define CLANG 1
+#else
+    #define CLANG 0
+#endif
+
+#if defined(__GNUC__) || defined(__GNUG__)
+    #define GNU 1
+#else
+    #define GNU 0
+#endif
+
+#ifdef _MSC_VER
+    #define MSC 1
+#else
+    #define MSC 0
+#endif
+
+#ifdef __INTEL_COMPILER
+    #define INTEL 1
+#else
+    #define INTEL 0
+#endif
+
+#ifdef __TINYC__
+    #define TCC 1
+#else
+    #define TCC 0
+#endif
+
+#ifdef __EMSCRIPTEN__
+    #define EMSCRIPTEN 1
+#else
+    #define EMSCRIPTEN 0
+#endif
+
+#ifdef __PGI
+    #define PGI 1
+#else
+    #define PGI 0
+#endif
+
+#ifdef __SUNPRO_C
+    #define SUNPRO 1
+#else
+    #define SUNPRO 0
+#endif
+
+#define COMPILER_FLAGS ( \
+    (CLANG ? COMPILER_FLAG_CLANG : 0) | \
+    (GNU ? COMPILER_FLAG_GNU : 0) | \
+    (MSC ? COMPILER_FLAG_MSC : 0) | \
+    (INTEL ? COMPILER_FLAG_INTEL : 0) | \
+    (TCC ? COMPILER_FLAG_TCC : 0) | \
+    (EMSCRIPTEN ? COMPILER_FLAG_EMSCRIPTEN : 0) | \
+    (PGI ? COMPILER_FLAG_PGI : 0) | \
+    (SUNPRO ? COMPILER_FLAG_SUNPRO : 0) | \
+    ((CLANG && GNU) ? COMPILER_FLAG_CLANG_GNU : 0) \
+)
+
+// Architexture
+
+#if defined(_M_IX86) || defined(__i386__) || defined(__EMSCRIPTEN__)
+    #define ARCH_X86 1
+#elif defined(_M_X64) || defined(_M_AMD64) || defined(__x86_64__)
+    #define ARCH_X64 1
+#elif defined(_M_ARM) || defined(__arm__)
+    #define ARCH_ARM 1
+#elif defined(_M_ARM64) || defined(__aarch64__)
+    #define ARCH_ARM64 1
+#else
+    #error "Unknown architecture"
+#endif
+
+#define local_persist static
+#define forward_global extern
+#define unit_local static
+
+// make inline actually inline if supported by compiler
+
+#ifdef __clang__
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wkeyword-macro"
+#endif
+#if COMPILER_FLAGS & COMPILER_FLAG_GNU
+    #define inline __attribute__((always_inline))
+#elif COMPILER_FLAGS & COMPILER_FLAG_MSC
+    #define inline __forceinline
+#endif
+#ifdef __clang__
+#pragma clang diagnostic pop
+#endif
+
+#define CSTD_C90 1
+#ifdef __STDC_VERSION__
+    #if __STDC_VERSION__ == 199901
+        #define CSTD_C99 1
+    #else
+        #define CSTD_C99 0
+    #endif // CSTD_C99
+    #if __STDC_VERSION__ == 201112
+        #define CSTD_C11 1
+    #else
+        #define CSTD_C11 0
+    #endif // CSTD_C11
+    #if __STDC_VERSION__ == 201710
+        #define CSTD_C17 1
+    #else
+        #define CSTD_C17 0
+    #endif // CSTD_C17
+    #if __STDC_VERSION__ == 202311
+        #define CSTD_C23 1
+    #else
+        #define CSTD_C23 0
+    #endif // CSTD_C23
+#endif
+
+#if CSTD_C23
+    #define CSTD "C23"
+#elif CSTD_C17
+    #define CSTD "C17"
+#elif CSTD_C11
+    #define CSTD "C11"
+#elif CSTD_C99
+    #define CSTD "C99"
+#elif CSTD_C90
+    #define CSTD "C90"
+#else
+    #warning "Unknown C standard."
+    #define CSTD "CUnknown"
+#endif
+
+
+
+
+/*
+            Target system
+*/
+
+#define OS_FLAG_WINDOWS           (1 << 0)
+#define OS_FLAG_UNIX              (1 << 1)
+#define OS_FLAG_LINUX             (1 << 2)
+#define OS_FLAG_APPLE             (1 << 3)
+#define OS_FLAG_MACOS             (1 << 4)
+#define OS_FLAG_IOS               (1 << 5)
+#define OS_FLAG_ANDROID           (1 << 6)
+#define OS_FLAG_STEAMOS           (1 << 7)
+#define OS_FLAG_LINUX_BASED       (1 << 8)
+#define OS_FLAG_HAS_WINDOW_SYSTEM (1 << 9)
+#define OS_FLAG_EMSCRIPTEN        (1 << 10)
+
+#define OS_FLAG_WEB OS_FLAG_EMSCRIPTEN
+
+#ifdef _WIN32
+    #define OS_FLAGS (OS_FLAG_WINDOWS | OS_FLAG_HAS_WINDOW_SYSTEM)
+#elif defined(__APPLE__)
+    #include <TargetConditionals.h>
+    #if TARGET_OS_IPHONE || TARGET_IPHONE_SIMULATOR
+        #define OS_FLAGS (OS_FLAG_UNIX | OS_FLAG_APPLE | OS_FLAG_IOS)
+    #elif TARGET_OS_MAC
+        #define OS_FLAGS (OS_FLAG_UNIX | OS_FLAG_APPLE | OS_FLAG_MACOS | OS_FLAG_HAS_WINDOW_SYSTEM)
+    #else
+        #define OS_FLAGS (OS_FLAG_UNIX | OS_FLAG_APPLE)
+    #endif
+#elif defined(__ANDROID__)
+    #define OS_FLAGS (OS_FLAG_UNIX | OS_FLAG_LINUX_BASED | OS_FLAG_ANDROID)
+#elif defined(__STEAMOS__) /* You need to define this yourself when targetting steam */
+    #define OS_FLAGS (OS_FLAG_UNIX | OS_FLAG_LINUX_BASED | OS_FLAG_LINUX | OS_FLAG_STEAMOS)
+#elif defined(__linux__)
+    #define OS_FLAGS (OS_FLAG_UNIX | OS_FLAG_LINUX_BASED | OS_FLAG_LINUX | OS_FLAG_HAS_WINDOW_SYSTEM)
+#elif defined(__EMSCRIPTEN__)
+    #define OS_FLAGS (OS_FLAG_UNIX | OS_FLAG_EMSCRIPTEN)
+#elif defined(__unix__) || defined(__unix)
+    #define OS_FLAGS (OS_FLAG_UNIX)
+#else
+    #define OS_FLAGS (0)
+#endif
+
+#if COMPILER_FLAGS & COMPILER_FLAG_MSC
+
+    #pragma clang diagnostic push
+    #pragma clang diagnostic ignored "-Wlanguage-extension-token"
+    typedef unsigned __int8   u8;
+    typedef signed __int8     s8;
+    typedef unsigned __int16  u16;
+    typedef signed __int16    s16;
+    typedef unsigned __int32  u32;
+    typedef signed __int32    s32;
+    typedef unsigned __int64  u64;
+    typedef signed __int64    s64;
+    typedef unsigned __int64 uintptr;
+    #pragma clang diagnostic pop
+
+#elif COMPILER_FLAGS & COMPILER_FLAG_GNU
+
+    typedef __UINT64_TYPE__ u64;
+    typedef __INT64_TYPE__  s64;
+    typedef __UINT32_TYPE__ u32;
+    typedef __INT32_TYPE__  s32;
+    typedef __UINT16_TYPE__ u16;
+    typedef __INT16_TYPE__  s16;
+    typedef __UINT8_TYPE__  u8;
+    typedef __INT8_TYPE__   s8;
+
+    typedef __UINTPTR_TYPE__  uintptr;
+
+#else
+
+    #include <stdint.h>
+    typedef uint8_t  u8;
+    typedef int8_t   s8;
+    typedef uint16_t u16;
+    typedef int16_t  s16;
+    typedef uint32_t u32;
+    typedef int32_t  s32;
+    typedef uint64_t u64;
+    typedef int64_t  s64;
+
+     typedef uintptr_t uintptr;
+
+#endif
+
+typedef float float32;
+typedef double float64;
+#if defined(__SIZEOF_FLOAT128__) && __SIZEOF_FLOAT128__ == 16
+    typedef __float128 float128;
+    #define HAS_FLOAT128 1
+#elif defined(__SIZEOF_LONG_DOUBLE__) && __SIZEOF_LONG_DOUBLE__ == 16
+    typedef long double float128;
+    #define HAS_FLOAT128 1
+#else
+    #define HAS_FLOAT128 0
+#endif
+
+typedef u8 uint8;
+typedef s8 int8;
+typedef u16 uint16;
+typedef s16 int16;
+typedef u32 uint32;
+typedef s32 int32;
+typedef u64 uint64;
+typedef s64 int64;
+
+typedef float32 f32;
+typedef float64 f64;
+#if HAS_FLOAT128
+typedef float128 f128;
+#endif // HAS_FLOAT128
+
+#define U8_MIN 0
+#define U8_MAX 255U
+#define S8_MIN (-128)
+#define S8_MAX 127
+#define U16_MIN 0
+#define U16_MAX 65535U
+#define S16_MIN (-32768)
+#define S16_MAX 32767
+#define U32_MIN 0U
+#define U32_MAX 4294967295UL
+#define S32_MIN (-2147483648L)
+#define S32_MAX 2147483647L
+#define U64_MIN 0ULL
+#define U64_MAX 18446744073709551615ULL
+#define S64_MIN (-9223372036854775807LL - 1)
+#define S64_MAX 9223372036854775807LL
+
+#define UINT8_MIN 0
+#define UINT8_MAX 255U
+#define INT8_MIN (-128)
+#define INT8_MAX 127
+#define UINT16_MIN 0
+#define UINT16_MAX 65535U
+#define INT16_MIN (-32768)
+#define INT16_MAX 32767
+#define UINT32_MIN 0U
+#define UINT32_MAX 4294967295UL
+#define INT32_MIN (-2147483648L)
+#define INT32_MAX 2147483647L
+#define UINT64_MIN 0ULL
+#define UINT64_MAX 18446744073709551615ULL
+#define INT64_MIN (-9223372036854775807LL - 1)
+#define INT64_MAX 9223372036854775807LL
+
+#if defined(ARCH_X64) || defined (ARCH_ARM64)
+typedef s64 sys_int;
+typedef u64 sys_uint;
+#define SYS_INT_MAX SYS_S64_MAX
+#define SYS_UINT_MAX SYS_U64_MAX
+#else
+#if OS_FLAGS & OS_FLAG_EMSCRIPTEN
+typedef signed long sys_int;
+typedef unsigned long sys_uint;
+#else
+typedef s32 sys_int;
+typedef u32 sys_uint;
+#endif
+#define SYS_INT_MAX S32_MAX
+#define SYS_UINT_MAX U32_MAX
+#endif
+
+#if !CSTD_C23
+
+#if (COMPILER_FLAGS & COMPILER_FLAG_CLANG) && ((COMPILER_FLAGS & COMPILER_FLAG_MSC) || COMPILER_FLAGS & COMPILER_FLAG_EMSCRIPTEN)
+    #pragma clang diagnostic push
+    #pragma clang diagnostic ignored "-Wc23-compat"
+#endif // (COMPILER_FLAGS & COMPILER_FLAG_CLANG) && ((COMPILER_FLAGS & COMPILER_FLAG_MSC) || COMPILER_FLAGS & COMPILER_FLAG_EMSCRIPTEN)
+
+    typedef s8 bool;
+    #define true 1
+    #define false 0
+#if (COMPILER_FLAGS & COMPILER_FLAG_CLANG) && ((COMPILER_FLAGS & COMPILER_FLAG_MSC) || COMPILER_FLAGS & COMPILER_FLAG_EMSCRIPTEN)
+    #pragma clang diagnostic pop
+#endif // (COMPILER_FLAGS & COMPILER_FLAG_CLANG) && ((COMPILER_FLAGS & COMPILER_FLAG_MSC) || COMPILER_FLAGS & COMPILER_FLAG_EMSCRIPTEN)
+
+#else // !CSTD_C23
+
+#endif // CSTD_C23
+
+#if COMPILER_FLAGS & COMPILER_FLAG_MSC
+#define debug_break(...) __debugbreak()
+#elif COMPILER_FLAGS & COMPILER_FLAG_GNU
+#define debug_break(...) __builtin_trap()
+#else
+#define debug_break(...) *(volatile int*)0 = 1
+#endif
+
+#define STRINGIFY(x) #x
+#define TOSTRING(x) STRINGIFY(x)
+#define assertmsg(x, msg) assertmsgs(x, STR(msg))
+#define assertmsgs(x, msg)  do { \
+        if (!(x)) {\
+            sys_write_string(sys_get_stderr(), STR("\n========================================================\n"));\
+            sys_write_string(sys_get_stderr(), STR("==========!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!==========\n"));\
+            sys_write_string(sys_get_stderr(), STR("========================================================\n"));\
+            sys_write_string(sys_get_stderr(), STR("\nAssertion failed for expression: '"));\
+            sys_write_string(sys_get_stderr(), STR(#x));\
+            sys_write_string(sys_get_stderr(), STR("'.\n"));\
+            if (msg.data && msg.count) {\
+                sys_write_string(sys_get_stderr(), STR("\n\""));\
+                sys_write_string(sys_get_stderr(), msg);\
+                sys_write_string(sys_get_stderr(), STR("\"\n"));\
+            }\
+            sys_write_string(sys_get_stderr(), STR("\nIn File '"));\
+            sys_write_string(sys_get_stderr(), STR(__FILE__));\
+            sys_write_string(sys_get_stderr(), STR("' on line "));\
+            sys_write_string(sys_get_stderr(), STR(TOSTRING(__LINE__)));\
+            sys_write_string(sys_get_stderr(), STR("\n\nPrinting stack trace:\n"));\
+            sys_print_stack_trace(sys_get_stderr());\
+            sys_write_string(sys_get_stderr(), STR("\n\n========================================================\n"));\
+            sys_write_string(sys_get_stderr(), STR("==========!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!==========\n"));\
+            sys_write_string(sys_get_stderr(), STR("========================================================\n"));\
+            debug_break();\
+        } \
+    } while(0)
+#define assert(x) assertmsg(x, "")
+
+inline void *memcpy(void *dst, const void * src, sys_uint n);
+// todo(charlie) inline asm / dynamically load crt's if msvc
+inline void *memset(void *dst, s32 c, sys_uint n) {
+    sys_uint i;
+    for (i = 0; i+4 < n; i += 4)  *((s32*)dst + (i/4)) = c;
+    if (i < n) memcpy(dst, &c, n-i);
+    return dst;
+}
+inline void *memcpy(void *dst, const void * src, sys_uint n) {
+    for (sys_uint i = 0; i < n; i += 1)  *((u8*)dst + i) = *((const u8*)src + i);
+    return dst;
+}
+inline void *memmove(void *dst, const void *src, sys_uint n) {
+    if (!n) return dst;
+    if ((sys_uint)dst > (sys_uint)src)
+        for (s64 i = (s64)n-1; i >= 0; i -= 1)  *((u8*)dst + i) = *((const u8*)src + i);
+    else
+        for (sys_uint i = 0; i < n; i += 1)  *((u8*)dst + i) = *((const u8*)src + i);
+    return dst;
+}
+
+inline int memcmp(const void* a, const void* b, sys_uint n) {
+    const u8 *p1 = (const u8 *)a;
+    const u8 *p2 = (const u8 *)b;
+
+    for (u32 i = 0; i < n; i++) {
+        if (p1[i] != p2[i]) {
+            return p1[i] - p2[i];
+        }
+    }
+    return 0;
+}
+
+#define DEFAULT(T) T##_default()
+
+
+// Forward decls
+u64 format_signed_int(s64 x, int base, void *buffer, u64 buffer_size);
+u64 format_unsigned_int(u64 x, int base, void *buffer, u64 buffer_size);
+u64 format_float(float64 x, int decimal_places, void *buffer, u64 buffer_size);
+
+
+
+#define PP_FIRST_ARG_HELPER(first, ...) first
+#define PP_FIRST_ARG(...) PP_FIRST_ARG_HELPER(__VA_ARGS__, 0)
+
+#define PP_EXCLUDE_FIRST_ARG_HELPER(first, ...) __VA_ARGS__
+#define PP_EXCLUDE_FIRST_ARG(...) PP_EXCLUDE_FIRST_ARG_HELPER(__VA_ARGS__)
+
+#define Swap(a, b) do {  u8 tmp__[sizeof(a)]; memcpy(tmp__, &a, sizeof(a)); a = b; memcpy(&b, tmp__, sizeof(b)); } while (0)
+
+#ifndef offsetof
+#define offsetof(t, d) ((sys_uint)&(((t *)0)->d))
+#endif
+
+
+void __cpuid(int cpuInfo[4], int function_id);
+
+#define min(a, b) ((a) < (b) ? (a) : (b))
+#define max(a, b) ((a) > (b) ? (a) : (b))
+
+unit_local inline bool is_alpha(u8 c) {
+	return (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z');
+}
+unit_local inline bool is_digit(u8 c) {
+	return (c >= '0' && c <= '9');
+}
+unit_local inline bool is_whitespace(u8 c) {
+	return c == '\n' || c == '\r' || c == '\t' || c == ' ';
+}
+
+unit_local inline u64 align_next(u64 n, u64 align) {
+    return (n+align-1) & ~(align-1);
+}
+
+#endif // _BASE_H
+
+
+
+
+/* End include: base.h */
+#endif // _BASE_H
+
+
+/* Begin include: trig_tables.h */
 #ifndef _TRIG_TABLES_H
 #define _TRIG_TABLES_H
 
 #ifndef _BASE_H
-#include "base.h"
 #endif // _BASE_H
 
 unit_local const float64 sine_table[360] = {
@@ -246,3 +743,601 @@ unit_local const float64 acosine_table[360] = {
 };
 
 #endif // _TRIG_TABLES_H
+
+/* End include: trig_tables.h */
+
+#if defined(__GNUC__) || defined(__GNUG__)
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wfloat-equal"
+#pragma GCC diagnostic ignored "-Wbad-function-cast"
+#endif
+
+#ifdef __clang__
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wfloat-equal"
+#pragma clang diagnostic ignored "-Wbad-function-cast"
+#endif // __clang__
+
+#define clamp(x, a, b) (min(max((x), (a)), (b)))
+
+#define abs(x) ((x) < 0 ? -(x) : (x))
+
+#define PI 3.141592653589793
+#define TAU (PI*2)
+
+unit_local inline f32 lerp32(f32 a, f32 b, f32 t) {
+    return a + (b-a)*t;
+}
+unit_local inline f64 lerp64(f64 a, f64 b, f64 t) {
+    return a + (b-a)*t;
+}
+
+unit_local inline f32 floor32(f32 f) {
+    return (f32)((f) < 0 ? (s64)(f) - 1 : (s64)(f));
+}
+unit_local inline f32 ceil32(f32 f) {
+    return (f32)((f) == (f32)(s64)(f) ? (s64)(f) : (f) > 0 ? (s64)(f) + 1 : (s64)(f));
+}
+unit_local inline f64 floor64(f64 f) {
+    return (f64)((f) < 0 ? (s64)(f) - 1 : (s64)(f));
+}
+unit_local inline f64 ceil64(f64 f) {
+    return (f64)((f) == (f64)(s64)(f) ? (s64)(f) : (f) > 0 ? (s64)(f) + 1 : (s64)(f));
+}
+
+#define trig_lookup(t, f) do { \
+    s64 c = sizeof(t) / sizeof(f64); \
+    f64 norm_index = (f) * (f64)c; \
+    s64 ilo = (s64)floor64(norm_index); \
+    s64 ihi = (s64)ceil64(norm_index); \
+    if (ihi >= c) return t[0]; \
+    f64 t_frac = norm_index - (f64)ilo;\
+    return lerp64(t[ilo], t[ihi], t_frac); \
+} while (0)
+
+
+unit_local inline float64 fmod_cycling(float64 x, float64 y) {
+    if (y == 0.0) {
+        return 0.0;
+    }
+    float64 n = (int)(x / y);
+    return x - n * y;
+}
+
+unit_local inline float64 sin(float64 x) {
+    if (x == 0.0) return 0.0;
+    x = fmod_cycling(x, TAU);
+    trig_lookup(sine_table, x/TAU);
+}
+unit_local inline float64 asin(float64 x) {
+    if (x == 0.0) return 0.0;
+    x = clamp(x, -1.0, 1.0);
+    trig_lookup(asine_table, ((x+1.0)/2.0)/TAU);
+}
+unit_local inline float64 cos(float64 x) {
+    if (x == 0.0) return 1.0;
+    x = fmod_cycling(x, TAU);
+    trig_lookup(cosine_table, x/TAU);
+}
+unit_local inline float64 acos(float64 x) {
+    if (x == 1.0) return 0.0;
+    x = clamp(x, -1.0, 1.0);
+    trig_lookup(acosine_table, ((x+1.0)/2.0)/TAU);
+}
+unit_local inline float64 tan(float64 x) {
+    x = fmod_cycling(x, TAU);
+    s64 i = (s64)((x/TAU) * (f64)(sizeof(tan_table)/sizeof(float64)));
+    if (i >= (s64)(sizeof(tan_table)/sizeof(float64))) return tan_table[0];
+    return tan_table[i];
+}
+unit_local inline float64 atan(float64 x) {
+    if (x == 0.0) return 0.0;
+    float64 theta = (x < 1.0 && x > -1.0) ? x : (x > 0.0 ? PI / 2 : -PI / 2);
+    
+    for (int i = 0; i < 5; ++i) { 
+        float64 sin_theta = sin(theta);
+        float64 cos_theta = cos(theta);
+        float64 tan_theta = sin_theta / cos_theta;
+        
+        theta -= (tan_theta - x) / (1.0 + tan_theta * tan_theta);
+    }
+    
+    return theta;
+}
+
+unit_local inline float64 atan2(float64 y, float64 x) {
+    return (x > 0) ? atan(y / x) :
+           (x < 0 && y >= 0) ? atan(y / x) + PI :
+           (x < 0 && y < 0) ? atan(y / x) - PI :
+           (y > 0) ? PI / 2 :
+           (y < 0) ? -PI / 2 : 0.0;
+}
+
+#define f2_expand(v) (v).x, (v).y
+#define f3_expand(v) (v).x, (v).y, (v).z
+#define f4_expand(v) (v).x, (v).y, (v).z, (v).w
+
+#define f2 f2x32
+#define f3 f3x32
+#define f4 f4x32
+
+#define f2_scalar f2x32_scalar
+#define f3_scalar f3x32_scalar
+#define f4_scalar f4x32_scalar
+
+#define f2_one  f2x32_one
+#define f3_one  f3x32_one
+#define f4_one  f4x32_one
+
+#define f2_zero  f2x32_zero
+#define f3_zero  f3x32_zero
+#define f4_zero  f4x32_zero
+
+#define f2_add  f2x32_add
+#define f3_add  f3x32_add
+#define f4_add  f4x32_add
+
+#define f2_sub  f2x32_sub
+#define f3_sub  f3x32_sub
+#define f4_sub  f4x32_sub
+
+#define f2_mul  f2x32_mul
+#define f3_mul  f3x32_mul
+#define f4_mul  f4x32_mul
+
+#define f2_mulf  f2x32_mulf32
+#define f3_mulf  f3x32_mulf32
+#define f4_mulf  f4x32_mulf32
+
+#define f2_div  f2x32_div
+#define f3_div  f3x32_div
+#define f4_div  f4x32_div
+
+#define f2_divf  f2x32_divf32
+#define f3_divf  f3x32_divf32
+#define f4_divf  f4x32_divf32
+
+#define f2_len  f2x32_len
+#define f3_len  f3x32_len
+#define f4_len  f4x32_len
+
+#define f2_lensq  f2x32_lensq
+#define f3_lensq  f3x32_lensq
+#define f4_lensq  f4x32_lensq
+
+#define f2_average  f2x32_average
+#define f3_average  f3x32_average
+#define f4_average  f4x32_average
+
+#define f2_normalize  f2x32_normalize
+#define f3_normalize  f3x32_normalize
+#define f4_normalize  f4x32_normalize
+
+#define f2_dot  f2x32_dot
+#define f3_dot  f3x32_dot
+#define f4_dot  f4x32_dot
+
+#define f2_perp  f2x32_perp
+#define f3_cross  f3x32_cross
+
+typedef struct int32x2 {
+    int32 x, y;
+} int32x2;
+
+typedef struct int32x4 {
+    int32 x, y, z, w;
+} int32x4;
+
+typedef int32x2 int2;
+
+
+typedef struct float2x32 {
+    float x, y;
+} float2x32;
+typedef struct float3x32 {
+    float x, y, z;
+} float3x32;
+typedef struct float4x32 {
+    float x, y, z, w;
+} float4x32;
+
+typedef float2x32 float2;
+typedef float3x32 float3;
+typedef float4x32 float4;
+
+unit_local inline float32 ln32(float32 x) {
+    u32 bx = * (u32 *) (&x);
+    u32 ex = bx >> 23;
+    s32 t = (s32)ex-(s32)127;
+    bx = 1065353216 | (bx & 8388607);
+    x = * (float32 *) (&bx);
+    return -1.49278f+(2.11263f+(-0.729104f+0.10969f*x)*x)*x+0.6931471806f*(float32)t;
+}
+unit_local inline float64 ln64(float64 x) {
+    u64 bx = *(u64 *)(&x);
+    u64 ex = bx >> 52;
+    s32 t = (s32)ex - 1023;
+    bx = 4607182418800017408ULL | (bx & 4503599627370495ULL);
+    x = *(float64 *)(&bx);
+    return -1.49278 + (2.11263 + (-0.729104 + 0.10969 * x) * x) * x + 0.6931471806 * t;
+}
+
+unit_local inline u64 powu(u64 x, u64 e) {
+    if (e == 0) return 1;
+    u64 result = x;
+    for (u64 i = 0; i < e-1; i += 1) {
+        result *= x;
+    }
+    return result;
+}
+unit_local inline f64 powf64(f64 x, f64 e) {
+    if (e == 0) return 1;
+    f64 result = x;
+    for (f64 i = 0; i < e-1; i += 1) {
+        result *= x;
+    }
+    return result;
+}
+
+unit_local inline float32 sqrt32(float32 n) {
+    if (n < 0.0f) {
+        return -1.0f;
+    }
+    if (n == 0.0f) {
+        return 0.0f;
+    }
+
+    float32 x = n;
+    float32 tolerance = 0.000001f;
+    float32 delta;
+
+    do {
+        float32 next_x = 0.5f * (x + n / x);
+        delta = next_x - x;
+        if (delta < 0.0f) {
+            delta = -delta;
+        }
+        x = next_x;
+    } while (delta > tolerance);
+
+    return x;
+}
+
+unit_local inline float64 sqrt64(float64 n) {
+    if (n < 0.0) {
+        return -1.0;
+    }
+    if (n == 0.0) {
+        return 0.0;
+    }
+
+    float64 x = n;
+    float64 tolerance = 0.000001;
+    float64 delta;
+
+    do {
+        float64 next_x = 0.5 * (x + n / x);
+        delta = next_x - x;
+        if (delta < 0.0) {
+            delta = -delta;
+        }
+        x = next_x;
+    } while (delta > tolerance);
+
+    return x;
+}
+
+unit_local inline float2x32 f2x32(float32 x, float32 y)                       { return (float2x32){x, y}; }
+unit_local inline float3x32 f3x32(float32 x, float32 y, float32 z)            { return (float3x32){x, y, z}; }
+unit_local inline float4x32 f4x32(float32 x, float32 y, float32 z, float32 w) { return (float4x32){x, y, z, w}; }
+
+unit_local inline float2x32 f2x32_scalar(float32 a) { return (float2x32){a, a}; }
+unit_local inline float3x32 f3x32_scalar(float32 a) { return (float3x32){a, a, a}; }
+unit_local inline float4x32 f4x32_scalar(float32 a) { return (float4x32){a, a, a, a}; }
+
+unit_local const float2x32 f2x32_one = {1, 1};
+unit_local const float3x32 f3x32_one = {1, 1, 1};
+unit_local const float4x32 f4x32_one = {1, 1, 1, 1};
+
+unit_local const float2x32 f2x32_zero = {0, 0};
+unit_local const float3x32 f3x32_zero = {0, 0, 0};
+unit_local const float4x32 f4x32_zero = {0, 0, 0, 0};
+
+unit_local inline float2x32 f2x32_add(float2x32 a, float2x32 b)  { return f2x32(a.x+b.x, a.y+b.y); }
+unit_local inline float3x32 f3x32_add(float3x32 a, float3x32 b)  { return f3x32(a.x+b.x, a.y+b.y, a.z+b.z); }
+unit_local inline float4x32 f4x32_add(float4x32 a, float4x32 b)  { return f4x32(a.x+b.x, a.y+b.y, a.z+b.z, a.w+b.w); }
+
+unit_local inline float2x32 f2x32_sub(float2x32 a, float2x32 b)  { return f2x32(a.x-b.x, a.y-b.y); }
+unit_local inline float3x32 f3x32_sub(float3x32 a, float3x32 b)  { return f3x32(a.x-b.x, a.y-b.y, a.z-b.z); }
+unit_local inline float4x32 f4x32_sub(float4x32 a, float4x32 b)  { return f4x32(a.x-b.x, a.y-b.y, a.z-b.z, a.w-b.w); }
+
+unit_local inline float2x32 f2x32_mul(float2x32 a, float2x32 b)  { return f2x32(a.x*b.x, a.y*b.y); }
+unit_local inline float3x32 f3x32_mul(float3x32 a, float3x32 b)  { return f3x32(a.x*b.x, a.y*b.y, a.z*b.z); }
+unit_local inline float4x32 f4x32_mul(float4x32 a, float4x32 b)  { return f4x32(a.x*b.x, a.y*b.y, a.z*b.z, a.w*b.w); }
+
+unit_local inline float2x32 f2x32_mulf32(float2x32 a, float32 s) { return f2x32_mul(a, f2x32(s, s)); }
+unit_local inline float3x32 f3x32_mulf32(float3x32 a, float32 s) { return f3x32_mul(a, f3x32(s, s, s)); }
+unit_local inline float4x32 f4x32_mulf32(float4x32 a, float32 s) { return f4x32_mul(a, f4x32(s, s, s, s)); }
+
+unit_local inline float2x32 f2x32_div(float2x32 a, float2x32 b)  { return f2x32(a.x/b.x, a.y/b.y); }
+unit_local inline float3x32 f3x32_div(float3x32 a, float3x32 b)  { return f3x32(a.x/b.x, a.y/b.y, a.z/b.z); }
+unit_local inline float4x32 f4x32_div(float4x32 a, float4x32 b)  { return f4x32(a.x/b.x, a.y/b.y, a.z/b.z, a.w/b.w); }
+
+unit_local inline float2x32 f2x32_divf32(float2x32 a, float32 s) { return f2x32_div(a, f2x32(s, s)); }
+unit_local inline float3x32 f3x32_divf32(float3x32 a, float32 s) { return f3x32_div(a, f3x32(s, s, s)); }
+unit_local inline float4x32 f4x32_divf32(float4x32 a, float32 s) { return f4x32_div(a, f4x32(s, s, s, s)); }
+
+unit_local inline float32 f2x32_lensq(float2x32 a) { return a.x*a.x + a.y*a.y; }
+unit_local inline float32 f3x32_lensq(float3x32 a) { return a.x * a.x + a.y * a.y + a.z * a.z; }
+unit_local inline float32 f4x32_lensq(float4x32 a) { return a.x * a.x + a.y * a.y + a.z * a.z + a.w * a.w; }
+
+unit_local inline float32 f2x32_len(float2x32 a) { return sqrt32(a.x*a.x + a.y*a.y); }
+unit_local inline float32 f3x32_len(float3x32 a) { return sqrt32(a.x * a.x + a.y * a.y + a.z * a.z); }
+unit_local inline float32 f4x32_len(float4x32 a) { return sqrt32(a.x * a.x + a.y * a.y + a.z * a.z + a.w * a.w); }
+
+unit_local inline float32 f2x32_average(float2x32 a) { return (a.x+a.y)/2.0f; }
+unit_local inline float32 f3x32_average(float3x32 a) { return (a.x + a.y + a.z) / 3.0f; }
+unit_local inline float32 f4x32_average(float4x32 a) { return (a.x + a.y + a.z + a.w) / 4.0f; }
+
+#if defined(__GNUC__) || defined(__GNUG__)
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wfloat-equal"
+#endif
+
+#ifdef __clang__
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wfloat-equal"
+#endif // __clang__
+
+unit_local inline float2x32 f2x32_normalize(float2x32 a) { return f2x32_lensq(a) == 0 ? f2x32_scalar(0) : f2x32_divf32(a, f2x32_len(a)); }
+unit_local inline float3x32 f3x32_normalize(float3x32 a) { return f3x32_lensq(a) == 0 ? f3x32_scalar(0) : f3x32_divf32(a, f3x32_len(a)); }
+unit_local inline float4x32 f4x32_normalize(float4x32 a) { return f4x32_lensq(a) == 0 ? f4x32_scalar(0) : f4x32_divf32(a, f4x32_len(a)); }
+
+#if defined(__GNUC__) || defined(__GNUG__)
+#pragma GCC diagnostic pop
+#endif
+
+#ifdef __clang__
+#pragma clang diagnostic pop
+#endif // __clang__
+
+unit_local inline float32 f2x32_dot(float2x32 a, float2x32 b) { return a.x * b.x + a.y * b.y; }
+unit_local inline float32 f3x32_dot(float3x32 a, float3x32 b) { return a.x * b.x + a.y * b.y + a.z * b.z; }
+unit_local inline float32 f4x32_dot(float4x32 a, float4x32 b) { return a.x * b.x + a.y * b.y + a.z * b.z + a.w * b.w; }
+
+unit_local inline float32 f2x32_perp(float2x32 a, float2x32 b) { return (a.x * b.y) - (a.y * b.x); }
+unit_local inline float3x32 f3x32_cross(float3x32 a, float3x32 b) { return f3x32((a.y*b.z)-(a.z*b.y), (a.z*b.x)-(a.x*b.z), (a.x*b.y)-(a.y*b.x)); }
+
+
+// Column major
+typedef struct Matrix4 {
+    float32 data[4][4];
+} Matrix4;
+
+unit_local inline Matrix4 m4_scalar(float32 scalar) {
+    Matrix4 m = (Matrix4){0};
+    m.data[0][0] = scalar; 
+    m.data[1][1] = scalar; 
+    m.data[2][2] = scalar; 
+    m.data[3][3] = scalar; 
+    return m;
+}
+
+unit_local inline Matrix4 m4_identity(void) { return m4_scalar(1.0); }
+
+unit_local inline Matrix4 m4_make_translation(float3 translation) {
+    Matrix4 m = m4_identity();    
+    *(float3*)m.data[3] = translation;
+    
+    return m;
+}
+
+unit_local inline Matrix4 m4_translate(Matrix4 m, float3 translation) {
+    m.data[3][0] = translation.x;
+    m.data[3][1] = translation.y;
+    m.data[3][2] = translation.z;
+    return m;
+}
+
+unit_local inline float m4_trace(Matrix4 m) {
+    float a = m.data[0][0];
+    a += m.data[1][1];
+    a += m.data[2][2];
+    a += m.data[3][3];
+    
+    return a;
+}
+
+unit_local inline Matrix4 m4_add(Matrix4 m0, Matrix4 m1) {
+    *(float4*)m0.data[0] = f4_add(*(float4*)m0.data[0], *(float4*)m1.data[0]);
+    *(float4*)m0.data[1] = f4_add(*(float4*)m0.data[1], *(float4*)m1.data[1]);
+    *(float4*)m0.data[2] = f4_add(*(float4*)m0.data[2], *(float4*)m1.data[2]);
+    *(float4*)m0.data[3] = f4_add(*(float4*)m0.data[3], *(float4*)m1.data[3]);
+    
+    return m0;
+}
+
+unit_local inline Matrix4 m4_make_scale(float3 scalars) {
+    Matrix4 m = m4_identity();
+    *(float4*)m.data[0] = f4_mulf(*(float4*)m.data[0], scalars.x);
+    *(float4*)m.data[1] = f4_mulf(*(float4*)m.data[1], scalars.y);
+    *(float4*)m.data[2] = f4_mulf(*(float4*)m.data[2], scalars.z);
+    
+    return m;
+}
+
+unit_local inline Matrix4 m4_scalef(Matrix4 m, float32 scalar) {
+    *(float4*)m.data[0] = f4_mulf(*(float4*)m.data[0], scalar);
+    *(float4*)m.data[1] = f4_mulf(*(float4*)m.data[1], scalar);
+    *(float4*)m.data[2] = f4_mulf(*(float4*)m.data[2], scalar);
+    *(float4*)m.data[3] = f4_mulf(*(float4*)m.data[3], scalar);
+    
+    return m;
+}
+unit_local inline Matrix4 m4_scale(Matrix4 m, float3 scalars) {
+    *(float4*)m.data[0] = f4_mulf(*(float4*)m.data[0], scalars.x);
+    *(float4*)m.data[1] = f4_mulf(*(float4*)m.data[1], scalars.y);
+    *(float4*)m.data[2] = f4_mulf(*(float4*)m.data[2], scalars.z);
+    
+    return m;
+}
+unit_local inline Matrix4 m4_scale_f4(Matrix4 m, float4 scalars) {
+    *(float4*)m.data[0] = f4_mulf(*(float4*)m.data[0], scalars.x);
+    *(float4*)m.data[1] = f4_mulf(*(float4*)m.data[1], scalars.y);
+    *(float4*)m.data[2] = f4_mulf(*(float4*)m.data[2], scalars.z);
+    *(float4*)m.data[3] = f4_mulf(*(float4*)m.data[3], scalars.w);
+    
+    return m;
+}
+
+unit_local inline Matrix4 m4_make_rotation_x(float rad) {
+    float c = (f32)cos((f64)rad);
+    float s = (f32)sin((f64)rad);
+    return (Matrix4){{
+        {  c,  0, -s,  0 },
+        {  0,  1,  0,  0 },
+        {  0,  0,  c,  0 },
+        {  s,  0,  0,  1 },
+    }};
+}
+unit_local inline Matrix4 m4_make_rotation_y(float rad) {
+    float c = (f32)cos((f64)rad);
+    float s = (f32)sin((f64)rad);
+    return (Matrix4){{
+        {  1,  0,  0,  0 },
+        {  0,  c,  s,  0 },
+        {  0, -s,  c,  0 },
+        {  0,  0,  0,  1 },
+    }};
+}
+unit_local inline Matrix4 m4_make_rotation_z(float rad) {
+    float c = (f32)cos((f64)rad);
+    float s = (f32)sin((f64)rad);
+    return (Matrix4){{
+        {  c,  s,  0,  0 },
+        { -s,  c,  0,  0 },
+        {  0,  0,  1,  0 },
+        {  0,  0,  0,  1 },
+    }};
+}
+
+unit_local inline Matrix4 m4_transpose(Matrix4 m) {
+    Matrix4 tm = m;
+    
+    // Diagonal is copied over, but swap each side of it
+    
+    tm.data[0][1] = m.data[1][0];
+    tm.data[0][2] = m.data[2][0];
+    tm.data[0][3] = m.data[3][0];
+    
+    tm.data[1][0] = m.data[0][1];
+    tm.data[1][2] = m.data[2][1];
+    tm.data[1][3] = m.data[3][1];
+    
+    tm.data[2][0] = m.data[0][2];
+    tm.data[2][1] = m.data[1][2];
+    tm.data[2][3] = m.data[3][2];
+    
+    tm.data[3][0] = m.data[0][3];
+    tm.data[3][1] = m.data[1][3];
+    tm.data[3][2] = m.data[2][3];
+    
+    return tm;
+} 
+
+unit_local inline Matrix4 m4_mulm4(Matrix4 m0, Matrix4 m1) {
+/*
+        m = m0 * m1
+        
+        each ij in m should be dot(m0[row:i], m1[col:j])
+        
+        We transpose m0 so we can read rows trivially (since our matrices are column-major)
+*/
+
+    // todo(charlie) very easily vectorized
+
+
+    Matrix4 tm0 = m4_transpose(m0);
+    Matrix4 m;
+    
+    *(float*)&m.data[0][0] = f4_dot(*(float4*)tm0.data[0], *(float4*)m1.data[0]);
+    *(float*)&m.data[0][1] = f4_dot(*(float4*)tm0.data[1], *(float4*)m1.data[0]);
+    *(float*)&m.data[0][2] = f4_dot(*(float4*)tm0.data[2], *(float4*)m1.data[0]);
+    *(float*)&m.data[0][3] = f4_dot(*(float4*)tm0.data[3], *(float4*)m1.data[0]);
+    
+    *(float*)&m.data[1][0] = f4_dot(*(float4*)tm0.data[0], *(float4*)m1.data[1]);
+    *(float*)&m.data[1][1] = f4_dot(*(float4*)tm0.data[1], *(float4*)m1.data[1]);
+    *(float*)&m.data[1][2] = f4_dot(*(float4*)tm0.data[2], *(float4*)m1.data[1]);
+    *(float*)&m.data[1][3] = f4_dot(*(float4*)tm0.data[3], *(float4*)m1.data[1]);
+    
+    *(float*)&m.data[2][0] = f4_dot(*(float4*)tm0.data[0], *(float4*)m1.data[2]);
+    *(float*)&m.data[2][1] = f4_dot(*(float4*)tm0.data[1], *(float4*)m1.data[2]);
+    *(float*)&m.data[2][2] = f4_dot(*(float4*)tm0.data[2], *(float4*)m1.data[2]);
+    *(float*)&m.data[2][3] = f4_dot(*(float4*)tm0.data[3], *(float4*)m1.data[2]);
+    
+    *(float*)&m.data[3][0] = f4_dot(*(float4*)tm0.data[0], *(float4*)m1.data[3]);
+    *(float*)&m.data[3][1] = f4_dot(*(float4*)tm0.data[1], *(float4*)m1.data[3]);
+    *(float*)&m.data[3][2] = f4_dot(*(float4*)tm0.data[2], *(float4*)m1.data[3]);
+    *(float*)&m.data[3][3] = f4_dot(*(float4*)tm0.data[3], *(float4*)m1.data[3]);
+    
+    return m;
+}
+
+unit_local inline float4 m4_mulf4(Matrix4 m0, float4 m1) {
+    Matrix4 tm0 = m4_transpose(m0);
+    
+    float4 f;
+    f.x = f4_dot(*(float4*)tm0.data[0], m1);
+    f.y = f4_dot(*(float4*)tm0.data[1], m1);
+    f.z = f4_dot(*(float4*)tm0.data[2], m1);
+    f.w = f4_dot(*(float4*)tm0.data[3], m1);
+    
+    return f;
+}
+
+// This aren't actually real well-defined mathmatical operations,
+// but nevertheless useful and makes sense to a game developer.
+// It just fills in the z w components to 0 1 if missing.
+// This only makes sense in games.
+unit_local inline float3 m4_mulf3_trunc(Matrix4 m0, float3 m1) {
+    Matrix4 tm0 = m4_transpose(m0);
+    
+    float3 f;
+    f.x = f4_dot(*(float4*)tm0.data[0], f4(m1.x, m1.y, m1.z, 1.0f));
+    f.y = f4_dot(*(float4*)tm0.data[1], f4(m1.x, m1.y, m1.z, 1.0f));
+    f.z = f4_dot(*(float4*)tm0.data[2], f4(m1.x, m1.y, m1.z, 1.0f));
+    
+    return f;
+} 
+unit_local inline float2 m4_mulf2_trunc(Matrix4 m0, float2 m1) {
+    Matrix4 tm0 = m4_transpose(m0);
+    
+    float2 f;
+    f.x = f4_dot(*(float4*)tm0.data[0], f4(m1.x, m1.y, 0.0f, 1.0f));
+    f.y = f4_dot(*(float4*)tm0.data[1], f4(m1.x, m1.y, 0.0f, 1.0f));
+    
+    return f;
+} 
+
+unit_local inline f64 get_power_of_two_f64(f64 x, u64 exp) {
+    return x * (f64)(1ULL << exp);
+}
+
+#if defined(__GNUC__) || defined(__GNUG__)
+#pragma GCC diagnostic pop
+#endif
+
+#ifdef __clang__
+#pragma clang diagnostic pop
+#endif // __clang__
+
+#endif //_MATH_H
+#endif // _ONE_MATH_H
+#if defined(__clang__)
+#pragma clang diagnostic pop
+#endif
+
+#if defined(__GNUC__) || defined(__GNUG__)
+#pragma GCC diagnostic pop
+#endif
+

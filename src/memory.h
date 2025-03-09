@@ -1,6 +1,17 @@
-#if 0
-#include "ostd.h" // For syntax highlighting.
-#endif
+#ifndef _MEMORY_H
+#define _MEMORY_H
+
+#ifndef _BASE_H
+#include "base.h"
+#endif // _BASE_H
+
+#ifndef _STRING_H
+#include "string.h"
+#endif //_STRING_H
+
+#ifndef _SYSTEM_1_H
+#include "system1.h"
+#endif //_SYSTEM_1_H
 
 /////
 // Allocator
@@ -106,34 +117,39 @@ inline string string_copy(Allocator a, string s) {
 
 #ifdef OSTD_IMPL
 
-unit_local Arena _temp_arena;
-unit_local Allocator _temp;
-unit_local bool _temp_initted = false;
+typedef struct _Per_Thread_Temporary_Storage {
+    Arena arena;
+    Allocator a;
+    bool initted;
+} _Per_Thread_Temporary_Storage;
 
-unit_local inline void _lazy_init_temporary_storage(void) {
-    if (_temp_initted) return;
+unit_local inline _Per_Thread_Temporary_Storage* _lazy_init_temporary_storage(void) {
+    _Ostd_Thread_Storage *s = _ostd_get_thread_storage();
+    assert(s->temp);
+    assertmsg(sizeof(_Per_Thread_Temporary_Storage) < sizeof(s->temporary_storage_struct_backing), "refactor time");
+    if (s->temp->initted) {
+        return s->temp;
+    }
 
 #if OS_FLAGS & OS_FLAG_EMSCRIPTEN
-    _temp_arena = make_arena(1024*1024, 1024*1024);
+    s->temp->arena = make_arena(1024*1024, 1024*1024);
 #else
-    _temp_arena = make_arena(sys_get_info().page_size*6900, 1024);
+    s->temp->arena = make_arena(sys_get_info().page_size*6900, 1024);
 #endif
-    _temp = (Allocator) { &_temp_arena, arena_allocator_proc };
-
-    _temp_initted = true;
+    s->temp->a = (Allocator) { &s->temp->arena, arena_allocator_proc };
+    
+    s->temp->initted = true;
+    
+    return s->temp;
 }
 Allocator get_temp(void) {
-    _lazy_init_temporary_storage();
-    return _temp;
+    return _lazy_init_temporary_storage()->a;
 }
 void reset_temporary_storage(void) {
-    _lazy_init_temporary_storage();
-    arena_reset(&_temp_arena);
+    arena_reset(&_lazy_init_temporary_storage()->arena);
 }
 void *tallocate(size_t n) {
-    _lazy_init_temporary_storage();
-
-    return allocate(_temp, n);
+    return allocate(_lazy_init_temporary_storage()->a, n);
 }
 
 Arena make_arena(u64 reserved_size, u64 initial_allocated_size) {
@@ -265,3 +281,4 @@ void* arena_allocator_proc(Allocator_Message msg, void *data, void *old, u64 old
 
 #endif // OSTD_IMPL
 
+#endif // _MEMORY_H

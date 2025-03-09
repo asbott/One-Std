@@ -1,6 +1,9 @@
-#if 0
-#include "ostd.h" // For syntax highlighting.
-#endif
+#ifndef _STRING_H
+#define _STRING_H
+
+#ifndef _BASE_H
+#include "base.h"
+#endif // _BASE_H
 
 typedef struct string {
     u64 count;
@@ -64,6 +67,7 @@ unit_local inline bool string_ends_with(string s, string sub) {
 }
 
 unit_local s64 string_find_index_from_left(string s, string sub) {
+    if (sub.count > s.count) return -1;
     
     for (u64 i = 0; i < s.count-sub.count; i += 1) {
         
@@ -73,3 +77,16 @@ unit_local s64 string_find_index_from_left(string s, string sub) {
     }
     return -1;
 }
+unit_local s64 string_find_index_from_right(string s, string sub) {
+    if (sub.count > s.count) return -1;
+    
+    for (s64 i = (s64)(s.count-sub.count); i >= 0; i -= 1) {
+        
+        if (strings_match((string){sub.count, s.data+(u64)i}, sub)) {
+            return (s64)i;
+        }
+    }
+    return -1;
+}
+
+#endif // _STRING_H

@@ -1,17 +1,12 @@
-#ifndef OSTD_SINGLE_HEADER
-#define OSTD_SINGLE_HEADER
-
-#ifndef OSTD_H_
-#define OSTD_H_
-
+// I try to compile with -pedantic and -Weverything, but get really dumb warnings like these,
+// so I have to ignore them.
 #if defined(__GNUC__) || defined(__GNUG__)
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wattributes"
 #pragma GCC diagnostic ignored "-Wunused-function"
+#pragma GCC diagnostic ignored "-Wunused-macros"
+#pragma GCC diagnostic ignored "-Wunused-const-variable"
 #endif
-
-// I try to compile with -pedantic and -Weverything, but get really dumb warnings like these,
-// so I have to ignore them.
 #ifdef __clang__
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wattributes"
@@ -20,6 +15,48 @@
 #pragma clang diagnostic ignored "-Wcovered-switch-default"
 #pragma clang diagnostic ignored "-Wcast-align"
 #pragma clang diagnostic ignored "-Wunused-function"
+#pragma clang diagnostic ignored "-Wunused-macros"
+#pragma clang diagnostic ignored "-Wunused-const-variable"
+#if __STDC_VERSION__ == 202311
+#pragma clang diagnostic ignored "-Wpre-c23-compat"
+#endif
+#ifdef __EMSCRIPTEN__
+#pragma clang diagnostic ignored "-Wpadded"
+#endif // __EMSCRIPTEN__
+#if defined(_MSC_VER) || defined(__EMSCRIPTEN__)
+#pragma clang diagnostic ignored "-Wunsafe-buffer-usage"
+#endif
+#endif // __clang__
+#ifndef _ONE_OSTD_H
+#define _ONE_OSTD_H
+
+#ifndef OSTD_H_
+#define OSTD_H_
+
+
+/* Begin include: ignore_warnings.h */
+// I try to compile with -pedantic and -Weverything, but get really dumb warnings like these,
+// so I have to ignore them.
+#if defined(__GNUC__) || defined(__GNUG__)
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wattributes"
+#pragma GCC diagnostic ignored "-Wunused-function"
+#pragma GCC diagnostic ignored "-Wunused-macros"
+#pragma GCC diagnostic ignored "-Wunused-const-variable"
+#endif
+#ifdef __clang__
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wattributes"
+#pragma clang diagnostic ignored "-Wreserved-identifier"
+#pragma clang diagnostic ignored "-Wdeclaration-after-statement"
+#pragma clang diagnostic ignored "-Wcovered-switch-default"
+#pragma clang diagnostic ignored "-Wcast-align"
+#pragma clang diagnostic ignored "-Wunused-function"
+#pragma clang diagnostic ignored "-Wunused-macros"
+#pragma clang diagnostic ignored "-Wunused-const-variable"
+#if __STDC_VERSION__ == 202311
+#pragma clang diagnostic ignored "-Wpre-c23-compat"
+#endif
 #ifdef __EMSCRIPTEN__
 #pragma clang diagnostic ignored "-Wpadded"
 #endif // __EMSCRIPTEN__
@@ -28,11 +65,14 @@
 #endif
 #endif // __clang__
 
+/* End include: ignore_warnings.h */
+
 
 /* Begin include: base.h */
 
-#if 0
-#endif
+#ifndef _BASE_H
+#define _BASE_H
+
 
 /*
             Compiler
@@ -364,8 +404,6 @@ typedef u32 sys_uint;
 
 #else // !CSTD_C23
 
-#pragma clang diagnostic ignored "-Wpre-c23-compat"
-
 #endif // CSTD_C23
 
 #if COMPILER_FLAGS & COMPILER_FLAG_MSC
@@ -464,16 +502,46 @@ u64 format_float(float64 x, int decimal_places, void *buffer, u64 buffer_size);
 
 void __cpuid(int cpuInfo[4], int function_id);
 
+#define min(a, b) ((a) < (b) ? (a) : (b))
+#define max(a, b) ((a) > (b) ? (a) : (b))
+
+unit_local inline bool is_alpha(u8 c) {
+	return (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z');
+}
+unit_local inline bool is_digit(u8 c) {
+	return (c >= '0' && c <= '9');
+}
+unit_local inline bool is_whitespace(u8 c) {
+	return c == '\n' || c == '\r' || c == '\t' || c == ' ';
+}
+
+unit_local inline u64 align_next(u64 n, u64 align) {
+    return (n+align-1) & ~(align-1);
+}
+
+#endif // _BASE_H
+
+
+
 
 /* End include: base.h */
 
 
 /* Begin include: math.h */
-#if 0
-#endif
+#ifndef _MATH_H
+#define _MATH_H
+
+#ifndef _BASE_H
+#endif // _BASE_H
 
 
 /* Begin include: trig_tables.h */
+#ifndef _TRIG_TABLES_H
+#define _TRIG_TABLES_H
+
+#ifndef _BASE_H
+#endif // _BASE_H
+
 unit_local const float64 sine_table[360] = {
     0,    0.017452406437283512,    0.034899496702500969,    0.052335956242943828,    0.069756473744125302,    0.087155742747658166,    0.10452846326765346,    0.12186934340514748,
     0.13917310096006544,    0.15643446504023087,    0.17364817766693033,    0.1908089953765448,    0.20791169081775931,    0.22495105434386498,    0.24192189559966773,    0.25881904510252074,
@@ -714,6 +782,8 @@ unit_local const float64 acosine_table[360] = {
     0.29925781871903512,    0.27979847592703461,    0.25892154200622164,    0.23625130598477004,    0.21121088035917793,    0.18282871674409445,    0.14920957360514839,    0.10545811702189975
 };
 
+#endif // _TRIG_TABLES_H
+
 /* End include: trig_tables.h */
 
 #if defined(__GNUC__) || defined(__GNUG__)
@@ -727,9 +797,6 @@ unit_local const float64 acosine_table[360] = {
 #pragma clang diagnostic ignored "-Wfloat-equal"
 #pragma clang diagnostic ignored "-Wbad-function-cast"
 #endif // __clang__
-
-#define min(a, b) ((a) < (b) ? (a) : (b))
-#define max(a, b) ((a) > (b) ? (a) : (b))
 
 #define clamp(x, a, b) (min(max((x), (a)), (b)))
 
@@ -918,14 +985,6 @@ typedef float2x32 float2;
 typedef float3x32 float3;
 typedef float4x32 float4;
 
-
-
-
-
-
-
-
-
 unit_local inline float32 ln32(float32 x) {
     u32 bx = * (u32 *) (&x);
     u32 ex = bx >> 23;
@@ -934,17 +993,14 @@ unit_local inline float32 ln32(float32 x) {
     x = * (float32 *) (&bx);
     return -1.49278f+(2.11263f+(-0.729104f+0.10969f*x)*x)*x+0.6931471806f*(float32)t;
 }
-
 unit_local inline float64 ln64(float64 x) {
-    u64 bx = *(u64 *)(&x); // Read float64 bits
-    u64 ex = bx >> 52; // Extract exponent (11 bits)
-    s32 t = (s32)ex - 1023; // Adjust for float64 bias
-    bx = 4607182418800017408ULL | (bx & 4503599627370495ULL); // Normalize mantissa
+    u64 bx = *(u64 *)(&x);
+    u64 ex = bx >> 52;
+    s32 t = (s32)ex - 1023;
+    bx = 4607182418800017408ULL | (bx & 4503599627370495ULL);
     x = *(float64 *)(&bx);
     return -1.49278 + (2.11263 + (-0.729104 + 0.10969 * x) * x) * x + 0.6931471806 * t;
 }
-
-
 
 unit_local inline u64 powu(u64 x, u64 e) {
     if (e == 0) return 1;
@@ -1315,36 +1371,17 @@ unit_local inline f64 get_power_of_two_f64(f64 x, u64 exp) {
 #pragma clang diagnostic pop
 #endif // __clang__
 
+#endif //_MATH_H
 
 /* End include: math.h */
 
 
-/* Begin include: utility.h */
-#if 0
-#endif
-
-unit_local inline bool is_alpha(u8 c) {
-	return (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z');
-}
-unit_local inline bool is_digit(u8 c) {
-	return (c >= '0' && c <= '9');
-}
-unit_local inline bool is_whitespace(u8 c) {
-	return c == '\n' || c == '\r' || c == '\t' || c == ' ';
-}
-
-
-unit_local inline u64 align_next(u64 n, u64 align) {
-    return (n+align-1) & ~(align-1);
-}
-
-
-/* End include: utility.h */
-
-
 /* Begin include: string.h */
-#if 0
-#endif
+#ifndef _STRING_H
+#define _STRING_H
+
+#ifndef _BASE_H
+#endif // _BASE_H
 
 typedef struct string {
     u64 count;
@@ -1393,13 +1430,22 @@ unit_local inline bool string_contains(string s, string sub) {
     return false;
 }
 
+unit_local inline string string_slice(string s, u64 index, u64 count) {
+    return (string){ count, s.data+index };
+}
+
 unit_local inline bool string_starts_with(string s, string sub) {
     if (sub.count > s.count) return false;
     
     return memcmp(s.data, sub.data, (u32)sub.count) == 0;
 }
+unit_local inline bool string_ends_with(string s, string sub) {
+    if (sub.count > s.count) return false;
+    return strings_match(sub, string_slice(s, s.count-sub.count, sub.count));
+}
 
 unit_local s64 string_find_index_from_left(string s, string sub) {
+    if (sub.count > s.count) return -1;
     
     for (u64 i = 0; i < s.count-sub.count; i += 1) {
         
@@ -1409,14 +1455,31 @@ unit_local s64 string_find_index_from_left(string s, string sub) {
     }
     return -1;
 }
+unit_local s64 string_find_index_from_right(string s, string sub) {
+    if (sub.count > s.count) return -1;
+    
+    for (s64 i = (s64)(s.count-sub.count); i >= 0; i -= 1) {
+        
+        if (strings_match((string){sub.count, s.data+(u64)i}, sub)) {
+            return (s64)i;
+        }
+    }
+    return -1;
+}
+
+#endif // _STRING_H
 
 /* End include: string.h */
 
 
+/* Begin include: system1.h */
+#ifndef _SYSTEM_1_H
+#define _SYSTEM_1_H
 
-/* Begin include: system.h */
-#if 0
-#endif
+#ifndef _BASE_H
+#endif // _BASE_H
+#ifndef _STRING_H
+#endif // _STRING_H
 
 #define SYS_MEMORY_RESERVE (1 << 0)
 #define SYS_MEMORY_ALLOCATE (1 << 1)
@@ -1494,14 +1557,25 @@ void sys_close(File_Handle h);
 
 // Returns 0 on failure
 File_Handle sys_open_file(string path, File_Open_Flags flags);
-
 u64 sys_get_file_size(File_Handle f);
+
+bool sys_make_directory(string path, bool recursive);
+bool sys_remove_directory(string path, bool recursive);
+bool sys_is_file(string path);
+bool sys_is_directory(string path);
+
+typedef bool (*Walk_Proc)(string); // Return true to continue, false to break
+void sys_walk_directory(string path, bool recursive, bool walk_directories, Walk_Proc walk_proc);
 
 typedef struct Easy_Command_Result {
     s64 exit_code;
     bool process_start_success;
 } Easy_Command_Result;
-Easy_Command_Result sys_run_command_easy(string command_line);
+Easy_Command_Result sys_run_command_easy(string command_line, File_Handle stdout, File_Handle stderr, string workspace_dir);
+
+//////
+// Sockets
+//////
 
 typedef u64 Socket;
 
@@ -1561,6 +1635,44 @@ Socket_Result sys_socket_recv(Socket socket, void *buffer, u64 length, u64 *sent
 Socket_Result sys_socket_close(Socket socket);
 Socket_Result sys_socket_set_blocking(Socket *socket, bool blocking);
 Socket_Result sys_set_socket_blocking_timeout(Socket socket, u64 ms);
+
+
+//////
+// Thread Primitives
+//////
+
+typedef void* Thread_Key;
+
+u64 sys_get_current_thread_id(void);
+
+bool sys_thread_key_init(Thread_Key *key);
+bool sys_thread_key_write(Thread_Key key, void* value);
+void* sys_thread_key_read(Thread_Key key);
+
+struct Thread;
+typedef s64 (*Thread_Proc)(struct Thread*);
+typedef struct Thread {
+    void *handle;
+    u64 id;
+    void *userdata;
+    Thread_Proc proc;
+    bool is_suspended;
+} Thread;
+
+bool sys_thread_init(Thread *thread, Thread_Proc proc, void *userdata);
+void sys_thread_start(Thread *thread);
+void sys_thread_join(Thread *thread);
+void sys_thread_close(Thread *thread);
+
+typedef struct Mutex {
+    void *handle;
+    u8 handle_backing[40]; // This is for windows critical section;
+} Mutex;
+
+bool sys_mutex_init(Mutex *mutex);
+bool sys_mutex_uninit(Mutex *mutex);
+void sys_mutex_acquire(Mutex mutex);
+void sys_mutex_release(Mutex mutex);
 
 //////
 // Surfaces (Window)
@@ -1697,9 +1809,96 @@ void sys_print_stack_trace(File_Handle handle);
 // Implementations
 //////
 
+
+struct _Per_Thread_Temporary_Storage;
+typedef struct _Ostd_Thread_Storage {
+    u64 thread_id;
+    u8 temporary_storage_struct_backing[128];
+    struct _Per_Thread_Temporary_Storage *temp;
+    bool taken;
+} _Ostd_Thread_Storage;
+
+_Ostd_Thread_Storage *_ostd_get_thread_storage(void);
+
 #ifdef OSTD_IMPL
 
+unit_local _Ostd_Thread_Storage *_ostd_thread_storage = 0;
+unit_local u64 _ostd_thread_storage_allocated_count = 0;
+unit_local Mutex _ostd_thread_storage_register_mutex;
+unit_local u64 _ostd_main_thread_id;
+unit_local bool _ostd_main_thread_is_unknown = true;
+unit_local _Ostd_Thread_Storage _ostd_main_thread_storage;
 
+_Ostd_Thread_Storage *_ostd_get_thread_storage(void) {
+    u64 thread_id = sys_get_current_thread_id();
+    
+    if (!_ostd_main_thread_is_unknown && _ostd_main_thread_id == thread_id) {
+        return &_ostd_main_thread_storage;
+    }
+    
+    for (u64 i = 0; i < _ostd_thread_storage_allocated_count; i += 1) {
+        _Ostd_Thread_Storage *s = &_ostd_thread_storage[i];
+        if (s->thread_id == thread_id) return s;
+    }
+    
+    if (_ostd_main_thread_is_unknown) {
+        _ostd_main_thread_id = thread_id;
+        _ostd_main_thread_is_unknown = false;
+        _ostd_main_thread_storage = (_Ostd_Thread_Storage){0};
+        _ostd_main_thread_storage.taken = true;
+        _ostd_main_thread_storage.thread_id = thread_id;
+        _ostd_main_thread_storage.temp 
+            = (struct _Per_Thread_Temporary_Storage*)_ostd_main_thread_storage.temporary_storage_struct_backing;
+        return &_ostd_main_thread_storage;
+    }
+    
+    return 0;
+}
+
+unit_local void _ostd_register_thread_storage(u64 thread_id) {
+
+    if (_ostd_thread_storage) {
+        sys_mutex_acquire(_ostd_thread_storage_register_mutex);
+    }
+
+    for (u64 i = 0; i < _ostd_thread_storage_allocated_count; i += 1) {
+        _Ostd_Thread_Storage *s = &_ostd_thread_storage[i];
+        if (!s->taken) {
+            *s = (_Ostd_Thread_Storage) {0};
+            s->taken = true;
+            s->thread_id = thread_id;
+            s->temp = (struct _Per_Thread_Temporary_Storage*)s->temporary_storage_struct_backing;
+            sys_mutex_release(_ostd_thread_storage_register_mutex);
+            return;
+        }
+    }
+    
+    u64 page_size = sys_get_info().page_size;
+    
+    assertmsg(sizeof(_Ostd_Thread_Storage) < page_size, "refactor time");
+    
+    if (!_ostd_thread_storage) {
+        sys_mutex_init(&_ostd_thread_storage_register_mutex);
+        _ostd_thread_storage = sys_map_pages(SYS_MEMORY_RESERVE, 0, 1024*1024*10, false);
+        assert(_ostd_thread_storage);
+        void *allocated = sys_map_pages(SYS_MEMORY_ALLOCATE, _ostd_thread_storage, 1, false);
+        assert(allocated == _ostd_thread_storage);
+        memset(allocated, 0, page_size);
+        _ostd_thread_storage_allocated_count = page_size/sizeof(_Ostd_Thread_Storage);
+    } else {
+        void *next_alloc = (void*)(uintptr)align_next((u64)(_ostd_thread_storage+_ostd_thread_storage_allocated_count), page_size);
+        void *allocated = sys_map_pages(SYS_MEMORY_ALLOCATE, next_alloc, 1, false);
+        assert(allocated == next_alloc);
+        memset(allocated, 0, page_size);
+        
+        _ostd_thread_storage_allocated_count += (page_size / sizeof(_Ostd_Thread_Storage));
+    } 
+    
+    sys_mutex_release(_ostd_thread_storage_register_mutex);
+    
+    // scary
+    _ostd_register_thread_storage(thread_id);
+}
 
 #if (OS_FLAGS & OS_FLAG_HAS_WINDOW_SYSTEM)
 
@@ -1728,6 +1927,12 @@ void sys_print_stack_trace(File_Handle handle);
     #ifndef _WINDOWS_ /* This is defined in windows.h */
 
 /* Begin include: windows_loader.h */
+
+#ifndef _WINDOWS_LOADER_H
+#define _WINDOWS_LOADER_H
+
+#ifndef _BASE_H
+#endif // _BASE_H
 
 #define WINVER 0x0A00
 #define _WIN32_WINNT 0x0A00
@@ -4473,6 +4678,187 @@ select(
     const struct timeval * timeout
     );
     
+#endif // _WINDOWS_LOADER_H
+
+typedef struct _FILETIME {
+  DWORD dwLowDateTime;
+  DWORD dwHighDateTime;
+} FILETIME, *PFILETIME, *LPFILETIME;
+
+WINDOWS_IMPORT BOOL WINAPI FindClose(
+  HANDLE hFindFile
+);
+
+typedef struct _WIN32_FIND_DATAW {
+  DWORD    dwFileAttributes;
+  FILETIME ftCreationTime;
+  FILETIME ftLastAccessTime;
+  FILETIME ftLastWriteTime;
+  DWORD    nFileSizeHigh;
+  DWORD    nFileSizeLow;
+  DWORD    dwReserved0;
+  DWORD    dwReserved1;
+  WCHAR    cFileName[260];
+  WCHAR    cAlternateFileName[14];
+  DWORD    dwFileType; // Obsolete. Do not use.
+  DWORD    dwCreatorType; // Obsolete. Do not use
+  WORD     wFinderFlags; // Obsolete. Do not use
+} WIN32_FIND_DATAW, *PWIN32_FIND_DATAW, *LPWIN32_FIND_DATAW;
+
+WINDOWS_IMPORT HANDLE WINAPI FindFirstFileW(
+  LPCWSTR            lpFileName,
+  LPWIN32_FIND_DATAW lpFindFileData
+);
+
+WINDOWS_IMPORT BOOL WINAPI FindNextFileW(
+  HANDLE             hFindFile,
+  LPWIN32_FIND_DATAW lpFindFileData
+);
+
+WINDOWS_IMPORT DWORD WINAPI GetFileAttributesW(
+  LPCWSTR lpFileName
+);
+
+WINDOWS_IMPORT BOOL WINAPI RemoveDirectoryW(
+  LPCWSTR lpPathName
+);
+
+WINDOWS_IMPORT BOOL WINAPI DeleteFileW(
+  LPCWSTR lpFileName
+);
+
+// end_access
+#define FILE_SHARE_READ                 0x00000001  
+#define FILE_SHARE_WRITE                0x00000002  
+#define FILE_SHARE_DELETE               0x00000004  
+#define FILE_ATTRIBUTE_READONLY             0x00000001  
+#define FILE_ATTRIBUTE_HIDDEN               0x00000002  
+#define FILE_ATTRIBUTE_SYSTEM               0x00000004  
+#define FILE_ATTRIBUTE_DIRECTORY            0x00000010  
+#define FILE_ATTRIBUTE_ARCHIVE              0x00000020  
+#define FILE_ATTRIBUTE_DEVICE               0x00000040  
+#define FILE_ATTRIBUTE_NORMAL               0x00000080  
+#define FILE_ATTRIBUTE_TEMPORARY            0x00000100  
+#define FILE_ATTRIBUTE_SPARSE_FILE          0x00000200  
+#define FILE_ATTRIBUTE_REPARSE_POINT        0x00000400  
+#define FILE_ATTRIBUTE_COMPRESSED           0x00000800  
+#define FILE_ATTRIBUTE_OFFLINE              0x00001000  
+#define FILE_ATTRIBUTE_NOT_CONTENT_INDEXED  0x00002000  
+#define FILE_ATTRIBUTE_ENCRYPTED            0x00004000  
+#define FILE_ATTRIBUTE_INTEGRITY_STREAM     0x00008000  
+#define FILE_ATTRIBUTE_VIRTUAL              0x00010000  
+#define FILE_ATTRIBUTE_NO_SCRUB_DATA        0x00020000  
+#define FILE_ATTRIBUTE_EA                   0x00040000  
+#define FILE_ATTRIBUTE_PINNED               0x00080000  
+#define FILE_ATTRIBUTE_UNPINNED             0x00100000  
+#define FILE_ATTRIBUTE_RECALL_ON_OPEN       0x00040000  
+#define FILE_ATTRIBUTE_RECALL_ON_DATA_ACCESS 0x00400000 
+#define TREE_CONNECT_ATTRIBUTE_PRIVACY      0x00004000  
+#define TREE_CONNECT_ATTRIBUTE_INTEGRITY    0x00008000  
+#define TREE_CONNECT_ATTRIBUTE_GLOBAL       0x00000004  
+#define TREE_CONNECT_ATTRIBUTE_PINNED       0x00000002  
+#define FILE_ATTRIBUTE_STRICTLY_SEQUENTIAL  0x20000000  
+#define FILE_NOTIFY_CHANGE_FILE_NAME    0x00000001   
+#define FILE_NOTIFY_CHANGE_DIR_NAME     0x00000002   
+#define FILE_NOTIFY_CHANGE_ATTRIBUTES   0x00000004   
+#define FILE_NOTIFY_CHANGE_SIZE         0x00000008   
+#define FILE_NOTIFY_CHANGE_LAST_WRITE   0x00000010   
+#define FILE_NOTIFY_CHANGE_LAST_ACCESS  0x00000020   
+#define FILE_NOTIFY_CHANGE_CREATION     0x00000040   
+#define FILE_NOTIFY_CHANGE_SECURITY     0x00000100   
+#define FILE_ACTION_ADDED                   0x00000001   
+#define FILE_ACTION_REMOVED                 0x00000002   
+#define FILE_ACTION_MODIFIED                0x00000003   
+#define FILE_ACTION_RENAMED_OLD_NAME        0x00000004   
+#define FILE_ACTION_RENAMED_NEW_NAME        0x00000005   
+#define MAILSLOT_NO_MESSAGE             ((DWORD)-1) 
+#define MAILSLOT_WAIT_FOREVER           ((DWORD)-1) 
+#define FILE_CASE_SENSITIVE_SEARCH          0x00000001  
+#define FILE_CASE_PRESERVED_NAMES           0x00000002  
+#define FILE_UNICODE_ON_DISK                0x00000004  
+#define FILE_PERSISTENT_ACLS                0x00000008  
+#define FILE_FILE_COMPRESSION               0x00000010  
+#define FILE_VOLUME_QUOTAS                  0x00000020  
+#define FILE_SUPPORTS_SPARSE_FILES          0x00000040  
+#define FILE_SUPPORTS_REPARSE_POINTS        0x00000080  
+#define FILE_SUPPORTS_REMOTE_STORAGE        0x00000100  
+#define FILE_RETURNS_CLEANUP_RESULT_INFO    0x00000200  
+#define FILE_SUPPORTS_POSIX_UNLINK_RENAME   0x00000400  
+
+
+
+
+#define FILE_VOLUME_IS_COMPRESSED           0x00008000  
+#define FILE_SUPPORTS_OBJECT_IDS            0x00010000  
+#define FILE_SUPPORTS_ENCRYPTION            0x00020000  
+#define FILE_NAMED_STREAMS                  0x00040000  
+#define FILE_READ_ONLY_VOLUME               0x00080000  
+#define FILE_SEQUENTIAL_WRITE_ONCE          0x00100000  
+#define FILE_SUPPORTS_TRANSACTIONS          0x00200000  
+#define FILE_SUPPORTS_HARD_LINKS            0x00400000  
+#define FILE_SUPPORTS_EXTENDED_ATTRIBUTES   0x00800000  
+#define FILE_SUPPORTS_OPEN_BY_FILE_ID       0x01000000  
+#define FILE_SUPPORTS_USN_JOURNAL           0x02000000  
+#define FILE_SUPPORTS_INTEGRITY_STREAMS     0x04000000  
+#define FILE_SUPPORTS_BLOCK_REFCOUNTING     0x08000000  
+#define FILE_SUPPORTS_SPARSE_VDL            0x10000000  
+#define FILE_DAX_VOLUME                     0x20000000  
+#define FILE_SUPPORTS_GHOSTING              0x40000000  
+
+
+WINDOWS_IMPORT DWORD WINAPI TlsAlloc(void);
+WINDOWS_IMPORT LPVOID WINAPI TlsGetValue(
+  DWORD dwTlsIndex
+);
+WINDOWS_IMPORT BOOL WINAPI TlsSetValue(
+  DWORD  dwTlsIndex,
+  LPVOID lpTlsValue
+);
+
+WINDOWS_IMPORT DWORD WINAPI GetCurrentThreadId(void);
+
+typedef DWORD (__stdcall *LPTHREAD_START_ROUTINE) (LPVOID lpThreadParameter);  
+
+WINDOWS_IMPORT HANDLE WINAPI CreateThread(LPSECURITY_ATTRIBUTES lpThreadAttributes, size_t dwStackSize, LPTHREAD_START_ROUTINE lpStartAddress, LPVOID lpParameter, DWORD dwCreationFlags, LPDWORD lpThreadId);
+
+WINDOWS_IMPORT DWORD WINAPI ResumeThread(HANDLE hThread);
+
+typedef struct CRITICAL_SECTION {
+  u8 _[40]; // todo(charlie) #portability 32-bit
+} CRITICAL_SECTION, *LPCRITICAL_SECTION, *PCRITICAL_SECTION;
+
+WINDOWS_IMPORT void WINAPI InitializeCriticalSection(
+  LPCRITICAL_SECTION lpCriticalSection
+);
+
+WINDOWS_IMPORT void WINAPI EnterCriticalSection(
+  LPCRITICAL_SECTION lpCriticalSection
+);
+
+WINDOWS_IMPORT void WINAPI LeaveCriticalSection(
+  LPCRITICAL_SECTION lpCriticalSection
+);
+
+WINDOWS_IMPORT void WINAPI DeleteCriticalSection(
+  LPCRITICAL_SECTION lpCriticalSection
+);
+
+WINDOWS_IMPORT BOOL WINAPI CreateDirectoryW(
+  LPCWSTR               lpPathName,
+  LPSECURITY_ATTRIBUTES lpSecurityAttributes
+);
+
+
+#define SO_DEBUG        0x0001          /* turn on debugging info recording */
+#define SO_ACCEPTCONN   0x0002          /* socket has had listen() */
+#define SO_REUSEADDR    0x0004          /* allow local address reuse */
+#define SO_KEEPALIVE    0x0008          /* keep connections alive */
+#define SO_DONTROUTE    0x0010          /* just use interface addresses */
+#define SO_BROADCAST    0x0020          /* permit sending of broadcast msgs */
+#define SO_USELOOPBACK  0x0040          /* bypass hardware when possible */
+#define SO_LINGER       0x0080          /* linger on close if data present */
+#define SO_OOBINLINE    0x0100          /* leave received OOB data in line */
+
 
 /* End include: windows_loader.h */
     #endif // _WINDOWS_
@@ -4867,6 +5253,8 @@ u64 sys_get_file_size(File_Handle f) {
     return (u64)file_stat.st_size;
 }
 
+
+
 unit_local int _to_win_sock_err(Socket_Result r) {
     switch(r) {
         case SOCKET_OK:                  return 0;
@@ -4951,6 +5339,10 @@ Socket_Result sys_socket_init(Socket *s, Socket_Domain domain, Socket_Type type,
     if (sock < 0) {
         return SOCKET_PROTOCOL_ERROR;
     }
+    
+    int optval = 1;
+    setsockopt(sock, SOL_SOCKET, SO_REUSEADDR, &optval, sizeof(optval))
+    
     *s = (Socket)sock;
     return SOCKET_OK;
 }
@@ -4989,7 +5381,7 @@ Socket_Result sys_socket_accept(Socket sock, Socket *accepted, u64 timeout_ms) {
     tv.tv_sec  = (long)(timeout_ms / 1000);
     tv.tv_usec = (long)((timeout_ms % 1000) * 1000);
 
-    int select_result = select((int)sock + 1, &readfds, NULL, NULL, &tv);
+    int select_result = select((int)sock + 1, &readfds, 0, 0, &tv);
     if (select_result == 0) {
         return SOCKET_TIMED_OUT;
     }
@@ -5158,6 +5550,31 @@ unit_local u64 _win_utf8_to_wide(string utf8, u16 *result, u64 result_max) {
     u64 n = (u64)MultiByteToWideChar(CP_UTF8, 0, (LPCCH)utf8.data, (int)utf8.count, (LPWSTR)result, (int)result_max);
     if (n < result_max) result[n] = 0;
     return n;
+}
+
+
+unit_local u64 _wide_strlen(u16 *str) {
+    u64 len = 0;
+    while (str[len] != 0) {
+        len++;
+    }
+    return len;
+}
+
+unit_local s64 _wide_strcmp(u16 *s1, u16 *s2) {
+    while (*s1 && (*s1 == *s2)) {
+        s1++;
+        s2++;
+    }
+    return (s64)*s1 - (s64)*s2;
+}
+
+unit_local void _win_wide_to_utf8(u16 *s, string *utf8) {
+    u64 len = _wide_strlen(s);
+    int result = WideCharToMultiByte(CP_UTF8, 0, (LPCWCH)s, -1, (char*)utf8->data, (int)len+1, 0, 0);
+    assert(result);
+    
+    utf8->count = (u64)(len);
 }
 
 #ifndef OSTD_HEADLESS
@@ -5531,12 +5948,16 @@ File_Handle sys_open_file(string path, File_Open_Flags flags) {
     } else {
         creation_flags = OPEN_EXISTING;
     }
+    
+    SECURITY_ATTRIBUTES attr = (SECURITY_ATTRIBUTES){0};
+    attr.nLength = sizeof(SECURITY_ATTRIBUTES);
+    attr.bInheritHandle = 1;
 
     HANDLE handle = CreateFileW(
         cpath,
         access_mode,
         FILE_SHARE_READ | FILE_SHARE_WRITE,
-        0,
+        &attr,
         creation_flags,
         FILE_ATTRIBUTE_NORMAL,
         0
@@ -5557,11 +5978,243 @@ u64 sys_get_file_size(File_Handle f) {
     return (u64)size.QuadPart;
 }
 
-Easy_Command_Result sys_run_command_easy(string command_line) {
+bool sys_make_directory(string path, bool recursive) {
+    u16 path_wide[2048];
+    u64 path_len = _win_utf8_to_wide(path, path_wide, 2048);
+    if (path_len == 0) {
+        return false;
+    }
+    
+    if (!recursive) {
+        if (CreateDirectoryW(path_wide, 0) || GetLastError() == 0xB7 /* ERROR_ALREADY_EXISTS */) {
+            return true;
+        }
+        return false;
+    }
+
+    u16 buffer[1024];
+    if (path.count >= sizeof(buffer))
+        return false;
+    
+    memcpy(buffer, path_wide, path.count*sizeof(u16));
+    buffer[path.count] = '\0';
+
+    for (size_t i = 0; i < path.count; i++) {
+        if (buffer[i] == '\\' || buffer[i] == '/') {
+            if (i == 0 || (i == 2 && buffer[1] == ':'))
+                continue;
+
+            u16 saved = buffer[i];
+            buffer[i] = '\0';
+            if (!CreateDirectoryW(buffer, 0) && GetLastError() != 0xB7 /* ERROR_ALREADY_EXISTS */) {
+                return false;
+            }
+            buffer[i] = saved;
+        }
+    }
+
+    if (!CreateDirectoryW(buffer, 0) && GetLastError() != 0xB7 /* ERROR_ALREADY_EXISTS */) {
+        return false;
+    }
+    return true;
+}
+
+bool sys_remove_directory(string path, bool recursive) {
+    u16 path_wide[2048];
+    u64 path_len = _win_utf8_to_wide(path, path_wide, 2048);
+    if (path_len == 0) {
+        return false;
+    }
+
+    if (!recursive) {
+        return (RemoveDirectoryW((LPCWSTR)path_wide) != 0);
+    }
+
+    bool has_slash = false;
+    if (path.count > 0) {
+        char last = ((char*)path.data)[path.count - 1];
+        if (last == '\\' || last == '/') {
+            has_slash = true;
+        }
+    }
+    u16 search_pattern[2048];
+    u64 pos = 0;
+    for (u64 i = 0; i < path_len; i++) {
+        search_pattern[pos++] = path_wide[i];
+    }
+    if (!has_slash) {
+        search_pattern[pos++] = '\\';
+    }
+    search_pattern[pos++] = '*';
+    search_pattern[pos] = 0;
+
+    WIN32_FIND_DATAW findData;
+    HANDLE hFind = FindFirstFileW((LPCWSTR)search_pattern, &findData);
+    if (hFind == INVALID_HANDLE_VALUE) {
+        return false;
+    }
+
+    do {
+        if (_wide_strcmp(findData.cFileName, L".") == 0 ||
+            _wide_strcmp(findData.cFileName, L"..") == 0) {
+            continue;
+        }
+
+        u16 entry_path[2048];
+        u64 new_pos = 0;
+        for (u64 i = 0; i < path_len; i++) {
+            entry_path[new_pos++] = path_wide[i];
+        }
+        if (!has_slash) {
+            entry_path[new_pos++] = '\\';
+        }
+        u64 entry_name_len = _wide_strlen(findData.cFileName);
+        for (u64 i = 0; i < entry_name_len; i++) {
+            entry_path[new_pos++] = findData.cFileName[i];
+        }
+        entry_path[new_pos] = 0;
+
+        if (findData.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) {
+            u8 entry_utf8[2048];
+            string entry_str;
+            entry_str.data = entry_utf8;
+            entry_str.count = _wide_strlen(entry_path);
+            _win_wide_to_utf8(entry_path, &entry_str);
+            if (!sys_remove_directory(entry_str, true)) {
+                FindClose(hFind);
+                return false;
+            }
+        } else {
+            if (!DeleteFileW((LPCWSTR)entry_path)) {
+                FindClose(hFind);
+                return false;
+            }
+        }
+    } while (FindNextFileW(hFind, &findData));
+
+    FindClose(hFind);
+
+    return (RemoveDirectoryW((LPCWSTR)path_wide) != 0);
+}
+
+bool sys_is_file(string path) {
+    u16 path_wide[2048];
+    u64 path_len = _win_utf8_to_wide(path, path_wide, 2048);
+    if (path_len == 0) {
+        return false;
+    }
+    DWORD attr = GetFileAttributesW((LPCWSTR)path_wide);
+    if (attr == 0xFFFFFFFF)
+        return false;
+    return ((attr & FILE_ATTRIBUTE_DIRECTORY) == 0);
+}
+
+bool sys_is_directory(string path) {
+    u16 path_wide[2048];
+    u64 path_len = _win_utf8_to_wide(path, path_wide, 2048);
+    if (path_len == 0) {
+        return false;
+    }
+    DWORD attr = GetFileAttributesW((LPCWSTR)path_wide);
+    if (attr == 0xFFFFFFFF)
+        return false;
+    return ((attr & FILE_ATTRIBUTE_DIRECTORY) != 0);
+}
+
+
+
+void sys_walk_directory(string path, bool recursive, bool walk_directories, Walk_Proc walk_proc) {
+    bool has_slash = false;
+    if (path.count > 0) {
+        char last = ((char*)path.data)[path.count - 1];
+        if (last == '\\' || last == '/') {
+            has_slash = true;
+        }
+    }
+    
+    u16 path_wide[2048];
+    u64 path_len = _win_utf8_to_wide(path, path_wide, 2048);
+    
+    u16 search_pattern[2048];
+    u64 pos = 0;
+    for (u64 i = 0; i < path_len; i++) {
+        search_pattern[pos++] = path_wide[i];
+    }
+    if (!has_slash) {
+        search_pattern[pos++] = '\\';
+    }
+    search_pattern[pos++] = '*';
+    
+    WIN32_FIND_DATAW findData;
+    HANDLE hFind = FindFirstFileW((LPCWSTR)search_pattern, &findData);
+    if (hFind == INVALID_HANDLE_VALUE) {
+        return;
+    }
+    
+    do {
+        if (_wide_strcmp(findData.cFileName, L".") == 0 ||
+            _wide_strcmp(findData.cFileName, L"..") == 0) {
+            continue;
+        }
+        
+        u64 entry_name_len = _wide_strlen(findData.cFileName);
+        u64 new_path_len = path.count + (has_slash ? 0 : 1) + entry_name_len;
+        u16 new_path_wide[2048];
+        u64 new_pos = 0;
+        for (u64 i = 0; i < path.count; i++) {
+            new_path_wide[new_pos++] = path_wide[i];
+        }
+        if (!has_slash) {
+            new_path_wide[new_pos++] = '\\';
+        }
+        for (u64 i = 0; i < entry_name_len; i++) {
+            new_path_wide[new_pos++] = findData.cFileName[i];
+            //sys_write_string(sys_get_stdout(), (string){1, (u8*)&findData.cFileName[i]});
+        }
+        new_path_wide[new_pos++] = 0;
+        
+        u8 new_path[2048];
+        
+        string entry_str;
+        entry_str.count = new_path_len;
+        entry_str.data = new_path;
+        
+        _win_wide_to_utf8(new_path_wide, &entry_str);
+        
+        
+        bool is_dir = (findData.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) != 0;
+        
+        if (is_dir) {
+            if (walk_directories) {
+                if (!walk_proc(entry_str)) {
+                    FindClose(hFind);
+                    return;
+                }
+            }
+            if (recursive) {
+                sys_walk_directory(entry_str, recursive, walk_directories, walk_proc);
+            }
+        } else {
+            if (!walk_proc(entry_str)) {
+                FindClose(hFind);
+                return;
+            }
+        }
+        
+    } while (FindNextFileW(hFind, &findData));
+    
+    FindClose(hFind);
+}
+
+Easy_Command_Result sys_run_command_easy(string command_line, File_Handle stdout, File_Handle stderr, string workspace_dir) {
     Easy_Command_Result res = (Easy_Command_Result){0};
     
-    STARTUPINFOA si = (STARTUPINFOA){0};
-	si.cb = sizeof(STARTUPINFOA);
+    STARTUPINFOA si = {0};
+    si.cb = sizeof(STARTUPINFOA);
+    si.dwFlags |= 0x00000100; /*STARTF_USESTDHANDLES */
+    si.hStdOutput = stdout;
+    si.hStdError = stderr;
+    
     PROCESS_INFORMATION pi = (PROCESS_INFORMATION){ 0 };
     
     char cmd[1024];
@@ -5569,10 +6222,11 @@ Easy_Command_Result sys_run_command_easy(string command_line) {
     memcpy(cmd, command_line.data, command_line.count);
     cmd[command_line.count] = 0;
     
-    sys_write_string(sys_get_stdout(), STR(cmd));
-    sys_write_string(sys_get_stdout(), STR("\n"));
+    char wks[1024];
+    memcpy(wks, workspace_dir.data, workspace_dir.count);
+    wks[workspace_dir.count] = 0;
     
-    bool ok = (bool)(int)CreateProcessA(0, cmd, 0, 0, false, 0, 0, 0, &si, &pi);
+    bool ok = (bool)(int)CreateProcessA(0, cmd, 0, 0, true, 0, 0, wks, &si, &pi);
     
     if (!ok) {
         res.process_start_success = false;
@@ -5714,6 +6368,10 @@ Socket_Result sys_socket_init(Socket *s, Socket_Domain domain, Socket_Type type,
     if (win_sock == INVALID_SOCKET) {
         return SOCKET_PROTOCOL_ERROR;
     }
+    
+    int optval = 1;
+    setsockopt(win_sock, SOL_SOCKET, SO_REUSEADDR,  (const char *)&optval, sizeof(optval));
+    
     *s = (Socket)win_sock;
     return SOCKET_OK;
 }
@@ -5833,6 +6491,74 @@ Socket_Result sys_set_socket_blocking_timeout(Socket socket, u64 ms) {
     return SOCKET_OK;
 }
 
+u64 sys_get_current_thread_id(void) {
+    return (u64)GetCurrentThreadId();
+}
+
+bool sys_thread_key_init(Thread_Key *key) {
+    *key = (Thread_Key)(u64)TlsAlloc();
+    return (u64)*key != 0xFFFFFFFF;
+}
+bool sys_thread_key_write(Thread_Key key, void* value) {
+    return (bool)(int)TlsSetValue((DWORD)(u64)key, value);
+}
+void* sys_thread_key_read(Thread_Key key) {
+    return TlsGetValue((DWORD)(u64)key);
+}
+
+unit_local DWORD WINAPI _windows_thread_proc(LPVOID lpParameter) {
+    Thread *t = (Thread*)lpParameter;
+    
+    _ostd_register_thread_storage(t->id);
+    
+    DWORD ret = (DWORD)t->proc(t);
+    
+    _ostd_get_thread_storage()->taken = false;
+    
+    return ret;
+}
+
+bool sys_thread_init(Thread *thread, Thread_Proc proc, void *userdata) {
+    thread->userdata = userdata;
+    thread->id = 0;
+    thread->handle = CreateThread(0, 0, _windows_thread_proc, thread, 0x00000004, (LPDWORD)&thread->id);
+    thread->is_suspended = true;
+    thread->proc = proc;
+    return thread->handle != 0;
+}
+void sys_thread_start(Thread *thread) {
+    thread->is_suspended = false;
+    ResumeThread(thread->handle);
+}
+void sys_thread_join(Thread *thread) {
+    assert(!thread->is_suspended);
+    WaitForSingleObject(thread->handle, 0xFFFFFFFF);
+}
+void sys_thread_close(Thread *thread) {
+    CloseHandle(thread->handle);
+}
+
+bool sys_mutex_init(Mutex *mutex) {
+    if (!mutex) return false;
+    mutex->handle = mutex->handle_backing;
+    InitializeCriticalSection(mutex->handle);
+    return true;
+}
+
+bool sys_mutex_uninit(Mutex *mutex) {
+    if (!mutex || !mutex->handle) return false;
+    DeleteCriticalSection(mutex->handle);
+    mutex->handle = 0;
+    return true;
+}
+
+void sys_mutex_acquire(Mutex mutex) {
+    EnterCriticalSection(mutex.handle);
+}
+
+void sys_mutex_release(Mutex mutex) {
+    LeaveCriticalSection(mutex.handle);
+}
 #ifndef OSTD_HEADLESS
 
 Surface_Handle sys_make_surface(Surface_Desc desc) {
@@ -7108,7 +7834,7 @@ bool surface_get_framebuffer_size(Surface_Handle h, s64 *width, s64 *height) {
     return true;
 }
 
-static uint32_t *_em_pixel_buffer = NULL;
+static uint32_t *_em_pixel_buffer = 0;
 static size_t _em_pixel_buffer_size = 0;
 // Allocate (or reallocate) a static pixel buffer to match the canvas size.
 void* surface_map_pixels(Surface_Handle h) {
@@ -7160,7 +7886,7 @@ void surface_blit_pixels(Surface_Handle h) {
     
     #pragma clang diagnostic ignored "-Wformat-nonliteral"
     extern int snprintf(char*restrict, unsigned long, const char*restrict, ...);
-    int script_len = snprintf(NULL, 0, format, w, h_int, w, h_int, (int)_em_pixel_buffer) + 1;
+    int script_len = snprintf(0, 0, format, w, h_int, w, h_int, (int)_em_pixel_buffer) + 1;
     assert(script_len < (int)sizeof(_em_surface_blit_pixels_script));
     snprintf(_em_surface_blit_pixels_script, (unsigned long)script_len, format, w, h_int, w, h_int, (int)_em_pixel_buffer);
 
@@ -7176,7 +7902,7 @@ unit_local EM_BOOL animation_frame_callback(double time, void *userData) {
 }
 unit_local void _em_main_thread_wait_animation_frame(void) {
     _em_frame_ready = 0;
-    emscripten_request_animation_frame(animation_frame_callback, NULL);
+    emscripten_request_animation_frame(animation_frame_callback, 0);
     
     while (!_em_frame_ready) {
         // whatevs web is dumb
@@ -7207,22 +7933,17 @@ void sys_print_stack_trace(File_Handle handle) {
 
 
 
+#endif // _SYSTEM_1_H
 
-
-
-
-
-
-
-
-
-
-/* End include: system.h */
+/* End include: system1.h */
 
 
 /* Begin include: unicode.h */
-#if 0
-#endif
+#ifndef _UNICODE_H
+#define _UNICODE_H
+
+#ifndef _BASE_H
+#endif // _BASE_H
 
 #define UTF16_SURROGATE_HIGH_START  0xD800
 #define UTF16_SURROGATE_HIGH_END    0xDBFF
@@ -7333,12 +8054,23 @@ Utf8_To_Utf16_Result one_utf8_to_utf16(u8 *s, s64 source_length, bool strict) {
 #endif //OSTD_IMPL
 
 
+#endif // _UNICODE_H
+
 /* End include: unicode.h */
 
 
 /* Begin include: memory.h */
-#if 0
-#endif
+#ifndef _MEMORY_H
+#define _MEMORY_H
+
+#ifndef _BASE_H
+#endif // _BASE_H
+
+#ifndef _STRING_H
+#endif //_STRING_H
+
+#ifndef _SYSTEM_1_H
+#endif //_SYSTEM_1_H
 
 /////
 // Allocator
@@ -7444,34 +8176,39 @@ inline string string_copy(Allocator a, string s) {
 
 #ifdef OSTD_IMPL
 
-unit_local Arena _temp_arena;
-unit_local Allocator _temp;
-unit_local bool _temp_initted = false;
+typedef struct _Per_Thread_Temporary_Storage {
+    Arena arena;
+    Allocator a;
+    bool initted;
+} _Per_Thread_Temporary_Storage;
 
-unit_local inline void _lazy_init_temporary_storage(void) {
-    if (_temp_initted) return;
+unit_local inline _Per_Thread_Temporary_Storage* _lazy_init_temporary_storage(void) {
+    _Ostd_Thread_Storage *s = _ostd_get_thread_storage();
+    assert(s->temp);
+    assertmsg(sizeof(_Per_Thread_Temporary_Storage) < sizeof(s->temporary_storage_struct_backing), "refactor time");
+    if (s->temp->initted) {
+        return s->temp;
+    }
 
 #if OS_FLAGS & OS_FLAG_EMSCRIPTEN
-    _temp_arena = make_arena(1024*1024, 1024*1024);
+    s->temp->arena = make_arena(1024*1024, 1024*1024);
 #else
-    _temp_arena = make_arena(sys_get_info().page_size*6900, 1024);
+    s->temp->arena = make_arena(sys_get_info().page_size*6900, 1024);
 #endif
-    _temp = (Allocator) { &_temp_arena, arena_allocator_proc };
-
-    _temp_initted = true;
+    s->temp->a = (Allocator) { &s->temp->arena, arena_allocator_proc };
+    
+    s->temp->initted = true;
+    
+    return s->temp;
 }
 Allocator get_temp(void) {
-    _lazy_init_temporary_storage();
-    return _temp;
+    return _lazy_init_temporary_storage()->a;
 }
 void reset_temporary_storage(void) {
-    _lazy_init_temporary_storage();
-    arena_reset(&_temp_arena);
+    arena_reset(&_lazy_init_temporary_storage()->arena);
 }
 void *tallocate(size_t n) {
-    _lazy_init_temporary_storage();
-
-    return allocate(_temp, n);
+    return allocate(_lazy_init_temporary_storage()->a, n);
 }
 
 Arena make_arena(u64 reserved_size, u64 initial_allocated_size) {
@@ -7603,13 +8340,19 @@ void* arena_allocator_proc(Allocator_Message msg, void *data, void *old, u64 old
 
 #endif // OSTD_IMPL
 
+#endif // _MEMORY_H
 
 /* End include: memory.h */
 
 
 /* Begin include: var_args.h */
-#if 0
-#endif
+#ifndef _VAR_ARGS_H
+#define _VAR_ARGS_H
+
+#ifndef _BASE_H
+#endif // _BASE_H
+#ifndef _STRING_H
+#endif // _STRING_H
 
 // This is C90 so we need to do some macro nonsense to be able to do any form of variadic stuff.
 // It's to get slightly better var args than the standard C va_list.
@@ -7681,6 +8424,9 @@ typedef struct Var_Arg {
 
 
 /* Begin include: var_args_macros.h */
+#ifndef _VAR_ARGS_MACROS_H
+#define _VAR_ARGS_MACROS_H
+
 #define MAX_VAR_ARGS 70
 
 #define PP_NARG(...) PP_ARG_N(__VA_ARGS__, PP_RSEQ_N())
@@ -7913,25 +8659,41 @@ typedef struct Var_Arg {
 #define MAKE_WRAPPED_CALL(TARGET, ...) \
     _WRAP_ARGS_DISPATCH(PP_NARG(__VA_ARGS__), TARGET, __VA_ARGS__)
 
+#endif // _VAR_ARGS_MACROS_H
+
 /* End include: var_args_macros.h */
 
+#endif // _VAR_ARGS_H
 
 /* End include: var_args.h */
 
 /* Begin include: print.h */
-#if 0
-#endif
+#ifndef _PRINT_H
+#define _PRINT_H
+
+#ifndef _BASE_H
+#endif // _BASE_H
+#ifndef _STRING_H
+#endif // _STRING_H
+#ifndef _MEMORY_H
+#endif // _MEMORY_H
+#ifndef _VAR_ARGS_H
+#endif // _VAR_ARGS_H
+#ifndef _SYSTEM_1_H
+#endif // _SYSTEM_1_H
+#ifndef _MATH_H
+#endif // _MATH_H
 
 /*
 
     TODO:
 
         - Specify int base
-            %ib16 - base 16
+            %i16  - base 16
         - Padding, 0 padding
-            %i-4   "   5"
+            %4-i   "   5"
                    "  81"
-            %i4    "5   "
+            %i-4   "5   "
                    "81  "
             %i04   "0005"
                    "0081"
@@ -7941,7 +8703,7 @@ typedef struct Var_Arg {
 
             %f04.3 "0001.123""
 
-        - Null terminated string %s0 or %cs or %ns
+        - Null terminated string is %s0
 
         - Stack-backed buffered print() (instead of temporary allocation)
 
@@ -7961,9 +8723,9 @@ u64 format_signed_int(s64 x, int base, void *buffer, u64 buffer_size);
 u64 format_unsigned_int(u64 x, int base, void *buffer, u64 buffer_size);
 u64 format_float(float64 x, int decimal_places, void *buffer, u64 buffer_size);
 
-unit_local u64 string_to_unsigned_int(string str, int base, bool *success);
-unit_local s64 string_to_signed_int(string str, int base, bool *success);
-unit_local float64 string_to_float(string str, bool *success);
+u64 string_to_unsigned_int(string str, int base, bool *success);
+s64 string_to_signed_int(string str, int base, bool *success);
+float64 string_to_float(string str, bool *success);
 
 //////
 // Printing
@@ -8354,7 +9116,7 @@ u64 format_float(float64 x, int decimal_places, void *buffer, u64 buffer_size) {
     return written;
 }
 
-unit_local u64 string_to_unsigned_int(string str, int base, bool *success)
+u64 string_to_unsigned_int(string str, int base, bool *success)
 {
     u64 value = 0;
     if (base < 2 || base > 36) {
@@ -8402,7 +9164,7 @@ unit_local u64 string_to_unsigned_int(string str, int base, bool *success)
     return value;
 }
 
-unit_local s64 string_to_signed_int(string str, int base, bool *success)
+s64 string_to_signed_int(string str, int base, bool *success)
 {
     u8 *p = str.data;
 
@@ -8429,7 +9191,7 @@ unit_local s64 string_to_signed_int(string str, int base, bool *success)
     return signed_val;
 }
 
-unit_local float64 string_to_float(string str, bool *success)
+float64 string_to_float(string str, bool *success)
 {
     u8 *p = str.data;
 
@@ -8482,6 +9244,9 @@ unit_local float64 string_to_float(string str, bool *success)
 Logger_Proc logger = 0;
 
 // todo(charlie) move to appropriate file
+// There probably needs to be a string_utilities file or something because this function needs
+// the memory module, but the string module must come before the memory module because the system
+// module must come before the memory module because it uses strings. 
 string string_replace(Allocator a, string s, string sub, string replacement) {
     if (s.count < sub.count) return (string){0};
 
@@ -8523,12 +9288,21 @@ string string_replace(Allocator a, string s, string sub, string replacement) {
 #endif // OSTD_IMPL
 
 
+#endif // _PRINT_H
 
 /* End include: print.h */
 
 
 /* Begin include: system2.h */
+#ifndef _SYSTEM_2_H
+#define _SYSTEM_2_H
 
+#ifndef _SYSTEM_1_H
+#endif // _SYSTEM_1_H
+#ifndef _MEMORY_H
+#endif // _MEMORY_H
+#ifndef _PRINT_H
+#endif // _PRINT_H
 
 bool sys_read_entire_file(Allocator a, string path, string *result);
 bool sys_write_entire_file(string path, string data);
@@ -8568,8 +9342,62 @@ bool sys_write_entire_file(string path, string data) {
 
 #endif // OSTD_IMPL
 
+#endif // _SYSTEM_2_H
 
 /* End include: system2.h */
+
+
+/* Begin include: path_utils.h */
+
+
+
+string path_get_filename(string path);
+string path_strip_one_extension(string path);
+string path_strip_all_extensions(string path);
+
+#ifdef OSTD_IMPL
+
+string path_get_filename(string path) {
+	for (s64 i = (s64)(path.count-1); i >= 0; i -= 1) {
+		if (path.data[i] == '\\' || path.data[i] == '/') {
+			return string_slice(path, (u64)i+1, path.count-(u64)i-1);
+		}
+    }
+    return path;
+}
+
+string path_strip_one_extension(string path) {
+	for (s64 i = (s64)(path.count-1); i >= 0; i -= 1) {
+		if (path.data[i] == '\\' || path.data[i] == '/') {
+			return path;
+		}
+		if (path.data[i] == '.') {
+			return string_slice(path, 0, (u64)i);
+		}
+    }
+    return path;
+}
+
+string path_strip_all_extensions(string path) {
+	s64 lowest_index = -1;
+	for (s64 i = (s64)(path.count-1); i >= 0; i -= 1) {
+		if (path.data[i] == '\\' || path.data[i] == '/') {
+			break;
+		}
+		if (path.data[i] == '.') {
+			if (lowest_index == -1 || i < lowest_index) {
+				lowest_index = i;
+			}
+		}
+    }
+    if (lowest_index == -1) return path;
+    
+	return string_slice(path, 0, (u64)lowest_index);
+}
+
+#endif // OSTD_IMPL
+
+/* End include: path_utils.h */
 
 #ifndef OSTD_NO_GRAPHICS
 
@@ -8577,8 +9405,19 @@ bool sys_write_entire_file(string path, string data) {
 #if !defined(OGA_GRAPHICS) && !defined(OSTD_HEADLESS)
 #define OGA_GRAPHICS
 
-#if 0
-#endif
+
+#ifndef _BASE_H
+#endif // _BASE_H
+#ifndef _STRING_H
+#endif // _STRING_H
+#ifndef _MEMORY_H
+#endif // _MEMORY_H
+#ifndef _SYSTEM_1_H
+#endif // _SYSTEM_1_H
+#ifndef _MATH_H
+#endif // _MATH_H
+#ifndef _PRINT_H
+#endif // _PRINT_H
 
 // todo(charlie) make a stack of non-OK results which can be popped
 typedef enum Oga_Result {
@@ -9506,9 +10345,9 @@ typedef struct Oga_Vertex_List_Layout_Desc {
 } Oga_Vertex_List_Layout_Desc;
 
 typedef u64 Oga_Render_Pass_Flag;
-unit_local Oga_Render_Pass_Flag OGA_RENDER_PASS_INHERITANCE_PARENT = 1 << 0;
-unit_local Oga_Render_Pass_Flag OGA_RENDER_PASS_INHERITANCE_CHILD = 1 << 1;
-unit_local Oga_Render_Pass_Flag OGA_RENDER_PASS_DISABLE_DEPTH_CLAMP = 1 << 2;
+unit_local const Oga_Render_Pass_Flag OGA_RENDER_PASS_INHERITANCE_PARENT = 1 << 0;
+unit_local const Oga_Render_Pass_Flag OGA_RENDER_PASS_INHERITANCE_CHILD = 1 << 1;
+unit_local const Oga_Render_Pass_Flag OGA_RENDER_PASS_DISABLE_DEPTH_CLAMP = 1 << 2;
 
 // #Volatile values must map to same as vulkan equivalents
 typedef enum Oga_Primitive_Topology {
@@ -13914,6 +14753,11 @@ void oga_cmd_fill_image(Oga_Command_List cmd, Oga_Optimal_Copy_View *dst_view, f
 
 #define OGA_OSL_TARGET OSL_TARGET_AVX
 
+u64 oga_query_devices(Oga_Device *buffer, u64 buffer_count) {
+    (void)buffer;(void)buffer_count;
+    return 0;
+}
+
 #endif
 
 #endif // OSTD_IMPL
@@ -13928,8 +14772,19 @@ void oga_cmd_fill_image(Oga_Command_List cmd, Oga_Optimal_Copy_View *dst_view, f
 
 /* Begin include: osl_compiler.h */
 
-#if 0
-#endif
+#ifndef _OSL_COMPILER_H
+#define _OSL_COMPILER_H
+
+#ifndef _BASE_H
+#endif // _BASE_H
+#ifndef _STRING_H
+#endif // _STRING_H
+#ifndef _MEMORY_H
+#endif // _MEMORY_H
+#ifndef _SYSTEM_1_H
+#endif // _SYSTEM_1_H
+#ifndef _PRINT_H
+#endif // _PRINT_H
 
 typedef enum Osl_Result {
     OSL_OK,
@@ -17642,7 +18497,7 @@ unit_local Osl_Result _osl_parse_type_ident(Osl_Compiler *compiler, Osl_Block *b
 
 unit_local Osl_Result _osl_parse_arg_list(Osl_Compiler *compiler, Osl_Block *block, Osl_Token_Kind close_token, Osl_Token *start, Osl_Token **done_token, Osl_Arg_List *list) {
 	*list = (Osl_Arg_List){0};
-	
+	assert(list->arg_count == 0); // todo(charlie) tcc compiler bug causes crash here. Maybe we can work around it?
 	Osl_Token_Kind open_token = 0;
 	if (close_token == OSL_TOKEN_KIND_RPAREN) {
 		open_token = OSL_TOKEN_KIND_LPAREN;
@@ -17667,7 +18522,7 @@ unit_local Osl_Result _osl_parse_arg_list(Osl_Compiler *compiler, Osl_Block *blo
 	while (next->kind != OSL_TOKEN_KIND_EOF && next->kind != close_token) {
 
 		next += 1;
-		assertmsg(list->arg_count < 128, "Exceeding max allowed argument count of 128");
+		assertmsgs(list->arg_count < 128, _osl_tprint_token(compiler, next, tprint("Exceeding max allowed argument count of 128 (%i)", list->arg_count)));
 		
 		
 		Osl_Token *sub_expr_start = next;
@@ -18711,11 +19566,14 @@ Osl_Result osl_compile(Allocator a, Osl_Compile_Desc desc, void **pcode, u64 *pc
 
 #endif // OSTD_IMPL
 
+
+#endif // _OSL_COMPILER_H
+
 /* End include: osl_compiler.h */
 #endif // OSTD_NO_COMPILER
 
 
-
+/* Begin include: unignore_warnings.h */
 #if defined(__clang__)
 #pragma clang diagnostic pop
 #endif
@@ -18724,6 +19582,17 @@ Osl_Result osl_compile(Allocator a, Osl_Compile_Desc desc, void **pcode, u64 *pc
 #pragma GCC diagnostic pop
 #endif
 
+
+/* End include: unignore_warnings.h */
+
 #endif // OSTD_H_
 
-#endif // OSTD_SINGLE_HEADER
+#endif // _ONE_OSTD_H
+#if defined(__clang__)
+#pragma clang diagnostic pop
+#endif
+
+#if defined(__GNUC__) || defined(__GNUG__)
+#pragma GCC diagnostic pop
+#endif
+

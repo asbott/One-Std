@@ -1,4 +1,10 @@
-#include "ostd.h" // For syntax highlighting.
+
+#ifndef _WINDOWS_LOADER_H
+#define _WINDOWS_LOADER_H
+
+#ifndef _BASE_H
+#include "base.h"
+#endif // _BASE_H
 
 #define WINVER 0x0A00
 #define _WIN32_WINNT 0x0A00
@@ -2744,3 +2750,184 @@ select(
     const struct timeval * timeout
     );
     
+#endif // _WINDOWS_LOADER_H
+
+typedef struct _FILETIME {
+  DWORD dwLowDateTime;
+  DWORD dwHighDateTime;
+} FILETIME, *PFILETIME, *LPFILETIME;
+
+WINDOWS_IMPORT BOOL WINAPI FindClose(
+  HANDLE hFindFile
+);
+
+typedef struct _WIN32_FIND_DATAW {
+  DWORD    dwFileAttributes;
+  FILETIME ftCreationTime;
+  FILETIME ftLastAccessTime;
+  FILETIME ftLastWriteTime;
+  DWORD    nFileSizeHigh;
+  DWORD    nFileSizeLow;
+  DWORD    dwReserved0;
+  DWORD    dwReserved1;
+  WCHAR    cFileName[260];
+  WCHAR    cAlternateFileName[14];
+  DWORD    dwFileType; // Obsolete. Do not use.
+  DWORD    dwCreatorType; // Obsolete. Do not use
+  WORD     wFinderFlags; // Obsolete. Do not use
+} WIN32_FIND_DATAW, *PWIN32_FIND_DATAW, *LPWIN32_FIND_DATAW;
+
+WINDOWS_IMPORT HANDLE WINAPI FindFirstFileW(
+  LPCWSTR            lpFileName,
+  LPWIN32_FIND_DATAW lpFindFileData
+);
+
+WINDOWS_IMPORT BOOL WINAPI FindNextFileW(
+  HANDLE             hFindFile,
+  LPWIN32_FIND_DATAW lpFindFileData
+);
+
+WINDOWS_IMPORT DWORD WINAPI GetFileAttributesW(
+  LPCWSTR lpFileName
+);
+
+WINDOWS_IMPORT BOOL WINAPI RemoveDirectoryW(
+  LPCWSTR lpPathName
+);
+
+WINDOWS_IMPORT BOOL WINAPI DeleteFileW(
+  LPCWSTR lpFileName
+);
+
+// end_access
+#define FILE_SHARE_READ                 0x00000001  
+#define FILE_SHARE_WRITE                0x00000002  
+#define FILE_SHARE_DELETE               0x00000004  
+#define FILE_ATTRIBUTE_READONLY             0x00000001  
+#define FILE_ATTRIBUTE_HIDDEN               0x00000002  
+#define FILE_ATTRIBUTE_SYSTEM               0x00000004  
+#define FILE_ATTRIBUTE_DIRECTORY            0x00000010  
+#define FILE_ATTRIBUTE_ARCHIVE              0x00000020  
+#define FILE_ATTRIBUTE_DEVICE               0x00000040  
+#define FILE_ATTRIBUTE_NORMAL               0x00000080  
+#define FILE_ATTRIBUTE_TEMPORARY            0x00000100  
+#define FILE_ATTRIBUTE_SPARSE_FILE          0x00000200  
+#define FILE_ATTRIBUTE_REPARSE_POINT        0x00000400  
+#define FILE_ATTRIBUTE_COMPRESSED           0x00000800  
+#define FILE_ATTRIBUTE_OFFLINE              0x00001000  
+#define FILE_ATTRIBUTE_NOT_CONTENT_INDEXED  0x00002000  
+#define FILE_ATTRIBUTE_ENCRYPTED            0x00004000  
+#define FILE_ATTRIBUTE_INTEGRITY_STREAM     0x00008000  
+#define FILE_ATTRIBUTE_VIRTUAL              0x00010000  
+#define FILE_ATTRIBUTE_NO_SCRUB_DATA        0x00020000  
+#define FILE_ATTRIBUTE_EA                   0x00040000  
+#define FILE_ATTRIBUTE_PINNED               0x00080000  
+#define FILE_ATTRIBUTE_UNPINNED             0x00100000  
+#define FILE_ATTRIBUTE_RECALL_ON_OPEN       0x00040000  
+#define FILE_ATTRIBUTE_RECALL_ON_DATA_ACCESS 0x00400000 
+#define TREE_CONNECT_ATTRIBUTE_PRIVACY      0x00004000  
+#define TREE_CONNECT_ATTRIBUTE_INTEGRITY    0x00008000  
+#define TREE_CONNECT_ATTRIBUTE_GLOBAL       0x00000004  
+#define TREE_CONNECT_ATTRIBUTE_PINNED       0x00000002  
+#define FILE_ATTRIBUTE_STRICTLY_SEQUENTIAL  0x20000000  
+#define FILE_NOTIFY_CHANGE_FILE_NAME    0x00000001   
+#define FILE_NOTIFY_CHANGE_DIR_NAME     0x00000002   
+#define FILE_NOTIFY_CHANGE_ATTRIBUTES   0x00000004   
+#define FILE_NOTIFY_CHANGE_SIZE         0x00000008   
+#define FILE_NOTIFY_CHANGE_LAST_WRITE   0x00000010   
+#define FILE_NOTIFY_CHANGE_LAST_ACCESS  0x00000020   
+#define FILE_NOTIFY_CHANGE_CREATION     0x00000040   
+#define FILE_NOTIFY_CHANGE_SECURITY     0x00000100   
+#define FILE_ACTION_ADDED                   0x00000001   
+#define FILE_ACTION_REMOVED                 0x00000002   
+#define FILE_ACTION_MODIFIED                0x00000003   
+#define FILE_ACTION_RENAMED_OLD_NAME        0x00000004   
+#define FILE_ACTION_RENAMED_NEW_NAME        0x00000005   
+#define MAILSLOT_NO_MESSAGE             ((DWORD)-1) 
+#define MAILSLOT_WAIT_FOREVER           ((DWORD)-1) 
+#define FILE_CASE_SENSITIVE_SEARCH          0x00000001  
+#define FILE_CASE_PRESERVED_NAMES           0x00000002  
+#define FILE_UNICODE_ON_DISK                0x00000004  
+#define FILE_PERSISTENT_ACLS                0x00000008  
+#define FILE_FILE_COMPRESSION               0x00000010  
+#define FILE_VOLUME_QUOTAS                  0x00000020  
+#define FILE_SUPPORTS_SPARSE_FILES          0x00000040  
+#define FILE_SUPPORTS_REPARSE_POINTS        0x00000080  
+#define FILE_SUPPORTS_REMOTE_STORAGE        0x00000100  
+#define FILE_RETURNS_CLEANUP_RESULT_INFO    0x00000200  
+#define FILE_SUPPORTS_POSIX_UNLINK_RENAME   0x00000400  
+
+
+
+
+#define FILE_VOLUME_IS_COMPRESSED           0x00008000  
+#define FILE_SUPPORTS_OBJECT_IDS            0x00010000  
+#define FILE_SUPPORTS_ENCRYPTION            0x00020000  
+#define FILE_NAMED_STREAMS                  0x00040000  
+#define FILE_READ_ONLY_VOLUME               0x00080000  
+#define FILE_SEQUENTIAL_WRITE_ONCE          0x00100000  
+#define FILE_SUPPORTS_TRANSACTIONS          0x00200000  
+#define FILE_SUPPORTS_HARD_LINKS            0x00400000  
+#define FILE_SUPPORTS_EXTENDED_ATTRIBUTES   0x00800000  
+#define FILE_SUPPORTS_OPEN_BY_FILE_ID       0x01000000  
+#define FILE_SUPPORTS_USN_JOURNAL           0x02000000  
+#define FILE_SUPPORTS_INTEGRITY_STREAMS     0x04000000  
+#define FILE_SUPPORTS_BLOCK_REFCOUNTING     0x08000000  
+#define FILE_SUPPORTS_SPARSE_VDL            0x10000000  
+#define FILE_DAX_VOLUME                     0x20000000  
+#define FILE_SUPPORTS_GHOSTING              0x40000000  
+
+
+WINDOWS_IMPORT DWORD WINAPI TlsAlloc(void);
+WINDOWS_IMPORT LPVOID WINAPI TlsGetValue(
+  DWORD dwTlsIndex
+);
+WINDOWS_IMPORT BOOL WINAPI TlsSetValue(
+  DWORD  dwTlsIndex,
+  LPVOID lpTlsValue
+);
+
+WINDOWS_IMPORT DWORD WINAPI GetCurrentThreadId(void);
+
+typedef DWORD (__stdcall *LPTHREAD_START_ROUTINE) (LPVOID lpThreadParameter);  
+
+WINDOWS_IMPORT HANDLE WINAPI CreateThread(LPSECURITY_ATTRIBUTES lpThreadAttributes, size_t dwStackSize, LPTHREAD_START_ROUTINE lpStartAddress, LPVOID lpParameter, DWORD dwCreationFlags, LPDWORD lpThreadId);
+
+WINDOWS_IMPORT DWORD WINAPI ResumeThread(HANDLE hThread);
+
+typedef struct CRITICAL_SECTION {
+  u8 _[40]; // todo(charlie) #portability 32-bit
+} CRITICAL_SECTION, *LPCRITICAL_SECTION, *PCRITICAL_SECTION;
+
+WINDOWS_IMPORT void WINAPI InitializeCriticalSection(
+  LPCRITICAL_SECTION lpCriticalSection
+);
+
+WINDOWS_IMPORT void WINAPI EnterCriticalSection(
+  LPCRITICAL_SECTION lpCriticalSection
+);
+
+WINDOWS_IMPORT void WINAPI LeaveCriticalSection(
+  LPCRITICAL_SECTION lpCriticalSection
+);
+
+WINDOWS_IMPORT void WINAPI DeleteCriticalSection(
+  LPCRITICAL_SECTION lpCriticalSection
+);
+
+WINDOWS_IMPORT BOOL WINAPI CreateDirectoryW(
+  LPCWSTR               lpPathName,
+  LPSECURITY_ATTRIBUTES lpSecurityAttributes
+);
+
+
+#define SO_DEBUG        0x0001          /* turn on debugging info recording */
+#define SO_ACCEPTCONN   0x0002          /* socket has had listen() */
+#define SO_REUSEADDR    0x0004          /* allow local address reuse */
+#define SO_KEEPALIVE    0x0008          /* keep connections alive */
+#define SO_DONTROUTE    0x0010          /* just use interface addresses */
+#define SO_BROADCAST    0x0020          /* permit sending of broadcast msgs */
+#define SO_USELOOPBACK  0x0040          /* bypass hardware when possible */
+#define SO_LINGER       0x0080          /* linger on close if data present */
+#define SO_OOBINLINE    0x0100          /* leave received OOB data in line */
+

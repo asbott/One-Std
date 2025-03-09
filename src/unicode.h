@@ -1,6 +1,9 @@
-#if 0
-#include "ostd.h" // For syntax highlighting.
-#endif
+#ifndef _UNICODE_H
+#define _UNICODE_H
+
+#ifndef _BASE_H
+#include "base.h"
+#endif // _BASE_H
 
 #define UTF16_SURROGATE_HIGH_START  0xD800
 #define UTF16_SURROGATE_HIGH_END    0xDBFF
@@ -110,3 +113,5 @@ Utf8_To_Utf16_Result one_utf8_to_utf16(u8 *s, s64 source_length, bool strict) {
 
 #endif //OSTD_IMPL
 
+
+#endif // _UNICODE_H

@@ -1,6 +1,7 @@
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wdeclaration-after-statement"
 #pragma clang diagnostic ignored "-Wreserved-macro-identifier"
+#pragma clang diagnostic ignored "-Wpre-c23-compat"
 #if defined(_MSC_VER) || defined(__EMSCRIPTEN__)
 #pragma clang diagnostic ignored "-Wunsafe-buffer-usage"
 #endif

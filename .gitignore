@@ -38,3 +38,5 @@ test.frag.spv
 tests/test_result
 
 *index.*
+
+tests/temp

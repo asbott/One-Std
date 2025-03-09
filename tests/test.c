@@ -15,6 +15,7 @@
 // std=c99 ....
 #pragma clang diagnostic ignored "-Wdeclaration-after-statement"
 // MSC clang also complains every time I do pointer arithmetic... in C .....
+#pragma clang diagnostic ignored "-Wpre-c23-compat"
 #ifdef _MSC_VER
 #pragma clang diagnostic ignored "-Wunsafe-buffer-usage"
 #endif
@@ -755,7 +756,7 @@ void test_memory(void) {
         reset_temporary_storage();
 
         void *mem1 = tallocate(69);
-        assert(mem0 == mem1);
+        assertmsgs(mem0 == mem1, tprint("%u, %u", mem0, mem1));
         memset(mem1, 0, 69);
     }
 }

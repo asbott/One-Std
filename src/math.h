@@ -1,6 +1,9 @@
-#if 0
-#include "ostd.h" // For syntax highlighting.
-#endif
+#ifndef _MATH_H
+#define _MATH_H
+
+#ifndef _BASE_H
+#include "base.h"
+#endif // _BASE_H
 
 #include "trig_tables.h"
 
@@ -15,9 +18,6 @@
 #pragma clang diagnostic ignored "-Wfloat-equal"
 #pragma clang diagnostic ignored "-Wbad-function-cast"
 #endif // __clang__
-
-#define min(a, b) ((a) < (b) ? (a) : (b))
-#define max(a, b) ((a) > (b) ? (a) : (b))
 
 #define clamp(x, a, b) (min(max((x), (a)), (b)))
 
@@ -206,14 +206,6 @@ typedef float2x32 float2;
 typedef float3x32 float3;
 typedef float4x32 float4;
 
-
-
-
-
-
-
-
-
 unit_local inline float32 ln32(float32 x) {
     u32 bx = * (u32 *) (&x);
     u32 ex = bx >> 23;
@@ -222,17 +214,14 @@ unit_local inline float32 ln32(float32 x) {
     x = * (float32 *) (&bx);
     return -1.49278f+(2.11263f+(-0.729104f+0.10969f*x)*x)*x+0.6931471806f*(float32)t;
 }
-
 unit_local inline float64 ln64(float64 x) {
-    u64 bx = *(u64 *)(&x); // Read float64 bits
-    u64 ex = bx >> 52; // Extract exponent (11 bits)
-    s32 t = (s32)ex - 1023; // Adjust for float64 bias
-    bx = 4607182418800017408ULL | (bx & 4503599627370495ULL); // Normalize mantissa
+    u64 bx = *(u64 *)(&x);
+    u64 ex = bx >> 52;
+    s32 t = (s32)ex - 1023;
+    bx = 4607182418800017408ULL | (bx & 4503599627370495ULL);
     x = *(float64 *)(&bx);
     return -1.49278 + (2.11263 + (-0.729104 + 0.10969 * x) * x) * x + 0.6931471806 * t;
 }
-
-
 
 unit_local inline u64 powu(u64 x, u64 e) {
     if (e == 0) return 1;
@@ -603,3 +592,4 @@ unit_local inline f64 get_power_of_two_f64(f64 x, u64 exp) {
 #pragma clang diagnostic pop
 #endif // __clang__
 
+#endif //_MATH_H

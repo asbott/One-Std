@@ -1,6 +1,12 @@
-#if 0
-#include "ostd.h" // For syntax highlighting.
-#endif
+#ifndef _VAR_ARGS_H
+#define _VAR_ARGS_H
+
+#ifndef _BASE_H
+#include "base.h"
+#endif // _BASE_H
+#ifndef _STRING_H
+#include "string.h"
+#endif // _STRING_H
 
 // This is C90 so we need to do some macro nonsense to be able to do any form of variadic stuff.
 // It's to get slightly better var args than the standard C va_list.
@@ -72,3 +78,4 @@ typedef struct Var_Arg {
 
 #include "var_args_macros.h"
 
+#endif // _VAR_ARGS_H

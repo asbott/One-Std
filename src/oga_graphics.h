@@ -1,9 +1,25 @@
 #if !defined(OGA_GRAPHICS) && !defined(OSTD_HEADLESS)
 #define OGA_GRAPHICS
 
-#if 0
-#include "ostd.h" // For syntax highlighting.
-#endif
+
+#ifndef _BASE_H
+#include "base.h"
+#endif // _BASE_H
+#ifndef _STRING_H
+#include "string.h"
+#endif // _STRING_H
+#ifndef _MEMORY_H
+#include "memory.h"
+#endif // _MEMORY_H
+#ifndef _SYSTEM_1_H
+#include "system1.h"
+#endif // _SYSTEM_1_H
+#ifndef _MATH_H
+#include "math.h"
+#endif // _MATH_H
+#ifndef _PRINT_H
+#include "print.h"
+#endif // _PRINT_H
 
 // todo(charlie) make a stack of non-OK results which can be popped
 typedef enum Oga_Result {
@@ -931,9 +947,9 @@ typedef struct Oga_Vertex_List_Layout_Desc {
 } Oga_Vertex_List_Layout_Desc;
 
 typedef u64 Oga_Render_Pass_Flag;
-unit_local Oga_Render_Pass_Flag OGA_RENDER_PASS_INHERITANCE_PARENT = 1 << 0;
-unit_local Oga_Render_Pass_Flag OGA_RENDER_PASS_INHERITANCE_CHILD = 1 << 1;
-unit_local Oga_Render_Pass_Flag OGA_RENDER_PASS_DISABLE_DEPTH_CLAMP = 1 << 2;
+unit_local const Oga_Render_Pass_Flag OGA_RENDER_PASS_INHERITANCE_PARENT = 1 << 0;
+unit_local const Oga_Render_Pass_Flag OGA_RENDER_PASS_INHERITANCE_CHILD = 1 << 1;
+unit_local const Oga_Render_Pass_Flag OGA_RENDER_PASS_DISABLE_DEPTH_CLAMP = 1 << 2;
 
 // #Volatile values must map to same as vulkan equivalents
 typedef enum Oga_Primitive_Topology {
@@ -1764,6 +1780,11 @@ inline string oga_format_str(Oga_Format f);
 /////////////////////////////////////////////////////
 
 #define OGA_OSL_TARGET OSL_TARGET_AVX
+
+u64 oga_query_devices(Oga_Device *buffer, u64 buffer_count) {
+    (void)buffer;(void)buffer_count;
+    return 0;
+}
 
 #endif
 

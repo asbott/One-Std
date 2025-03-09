@@ -2,6 +2,7 @@
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wdeclaration-after-statement"
 #pragma clang diagnostic ignored "-Wunsafe-buffer-usage"
+#pragma clang diagnostic ignored "-Wpre-c23-compat"
 #endif
 
 #define OSTD_IMPL
@@ -606,4 +607,6 @@ int main(void) {
 
     oga_reset(); // Only really necessary to get messages about leaked resources
 #endif
+
+    return 0;
 }

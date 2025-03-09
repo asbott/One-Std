@@ -1,40 +1,15 @@
 #ifndef OSTD_H_
 #define OSTD_H_
 
-#if defined(__GNUC__) || defined(__GNUG__)
-#pragma GCC diagnostic push
-#pragma GCC diagnostic ignored "-Wattributes"
-#pragma GCC diagnostic ignored "-Wunused-function"
-#endif
-
-// I try to compile with -pedantic and -Weverything, but get really dumb warnings like these,
-// so I have to ignore them.
-#ifdef __clang__
-#pragma clang diagnostic push
-#pragma clang diagnostic ignored "-Wattributes"
-#pragma clang diagnostic ignored "-Wreserved-identifier"
-#pragma clang diagnostic ignored "-Wdeclaration-after-statement"
-#pragma clang diagnostic ignored "-Wcovered-switch-default"
-#pragma clang diagnostic ignored "-Wcast-align"
-#pragma clang diagnostic ignored "-Wunused-function"
-#ifdef __EMSCRIPTEN__
-#pragma clang diagnostic ignored "-Wpadded"
-#endif // __EMSCRIPTEN__
-#if defined(_MSC_VER) || defined(__EMSCRIPTEN__)
-#pragma clang diagnostic ignored "-Wunsafe-buffer-usage"
-#endif
-#endif // __clang__
+#include "ignore_warnings.h"
 
 #include "base.h"
 
 #include "math.h"
 
-#include "utility.h"
-
 #include "string.h"
 
-
-#include "system.h"
+#include "system1.h"
 
 #include "unicode.h"
 
@@ -45,6 +20,8 @@
 
 #include "system2.h"
 
+#include "path_utils.h"
+
 #ifndef OSTD_NO_GRAPHICS
 #include "oga_graphics.h"
 #endif // OSTD_NO_GRAPHICS
@@ -53,15 +30,7 @@
 #include "osl_compiler.h"
 #endif // OSTD_NO_COMPILER
 
-
-
-#if defined(__clang__)
-#pragma clang diagnostic pop
-#endif
-
-#if defined(__GNUC__) || defined(__GNUG__)
-#pragma GCC diagnostic pop
-#endif
+#include "unignore_warnings.h"
 
 #endif // OSTD_H_
 

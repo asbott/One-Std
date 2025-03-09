@@ -5,6 +5,7 @@
 #pragma clang diagnostic ignored "-Wc11-extensions"
 #pragma clang diagnostic ignored "-Wcovered-switch-default"
 #pragma clang diagnostic ignored "-Wunused-function"
+#pragma clang diagnostic ignored "-Wpre-c23-compat"
 #ifdef _MSC_VER
 #pragma clang diagnostic ignored "-Wunsafe-buffer-usage"
 #endif
@@ -1436,10 +1437,10 @@ int main(int argc, char **argv) {
     volatile bool t = true;
     if (t) return 0;*/
     
-    Easy_Command_Result assembler_res = sys_run_command_easy(tprint("\"C:\\Program Files\\Microsoft Visual Studio\\2022\\Community\\VC\\Tools\\MSVC\\14.42.34433\\bin\\Hostx86\\x64\\ml64.exe\" /c /Fo\"%s.obj\" \"%s.asm\"", in_path, in_path));
+    Easy_Command_Result assembler_res = sys_run_command_easy(tprint("\"C:\\Program Files\\Microsoft Visual Studio\\2022\\Community\\VC\\Tools\\MSVC\\14.42.34433\\bin\\Hostx86\\x64\\ml64.exe\" /c /Fo\"%s.obj\" \"%s.asm\"", in_path, in_path), sys_get_stdout(), sys_get_stdout(), STR(""));
     assert(assembler_res.process_start_success && assembler_res.exit_code == 0 || assembler_res.exit_code == 1104);
     
-    Easy_Command_Result linker_res = sys_run_command_easy(tprint("\"C:\\Program Files\\Microsoft Visual Studio\\2022\\Community\\VC\\Tools\\MSVC\\14.42.34433\\bin\\Hostx64\\x64\\link.exe\" /DLL /EXPORT:out_buffer /EXPORT:in_buffer /SUBSYSTEM:WINDOWS /ENTRY:DllMain /OUT:%s %s.obj", out_path, in_path));
+    Easy_Command_Result linker_res = sys_run_command_easy(tprint("\"C:\\Program Files\\Microsoft Visual Studio\\2022\\Community\\VC\\Tools\\MSVC\\14.42.34433\\bin\\Hostx64\\x64\\link.exe\" /DLL /EXPORT:out_buffer /EXPORT:in_buffer /SUBSYSTEM:WINDOWS /ENTRY:DllMain /OUT:%s %s.obj", out_path, in_path), sys_get_stdout(), sys_get_stdout(), STR(""));
     assert(linker_res.process_start_success && linker_res.exit_code == 0);
 	
 	u32 in0 = 5;

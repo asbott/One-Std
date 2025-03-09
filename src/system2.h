@@ -1,4 +1,15 @@
+#ifndef _SYSTEM_2_H
+#define _SYSTEM_2_H
 
+#ifndef _SYSTEM_1_H
+#include "system1.h"
+#endif // _SYSTEM_1_H
+#ifndef _MEMORY_H
+#include "memory.h"
+#endif // _MEMORY_H
+#ifndef _PRINT_H
+#include "print.h"
+#endif // _PRINT_H
 
 bool sys_read_entire_file(Allocator a, string path, string *result);
 bool sys_write_entire_file(string path, string data);
@@ -38,3 +49,4 @@ bool sys_write_entire_file(string path, string data) {
 
 #endif // OSTD_IMPL
 
+#endif // _SYSTEM_2_H
