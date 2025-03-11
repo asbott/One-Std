@@ -67,38 +67,38 @@ typedef u64 File_Open_Flags;
 #define FILE_OPEN_RESET  (1 << 2)
 #define FILE_OPEN_CREATE (1 << 3)
 
-File_Handle sys_get_stdout(void);
-File_Handle sys_get_stderr(void);
+OSTD_LIB File_Handle sys_get_stdout(void);
+OSTD_LIB File_Handle sys_get_stderr(void);
 
-void sys_set_stdout(File_Handle h);
-void sys_set_stderr(File_Handle h);
+OSTD_LIB void sys_set_stdout(File_Handle h);
+OSTD_LIB void sys_set_stderr(File_Handle h);
 
-s64 sys_write(File_Handle h, void *data, u64 size);
-s64 sys_write_string(File_Handle h, string s);
+OSTD_LIB s64 sys_write(File_Handle h, void *data, u64 size);
+OSTD_LIB s64 sys_write_string(File_Handle h, string s);
 
-s64 sys_read(File_Handle h, void *buffer, u64 buffer_size);
+OSTD_LIB s64 sys_read(File_Handle h, void *buffer, u64 buffer_size);
 
-bool sys_make_pipe(File_Handle *read, File_Handle *write);
+OSTD_LIB bool sys_make_pipe(File_Handle *read, File_Handle *write);
 
-void sys_close(File_Handle h);
+OSTD_LIB void sys_close(File_Handle h);
 
 // Returns 0 on failure
-File_Handle sys_open_file(string path, File_Open_Flags flags);
-u64 sys_get_file_size(File_Handle f);
+OSTD_LIB File_Handle sys_open_file(string path, File_Open_Flags flags);
+OSTD_LIB u64 sys_get_file_size(File_Handle f);
 
-bool sys_make_directory(string path, bool recursive);
-bool sys_remove_directory(string path, bool recursive);
-bool sys_is_file(string path);
-bool sys_is_directory(string path);
+OSTD_LIB bool sys_make_directory(string path, bool recursive);
+OSTD_LIB bool sys_remove_directory(string path, bool recursive);
+OSTD_LIB bool sys_is_file(string path);
+OSTD_LIB bool sys_is_directory(string path);
 
 typedef bool (*Walk_Proc)(string); // Return true to continue, false to break
-void sys_walk_directory(string path, bool recursive, bool walk_directories, Walk_Proc walk_proc);
+OSTD_LIB void sys_walk_directory(string path, bool recursive, bool walk_directories, Walk_Proc walk_proc);
 
 typedef struct Easy_Command_Result {
     s64 exit_code;
     bool process_start_success;
 } Easy_Command_Result;
-Easy_Command_Result sys_run_command_easy(string command_line, File_Handle stdout, File_Handle stderr, string workspace_dir);
+OSTD_LIB Easy_Command_Result sys_run_command_easy(string command_line, File_Handle stdout, File_Handle stderr, string workspace_dir);
 
 //////
 // Sockets
@@ -150,18 +150,18 @@ typedef enum Socket_Protocol {
     SOCKET_PROTOCOL_UDP,
 } Socket_Protocol;
 
-u32 sys_convert_address_string(string address);
+OSTD_LIB u32 sys_convert_address_string(string address);
 
-Socket_Result sys_socket_init(Socket *socket, Socket_Domain domain, Socket_Type type, Socket_Protocol protocol);
-Socket_Result sys_socket_bind(Socket socket, u32 address, u16 port);
-Socket_Result sys_socket_listen(Socket socket, s64 backlog);
-Socket_Result sys_socket_accept(Socket socket, Socket *accepted, u64 timeout_ms);
-Socket_Result sys_socket_connect(Socket sock, u32 address, u16 port, Socket_Domain domain);
-Socket_Result sys_socket_send(Socket socket, void *data, u64 length, u64 *sent);
-Socket_Result sys_socket_recv(Socket socket, void *buffer, u64 length, u64 *sent);
-Socket_Result sys_socket_close(Socket socket);
-Socket_Result sys_socket_set_blocking(Socket *socket, bool blocking);
-Socket_Result sys_set_socket_blocking_timeout(Socket socket, u64 ms);
+OSTD_LIB Socket_Result sys_socket_init(Socket *socket, Socket_Domain domain, Socket_Type type, Socket_Protocol protocol);
+OSTD_LIB Socket_Result sys_socket_bind(Socket socket, u32 address, u16 port);
+OSTD_LIB Socket_Result sys_socket_listen(Socket socket, s64 backlog);
+OSTD_LIB Socket_Result sys_socket_accept(Socket socket, Socket *accepted, u64 timeout_ms);
+OSTD_LIB Socket_Result sys_socket_connect(Socket sock, u32 address, u16 port, Socket_Domain domain);
+OSTD_LIB Socket_Result sys_socket_send(Socket socket, void *data, u64 length, u64 *sent);
+OSTD_LIB Socket_Result sys_socket_recv(Socket socket, void *buffer, u64 length, u64 *sent);
+OSTD_LIB Socket_Result sys_socket_close(Socket socket);
+OSTD_LIB Socket_Result sys_socket_set_blocking(Socket *socket, bool blocking);
+OSTD_LIB Socket_Result sys_set_socket_blocking_timeout(Socket socket, u64 ms);
 
 
 //////
@@ -170,11 +170,11 @@ Socket_Result sys_set_socket_blocking_timeout(Socket socket, u64 ms);
 
 typedef void* Thread_Key;
 
-u64 sys_get_current_thread_id(void);
+OSTD_LIB u64 sys_get_current_thread_id(void);
 
-bool sys_thread_key_init(Thread_Key *key);
-bool sys_thread_key_write(Thread_Key key, void* value);
-void* sys_thread_key_read(Thread_Key key);
+OSTD_LIB bool sys_thread_key_init(Thread_Key *key);
+OSTD_LIB bool sys_thread_key_write(Thread_Key key, void* value);
+OSTD_LIB void* sys_thread_key_read(Thread_Key key);
 
 struct Thread;
 typedef s64 (*Thread_Proc)(struct Thread*);
@@ -186,20 +186,20 @@ typedef struct Thread {
     bool is_suspended;
 } Thread;
 
-bool sys_thread_init(Thread *thread, Thread_Proc proc, void *userdata);
-void sys_thread_start(Thread *thread);
-void sys_thread_join(Thread *thread);
-void sys_thread_close(Thread *thread);
+OSTD_LIB bool sys_thread_init(Thread *thread, Thread_Proc proc, void *userdata);
+OSTD_LIB void sys_thread_start(Thread *thread);
+OSTD_LIB void sys_thread_join(Thread *thread);
+OSTD_LIB void sys_thread_close(Thread *thread);
 
 typedef struct Mutex {
     void *handle;
     u8 handle_backing[40]; // This is for windows critical section;
 } Mutex;
 
-bool sys_mutex_init(Mutex *mutex);
-bool sys_mutex_uninit(Mutex *mutex);
-void sys_mutex_acquire(Mutex mutex);
-void sys_mutex_release(Mutex mutex);
+OSTD_LIB bool sys_mutex_init(Mutex *mutex);
+OSTD_LIB bool sys_mutex_uninit(Mutex *mutex);
+OSTD_LIB void sys_mutex_acquire(Mutex mutex);
+OSTD_LIB void sys_mutex_release(Mutex mutex);
 
 //////
 // Surfaces (Window)
@@ -264,29 +264,29 @@ unit_local inline Surface_Desc Surface_Desc_default(void) {
     desc.flags = 0;
     return desc;
 }
-Surface_Handle sys_make_surface(Surface_Desc desc);
-void surface_close(Surface_Handle s);
+OSTD_LIB Surface_Handle sys_make_surface(Surface_Desc desc);
+OSTD_LIB void surface_close(Surface_Handle s);
 
 
 #else // !(OS_FLAGS & OS_FLAG_HAS_WINDOW_SYSTEM)
 
-Surface_Handle sys_get_surface(void);
+OSTD_LIB Surface_Handle sys_get_surface(void);
 
 #endif // !(OS_FLAGS & OS_FLAG_HAS_WINDOW_SYSTEM)
 
-void surface_poll_events(Surface_Handle surface);
-bool surface_should_close(Surface_Handle s);
+OSTD_LIB void surface_poll_events(Surface_Handle surface);
+OSTD_LIB bool surface_should_close(Surface_Handle s);
 
 // Will return false on systems where the flag isn't implemented
-bool surface_set_flags(Surface_Handle h, Surface_Flags flags);
-bool surface_unset_flags(Surface_Handle h, Surface_Flags flags);
+OSTD_LIB bool surface_set_flags(Surface_Handle h, Surface_Flags flags);
+OSTD_LIB bool surface_unset_flags(Surface_Handle h, Surface_Flags flags);
 
-bool surface_get_framebuffer_size(Surface_Handle h, s64 *width, s64 *height);
+OSTD_LIB bool surface_get_framebuffer_size(Surface_Handle h, s64 *width, s64 *height);
 
-void* surface_map_pixels(Surface_Handle h);
-void surface_blit_pixels(Surface_Handle h);
+OSTD_LIB void* surface_map_pixels(Surface_Handle h);
+OSTD_LIB void surface_blit_pixels(Surface_Handle h);
 
-bool surface_get_monitor(Surface_Handle h, Physical_Monitor *monitor);
+OSTD_LIB bool surface_get_monitor(Surface_Handle h, Physical_Monitor *monitor);
 
 #endif // !OSTD_HEADLESS
 
@@ -294,7 +294,7 @@ bool surface_get_monitor(Surface_Handle h, Physical_Monitor *monitor);
 // Time
 //////
 
-float64 sys_get_seconds_monotonic(void);
+OSTD_LIB float64 sys_get_seconds_monotonic(void);
 
 //////
 // Process & Thread
@@ -302,8 +302,8 @@ float64 sys_get_seconds_monotonic(void);
 
 typedef void* Thread_Handle;
 
-Thread_Handle sys_get_current_thread(void);
-void sys_set_thread_affinity_mask(Thread_Handle thread, u64 bits);
+OSTD_LIB Thread_Handle sys_get_current_thread(void);
+OSTD_LIB void sys_set_thread_affinity_mask(Thread_Handle thread, u64 bits);
 
 typedef enum Priority_Level {
     SYS_PRIORITY_LOW,
@@ -311,18 +311,18 @@ typedef enum Priority_Level {
     SYS_PRIORITY_HIGH,
 } Priority_Level;
 
-void sys_set_local_process_priority_level(Priority_Level level);
-void sys_set_thread_priority_level(Thread_Handle thread, Priority_Level level);
+OSTD_LIB void sys_set_local_process_priority_level(Priority_Level level);
+OSTD_LIB void sys_set_thread_priority_level(Thread_Handle thread, Priority_Level level);
 
-void *sys_load_library(string s);
-void sys_close_library(void *lib);
-void* sys_get_library_symbol(void *lib, string symbol);
+OSTD_LIB void *sys_load_library(string s);
+OSTD_LIB void sys_close_library(void *lib);
+OSTD_LIB void* sys_get_library_symbol(void *lib, string symbol);
 
 //////
 // Debug
 //////
 
-void sys_print_stack_trace(File_Handle handle);
+OSTD_LIB void sys_print_stack_trace(File_Handle handle);
 
 //////
 // System Constants

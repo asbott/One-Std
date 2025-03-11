@@ -1,0 +1,1 @@
+clang -c ../../src/ostd.c -o ostd_windows.obj -DOSTD_LIB=__declspec(dllexport) -DOGA_IMPL_VULKAN -I../../vendors  && clang -shared -o ostd_windows.dll ostd_windows.obj -L../.. && jai generate.jai

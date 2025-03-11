@@ -11,8 +11,8 @@
 #include "print.h"
 #endif // _PRINT_H
 
-bool sys_read_entire_file(Allocator a, string path, string *result);
-bool sys_write_entire_file(string path, string data);
+OSTD_LIB bool sys_read_entire_file(Allocator a, string path, string *result);
+OSTD_LIB bool sys_write_entire_file(string path, string data);
 
 #ifdef OSTD_IMPL
 

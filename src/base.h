@@ -373,6 +373,10 @@ typedef u32 sys_uint;
     } while(0)
 #define assert(x) assertmsg(x, "")
 
+#ifndef OSTD_LIB
+    #define OSTD_LIB
+#endif
+
 inline void *memcpy(void *dst, const void * src, sys_uint n);
 // todo(charlie) inline asm / dynamically load crt's if msvc
 inline void *memset(void *dst, s32 c, sys_uint n) {

@@ -43,7 +43,6 @@ Currently targets:
     - Vulkan
     
 Upcoming Targets:
- - WebGPU
  - Console Graphics API's (Need dev kits. Would be closed-source and only given to licensed entities.)
  - D3D12
  - Metal
@@ -59,7 +58,6 @@ Currently targets:
     - SPIR-V
 
 Upcoming Targets:
- - WebGPU Shading Language
  - HLSL or DXIL not sure yet (maybe both?)
  - Metal
  - Console Shading Languages (Need dev kits. Would be closed-source and only given to licensed entities.)
@@ -106,4 +104,3 @@ To choose a specific implementation:
 For vulkan: `#define OGA_IMPL_VULKAN`
 For D3D12: `#define OGA_IMPL_D3D12`
 For Metal: `#define OGA_IMPL_METAL`
-For WebGPU: `#define OGA_IMPL_WEBGPU`

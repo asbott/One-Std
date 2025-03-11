@@ -1,9 +1,9 @@
 
 
 
-string path_get_filename(string path);
-string path_strip_one_extension(string path);
-string path_strip_all_extensions(string path);
+OSTD_LIB string path_get_filename(string path);
+OSTD_LIB string path_strip_one_extension(string path);
+OSTD_LIB string path_strip_all_extensions(string path);
 
 #ifdef OSTD_IMPL
 

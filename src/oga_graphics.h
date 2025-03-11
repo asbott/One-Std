@@ -597,8 +597,8 @@ typedef enum Oga_Device_Pick_Flag {
     OGA_DEVICE_PICK_REQUIRE_CPU = 1 << 5,
 } Oga_Device_Pick_Flag;
 
-u64 oga_query_devices(Oga_Device *buffer, u64 buffer_count);
-Oga_Device *oga_get_devices(Allocator a, u64 *count);
+OSTD_LIB u64 oga_query_devices(Oga_Device *buffer, u64 buffer_count);
+OSTD_LIB Oga_Device *oga_get_devices(Allocator a, u64 *count);
 
 typedef struct Oga_Pick_Device_Result {
     bool passed;
@@ -608,7 +608,7 @@ typedef struct Oga_Pick_Device_Result {
     Oga_Device_Feature_Flag failed_preferred_features;
 } Oga_Pick_Device_Result;
 // todo(charlie) add consideration for heap properties and usage flags
-Oga_Pick_Device_Result oga_pick_device(Oga_Device_Pick_Flag pick_flags, Oga_Device_Feature_Flag required_features, Oga_Device_Feature_Flag preferred_features);
+OSTD_LIB Oga_Pick_Device_Result oga_pick_device(Oga_Device_Pick_Flag pick_flags, Oga_Device_Feature_Flag required_features, Oga_Device_Feature_Flag preferred_features);
 
 //////////
 /// Oga Context
@@ -620,7 +620,7 @@ typedef struct Oga_Logical_Engines_Create_Desc {
 } Oga_Logical_Engines_Create_Desc;
 
 // Default allocator of non is specified in Oga_Context_Desc::state_allocator
-void* oga_state_allocator_proc(Allocator_Message msg, void *data, void *old, u64 old_n, u64 n, u64 alignment, u64 flags);
+OSTD_LIB void* oga_state_allocator_proc(Allocator_Message msg, void *data, void *old, u64 old_n, u64 n, u64 alignment, u64 flags);
 
 
 typedef struct Oga_Allocator_Row {
@@ -667,11 +667,11 @@ typedef struct Oga_Context {
     Oga_State_Allocator_Data default_allocator_data; // Backing for Allocator::data
 } Oga_Context;
 
-Oga_Result oga_init_context(Oga_Device target_device, Oga_Context_Desc desc, Oga_Context **context);
-void oga_uninit_context(Oga_Context *context);
+OSTD_LIB Oga_Result oga_init_context(Oga_Device target_device, Oga_Context_Desc desc, Oga_Context **context);
+OSTD_LIB void oga_uninit_context(Oga_Context *context);
 
-void oga_wait_engine_idle(Oga_Logical_Engine engine);
-void oga_wait_context_idle(Oga_Context *context);
+OSTD_LIB void oga_wait_engine_idle(Oga_Logical_Engine engine);
+OSTD_LIB void oga_wait_context_idle(Oga_Context *context);
 
 //////////
 /// Swap chain
@@ -717,14 +717,14 @@ typedef struct Oga_Swapchain {
     Oga_Format image_format;
 } Oga_Swapchain;
 
-bool get_preferred_swapchain_format(Oga_Context *context, Oga_Format *wanted_formats, u64 count, Oga_Format *format);
+OSTD_LIB bool get_preferred_swapchain_format(Oga_Context *context, Oga_Format *wanted_formats, u64 count, Oga_Format *format);
 
-Oga_Result oga_init_swapchain(Oga_Context *context, Oga_Swapchain_Desc desc, Oga_Swapchain **swapchain);
-void oga_uninit_swapchain(Oga_Swapchain *swapchain);
+OSTD_LIB Oga_Result oga_init_swapchain(Oga_Context *context, Oga_Swapchain_Desc desc, Oga_Swapchain **swapchain);
+OSTD_LIB void oga_uninit_swapchain(Oga_Swapchain *swapchain);
 
 struct Oga_Gpu_Latch;
 struct Oga_Cpu_Latch;
-Oga_Result oga_get_next_swapchain_image(Oga_Swapchain *swapchain, u64 timeout, struct Oga_Gpu_Latch *signal_gpu_latch, struct Oga_Cpu_Latch *signal_cpu_latch, u64 *image_index); 
+OSTD_LIB Oga_Result oga_get_next_swapchain_image(Oga_Swapchain *swapchain, u64 timeout, struct Oga_Gpu_Latch *signal_gpu_latch, struct Oga_Cpu_Latch *signal_cpu_latch, u64 *image_index); 
 
 typedef struct Oga_Present_Desc {
     Oga_Logical_Engine engine;
@@ -732,7 +732,7 @@ typedef struct Oga_Present_Desc {
     struct Oga_Gpu_Latch **wait_gpu_latches;
     u64 image_index;
 } Oga_Present_Desc;
-Oga_Result oga_submit_present(Oga_Swapchain *swapchain, Oga_Present_Desc desc);
+OSTD_LIB Oga_Result oga_submit_present(Oga_Swapchain *swapchain, Oga_Present_Desc desc);
 
 //////////
 /// GPU Programs
@@ -758,8 +758,8 @@ typedef struct Oga_Program {
 // Goes through OSL to compile osl lang to target drivers
 // Oga_Result oga_compile_program_for_target
 
-Oga_Result oga_init_program(Oga_Context *context, Oga_Program_Desc desc, Oga_Program **program);
-void oga_uninit_program(Oga_Program *program);
+OSTD_LIB Oga_Result oga_init_program(Oga_Context *context, Oga_Program_Desc desc, Oga_Program **program);
+OSTD_LIB void oga_uninit_program(Oga_Program *program);
 
 //////////
 /// Render Passes
@@ -819,8 +819,8 @@ typedef struct Oga_Binding_List_Layout {
     u64 allocated_lists_count;
 } Oga_Binding_List_Layout;
 
-Oga_Result oga_init_binding_list_layout(Oga_Context *context, Oga_Binding_List_Layout_Desc desc, Oga_Binding_List_Layout **layout);
-void oga_uninit_binding_list_layout(Oga_Binding_List_Layout *layout);
+OSTD_LIB Oga_Result oga_init_binding_list_layout(Oga_Context *context, Oga_Binding_List_Layout_Desc desc, Oga_Binding_List_Layout **layout);
+OSTD_LIB void oga_uninit_binding_list_layout(Oga_Binding_List_Layout *layout);
 
 struct Oga_Image_View;
 struct Oga_Block_View;
@@ -854,7 +854,7 @@ typedef struct Oga_Binding_List {
     Oga_Binding_List_Layout *layout;
 } Oga_Binding_List;
 
-Oga_Result oga_push_binding_list(Oga_Binding_List_Layout *layout, Oga_Binding_List_Desc desc, Oga_Binding_List **list);
+OSTD_LIB Oga_Result oga_push_binding_list(Oga_Binding_List_Layout *layout, Oga_Binding_List_Desc desc, Oga_Binding_List **list);
 
 // I looked through various devices and they all report these numbers
 // Including RTX 5090 as well as GT 710 (vulkan)
@@ -1002,10 +1002,10 @@ typedef struct Oga_Render_Pass {
     Oga_Vertex_List_Layout_Desc vertex_input_layout;
 } Oga_Render_Pass;
 
-Oga_Result oga_init_render_passes(Oga_Context *context, Oga_Render_Pass_Desc* descs, Oga_Render_Pass **render_passes, u64 render_pass_count);
+OSTD_LIB Oga_Result oga_init_render_passes(Oga_Context *context, Oga_Render_Pass_Desc* descs, Oga_Render_Pass **render_passes, u64 render_pass_count);
 
-Oga_Result oga_init_render_pass(Oga_Context *context, Oga_Render_Pass_Desc desc, Oga_Render_Pass **render_pass);
-void oga_uninit_render_pass(Oga_Render_Pass *render_pass);
+OSTD_LIB Oga_Result oga_init_render_pass(Oga_Context *context, Oga_Render_Pass_Desc desc, Oga_Render_Pass **render_pass);
+OSTD_LIB void oga_uninit_render_pass(Oga_Render_Pass *render_pass);
 
 //////////
 /// Synchronization
@@ -1016,18 +1016,18 @@ typedef struct Oga_Gpu_Latch {
     Oga_Context *context;
 } Oga_Gpu_Latch;
 
-Oga_Result oga_init_gpu_latch(Oga_Context *context, Oga_Gpu_Latch **gpu_latch);
-void oga_uninit_gpu_latch(Oga_Gpu_Latch *gpu_latch);
+OSTD_LIB Oga_Result oga_init_gpu_latch(Oga_Context *context, Oga_Gpu_Latch **gpu_latch);
+OSTD_LIB void oga_uninit_gpu_latch(Oga_Gpu_Latch *gpu_latch);
 
 // Cpu latch; for synchronizing cpu with gpu. Signalled on gpu, waited on cpu.
 typedef struct Oga_Cpu_Latch {
     void *id;
     Oga_Context *context;
 } Oga_Cpu_Latch;
-Oga_Result oga_init_cpu_latch(Oga_Context *context, Oga_Cpu_Latch **cpu_latch, bool start_signaled);
-void oga_uninit_cpu_latch(Oga_Cpu_Latch *cpu_latch);
-Oga_Result oga_wait_latch(Oga_Cpu_Latch *cpu_latch);
-Oga_Result oga_reset_latch(Oga_Cpu_Latch *cpu_latch);
+OSTD_LIB Oga_Result oga_init_cpu_latch(Oga_Context *context, Oga_Cpu_Latch **cpu_latch, bool start_signaled);
+OSTD_LIB void oga_uninit_cpu_latch(Oga_Cpu_Latch *cpu_latch);
+OSTD_LIB Oga_Result oga_wait_latch(Oga_Cpu_Latch *cpu_latch);
+OSTD_LIB Oga_Result oga_reset_latch(Oga_Cpu_Latch *cpu_latch);
 
 //////////
 /// Memory & Views
@@ -1047,11 +1047,11 @@ typedef struct Oga_Memory_Pointer {
 #endif 
 } Oga_Memory_Pointer;
 
-Oga_Result oga_allocate_memory(Oga_Context *context, u64 size, Oga_Memory_Property_Flag properties, Oga_Memory_Usage usage, Oga_Memory_Pointer *ptr);
-void oga_deallocate_memory(Oga_Memory_Pointer ptr);
-Oga_Result oga_map_memory(Oga_Memory_Pointer ptr, u64 size, void **mapped_mem);
-void oga_unmap_memory(Oga_Memory_Pointer ptr);
-Oga_Result oga_memory_offset(Oga_Memory_Pointer ptr, s64 offset, Oga_Memory_Pointer *result_ptr);
+OSTD_LIB Oga_Result oga_allocate_memory(Oga_Context *context, u64 size, Oga_Memory_Property_Flag properties, Oga_Memory_Usage usage, Oga_Memory_Pointer *ptr);
+OSTD_LIB void oga_deallocate_memory(Oga_Memory_Pointer ptr);
+OSTD_LIB Oga_Result oga_map_memory(Oga_Memory_Pointer ptr, u64 size, void **mapped_mem);
+OSTD_LIB void oga_unmap_memory(Oga_Memory_Pointer ptr);
+OSTD_LIB Oga_Result oga_memory_offset(Oga_Memory_Pointer ptr, s64 offset, Oga_Memory_Pointer *result_ptr);
 
 
 typedef struct Oga_Memory_View_Desc  {
@@ -1074,11 +1074,11 @@ typedef struct Oga_Index_List_View {
     u64 size;
 } Oga_Index_List_View;
 
-Oga_Result oga_init_vertex_list_view(Oga_Context *context, Oga_Memory_View_Desc desc, Oga_Vertex_List_View **vlist);
-void oga_uninit_vertex_list_view(Oga_Vertex_List_View *vlist);
+OSTD_LIB Oga_Result oga_init_vertex_list_view(Oga_Context *context, Oga_Memory_View_Desc desc, Oga_Vertex_List_View **vlist);
+OSTD_LIB void oga_uninit_vertex_list_view(Oga_Vertex_List_View *vlist);
 
-Oga_Result oga_init_index_list_view(Oga_Context *context, Oga_Memory_View_Desc desc, Oga_Index_List_View **ilist);
-void oga_uninit_index_list_view(Oga_Index_List_View *ilist);
+OSTD_LIB Oga_Result oga_init_index_list_view(Oga_Context *context, Oga_Memory_View_Desc desc, Oga_Index_List_View **ilist);
+OSTD_LIB void oga_uninit_index_list_view(Oga_Index_List_View *ilist);
 
 /// Image view
 
@@ -1107,10 +1107,10 @@ typedef struct Oga_Image_View {
     bool linear_tiling;
 } Oga_Image_View;
 
-Oga_Result oga_init_image_view(Oga_Context *context, Oga_Image_View_Desc desc, Oga_Image_View **image);
-void oga_uninit_image_view(Oga_Image_View *image);
+OSTD_LIB Oga_Result oga_init_image_view(Oga_Context *context, Oga_Image_View_Desc desc, Oga_Image_View **image);
+OSTD_LIB void oga_uninit_image_view(Oga_Image_View *image);
 
-u64 oga_get_image_memory_requirement(Oga_Context *context, Oga_Image_View_Desc desc);
+OSTD_LIB u64 oga_get_image_memory_requirement(Oga_Context *context, Oga_Image_View_Desc desc);
 
 typedef struct Oga_FBuffer_View {
     void *id;
@@ -1121,8 +1121,8 @@ typedef struct Oga_FBuffer_View {
     bool linear_tiling;
 } Oga_FBuffer_View;
 
-Oga_Result oga_init_fbuffer_view(Oga_Context *context, Oga_Image_View_Desc desc, Oga_FBuffer_View **fbuffer);
-void oga_uninit_fbuffer_view(Oga_FBuffer_View *fbuffer);
+OSTD_LIB Oga_Result oga_init_fbuffer_view(Oga_Context *context, Oga_Image_View_Desc desc, Oga_FBuffer_View **fbuffer);
+OSTD_LIB void oga_uninit_fbuffer_view(Oga_FBuffer_View *fbuffer);
 
 /// Image copy target view
 
@@ -1152,8 +1152,8 @@ typedef struct Oga_Optimal_Copy_View {
     Oga_Optimal_Copy_Flag flags;
 } Oga_Optimal_Copy_View;
 
-Oga_Result oga_init_optimal_copy_view(Oga_Context *context, Oga_Optimal_Copy_View_Desc desc, Oga_Optimal_Copy_View **image);
-void oga_uninit_optimal_copy_view(Oga_Optimal_Copy_View *image);
+OSTD_LIB Oga_Result oga_init_optimal_copy_view(Oga_Context *context, Oga_Optimal_Copy_View_Desc desc, Oga_Optimal_Copy_View **image);
+OSTD_LIB void oga_uninit_optimal_copy_view(Oga_Optimal_Copy_View *image);
 
 typedef struct Oga_Render_Image_View_Desc {
     Oga_Memory_Pointer memory_pointer;
@@ -1184,13 +1184,13 @@ typedef struct Oga_Block_View {
     Oga_Memory_Pointer memory_pointer;
     u64 size;
 } Oga_Block_View;
-Oga_Result oga_init_block_view(Oga_Context *context, Oga_Memory_View_Desc desc, Oga_Block_View **buffer);
-void oga_uninit_block_view(Oga_Block_View *buffer);
+OSTD_LIB Oga_Result oga_init_block_view(Oga_Context *context, Oga_Memory_View_Desc desc, Oga_Block_View **buffer);
+OSTD_LIB void oga_uninit_block_view(Oga_Block_View *buffer);
 
 // todo(charlie) #validation
 // Keep track of all init()'s and report them here if they were not uninitted
 // This is really only here to get validation/debug layer messages for leaked resources
-void oga_reset(void);
+OSTD_LIB void oga_reset(void);
 
 
 //////////
@@ -1222,21 +1222,21 @@ typedef struct Oga_Command_List {
 #endif
 } Oga_Command_List;
 
-Oga_Result oga_init_command_pool(Oga_Context *context, Oga_Command_Pool_Desc desc, Oga_Command_Pool **pool);
+OSTD_LIB Oga_Result oga_init_command_pool(Oga_Context *context, Oga_Command_Pool_Desc desc, Oga_Command_Pool **pool);
  // This will free all command lists, so you do not need to explicitly free each command list.
-void oga_uninit_command_pool(Oga_Command_Pool *pool);
-void oga_reset_command_pool(Oga_Command_Pool *pool);
+OSTD_LIB void oga_uninit_command_pool(Oga_Command_Pool *pool);
+OSTD_LIB void oga_reset_command_pool(Oga_Command_Pool *pool);
 
-Oga_Result oga_get_command_lists(Oga_Command_Pool *pool, Oga_Command_List *lists, u64 list_count);
-void oga_release_command_lists(Oga_Command_List *lists, u64 list_count);
+OSTD_LIB Oga_Result oga_get_command_lists(Oga_Command_Pool *pool, Oga_Command_List *lists, u64 list_count);
+OSTD_LIB void oga_release_command_lists(Oga_Command_List *lists, u64 list_count);
 
 
 
 typedef u64 Oga_Command_List_Usage_Flag;
 #define OGA_COMMAND_LIST_USAGE_ONE_TIME_SUBMIT (1 << 0)
 
-Oga_Result oga_cmd_begin(Oga_Command_List cmd, Oga_Command_List_Usage_Flag flags);
-Oga_Result oga_cmd_end(Oga_Command_List cmd);
+OSTD_LIB Oga_Result oga_cmd_begin(Oga_Command_List cmd, Oga_Command_List_Usage_Flag flags);
+OSTD_LIB Oga_Result oga_cmd_end(Oga_Command_List cmd);
 
 typedef struct Oga_Submit_Command_List_Desc {
     Oga_Logical_Engine engine; 
@@ -1246,7 +1246,7 @@ typedef struct Oga_Submit_Command_List_Desc {
     u64 signal_gpu_latch_count; 
     Oga_Cpu_Latch *signal_cpu_latch;
 } Oga_Submit_Command_List_Desc;
-Oga_Result oga_submit_command_list(Oga_Command_List cmd, Oga_Submit_Command_List_Desc desc);
+OSTD_LIB Oga_Result oga_submit_command_list(Oga_Command_List cmd, Oga_Submit_Command_List_Desc desc);
 
 typedef struct Oga_Gpu_Timestamp_Pool {
     void *id;
@@ -1255,13 +1255,13 @@ typedef struct Oga_Gpu_Timestamp_Pool {
     u64 written_timestamp_count;
 } Oga_Gpu_Timestamp_Pool;
 
-Oga_Result oga_init_gpu_timestamp_pool(Oga_Context *context, u64 timestamp_count, Oga_Gpu_Timestamp_Pool **pool);
-void oga_uninit_gpu_timestamp_pool(Oga_Gpu_Timestamp_Pool *pool);
+OSTD_LIB Oga_Result oga_init_gpu_timestamp_pool(Oga_Context *context, u64 timestamp_count, Oga_Gpu_Timestamp_Pool **pool);
+OSTD_LIB void oga_uninit_gpu_timestamp_pool(Oga_Gpu_Timestamp_Pool *pool);
 
-void oga_cmd_reset_timestamp_pool(Oga_Command_List cmd, Oga_Gpu_Timestamp_Pool *pool);
-void oga_cmd_write_timestamp(Oga_Command_List cmd, Oga_Gpu_Timestamp_Pool *pool);
+OSTD_LIB void oga_cmd_reset_timestamp_pool(Oga_Command_List cmd, Oga_Gpu_Timestamp_Pool *pool);
+OSTD_LIB void oga_cmd_write_timestamp(Oga_Command_List cmd, Oga_Gpu_Timestamp_Pool *pool);
 
-Oga_Result oga_read_timestamps(Oga_Gpu_Timestamp_Pool *pool, f64 *nanosecond_timestamps, bool wait);
+OSTD_LIB Oga_Result oga_read_timestamps(Oga_Gpu_Timestamp_Pool *pool, f64 *nanosecond_timestamps, bool wait);
 
 typedef u64 Oga_Msaa_Resolve_Mode_Flag;
 #define OGA_MSAA_RESOLVE_MODE_NONE    0
@@ -1304,10 +1304,10 @@ typedef struct Oga_Begin_Render_Pass_Desc {
     Oga_Render_Attachment_Desc *attachments;
 } Oga_Begin_Render_Pass_Desc;
 
-void oga_cmd_begin_render_pass(Oga_Command_List cmd, Oga_Render_Pass *render_pass, Oga_Begin_Render_Pass_Desc desc);
-void oga_cmd_end_render_pass(Oga_Command_List cmd, Oga_Render_Pass *render_pass);
+OSTD_LIB void oga_cmd_begin_render_pass(Oga_Command_List cmd, Oga_Render_Pass *render_pass, Oga_Begin_Render_Pass_Desc desc);
+OSTD_LIB void oga_cmd_end_render_pass(Oga_Command_List cmd, Oga_Render_Pass *render_pass);
 
-void oga_cmd_bind_render_pass_binding_list(Oga_Command_List cmd, Oga_Render_Pass *pass, Oga_Binding_List *list);
+OSTD_LIB void oga_cmd_bind_render_pass_binding_list(Oga_Command_List cmd, Oga_Render_Pass *pass, Oga_Binding_List *list);
 
 typedef enum Oga_Draw_Type {
     OGA_DRAW_INSTANCED,
@@ -1355,23 +1355,23 @@ typedef struct Oga_Draw_Desc {
     
 } Oga_Draw_Desc;
 
-Oga_Result oga_cmd_draw(Oga_Command_List cmd, Oga_Draw_Desc desc);
+OSTD_LIB Oga_Result oga_cmd_draw(Oga_Command_List cmd, Oga_Draw_Desc desc);
 
-void oga_cmd_copy_linear(Oga_Command_List cmd, Oga_Memory_Pointer dst, Oga_Memory_Pointer src, u64 size);
+OSTD_LIB void oga_cmd_copy_linear(Oga_Command_List cmd, Oga_Memory_Pointer dst, Oga_Memory_Pointer src, u64 size);
 
 typedef struct Oga_Optimal_Copy_Desc {
     s64 offset_x, offset_y, offset_z;
     u64 width, height, depth;
 } Oga_Optimal_Copy_Desc;
-void oga_cmd_copy_linear_to_image(Oga_Command_List cmd, Oga_Optimal_Copy_View *dst_view, Oga_Optimal_Copy_Desc dst_desc, Oga_Memory_Pointer src);
-void oga_cmd_copy_image_to_linear(Oga_Command_List cmd, Oga_Memory_Pointer dst, Oga_Optimal_Copy_View *src_view, Oga_Optimal_Copy_Desc src_desc);
-void oga_cmd_copy_image(Oga_Command_List cmd, Oga_Optimal_Copy_View *dst_view, Oga_Optimal_Copy_Desc dst_desc, Oga_Optimal_Copy_View *src_view, Oga_Optimal_Copy_Desc src_desc);
+OSTD_LIB void oga_cmd_copy_linear_to_image(Oga_Command_List cmd, Oga_Optimal_Copy_View *dst_view, Oga_Optimal_Copy_Desc dst_desc, Oga_Memory_Pointer src);
+OSTD_LIB void oga_cmd_copy_image_to_linear(Oga_Command_List cmd, Oga_Memory_Pointer dst, Oga_Optimal_Copy_View *src_view, Oga_Optimal_Copy_Desc src_desc);
+OSTD_LIB void oga_cmd_copy_image(Oga_Command_List cmd, Oga_Optimal_Copy_View *dst_view, Oga_Optimal_Copy_Desc dst_desc, Oga_Optimal_Copy_View *src_view, Oga_Optimal_Copy_Desc src_desc);
 
-void oga_cmd_fill_image(Oga_Command_List cmd, Oga_Optimal_Copy_View *dst_view, float4 color);
+OSTD_LIB void oga_cmd_fill_image(Oga_Command_List cmd, Oga_Optimal_Copy_View *dst_view, float4 color);
 
 #ifdef OGA_IMPL_AUTO
     #if (OS_FLAGS & OS_FLAG_WEB)
-        #define OGA_IMPL_WEBGPU
+        // webgl and webgpu are awful so we will only support software rendering for web.
     #elif (OS_FLAGS & OS_FLAG_WINDOWS)
         #define OGA_IMPL_D3D12
     #elif (OS_FLAGS & OS_FLAG_APPLE)
@@ -1383,7 +1383,7 @@ void oga_cmd_fill_image(Oga_Command_List cmd, Oga_Optimal_Copy_View *dst_view, f
     #endif
 #endif // OGA_IMPL_AUTO
 
-#if !defined(OGA_IMPL_WEBGPU) && !defined(OGA_IMPL_D3D12) && !defined(OGA_IMPL_METAL) && !defined(OGA_IMPL_VULKAN)
+#if !defined(OGA_IMPL_D3D12) && !defined(OGA_IMPL_METAL) && !defined(OGA_IMPL_VULKAN)
 
     #define OGA_NO_IMPL
 
@@ -1720,23 +1720,6 @@ inline string oga_format_str(Oga_Format f);
 #endif // (OS_FLAGS & (OS_FLAG_WINDOWS | OS_FLAG_LINUX | OS_FLAG_MACOS | OS_FLAG_IOS | OS_FLAG_ANDROID))
 
 // OGA_IMPL_VULKAN
-#elif defined(OGA_IMPL_WEBGPU)
-
-/////////////////////////////////////////////////////
-//////
-// :WebGPU
-//////
-/////////////////////////////////////////////////////
-
-#define OGA_OSL_TARGET OSL_TARGET_WGPU
-
-#if !(OS_FLAGS & OS_FLAG_WEB)
-    #error WebGPU can only be implemented when targetting web (Emscripten)
-#else
-    #include "graphics_webgpu.h"
-#endif
-
-// OGA_IMPL_WEBGPU
 #elif defined(OGA_IMPL_D3D12)
 
 /////////////////////////////////////////////////////

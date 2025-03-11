@@ -444,6 +444,10 @@ typedef u32 sys_uint;
     } while(0)
 #define assert(x) assertmsg(x, "")
 
+#ifndef OSTD_LIB
+    #define OSTD_LIB
+#endif
+
 inline void *memcpy(void *dst, const void * src, sys_uint n);
 // todo(charlie) inline asm / dynamically load crt's if msvc
 inline void *memset(void *dst, s32 c, sys_uint n) {
@@ -1540,38 +1544,38 @@ typedef u64 File_Open_Flags;
 #define FILE_OPEN_RESET  (1 << 2)
 #define FILE_OPEN_CREATE (1 << 3)
 
-File_Handle sys_get_stdout(void);
-File_Handle sys_get_stderr(void);
+OSTD_LIB File_Handle sys_get_stdout(void);
+OSTD_LIB File_Handle sys_get_stderr(void);
 
-void sys_set_stdout(File_Handle h);
-void sys_set_stderr(File_Handle h);
+OSTD_LIB void sys_set_stdout(File_Handle h);
+OSTD_LIB void sys_set_stderr(File_Handle h);
 
-s64 sys_write(File_Handle h, void *data, u64 size);
-s64 sys_write_string(File_Handle h, string s);
+OSTD_LIB s64 sys_write(File_Handle h, void *data, u64 size);
+OSTD_LIB s64 sys_write_string(File_Handle h, string s);
 
-s64 sys_read(File_Handle h, void *buffer, u64 buffer_size);
+OSTD_LIB s64 sys_read(File_Handle h, void *buffer, u64 buffer_size);
 
-bool sys_make_pipe(File_Handle *read, File_Handle *write);
+OSTD_LIB bool sys_make_pipe(File_Handle *read, File_Handle *write);
 
-void sys_close(File_Handle h);
+OSTD_LIB void sys_close(File_Handle h);
 
 // Returns 0 on failure
-File_Handle sys_open_file(string path, File_Open_Flags flags);
-u64 sys_get_file_size(File_Handle f);
+OSTD_LIB File_Handle sys_open_file(string path, File_Open_Flags flags);
+OSTD_LIB u64 sys_get_file_size(File_Handle f);
 
-bool sys_make_directory(string path, bool recursive);
-bool sys_remove_directory(string path, bool recursive);
-bool sys_is_file(string path);
-bool sys_is_directory(string path);
+OSTD_LIB bool sys_make_directory(string path, bool recursive);
+OSTD_LIB bool sys_remove_directory(string path, bool recursive);
+OSTD_LIB bool sys_is_file(string path);
+OSTD_LIB bool sys_is_directory(string path);
 
 typedef bool (*Walk_Proc)(string); // Return true to continue, false to break
-void sys_walk_directory(string path, bool recursive, bool walk_directories, Walk_Proc walk_proc);
+OSTD_LIB void sys_walk_directory(string path, bool recursive, bool walk_directories, Walk_Proc walk_proc);
 
 typedef struct Easy_Command_Result {
     s64 exit_code;
     bool process_start_success;
 } Easy_Command_Result;
-Easy_Command_Result sys_run_command_easy(string command_line, File_Handle stdout, File_Handle stderr, string workspace_dir);
+OSTD_LIB Easy_Command_Result sys_run_command_easy(string command_line, File_Handle stdout, File_Handle stderr, string workspace_dir);
 
 //////
 // Sockets
@@ -1623,18 +1627,18 @@ typedef enum Socket_Protocol {
     SOCKET_PROTOCOL_UDP,
 } Socket_Protocol;
 
-u32 sys_convert_address_string(string address);
+OSTD_LIB u32 sys_convert_address_string(string address);
 
-Socket_Result sys_socket_init(Socket *socket, Socket_Domain domain, Socket_Type type, Socket_Protocol protocol);
-Socket_Result sys_socket_bind(Socket socket, u32 address, u16 port);
-Socket_Result sys_socket_listen(Socket socket, s64 backlog);
-Socket_Result sys_socket_accept(Socket socket, Socket *accepted, u64 timeout_ms);
-Socket_Result sys_socket_connect(Socket sock, u32 address, u16 port, Socket_Domain domain);
-Socket_Result sys_socket_send(Socket socket, void *data, u64 length, u64 *sent);
-Socket_Result sys_socket_recv(Socket socket, void *buffer, u64 length, u64 *sent);
-Socket_Result sys_socket_close(Socket socket);
-Socket_Result sys_socket_set_blocking(Socket *socket, bool blocking);
-Socket_Result sys_set_socket_blocking_timeout(Socket socket, u64 ms);
+OSTD_LIB Socket_Result sys_socket_init(Socket *socket, Socket_Domain domain, Socket_Type type, Socket_Protocol protocol);
+OSTD_LIB Socket_Result sys_socket_bind(Socket socket, u32 address, u16 port);
+OSTD_LIB Socket_Result sys_socket_listen(Socket socket, s64 backlog);
+OSTD_LIB Socket_Result sys_socket_accept(Socket socket, Socket *accepted, u64 timeout_ms);
+OSTD_LIB Socket_Result sys_socket_connect(Socket sock, u32 address, u16 port, Socket_Domain domain);
+OSTD_LIB Socket_Result sys_socket_send(Socket socket, void *data, u64 length, u64 *sent);
+OSTD_LIB Socket_Result sys_socket_recv(Socket socket, void *buffer, u64 length, u64 *sent);
+OSTD_LIB Socket_Result sys_socket_close(Socket socket);
+OSTD_LIB Socket_Result sys_socket_set_blocking(Socket *socket, bool blocking);
+OSTD_LIB Socket_Result sys_set_socket_blocking_timeout(Socket socket, u64 ms);
 
 
 //////
@@ -1643,11 +1647,11 @@ Socket_Result sys_set_socket_blocking_timeout(Socket socket, u64 ms);
 
 typedef void* Thread_Key;
 
-u64 sys_get_current_thread_id(void);
+OSTD_LIB u64 sys_get_current_thread_id(void);
 
-bool sys_thread_key_init(Thread_Key *key);
-bool sys_thread_key_write(Thread_Key key, void* value);
-void* sys_thread_key_read(Thread_Key key);
+OSTD_LIB bool sys_thread_key_init(Thread_Key *key);
+OSTD_LIB bool sys_thread_key_write(Thread_Key key, void* value);
+OSTD_LIB void* sys_thread_key_read(Thread_Key key);
 
 struct Thread;
 typedef s64 (*Thread_Proc)(struct Thread*);
@@ -1659,20 +1663,20 @@ typedef struct Thread {
     bool is_suspended;
 } Thread;
 
-bool sys_thread_init(Thread *thread, Thread_Proc proc, void *userdata);
-void sys_thread_start(Thread *thread);
-void sys_thread_join(Thread *thread);
-void sys_thread_close(Thread *thread);
+OSTD_LIB bool sys_thread_init(Thread *thread, Thread_Proc proc, void *userdata);
+OSTD_LIB void sys_thread_start(Thread *thread);
+OSTD_LIB void sys_thread_join(Thread *thread);
+OSTD_LIB void sys_thread_close(Thread *thread);
 
 typedef struct Mutex {
     void *handle;
     u8 handle_backing[40]; // This is for windows critical section;
 } Mutex;
 
-bool sys_mutex_init(Mutex *mutex);
-bool sys_mutex_uninit(Mutex *mutex);
-void sys_mutex_acquire(Mutex mutex);
-void sys_mutex_release(Mutex mutex);
+OSTD_LIB bool sys_mutex_init(Mutex *mutex);
+OSTD_LIB bool sys_mutex_uninit(Mutex *mutex);
+OSTD_LIB void sys_mutex_acquire(Mutex mutex);
+OSTD_LIB void sys_mutex_release(Mutex mutex);
 
 //////
 // Surfaces (Window)
@@ -1737,29 +1741,29 @@ unit_local inline Surface_Desc Surface_Desc_default(void) {
     desc.flags = 0;
     return desc;
 }
-Surface_Handle sys_make_surface(Surface_Desc desc);
-void surface_close(Surface_Handle s);
+OSTD_LIB Surface_Handle sys_make_surface(Surface_Desc desc);
+OSTD_LIB void surface_close(Surface_Handle s);
 
 
 #else // !(OS_FLAGS & OS_FLAG_HAS_WINDOW_SYSTEM)
 
-Surface_Handle sys_get_surface(void);
+OSTD_LIB Surface_Handle sys_get_surface(void);
 
 #endif // !(OS_FLAGS & OS_FLAG_HAS_WINDOW_SYSTEM)
 
-void surface_poll_events(Surface_Handle surface);
-bool surface_should_close(Surface_Handle s);
+OSTD_LIB void surface_poll_events(Surface_Handle surface);
+OSTD_LIB bool surface_should_close(Surface_Handle s);
 
 // Will return false on systems where the flag isn't implemented
-bool surface_set_flags(Surface_Handle h, Surface_Flags flags);
-bool surface_unset_flags(Surface_Handle h, Surface_Flags flags);
+OSTD_LIB bool surface_set_flags(Surface_Handle h, Surface_Flags flags);
+OSTD_LIB bool surface_unset_flags(Surface_Handle h, Surface_Flags flags);
 
-bool surface_get_framebuffer_size(Surface_Handle h, s64 *width, s64 *height);
+OSTD_LIB bool surface_get_framebuffer_size(Surface_Handle h, s64 *width, s64 *height);
 
-void* surface_map_pixels(Surface_Handle h);
-void surface_blit_pixels(Surface_Handle h);
+OSTD_LIB void* surface_map_pixels(Surface_Handle h);
+OSTD_LIB void surface_blit_pixels(Surface_Handle h);
 
-bool surface_get_monitor(Surface_Handle h, Physical_Monitor *monitor);
+OSTD_LIB bool surface_get_monitor(Surface_Handle h, Physical_Monitor *monitor);
 
 #endif // !OSTD_HEADLESS
 
@@ -1767,7 +1771,7 @@ bool surface_get_monitor(Surface_Handle h, Physical_Monitor *monitor);
 // Time
 //////
 
-float64 sys_get_seconds_monotonic(void);
+OSTD_LIB float64 sys_get_seconds_monotonic(void);
 
 //////
 // Process & Thread
@@ -1775,8 +1779,8 @@ float64 sys_get_seconds_monotonic(void);
 
 typedef void* Thread_Handle;
 
-Thread_Handle sys_get_current_thread(void);
-void sys_set_thread_affinity_mask(Thread_Handle thread, u64 bits);
+OSTD_LIB Thread_Handle sys_get_current_thread(void);
+OSTD_LIB void sys_set_thread_affinity_mask(Thread_Handle thread, u64 bits);
 
 typedef enum Priority_Level {
     SYS_PRIORITY_LOW,
@@ -1784,18 +1788,18 @@ typedef enum Priority_Level {
     SYS_PRIORITY_HIGH,
 } Priority_Level;
 
-void sys_set_local_process_priority_level(Priority_Level level);
-void sys_set_thread_priority_level(Thread_Handle thread, Priority_Level level);
+OSTD_LIB void sys_set_local_process_priority_level(Priority_Level level);
+OSTD_LIB void sys_set_thread_priority_level(Thread_Handle thread, Priority_Level level);
 
-void *sys_load_library(string s);
-void sys_close_library(void *lib);
-void* sys_get_library_symbol(void *lib, string symbol);
+OSTD_LIB void *sys_load_library(string s);
+OSTD_LIB void sys_close_library(void *lib);
+OSTD_LIB void* sys_get_library_symbol(void *lib, string symbol);
 
 //////
 // Debug
 //////
 
-void sys_print_stack_trace(File_Handle handle);
+OSTD_LIB void sys_print_stack_trace(File_Handle handle);
 
 //////
 // System Constants
@@ -8117,14 +8121,14 @@ typedef struct Arena {
     u64 allocated_size;
 } Arena;
 
-Arena make_arena(u64 reserved_size, u64 initial_allocated_size);
-void *arena_push(Arena *arena, u64 size);
-void *arena_push_copy(Arena *arena, void *src, u64 size);
-void arena_pop(Arena *arena, u64 size);
-void arena_reset(Arena *arena);
-void free_arena(Arena arena);
+OSTD_LIB Arena make_arena(u64 reserved_size, u64 initial_allocated_size);
+OSTD_LIB void *arena_push(Arena *arena, u64 size);
+OSTD_LIB void *arena_push_copy(Arena *arena, void *src, u64 size);
+OSTD_LIB void arena_pop(Arena *arena, u64 size);
+OSTD_LIB void arena_reset(Arena *arena);
+OSTD_LIB void free_arena(Arena arena);
 
-void* arena_allocator_proc(Allocator_Message msg, void *data, void *old, u64 old_n, u64 n, u64 alignment, u64 flags);
+unit_local void* arena_allocator_proc(Allocator_Message msg, void *data, void *old, u64 old_n, u64 n, u64 alignment, u64 flags);
 unit_local inline Allocator arena_allocator(Arena *a) { return (Allocator) { a, arena_allocator_proc }; }
 
 /////
@@ -8134,45 +8138,25 @@ unit_local inline Allocator arena_allocator(Arena *a) { return (Allocator) { a, 
 // todo(charlie) temporary storage might get bloated with large temporary allocations,
 // so we should provide a way to shrink temporary storage.
 
-Allocator get_temp(void);
-void reset_temporary_storage(void);
-void *tallocate(size_t n);
+OSTD_LIB Allocator get_temp(void);
+OSTD_LIB void reset_temporary_storage(void);
+OSTD_LIB void *tallocate(size_t n);
 
 
 
 
-inline void *allocate(Allocator a, u64 n) {
-    return a.proc(ALLOCATOR_ALLOCATE, a.data, 0, 0, n, 0, 0);
-}
-inline void *reallocate(Allocator a, void *p, u64 old_n, u64 n) {
-    return a.proc(ALLOCATOR_REALLOCATE, a.data, p, old_n, n, 0, 0);
-}
-inline void deallocate(Allocator a, void *p) {
-    a.proc(ALLOCATOR_FREE, a.data, p, 0, 0, 0, 0);
-}
+void *allocate(Allocator a, u64 n);
+void *reallocate(Allocator a, void *p, u64 old_n, u64 n);
+void deallocate(Allocator a, void *p);
 
-inline void *allocatef(Allocator a, u64 n, u64 flags) {
-    return a.proc(ALLOCATOR_ALLOCATE, a.data, 0, 0, n, flags, 0);
-}
-inline void *reallocatef(Allocator a, void *p, u64 old_n, u64 n, u64 flags) {
-    return a.proc(ALLOCATOR_REALLOCATE, a.data, p, old_n, n, flags, 0);
-}
-inline void deallocatef(Allocator a, void *p, u64 flags) {
-    a.proc(ALLOCATOR_FREE, a.data, p, 0, 0, flags, 0);
-}
+void *allocatef(Allocator a, u64 n, u64 flags);
+void *reallocatef(Allocator a, void *p, u64 old_n, u64 n, u64 flags);
+void deallocatef(Allocator a, void *p, u64 flags);
 
-inline string string_allocate(Allocator a, u64 n) {
-    return (string) {n, (u8*)allocate(a, n)};
-}
-inline void string_deallocate(Allocator a, string s) {
-    deallocate(a, s.data);
-}
+string string_allocate(Allocator a, u64 n);
+void string_deallocate(Allocator a, string s);
 
-inline string string_copy(Allocator a, string s) {
-    string new_s = string_allocate(a, s.count);
-    memcpy(new_s.data, s.data, (sys_uint)s.count);
-    return new_s;
-}
+string string_copy(Allocator a, string s);
 
 #ifdef OSTD_IMPL
 
@@ -8336,6 +8320,39 @@ void* arena_allocator_proc(Allocator_Message msg, void *data, void *old, u64 old
     }
 
     return 0;
+}
+
+void *allocate(Allocator a, u64 n) {
+    return a.proc(ALLOCATOR_ALLOCATE, a.data, 0, 0, n, 0, 0);
+}
+void *reallocate(Allocator a, void *p, u64 old_n, u64 n) {
+    return a.proc(ALLOCATOR_REALLOCATE, a.data, p, old_n, n, 0, 0);
+}
+void deallocate(Allocator a, void *p) {
+    a.proc(ALLOCATOR_FREE, a.data, p, 0, 0, 0, 0);
+}
+
+void *allocatef(Allocator a, u64 n, u64 flags) {
+    return a.proc(ALLOCATOR_ALLOCATE, a.data, 0, 0, n, flags, 0);
+}
+void *reallocatef(Allocator a, void *p, u64 old_n, u64 n, u64 flags) {
+    return a.proc(ALLOCATOR_REALLOCATE, a.data, p, old_n, n, flags, 0);
+}
+void deallocatef(Allocator a, void *p, u64 flags) {
+    a.proc(ALLOCATOR_FREE, a.data, p, 0, 0, flags, 0);
+}
+
+string string_allocate(Allocator a, u64 n) {
+    return (string) {n, (u8*)allocate(a, n)};
+}
+void string_deallocate(Allocator a, string s) {
+    deallocate(a, s.data);
+}
+
+string string_copy(Allocator a, string s) {
+    string new_s = string_allocate(a, s.count);
+    memcpy(new_s.data, s.data, (sys_uint)s.count);
+    return new_s;
 }
 
 #endif // OSTD_IMPL
@@ -9304,8 +9321,8 @@ string string_replace(Allocator a, string s, string sub, string replacement) {
 #ifndef _PRINT_H
 #endif // _PRINT_H
 
-bool sys_read_entire_file(Allocator a, string path, string *result);
-bool sys_write_entire_file(string path, string data);
+OSTD_LIB bool sys_read_entire_file(Allocator a, string path, string *result);
+OSTD_LIB bool sys_write_entire_file(string path, string data);
 
 #ifdef OSTD_IMPL
 
@@ -9351,9 +9368,9 @@ bool sys_write_entire_file(string path, string data) {
 
 
 
-string path_get_filename(string path);
-string path_strip_one_extension(string path);
-string path_strip_all_extensions(string path);
+OSTD_LIB string path_get_filename(string path);
+OSTD_LIB string path_strip_one_extension(string path);
+OSTD_LIB string path_strip_all_extensions(string path);
 
 #ifdef OSTD_IMPL
 
@@ -9995,8 +10012,8 @@ typedef enum Oga_Device_Pick_Flag {
     OGA_DEVICE_PICK_REQUIRE_CPU = 1 << 5,
 } Oga_Device_Pick_Flag;
 
-u64 oga_query_devices(Oga_Device *buffer, u64 buffer_count);
-Oga_Device *oga_get_devices(Allocator a, u64 *count);
+OSTD_LIB u64 oga_query_devices(Oga_Device *buffer, u64 buffer_count);
+OSTD_LIB Oga_Device *oga_get_devices(Allocator a, u64 *count);
 
 typedef struct Oga_Pick_Device_Result {
     bool passed;
@@ -10006,7 +10023,7 @@ typedef struct Oga_Pick_Device_Result {
     Oga_Device_Feature_Flag failed_preferred_features;
 } Oga_Pick_Device_Result;
 // todo(charlie) add consideration for heap properties and usage flags
-Oga_Pick_Device_Result oga_pick_device(Oga_Device_Pick_Flag pick_flags, Oga_Device_Feature_Flag required_features, Oga_Device_Feature_Flag preferred_features);
+OSTD_LIB Oga_Pick_Device_Result oga_pick_device(Oga_Device_Pick_Flag pick_flags, Oga_Device_Feature_Flag required_features, Oga_Device_Feature_Flag preferred_features);
 
 //////////
 /// Oga Context
@@ -10018,7 +10035,7 @@ typedef struct Oga_Logical_Engines_Create_Desc {
 } Oga_Logical_Engines_Create_Desc;
 
 // Default allocator of non is specified in Oga_Context_Desc::state_allocator
-void* oga_state_allocator_proc(Allocator_Message msg, void *data, void *old, u64 old_n, u64 n, u64 alignment, u64 flags);
+OSTD_LIB void* oga_state_allocator_proc(Allocator_Message msg, void *data, void *old, u64 old_n, u64 n, u64 alignment, u64 flags);
 
 
 typedef struct Oga_Allocator_Row {
@@ -10065,11 +10082,11 @@ typedef struct Oga_Context {
     Oga_State_Allocator_Data default_allocator_data; // Backing for Allocator::data
 } Oga_Context;
 
-Oga_Result oga_init_context(Oga_Device target_device, Oga_Context_Desc desc, Oga_Context **context);
-void oga_uninit_context(Oga_Context *context);
+OSTD_LIB Oga_Result oga_init_context(Oga_Device target_device, Oga_Context_Desc desc, Oga_Context **context);
+OSTD_LIB void oga_uninit_context(Oga_Context *context);
 
-void oga_wait_engine_idle(Oga_Logical_Engine engine);
-void oga_wait_context_idle(Oga_Context *context);
+OSTD_LIB void oga_wait_engine_idle(Oga_Logical_Engine engine);
+OSTD_LIB void oga_wait_context_idle(Oga_Context *context);
 
 //////////
 /// Swap chain
@@ -10115,14 +10132,14 @@ typedef struct Oga_Swapchain {
     Oga_Format image_format;
 } Oga_Swapchain;
 
-bool get_preferred_swapchain_format(Oga_Context *context, Oga_Format *wanted_formats, u64 count, Oga_Format *format);
+OSTD_LIB bool get_preferred_swapchain_format(Oga_Context *context, Oga_Format *wanted_formats, u64 count, Oga_Format *format);
 
-Oga_Result oga_init_swapchain(Oga_Context *context, Oga_Swapchain_Desc desc, Oga_Swapchain **swapchain);
-void oga_uninit_swapchain(Oga_Swapchain *swapchain);
+OSTD_LIB Oga_Result oga_init_swapchain(Oga_Context *context, Oga_Swapchain_Desc desc, Oga_Swapchain **swapchain);
+OSTD_LIB void oga_uninit_swapchain(Oga_Swapchain *swapchain);
 
 struct Oga_Gpu_Latch;
 struct Oga_Cpu_Latch;
-Oga_Result oga_get_next_swapchain_image(Oga_Swapchain *swapchain, u64 timeout, struct Oga_Gpu_Latch *signal_gpu_latch, struct Oga_Cpu_Latch *signal_cpu_latch, u64 *image_index); 
+OSTD_LIB Oga_Result oga_get_next_swapchain_image(Oga_Swapchain *swapchain, u64 timeout, struct Oga_Gpu_Latch *signal_gpu_latch, struct Oga_Cpu_Latch *signal_cpu_latch, u64 *image_index); 
 
 typedef struct Oga_Present_Desc {
     Oga_Logical_Engine engine;
@@ -10130,7 +10147,7 @@ typedef struct Oga_Present_Desc {
     struct Oga_Gpu_Latch **wait_gpu_latches;
     u64 image_index;
 } Oga_Present_Desc;
-Oga_Result oga_submit_present(Oga_Swapchain *swapchain, Oga_Present_Desc desc);
+OSTD_LIB Oga_Result oga_submit_present(Oga_Swapchain *swapchain, Oga_Present_Desc desc);
 
 //////////
 /// GPU Programs
@@ -10156,8 +10173,8 @@ typedef struct Oga_Program {
 // Goes through OSL to compile osl lang to target drivers
 // Oga_Result oga_compile_program_for_target
 
-Oga_Result oga_init_program(Oga_Context *context, Oga_Program_Desc desc, Oga_Program **program);
-void oga_uninit_program(Oga_Program *program);
+OSTD_LIB Oga_Result oga_init_program(Oga_Context *context, Oga_Program_Desc desc, Oga_Program **program);
+OSTD_LIB void oga_uninit_program(Oga_Program *program);
 
 //////////
 /// Render Passes
@@ -10217,8 +10234,8 @@ typedef struct Oga_Binding_List_Layout {
     u64 allocated_lists_count;
 } Oga_Binding_List_Layout;
 
-Oga_Result oga_init_binding_list_layout(Oga_Context *context, Oga_Binding_List_Layout_Desc desc, Oga_Binding_List_Layout **layout);
-void oga_uninit_binding_list_layout(Oga_Binding_List_Layout *layout);
+OSTD_LIB Oga_Result oga_init_binding_list_layout(Oga_Context *context, Oga_Binding_List_Layout_Desc desc, Oga_Binding_List_Layout **layout);
+OSTD_LIB void oga_uninit_binding_list_layout(Oga_Binding_List_Layout *layout);
 
 struct Oga_Image_View;
 struct Oga_Block_View;
@@ -10252,7 +10269,7 @@ typedef struct Oga_Binding_List {
     Oga_Binding_List_Layout *layout;
 } Oga_Binding_List;
 
-Oga_Result oga_push_binding_list(Oga_Binding_List_Layout *layout, Oga_Binding_List_Desc desc, Oga_Binding_List **list);
+OSTD_LIB Oga_Result oga_push_binding_list(Oga_Binding_List_Layout *layout, Oga_Binding_List_Desc desc, Oga_Binding_List **list);
 
 // I looked through various devices and they all report these numbers
 // Including RTX 5090 as well as GT 710 (vulkan)
@@ -10400,10 +10417,10 @@ typedef struct Oga_Render_Pass {
     Oga_Vertex_List_Layout_Desc vertex_input_layout;
 } Oga_Render_Pass;
 
-Oga_Result oga_init_render_passes(Oga_Context *context, Oga_Render_Pass_Desc* descs, Oga_Render_Pass **render_passes, u64 render_pass_count);
+OSTD_LIB Oga_Result oga_init_render_passes(Oga_Context *context, Oga_Render_Pass_Desc* descs, Oga_Render_Pass **render_passes, u64 render_pass_count);
 
-Oga_Result oga_init_render_pass(Oga_Context *context, Oga_Render_Pass_Desc desc, Oga_Render_Pass **render_pass);
-void oga_uninit_render_pass(Oga_Render_Pass *render_pass);
+OSTD_LIB Oga_Result oga_init_render_pass(Oga_Context *context, Oga_Render_Pass_Desc desc, Oga_Render_Pass **render_pass);
+OSTD_LIB void oga_uninit_render_pass(Oga_Render_Pass *render_pass);
 
 //////////
 /// Synchronization
@@ -10414,18 +10431,18 @@ typedef struct Oga_Gpu_Latch {
     Oga_Context *context;
 } Oga_Gpu_Latch;
 
-Oga_Result oga_init_gpu_latch(Oga_Context *context, Oga_Gpu_Latch **gpu_latch);
-void oga_uninit_gpu_latch(Oga_Gpu_Latch *gpu_latch);
+OSTD_LIB Oga_Result oga_init_gpu_latch(Oga_Context *context, Oga_Gpu_Latch **gpu_latch);
+OSTD_LIB void oga_uninit_gpu_latch(Oga_Gpu_Latch *gpu_latch);
 
 // Cpu latch; for synchronizing cpu with gpu. Signalled on gpu, waited on cpu.
 typedef struct Oga_Cpu_Latch {
     void *id;
     Oga_Context *context;
 } Oga_Cpu_Latch;
-Oga_Result oga_init_cpu_latch(Oga_Context *context, Oga_Cpu_Latch **cpu_latch, bool start_signaled);
-void oga_uninit_cpu_latch(Oga_Cpu_Latch *cpu_latch);
-Oga_Result oga_wait_latch(Oga_Cpu_Latch *cpu_latch);
-Oga_Result oga_reset_latch(Oga_Cpu_Latch *cpu_latch);
+OSTD_LIB Oga_Result oga_init_cpu_latch(Oga_Context *context, Oga_Cpu_Latch **cpu_latch, bool start_signaled);
+OSTD_LIB void oga_uninit_cpu_latch(Oga_Cpu_Latch *cpu_latch);
+OSTD_LIB Oga_Result oga_wait_latch(Oga_Cpu_Latch *cpu_latch);
+OSTD_LIB Oga_Result oga_reset_latch(Oga_Cpu_Latch *cpu_latch);
 
 //////////
 /// Memory & Views
@@ -10445,11 +10462,11 @@ typedef struct Oga_Memory_Pointer {
 #endif 
 } Oga_Memory_Pointer;
 
-Oga_Result oga_allocate_memory(Oga_Context *context, u64 size, Oga_Memory_Property_Flag properties, Oga_Memory_Usage usage, Oga_Memory_Pointer *ptr);
-void oga_deallocate_memory(Oga_Memory_Pointer ptr);
-Oga_Result oga_map_memory(Oga_Memory_Pointer ptr, u64 size, void **mapped_mem);
-void oga_unmap_memory(Oga_Memory_Pointer ptr);
-Oga_Result oga_memory_offset(Oga_Memory_Pointer ptr, s64 offset, Oga_Memory_Pointer *result_ptr);
+OSTD_LIB Oga_Result oga_allocate_memory(Oga_Context *context, u64 size, Oga_Memory_Property_Flag properties, Oga_Memory_Usage usage, Oga_Memory_Pointer *ptr);
+OSTD_LIB void oga_deallocate_memory(Oga_Memory_Pointer ptr);
+OSTD_LIB Oga_Result oga_map_memory(Oga_Memory_Pointer ptr, u64 size, void **mapped_mem);
+OSTD_LIB void oga_unmap_memory(Oga_Memory_Pointer ptr);
+OSTD_LIB Oga_Result oga_memory_offset(Oga_Memory_Pointer ptr, s64 offset, Oga_Memory_Pointer *result_ptr);
 
 
 typedef struct Oga_Memory_View_Desc  {
@@ -10472,11 +10489,11 @@ typedef struct Oga_Index_List_View {
     u64 size;
 } Oga_Index_List_View;
 
-Oga_Result oga_init_vertex_list_view(Oga_Context *context, Oga_Memory_View_Desc desc, Oga_Vertex_List_View **vlist);
-void oga_uninit_vertex_list_view(Oga_Vertex_List_View *vlist);
+OSTD_LIB Oga_Result oga_init_vertex_list_view(Oga_Context *context, Oga_Memory_View_Desc desc, Oga_Vertex_List_View **vlist);
+OSTD_LIB void oga_uninit_vertex_list_view(Oga_Vertex_List_View *vlist);
 
-Oga_Result oga_init_index_list_view(Oga_Context *context, Oga_Memory_View_Desc desc, Oga_Index_List_View **ilist);
-void oga_uninit_index_list_view(Oga_Index_List_View *ilist);
+OSTD_LIB Oga_Result oga_init_index_list_view(Oga_Context *context, Oga_Memory_View_Desc desc, Oga_Index_List_View **ilist);
+OSTD_LIB void oga_uninit_index_list_view(Oga_Index_List_View *ilist);
 
 /// Image view
 
@@ -10505,10 +10522,10 @@ typedef struct Oga_Image_View {
     bool linear_tiling;
 } Oga_Image_View;
 
-Oga_Result oga_init_image_view(Oga_Context *context, Oga_Image_View_Desc desc, Oga_Image_View **image);
-void oga_uninit_image_view(Oga_Image_View *image);
+OSTD_LIB Oga_Result oga_init_image_view(Oga_Context *context, Oga_Image_View_Desc desc, Oga_Image_View **image);
+OSTD_LIB void oga_uninit_image_view(Oga_Image_View *image);
 
-u64 oga_get_image_memory_requirement(Oga_Context *context, Oga_Image_View_Desc desc);
+OSTD_LIB u64 oga_get_image_memory_requirement(Oga_Context *context, Oga_Image_View_Desc desc);
 
 typedef struct Oga_FBuffer_View {
     void *id;
@@ -10519,8 +10536,8 @@ typedef struct Oga_FBuffer_View {
     bool linear_tiling;
 } Oga_FBuffer_View;
 
-Oga_Result oga_init_fbuffer_view(Oga_Context *context, Oga_Image_View_Desc desc, Oga_FBuffer_View **fbuffer);
-void oga_uninit_fbuffer_view(Oga_FBuffer_View *fbuffer);
+OSTD_LIB Oga_Result oga_init_fbuffer_view(Oga_Context *context, Oga_Image_View_Desc desc, Oga_FBuffer_View **fbuffer);
+OSTD_LIB void oga_uninit_fbuffer_view(Oga_FBuffer_View *fbuffer);
 
 /// Image copy target view
 
@@ -10550,8 +10567,8 @@ typedef struct Oga_Optimal_Copy_View {
     Oga_Optimal_Copy_Flag flags;
 } Oga_Optimal_Copy_View;
 
-Oga_Result oga_init_optimal_copy_view(Oga_Context *context, Oga_Optimal_Copy_View_Desc desc, Oga_Optimal_Copy_View **image);
-void oga_uninit_optimal_copy_view(Oga_Optimal_Copy_View *image);
+OSTD_LIB Oga_Result oga_init_optimal_copy_view(Oga_Context *context, Oga_Optimal_Copy_View_Desc desc, Oga_Optimal_Copy_View **image);
+OSTD_LIB void oga_uninit_optimal_copy_view(Oga_Optimal_Copy_View *image);
 
 typedef struct Oga_Render_Image_View_Desc {
     Oga_Memory_Pointer memory_pointer;
@@ -10582,13 +10599,13 @@ typedef struct Oga_Block_View {
     Oga_Memory_Pointer memory_pointer;
     u64 size;
 } Oga_Block_View;
-Oga_Result oga_init_block_view(Oga_Context *context, Oga_Memory_View_Desc desc, Oga_Block_View **buffer);
-void oga_uninit_block_view(Oga_Block_View *buffer);
+OSTD_LIB Oga_Result oga_init_block_view(Oga_Context *context, Oga_Memory_View_Desc desc, Oga_Block_View **buffer);
+OSTD_LIB void oga_uninit_block_view(Oga_Block_View *buffer);
 
 // todo(charlie) #validation
 // Keep track of all init()'s and report them here if they were not uninitted
 // This is really only here to get validation/debug layer messages for leaked resources
-void oga_reset(void);
+OSTD_LIB void oga_reset(void);
 
 
 //////////
@@ -10620,21 +10637,21 @@ typedef struct Oga_Command_List {
 #endif
 } Oga_Command_List;
 
-Oga_Result oga_init_command_pool(Oga_Context *context, Oga_Command_Pool_Desc desc, Oga_Command_Pool **pool);
+OSTD_LIB Oga_Result oga_init_command_pool(Oga_Context *context, Oga_Command_Pool_Desc desc, Oga_Command_Pool **pool);
  // This will free all command lists, so you do not need to explicitly free each command list.
-void oga_uninit_command_pool(Oga_Command_Pool *pool);
-void oga_reset_command_pool(Oga_Command_Pool *pool);
+OSTD_LIB void oga_uninit_command_pool(Oga_Command_Pool *pool);
+OSTD_LIB void oga_reset_command_pool(Oga_Command_Pool *pool);
 
-Oga_Result oga_get_command_lists(Oga_Command_Pool *pool, Oga_Command_List *lists, u64 list_count);
-void oga_release_command_lists(Oga_Command_List *lists, u64 list_count);
+OSTD_LIB Oga_Result oga_get_command_lists(Oga_Command_Pool *pool, Oga_Command_List *lists, u64 list_count);
+OSTD_LIB void oga_release_command_lists(Oga_Command_List *lists, u64 list_count);
 
 
 
 typedef u64 Oga_Command_List_Usage_Flag;
 #define OGA_COMMAND_LIST_USAGE_ONE_TIME_SUBMIT (1 << 0)
 
-Oga_Result oga_cmd_begin(Oga_Command_List cmd, Oga_Command_List_Usage_Flag flags);
-Oga_Result oga_cmd_end(Oga_Command_List cmd);
+OSTD_LIB Oga_Result oga_cmd_begin(Oga_Command_List cmd, Oga_Command_List_Usage_Flag flags);
+OSTD_LIB Oga_Result oga_cmd_end(Oga_Command_List cmd);
 
 typedef struct Oga_Submit_Command_List_Desc {
     Oga_Logical_Engine engine; 
@@ -10644,7 +10661,7 @@ typedef struct Oga_Submit_Command_List_Desc {
     u64 signal_gpu_latch_count; 
     Oga_Cpu_Latch *signal_cpu_latch;
 } Oga_Submit_Command_List_Desc;
-Oga_Result oga_submit_command_list(Oga_Command_List cmd, Oga_Submit_Command_List_Desc desc);
+OSTD_LIB Oga_Result oga_submit_command_list(Oga_Command_List cmd, Oga_Submit_Command_List_Desc desc);
 
 typedef struct Oga_Gpu_Timestamp_Pool {
     void *id;
@@ -10653,13 +10670,13 @@ typedef struct Oga_Gpu_Timestamp_Pool {
     u64 written_timestamp_count;
 } Oga_Gpu_Timestamp_Pool;
 
-Oga_Result oga_init_gpu_timestamp_pool(Oga_Context *context, u64 timestamp_count, Oga_Gpu_Timestamp_Pool **pool);
-void oga_uninit_gpu_timestamp_pool(Oga_Gpu_Timestamp_Pool *pool);
+OSTD_LIB Oga_Result oga_init_gpu_timestamp_pool(Oga_Context *context, u64 timestamp_count, Oga_Gpu_Timestamp_Pool **pool);
+OSTD_LIB void oga_uninit_gpu_timestamp_pool(Oga_Gpu_Timestamp_Pool *pool);
 
-void oga_cmd_reset_timestamp_pool(Oga_Command_List cmd, Oga_Gpu_Timestamp_Pool *pool);
-void oga_cmd_write_timestamp(Oga_Command_List cmd, Oga_Gpu_Timestamp_Pool *pool);
+OSTD_LIB void oga_cmd_reset_timestamp_pool(Oga_Command_List cmd, Oga_Gpu_Timestamp_Pool *pool);
+OSTD_LIB void oga_cmd_write_timestamp(Oga_Command_List cmd, Oga_Gpu_Timestamp_Pool *pool);
 
-Oga_Result oga_read_timestamps(Oga_Gpu_Timestamp_Pool *pool, f64 *nanosecond_timestamps, bool wait);
+OSTD_LIB Oga_Result oga_read_timestamps(Oga_Gpu_Timestamp_Pool *pool, f64 *nanosecond_timestamps, bool wait);
 
 typedef u64 Oga_Msaa_Resolve_Mode_Flag;
 #define OGA_MSAA_RESOLVE_MODE_NONE    0
@@ -10702,10 +10719,10 @@ typedef struct Oga_Begin_Render_Pass_Desc {
     Oga_Render_Attachment_Desc *attachments;
 } Oga_Begin_Render_Pass_Desc;
 
-void oga_cmd_begin_render_pass(Oga_Command_List cmd, Oga_Render_Pass *render_pass, Oga_Begin_Render_Pass_Desc desc);
-void oga_cmd_end_render_pass(Oga_Command_List cmd, Oga_Render_Pass *render_pass);
+OSTD_LIB void oga_cmd_begin_render_pass(Oga_Command_List cmd, Oga_Render_Pass *render_pass, Oga_Begin_Render_Pass_Desc desc);
+OSTD_LIB void oga_cmd_end_render_pass(Oga_Command_List cmd, Oga_Render_Pass *render_pass);
 
-void oga_cmd_bind_render_pass_binding_list(Oga_Command_List cmd, Oga_Render_Pass *pass, Oga_Binding_List *list);
+OSTD_LIB void oga_cmd_bind_render_pass_binding_list(Oga_Command_List cmd, Oga_Render_Pass *pass, Oga_Binding_List *list);
 
 typedef enum Oga_Draw_Type {
     OGA_DRAW_INSTANCED,
@@ -10753,23 +10770,23 @@ typedef struct Oga_Draw_Desc {
     
 } Oga_Draw_Desc;
 
-Oga_Result oga_cmd_draw(Oga_Command_List cmd, Oga_Draw_Desc desc);
+OSTD_LIB Oga_Result oga_cmd_draw(Oga_Command_List cmd, Oga_Draw_Desc desc);
 
-void oga_cmd_copy_linear(Oga_Command_List cmd, Oga_Memory_Pointer dst, Oga_Memory_Pointer src, u64 size);
+OSTD_LIB void oga_cmd_copy_linear(Oga_Command_List cmd, Oga_Memory_Pointer dst, Oga_Memory_Pointer src, u64 size);
 
 typedef struct Oga_Optimal_Copy_Desc {
     s64 offset_x, offset_y, offset_z;
     u64 width, height, depth;
 } Oga_Optimal_Copy_Desc;
-void oga_cmd_copy_linear_to_image(Oga_Command_List cmd, Oga_Optimal_Copy_View *dst_view, Oga_Optimal_Copy_Desc dst_desc, Oga_Memory_Pointer src);
-void oga_cmd_copy_image_to_linear(Oga_Command_List cmd, Oga_Memory_Pointer dst, Oga_Optimal_Copy_View *src_view, Oga_Optimal_Copy_Desc src_desc);
-void oga_cmd_copy_image(Oga_Command_List cmd, Oga_Optimal_Copy_View *dst_view, Oga_Optimal_Copy_Desc dst_desc, Oga_Optimal_Copy_View *src_view, Oga_Optimal_Copy_Desc src_desc);
+OSTD_LIB void oga_cmd_copy_linear_to_image(Oga_Command_List cmd, Oga_Optimal_Copy_View *dst_view, Oga_Optimal_Copy_Desc dst_desc, Oga_Memory_Pointer src);
+OSTD_LIB void oga_cmd_copy_image_to_linear(Oga_Command_List cmd, Oga_Memory_Pointer dst, Oga_Optimal_Copy_View *src_view, Oga_Optimal_Copy_Desc src_desc);
+OSTD_LIB void oga_cmd_copy_image(Oga_Command_List cmd, Oga_Optimal_Copy_View *dst_view, Oga_Optimal_Copy_Desc dst_desc, Oga_Optimal_Copy_View *src_view, Oga_Optimal_Copy_Desc src_desc);
 
-void oga_cmd_fill_image(Oga_Command_List cmd, Oga_Optimal_Copy_View *dst_view, float4 color);
+OSTD_LIB void oga_cmd_fill_image(Oga_Command_List cmd, Oga_Optimal_Copy_View *dst_view, float4 color);
 
 #ifdef OGA_IMPL_AUTO
     #if (OS_FLAGS & OS_FLAG_WEB)
-        #define OGA_IMPL_WEBGPU
+        // webgl and webgpu are awful so we will only support software rendering for web.
     #elif (OS_FLAGS & OS_FLAG_WINDOWS)
         #define OGA_IMPL_D3D12
     #elif (OS_FLAGS & OS_FLAG_APPLE)
@@ -10781,7 +10798,7 @@ void oga_cmd_fill_image(Oga_Command_List cmd, Oga_Optimal_Copy_View *dst_view, f
     #endif
 #endif // OGA_IMPL_AUTO
 
-#if !defined(OGA_IMPL_WEBGPU) && !defined(OGA_IMPL_D3D12) && !defined(OGA_IMPL_METAL) && !defined(OGA_IMPL_VULKAN)
+#if !defined(OGA_IMPL_D3D12) && !defined(OGA_IMPL_METAL) && !defined(OGA_IMPL_VULKAN)
 
     #define OGA_NO_IMPL
 
@@ -11847,7 +11864,9 @@ unit_local inline VkInstance _vk_instance(void) {
 void oga_reset(void) {
     void (*untyped)(void) = vkGetInstanceProcAddr(__instance, "vkDestroyDebugUtilsMessengerEXT");
     PFN_vkDestroyDebugUtilsMessengerEXT _vkDestroyDebugUtilsMessengerEXT  = (PFN_vkDestroyDebugUtilsMessengerEXT)*(PFN_vkDestroyDebugUtilsMessengerEXT*)(void**)&untyped;
-    _vkDestroyDebugUtilsMessengerEXT(_vk_instance(), _vk_messenger, 0);
+    if (_vkDestroyDebugUtilsMessengerEXT) {
+        _vkDestroyDebugUtilsMessengerEXT(_vk_instance(), _vk_messenger, 0);
+    }
     vkDestroyInstance(_vk_instance(), 0);
     __instance = 0;
 }
@@ -14677,28 +14696,6 @@ void oga_cmd_fill_image(Oga_Command_List cmd, Oga_Optimal_Copy_View *dst_view, f
 #endif // (OS_FLAGS & (OS_FLAG_WINDOWS | OS_FLAG_LINUX | OS_FLAG_MACOS | OS_FLAG_IOS | OS_FLAG_ANDROID))
 
 // OGA_IMPL_VULKAN
-#elif defined(OGA_IMPL_WEBGPU)
-
-/////////////////////////////////////////////////////
-//////
-// :WebGPU
-//////
-/////////////////////////////////////////////////////
-
-#define OGA_OSL_TARGET OSL_TARGET_WGPU
-
-#if !(OS_FLAGS & OS_FLAG_WEB)
-    #error WebGPU can only be implemented when targetting web (Emscripten)
-#else
-
-/* Begin include: graphics_webgpu.h */
-
-
-#error WebGPU graphics is not implemented
-/* End include: graphics_webgpu.h */
-#endif
-
-// OGA_IMPL_WEBGPU
 #elif defined(OGA_IMPL_D3D12)
 
 /////////////////////////////////////////////////////
@@ -14793,7 +14790,7 @@ typedef enum Osl_Result {
     OSL_BAD_OPERATOR,
     OSL_ASSIGN_NON_STORAGE_VALUE,
     OSL_UNDEFINED_VALUE,
-    OSL_BAD_COMPOSITE_INSTANTIATE,
+    OSL_BAD_VECTOR_INSTANTIATE,
     OSL_BAD_INSTANTIATION_ARGUMENT,
     OSL_BAD_DEREF,
     OSL_BAD_DECORATION_ARGUMENTS,
@@ -14843,7 +14840,7 @@ typedef struct Osl_Compile_Desc {
     Osl_Feature_Flag enabled_features;
 } Osl_Compile_Desc;
 
-Osl_Result osl_compile(Allocator a, Osl_Compile_Desc desc, void **pcode, u64 *pcode_size, string *err_log);
+OSTD_LIB Osl_Result osl_compile(Allocator a, Osl_Compile_Desc desc, void **pcode, u64 *pcode_size, string *err_log);
 
 #ifdef OSTD_IMPL
 
@@ -15005,7 +15002,8 @@ typedef struct Spv_Block {
 typedef enum Osl_Type_Kind {
 	OSL_TYPE_INT,
 	OSL_TYPE_FLOAT,
-	OSL_TYPE_COMPOSITE,
+	OSL_TYPE_VECTOR,
+	OSL_TYPE_MATRIX,
 	OSL_TYPE_ARRAY,
 	OSL_TYPE_IMAGE2DF,
 	OSL_TYPE_FBUFFER2D,
@@ -15016,10 +15014,16 @@ typedef enum Osl_Type_Kind {
 
 struct Osl_Type_Info;
 
-typedef struct Osl_Type_Info_Composite {
+typedef struct Osl_Type_Info_Vector {
 	struct Osl_Type_Info *underlying;
 	u64 component_count;
-} Osl_Type_Info_Composite;
+} Osl_Type_Info_Vector;
+
+typedef struct Osl_Type_Info_Matrix {
+	struct Osl_Type_Info *underlying;
+	u64 cols;
+	u64 rows;
+} Osl_Type_Info_Matrix;
 
 typedef struct Osl_Type_Info_Int {
 	bool is_signed;
@@ -15072,7 +15076,7 @@ typedef struct Osl_Type_Info {
 	u64 size;
 	
 	union {
-		Osl_Type_Info_Composite comp_type;
+		Osl_Type_Info_Vector vec_type;
 		Osl_Type_Info_Int int_type;
 		Osl_Type_Info_Array array_type;
 		Osl_Type_Info_Image image_type;
@@ -15602,11 +15606,11 @@ unit_local u32 spv_push_decl_int(Spv_Converter *spv, Spv_Block *block, u32 bit_w
     return id;
 }
 
-unit_local u32 spv_push_decl_vector(Spv_Converter *spv, Spv_Block *block, u32 id_type, u32 comp_count) {
+unit_local u32 spv_push_decl_vector(Spv_Converter *spv, Spv_Block *block, u32 id_type, u32 vec_count) {
     spv_begin_op(block, OpTypeVector);
     u32 id = spv_push_result_arg(spv, block);
     spv_push_word(block, id_type);
-    spv_push_word(block, comp_count);
+    spv_push_word(block, vec_count);
     spv_end_op(block);
     return id;
 }
@@ -15633,25 +15637,25 @@ unit_local void spv_push_base_decls(Spv_Converter *spv) {
     spv->type_f32.size = 4;
     spv->type_f32.type_id = spv_push_decl_float(spv, &spv->const_block, 32);
     
-    spv->type_f32v2.kind = OSL_TYPE_COMPOSITE;
+    spv->type_f32v2.kind = OSL_TYPE_VECTOR;
     spv->type_f32v2.name = STR("f32v2");
     spv->type_f32v2.size = 8;
-    spv->type_f32v2.val.comp_type.component_count = 2;
-    spv->type_f32v2.val.comp_type.underlying = &spv->type_f32;
+    spv->type_f32v2.val.vec_type.component_count = 2;
+    spv->type_f32v2.val.vec_type.underlying = &spv->type_f32;
     spv->type_f32v2.type_id = spv_push_decl_vector(spv, &spv->const_block, spv->type_f32.type_id, 2);
     
-    spv->type_f32v3.kind = OSL_TYPE_COMPOSITE;
+    spv->type_f32v3.kind = OSL_TYPE_VECTOR;
     spv->type_f32v3.name = STR("f32v3");
     spv->type_f32v3.size = 16;
-    spv->type_f32v3.val.comp_type.component_count = 3;
-    spv->type_f32v3.val.comp_type.underlying = &spv->type_f32;
+    spv->type_f32v3.val.vec_type.component_count = 3;
+    spv->type_f32v3.val.vec_type.underlying = &spv->type_f32;
     spv->type_f32v3.type_id = spv_push_decl_vector(spv, &spv->const_block, spv->type_f32.type_id, 3);
     
-    spv->type_f32v4.kind = OSL_TYPE_COMPOSITE;
+    spv->type_f32v4.kind = OSL_TYPE_VECTOR;
     spv->type_f32v4.name = STR("f32v4");
     spv->type_f32v4.size = 16;
-    spv->type_f32v4.val.comp_type.component_count = 4;
-    spv->type_f32v4.val.comp_type.underlying = &spv->type_f32;
+    spv->type_f32v4.val.vec_type.component_count = 4;
+    spv->type_f32v4.val.vec_type.underlying = &spv->type_f32;
     spv->type_f32v4.type_id = spv_push_decl_vector(spv, &spv->const_block, spv->type_f32.type_id, 4);
     
     spv->type_u32.kind = OSL_TYPE_INT;
@@ -15660,25 +15664,25 @@ unit_local void spv_push_base_decls(Spv_Converter *spv) {
     spv->type_u32.val.int_type.is_signed = false;
     spv->type_u32.type_id = spv_push_decl_int(spv, &spv->const_block, 32, false);
     
-    spv->type_u32v2.kind = OSL_TYPE_COMPOSITE;
+    spv->type_u32v2.kind = OSL_TYPE_VECTOR;
     spv->type_u32v2.name = STR("u32v2");
     spv->type_u32v2.size = 8;
-    spv->type_u32v2.val.comp_type.component_count = 2;
-    spv->type_u32v2.val.comp_type.underlying = &spv->type_u32;
+    spv->type_u32v2.val.vec_type.component_count = 2;
+    spv->type_u32v2.val.vec_type.underlying = &spv->type_u32;
     spv->type_u32v2.type_id = spv_push_decl_vector(spv, &spv->const_block, spv->type_u32.type_id, 2);
     
-    spv->type_u32v3.kind = OSL_TYPE_COMPOSITE;
+    spv->type_u32v3.kind = OSL_TYPE_VECTOR;
     spv->type_u32v3.name = STR("u32v3");
     spv->type_u32v3.size = 16;
-    spv->type_u32v3.val.comp_type.component_count = 3;
-    spv->type_u32v3.val.comp_type.underlying = &spv->type_u32;
+    spv->type_u32v3.val.vec_type.component_count = 3;
+    spv->type_u32v3.val.vec_type.underlying = &spv->type_u32;
     spv->type_u32v3.type_id = spv_push_decl_vector(spv, &spv->const_block, spv->type_u32.type_id, 3);
     
-    spv->type_u32v4.kind = OSL_TYPE_COMPOSITE;
+    spv->type_u32v4.kind = OSL_TYPE_VECTOR;
     spv->type_u32v4.name = STR("u32v4");
     spv->type_u32v4.size = 16;
-    spv->type_u32v4.val.comp_type.component_count = 4;
-    spv->type_u32v4.val.comp_type.underlying = &spv->type_u32;
+    spv->type_u32v4.val.vec_type.component_count = 4;
+    spv->type_u32v4.val.vec_type.underlying = &spv->type_u32;
     spv->type_u32v4.type_id = spv_push_decl_vector(spv, &spv->const_block, spv->type_u32.type_id, 4);
     
     spv->type_s32.kind = OSL_TYPE_INT;
@@ -15687,25 +15691,25 @@ unit_local void spv_push_base_decls(Spv_Converter *spv) {
     spv->type_s32.val.int_type.is_signed = true;
     spv->type_s32.type_id = spv_push_decl_int(spv, &spv->const_block, 32, true);
     
-    spv->type_s32v2.kind = OSL_TYPE_COMPOSITE;
+    spv->type_s32v2.kind = OSL_TYPE_VECTOR;
     spv->type_s32v2.name = STR("s32v2");
     spv->type_s32v2.size = 8;
-    spv->type_s32v2.val.comp_type.component_count = 2;
-    spv->type_s32v2.val.comp_type.underlying = &spv->type_s32;
+    spv->type_s32v2.val.vec_type.component_count = 2;
+    spv->type_s32v2.val.vec_type.underlying = &spv->type_s32;
     spv->type_s32v2.type_id = spv_push_decl_vector(spv, &spv->const_block, spv->type_s32.type_id, 2);
     
-    spv->type_s32v3.kind = OSL_TYPE_COMPOSITE;
+    spv->type_s32v3.kind = OSL_TYPE_VECTOR;
     spv->type_s32v3.name = STR("s32v3");
     spv->type_s32v3.size = 16;
-    spv->type_s32v3.val.comp_type.component_count = 3;
-    spv->type_s32v3.val.comp_type.underlying = &spv->type_s32;
+    spv->type_s32v3.val.vec_type.component_count = 3;
+    spv->type_s32v3.val.vec_type.underlying = &spv->type_s32;
     spv->type_s32v3.type_id = spv_push_decl_vector(spv, &spv->const_block, spv->type_s32.type_id, 3);
     
-    spv->type_s32v4.kind = OSL_TYPE_COMPOSITE;
+    spv->type_s32v4.kind = OSL_TYPE_VECTOR;
     spv->type_s32v4.name = STR("s32v4");
     spv->type_s32v4.size = 16;
-    spv->type_s32v4.val.comp_type.component_count = 4;
-    spv->type_s32v4.val.comp_type.underlying = &spv->type_s32;
+    spv->type_s32v4.val.vec_type.component_count = 4;
+    spv->type_s32v4.val.vec_type.underlying = &spv->type_s32;
     spv->type_s32v4.type_id = spv_push_decl_vector(spv, &spv->const_block, spv->type_s32.type_id, 4);
     
     spv->type_image2df.kind = OSL_TYPE_IMAGE2DF;
@@ -15922,25 +15926,25 @@ unit_local void spv_push_base_decls(Spv_Converter *spv) {
     spv->type_bool.type_id = spv_push_result_arg(spv, &spv->const_block);
     spv_end_op(&spv->const_block);
     
-    spv->type_boolv2.kind = OSL_TYPE_COMPOSITE;
+    spv->type_boolv2.kind = OSL_TYPE_VECTOR;
     spv->type_boolv2.name = STR("_boolv2");
     spv->type_boolv2.size = 2;
-    spv->type_boolv2.val.comp_type.component_count = 2;
-    spv->type_boolv2.val.comp_type.underlying = &spv->type_bool;
+    spv->type_boolv2.val.vec_type.component_count = 2;
+    spv->type_boolv2.val.vec_type.underlying = &spv->type_bool;
     spv->type_boolv2.type_id = spv_push_decl_vector(spv, &spv->const_block, spv->type_bool.type_id, 2);
     
-    spv->type_boolv3.kind = OSL_TYPE_COMPOSITE;
+    spv->type_boolv3.kind = OSL_TYPE_VECTOR;
     spv->type_boolv3.name = STR("_boolv3");
     spv->type_boolv3.size = 4;
-    spv->type_boolv3.val.comp_type.component_count = 3;
-    spv->type_boolv3.val.comp_type.underlying = &spv->type_bool;
+    spv->type_boolv3.val.vec_type.component_count = 3;
+    spv->type_boolv3.val.vec_type.underlying = &spv->type_bool;
     spv->type_boolv3.type_id = spv_push_decl_vector(spv, &spv->const_block, spv->type_bool.type_id, 3);
     
-    spv->type_boolv4.kind = OSL_TYPE_COMPOSITE;
+    spv->type_boolv4.kind = OSL_TYPE_VECTOR;
     spv->type_boolv4.name = STR("_boolv4");
     spv->type_boolv4.size = 4;
-    spv->type_boolv4.val.comp_type.component_count = 4;
-    spv->type_boolv4.val.comp_type.underlying = &spv->type_bool;
+    spv->type_boolv4.val.vec_type.component_count = 4;
+    spv->type_boolv4.val.vec_type.underlying = &spv->type_bool;
     spv->type_boolv4.type_id = spv_push_decl_vector(spv, &spv->const_block, spv->type_bool.type_id, 4);
 }
 
@@ -16012,17 +16016,6 @@ unit_local u32 spv_push_decl_array_type(Spv_Converter *spv, Spv_Block *block, u3
     u32 id = spv_push_result_arg(spv, block);
     spv_push_word(block, elem_type);
     spv_push_word(block, count);
-    spv_end_op(block);
-    return id;
-}
-
-unit_local u32 spv_push_decl_constant_composite(Spv_Converter *spv, Spv_Block *block, u32 type, u32 *members, u64 member_count) {
-    spv_begin_op(block, OpConstantComposite);
-    spv_push_word(block, type);
-    u32 id = spv_push_result_arg(spv, block);
-    for (u64 i = 0; i < member_count; i++) {
-        spv_push_word(block, members[i]);
-    }
     spv_end_op(block);
     return id;
 }
@@ -16503,8 +16496,8 @@ unit_local Osl_Result spv_emit_expr(Spv_Converter *spv, Spv_Block *block, Osl_Ex
 				op1_type = &spv->type_bool;
 			}
 			
-			is_vector_v_scalar = op1_type->kind == OSL_TYPE_COMPOSITE && op1_type->val.comp_type.underlying == op2_type;
-			is_scalar_v_vector = op2_type->kind == OSL_TYPE_COMPOSITE && op2_type->val.comp_type.underlying == op1_type;
+			is_vector_v_scalar = op1_type->kind == OSL_TYPE_VECTOR && op1_type->val.vec_type.underlying == op2_type;
+			is_scalar_v_vector = op2_type->kind == OSL_TYPE_VECTOR && op2_type->val.vec_type.underlying == op1_type;
 			
 			if (op1_type != op2_type && !((op->op_kind == OSL_OP_MUL || op->op_kind == OSL_OP_DIV) && (is_vector_v_scalar || is_scalar_v_vector))) {
 				string a = _osl_tprint_token(spv->compiler, op->op_token, STR("Cannot perform this operations on these types ..."));
@@ -16531,43 +16524,43 @@ unit_local Osl_Result spv_emit_expr(Spv_Converter *spv, Spv_Block *block, Osl_Ex
 			Osl_Type_Info *underlying1 = op1_type;
 			Osl_Type_Info *underlying2 = op2_type;
 			
-			if (underlying1->kind == OSL_TYPE_COMPOSITE && underlying2->kind == OSL_TYPE_COMPOSITE 
-			 && underlying2->val.comp_type.component_count <= underlying1->val.comp_type.component_count) {
-				// Composite conversion
-				Osl_Type_Info_Composite *comp1 = &op1_type->val.comp_type;
-				Osl_Type_Info_Composite *comp2 = &op2_type->val.comp_type;
+			if (underlying1->kind == OSL_TYPE_VECTOR && underlying2->kind == OSL_TYPE_VECTOR 
+			 && underlying2->val.vec_type.component_count <= underlying1->val.vec_type.component_count) {
+				// Vector conversion
+				Osl_Type_Info_Vector *vec1 = &op1_type->val.vec_type;
+				Osl_Type_Info_Vector *vec2 = &op2_type->val.vec_type;
 				
-				if (comp2->component_count < comp1->component_count) {
+				if (vec2->component_count < vec1->component_count) {
 				
 					Osl_Type_Info *trunc_vector_type = 0;
 					// Select the truncated vector type; same count as the type we are casting to
-					if (comp1->underlying == &spv->type_f32 && comp2->component_count == 2)
+					if (vec1->underlying == &spv->type_f32 && vec2->component_count == 2)
 						trunc_vector_type = &spv->type_f32v2;
-					else if (comp1->underlying == &spv->type_f32 && comp2->component_count == 3)
+					else if (vec1->underlying == &spv->type_f32 && vec2->component_count == 3)
 						trunc_vector_type = &spv->type_f32v3;
-					else if (comp1->underlying == &spv->type_f32 && comp2->component_count == 4)
+					else if (vec1->underlying == &spv->type_f32 && vec2->component_count == 4)
 						trunc_vector_type = &spv->type_f32v4;
-					else if (comp1->underlying == &spv->type_u32 && comp2->component_count == 2)
+					else if (vec1->underlying == &spv->type_u32 && vec2->component_count == 2)
 						trunc_vector_type = &spv->type_u32v2;
-					else if (comp1->underlying == &spv->type_u32 && comp2->component_count == 3)
+					else if (vec1->underlying == &spv->type_u32 && vec2->component_count == 3)
 						trunc_vector_type = &spv->type_u32v3;
-					else if (comp1->underlying == &spv->type_u32 && comp2->component_count == 4)
+					else if (vec1->underlying == &spv->type_u32 && vec2->component_count == 4)
 						trunc_vector_type = &spv->type_u32v4;
-					else if (comp1->underlying == &spv->type_s32 && comp2->component_count == 2)
+					else if (vec1->underlying == &spv->type_s32 && vec2->component_count == 2)
 						trunc_vector_type = &spv->type_s32v2;
-					else if (comp1->underlying == &spv->type_s32 && comp2->component_count == 3)
+					else if (vec1->underlying == &spv->type_s32 && vec2->component_count == 3)
 						trunc_vector_type = &spv->type_s32v3;
-					else if (comp1->underlying == &spv->type_s32 && comp2->component_count == 4)
+					else if (vec1->underlying == &spv->type_s32 && vec2->component_count == 4)
 						trunc_vector_type = &spv->type_s32v4;
 					else
 						assert(false);
 				
 					u32 indices[] = { 0, 1, 2, 3 };
-					op1 = spv_push_op_vector_shuffle(spv, block, trunc_vector_type->type_id, op1, op1, indices, comp2->component_count);
+					op1 = spv_push_op_vector_shuffle(spv, block, trunc_vector_type->type_id, op1, op1, indices, vec2->component_count);
 				}
 				
-				underlying1 = comp1->underlying;
-				underlying2 = comp2->underlying;
+				underlying1 = vec1->underlying;
+				underlying2 = vec2->underlying;
 			} 
 			
 			if (underlying1->kind == OSL_TYPE_FLOAT && (underlying2->kind == OSL_TYPE_INT && underlying2->val.int_type.is_signed)) {
@@ -16598,9 +16591,9 @@ unit_local Osl_Result spv_emit_expr(Spv_Converter *spv, Spv_Block *block, Osl_Ex
 		case OSL_OP_UNARY_NEGATE: {
 		
 			assert(!op->rhs);
-			if (op1_type->kind == OSL_TYPE_FLOAT || (op1_type->kind == OSL_TYPE_COMPOSITE && op1_type->val.comp_type.underlying->kind == OSL_TYPE_FLOAT)) 
+			if (op1_type->kind == OSL_TYPE_FLOAT || (op1_type->kind == OSL_TYPE_VECTOR && op1_type->val.vec_type.underlying->kind == OSL_TYPE_FLOAT)) 
 				spv_begin_op(block, OpFNegate);
-			else if (op1_type->kind == OSL_TYPE_INT || (op1_type->kind == OSL_TYPE_COMPOSITE && op1_type->val.comp_type.underlying->kind == OSL_TYPE_INT)) 
+			else if (op1_type->kind == OSL_TYPE_INT || (op1_type->kind == OSL_TYPE_VECTOR && op1_type->val.vec_type.underlying->kind == OSL_TYPE_INT)) 
 				spv_begin_op(block, OpSNegate); // todo(charlie) err if int is unsigned
 			else assert(false);
 			
@@ -16615,9 +16608,9 @@ unit_local Osl_Result spv_emit_expr(Spv_Converter *spv, Spv_Block *block, Osl_Ex
 		case OSL_OP_UNARY_NAUGHT: {
 		
 			assert(!op->rhs);
-			if (op1_type->kind == OSL_TYPE_FLOAT || (op1_type->kind == OSL_TYPE_COMPOSITE && op1_type->val.comp_type.underlying->kind == OSL_TYPE_FLOAT)) 
+			if (op1_type->kind == OSL_TYPE_FLOAT || (op1_type->kind == OSL_TYPE_VECTOR && op1_type->val.vec_type.underlying->kind == OSL_TYPE_FLOAT)) 
 				spv_begin_op(block, OpFOrdEqual);
-			else if (op1_type->kind == OSL_TYPE_INT || (op1_type->kind == OSL_TYPE_COMPOSITE && op1_type->val.comp_type.underlying->kind == OSL_TYPE_INT)) 
+			else if (op1_type->kind == OSL_TYPE_INT || (op1_type->kind == OSL_TYPE_VECTOR && op1_type->val.vec_type.underlying->kind == OSL_TYPE_INT)) 
 				spv_begin_op(block, OpIEqual); // todo(charlie) err if int is unsigned
 			else assert(false);
 			
@@ -16635,9 +16628,9 @@ unit_local Osl_Result spv_emit_expr(Spv_Converter *spv, Spv_Block *block, Osl_Ex
 		}
 		case OSL_OP_ADD: {
 		
-			if (op1_type->kind == OSL_TYPE_FLOAT || (op1_type->kind == OSL_TYPE_COMPOSITE && op1_type->val.comp_type.underlying->kind == OSL_TYPE_FLOAT)) 
+			if (op1_type->kind == OSL_TYPE_FLOAT || (op1_type->kind == OSL_TYPE_VECTOR && op1_type->val.vec_type.underlying->kind == OSL_TYPE_FLOAT)) 
 				spv_begin_op(block, OpFAdd);
-			else if (op1_type->kind == OSL_TYPE_INT || (op1_type->kind == OSL_TYPE_COMPOSITE && op1_type->val.comp_type.underlying->kind == OSL_TYPE_INT)) 
+			else if (op1_type->kind == OSL_TYPE_INT || (op1_type->kind == OSL_TYPE_VECTOR && op1_type->val.vec_type.underlying->kind == OSL_TYPE_INT)) 
 				spv_begin_op(block, OpIAdd);
 			else assert(false);
 			
@@ -16651,9 +16644,9 @@ unit_local Osl_Result spv_emit_expr(Spv_Converter *spv, Spv_Block *block, Osl_Ex
 		}
 		case OSL_OP_SUB: {
 		
-			if (op1_type->kind == OSL_TYPE_FLOAT || (op1_type->kind == OSL_TYPE_COMPOSITE && op1_type->val.comp_type.underlying->kind == OSL_TYPE_FLOAT)) 
+			if (op1_type->kind == OSL_TYPE_FLOAT || (op1_type->kind == OSL_TYPE_VECTOR && op1_type->val.vec_type.underlying->kind == OSL_TYPE_FLOAT)) 
 				spv_begin_op(block, OpFSub);
-			else if (op1_type->kind == OSL_TYPE_INT || (op1_type->kind == OSL_TYPE_COMPOSITE && op1_type->val.comp_type.underlying->kind == OSL_TYPE_INT)) 
+			else if (op1_type->kind == OSL_TYPE_INT || (op1_type->kind == OSL_TYPE_VECTOR && op1_type->val.vec_type.underlying->kind == OSL_TYPE_INT)) 
 				spv_begin_op(block, OpISub);
 			else assert(false);
 			
@@ -16671,9 +16664,9 @@ unit_local Osl_Result spv_emit_expr(Spv_Converter *spv, Spv_Block *block, Osl_Ex
 			
 			if (op1_type == op2_type) {
 				
-				if (op1_type->kind == OSL_TYPE_FLOAT || (op1_type->kind == OSL_TYPE_COMPOSITE && op1_type->val.comp_type.underlying->kind == OSL_TYPE_FLOAT)) 
+				if (op1_type->kind == OSL_TYPE_FLOAT || (op1_type->kind == OSL_TYPE_VECTOR && op1_type->val.vec_type.underlying->kind == OSL_TYPE_FLOAT)) 
 					spv_begin_op(block, OpFMul);
-				else if (op1_type->kind == OSL_TYPE_INT || (op1_type->kind == OSL_TYPE_COMPOSITE && op1_type->val.comp_type.underlying->kind == OSL_TYPE_INT)) 
+				else if (op1_type->kind == OSL_TYPE_INT || (op1_type->kind == OSL_TYPE_VECTOR && op1_type->val.vec_type.underlying->kind == OSL_TYPE_INT)) 
 					spv_begin_op(block, OpIMul);
 				else assert(false);
 				
@@ -16683,22 +16676,22 @@ unit_local Osl_Result spv_emit_expr(Spv_Converter *spv, Spv_Block *block, Osl_Ex
 			    spv_push_word(block, op2);
 		    	spv_end_op(block);
 				
-			} else if ((op1_type->kind == OSL_TYPE_COMPOSITE || op2_type->kind == OSL_TYPE_COMPOSITE)) {
+			} else if ((op1_type->kind == OSL_TYPE_VECTOR || op2_type->kind == OSL_TYPE_VECTOR)) {
 				
 				
-				Osl_Type_Info *comp_type_base = 
-					op1_type->kind == OSL_TYPE_COMPOSITE 
+				Osl_Type_Info *vec_type_base = 
+					op1_type->kind == OSL_TYPE_VECTOR 
 					? op1_type
 					: op2_type;
 				
-				Osl_Type_Info_Composite *comp_type = &comp_type_base->val.comp_type;
+				Osl_Type_Info_Vector *vec_type = &vec_type_base->val.vec_type;
 				
-				Osl_Type_Info *scalar_type = &op1_type->val.comp_type == comp_type ? op2_type : op1_type;
+				Osl_Type_Info *scalar_type = &op1_type->val.vec_type == vec_type ? op2_type : op1_type;
 				
-				u32 comp_op = comp_type == &op1_type->val.comp_type ? op1 : op2;
-				u32 scalar_op = comp_op == op1 ? op2 : op1;
+				u32 vec_op = vec_type == &op1_type->val.vec_type ? op1 : op2;
+				u32 scalar_op = vec_op == op1 ? op2 : op1;
 				
-				assert(comp_type->underlying == scalar_type);
+				assert(vec_type->underlying == scalar_type);
 				
 				if (is_vector_v_scalar) {
 					
@@ -16709,22 +16702,22 @@ unit_local Osl_Result spv_emit_expr(Spv_Converter *spv, Spv_Block *block, Osl_Ex
 						spv_op = OpIMul;
 					else assert(false);
 					
-					assert(comp_type->component_count <= 128);
+					assert(vec_type->component_count <= 128);
 					u32 results[128];
 					
-					for (u32 i = 0; i < comp_type->component_count; i += 1) {
-						u32 comp_part_id = spv_push_op_composite_extract(spv, block, comp_op, scalar_type->type_id, &i, 1);
+					for (u32 i = 0; i < vec_type->component_count; i += 1) {
+						u32 vec_part_id = spv_push_op_composite_extract(spv, block, vec_op, scalar_type->type_id, &i, 1);
 						
 						spv_begin_op(block, spv_op);
 						spv_push_word(block, scalar_type->type_id);
 					    results[i] = spv_push_result_arg(spv, block);
-					    spv_push_word(block, comp_part_id);
+					    spv_push_word(block, vec_part_id);
 					    spv_push_word(block, scalar_op);
 				    	spv_end_op(block);
 					}
 					
-					*result_id = spv_push_op_composite_construct(spv, block, comp_type_base->type_id, results, comp_type->component_count);
-					*type = comp_type_base;
+					*result_id = spv_push_op_composite_construct(spv, block, vec_type_base->type_id, results, vec_type->component_count);
+					*type = vec_type_base;
 					
 				} else if (is_scalar_v_vector) {
 					
@@ -16739,9 +16732,9 @@ unit_local Osl_Result spv_emit_expr(Spv_Converter *spv, Spv_Block *block, Osl_Ex
 		
 			if (op1_type == op2_type) {
 				
-				if (op1_type->kind == OSL_TYPE_FLOAT || (op1_type->kind == OSL_TYPE_COMPOSITE && op1_type->val.comp_type.underlying->kind == OSL_TYPE_FLOAT)) 
+				if (op1_type->kind == OSL_TYPE_FLOAT || (op1_type->kind == OSL_TYPE_VECTOR && op1_type->val.vec_type.underlying->kind == OSL_TYPE_FLOAT)) 
 					spv_begin_op(block, OpFDiv);
-				else if (op1_type->kind == OSL_TYPE_INT || (op1_type->kind == OSL_TYPE_COMPOSITE && op1_type->val.comp_type.underlying->kind == OSL_TYPE_INT)) 
+				else if (op1_type->kind == OSL_TYPE_INT || (op1_type->kind == OSL_TYPE_VECTOR && op1_type->val.vec_type.underlying->kind == OSL_TYPE_INT)) 
 					spv_begin_op(block, op1_type->val.int_type.is_signed ? OpSDiv : OpUDiv);
 				else assert(false);
 				
@@ -16751,20 +16744,20 @@ unit_local Osl_Result spv_emit_expr(Spv_Converter *spv, Spv_Block *block, Osl_Ex
 			    spv_push_word(block, op2);
 		    	spv_end_op(block);
 				
-			} else if ((op1_type->kind == OSL_TYPE_COMPOSITE || op2_type->kind == OSL_TYPE_COMPOSITE)) {
-				Osl_Type_Info *comp_type_base = 
-					op1_type->kind == OSL_TYPE_COMPOSITE 
+			} else if ((op1_type->kind == OSL_TYPE_VECTOR || op2_type->kind == OSL_TYPE_VECTOR)) {
+				Osl_Type_Info *vec_type_base = 
+					op1_type->kind == OSL_TYPE_VECTOR 
 					? op1_type
 					: op2_type;
 				
-				Osl_Type_Info_Composite *comp_type = &comp_type_base->val.comp_type;
+				Osl_Type_Info_Vector *vec_type = &vec_type_base->val.vec_type;
 				
-				Osl_Type_Info *scalar_type = &op1_type->val.comp_type == comp_type ? op2_type : op1_type;
+				Osl_Type_Info *scalar_type = &op1_type->val.vec_type == vec_type ? op2_type : op1_type;
 				
-				u32 comp_op = comp_type == &op1_type->val.comp_type ? op1 : op2;
-				u32 scalar_op = comp_op == op1 ? op2 : op1;
+				u32 vec_op = vec_type == &op1_type->val.vec_type ? op1 : op2;
+				u32 scalar_op = vec_op == op1 ? op2 : op1;
 				
-				assert(comp_type->underlying == scalar_type);
+				assert(vec_type->underlying == scalar_type);
 				
 				if (is_vector_v_scalar) {
 					
@@ -16777,22 +16770,22 @@ unit_local Osl_Result spv_emit_expr(Spv_Converter *spv, Spv_Block *block, Osl_Ex
 						spv_op = OpUDiv;
 					else assert(false);
 					
-					assert(comp_type->component_count <= 128);
+					assert(vec_type->component_count <= 128);
 					u32 results[128];
 					
-					for (u32 i = 0; i < comp_type->component_count; i += 1) {
-						u32 comp_part_id = spv_push_op_composite_extract(spv, block, comp_op, scalar_type->type_id, &i, 1);
+					for (u32 i = 0; i < vec_type->component_count; i += 1) {
+						u32 vec_part_id = spv_push_op_composite_extract(spv, block, vec_op, scalar_type->type_id, &i, 1);
 						
 						spv_begin_op(block, spv_op);
 						spv_push_word(block, scalar_type->type_id);
 					    results[i] = spv_push_result_arg(spv, block);
-					    spv_push_word(block, comp_part_id);
+					    spv_push_word(block, vec_part_id);
 					    spv_push_word(block, scalar_op);
 				    	spv_end_op(block);
 					}
 					
-					*result_id = spv_push_op_composite_construct(spv, block, comp_type_base->type_id, results, comp_type->component_count);
-					*type = comp_type_base;
+					*result_id = spv_push_op_composite_construct(spv, block, vec_type_base->type_id, results, vec_type->component_count);
+					*type = vec_type_base;
 					
 				} else if (is_scalar_v_vector) {
 					
@@ -16822,8 +16815,8 @@ unit_local Osl_Result spv_emit_expr(Spv_Converter *spv, Spv_Block *block, Osl_Ex
 		case OSL_OP_GT: {
 		
 			Osl_Type_Info *target_type1 = op1_type;
-			if (op1_type->kind == OSL_TYPE_COMPOSITE)
-				target_type1 = op1_type->val.comp_type.underlying;
+			if (op1_type->kind == OSL_TYPE_VECTOR)
+				target_type1 = op1_type->val.vec_type.underlying;
 			
 			if (target_type1->kind == OSL_TYPE_FLOAT) {
 				spv_begin_op(block, OpFOrdGreaterThan);
@@ -16846,8 +16839,8 @@ unit_local Osl_Result spv_emit_expr(Spv_Converter *spv, Spv_Block *block, Osl_Ex
 		case OSL_OP_LT: {
 		
 			Osl_Type_Info *target_type1 = op1_type;
-			if (op1_type->kind == OSL_TYPE_COMPOSITE)
-				target_type1 = op1_type->val.comp_type.underlying;
+			if (op1_type->kind == OSL_TYPE_VECTOR)
+				target_type1 = op1_type->val.vec_type.underlying;
 			
 			if (target_type1->kind == OSL_TYPE_FLOAT) {
 				spv_begin_op(block, OpFOrdLessThan);
@@ -16870,8 +16863,8 @@ unit_local Osl_Result spv_emit_expr(Spv_Converter *spv, Spv_Block *block, Osl_Ex
 		case OSL_OP_GTE: {
 		
 			Osl_Type_Info *target_type1 = op1_type;
-			if (op1_type->kind == OSL_TYPE_COMPOSITE)
-				target_type1 = op1_type->val.comp_type.underlying;
+			if (op1_type->kind == OSL_TYPE_VECTOR)
+				target_type1 = op1_type->val.vec_type.underlying;
 			
 			if (target_type1->kind == OSL_TYPE_FLOAT) {
 				spv_begin_op(block, OpFOrdGreaterThanEqual);
@@ -16894,8 +16887,8 @@ unit_local Osl_Result spv_emit_expr(Spv_Converter *spv, Spv_Block *block, Osl_Ex
 		case OSL_OP_LTE: {
 		
 			Osl_Type_Info *target_type1 = op1_type;
-			if (op1_type->kind == OSL_TYPE_COMPOSITE)
-				target_type1 = op1_type->val.comp_type.underlying;
+			if (op1_type->kind == OSL_TYPE_VECTOR)
+				target_type1 = op1_type->val.vec_type.underlying;
 			
 			if (target_type1->kind == OSL_TYPE_FLOAT) {
 				spv_begin_op(block, OpFOrdLessThanEqual);
@@ -16918,8 +16911,8 @@ unit_local Osl_Result spv_emit_expr(Spv_Converter *spv, Spv_Block *block, Osl_Ex
 		case OSL_OP_EQ: {
 		
 			Osl_Type_Info *target_type1 = op1_type;
-			if (op1_type->kind == OSL_TYPE_COMPOSITE)
-				target_type1 = op1_type->val.comp_type.underlying;
+			if (op1_type->kind == OSL_TYPE_VECTOR)
+				target_type1 = op1_type->val.vec_type.underlying;
 			
 			if (target_type1->kind == OSL_TYPE_FLOAT) {
 				spv_begin_op(block, OpFOrdEqual);
@@ -16940,8 +16933,8 @@ unit_local Osl_Result spv_emit_expr(Spv_Converter *spv, Spv_Block *block, Osl_Ex
 		case OSL_OP_NEQ: {
 		
 			Osl_Type_Info *target_type1 = op1_type;
-			if (op1_type->kind == OSL_TYPE_COMPOSITE)
-				target_type1 = op1_type->val.comp_type.underlying;
+			if (op1_type->kind == OSL_TYPE_VECTOR)
+				target_type1 = op1_type->val.vec_type.underlying;
 			
 			if (target_type1->kind == OSL_TYPE_FLOAT) {
 				spv_begin_op(block, OpFOrdNotEqual);
@@ -17068,16 +17061,16 @@ unit_local Osl_Result spv_emit_expr(Spv_Converter *spv, Spv_Block *block, Osl_Ex
 		}
 		
 		if (inst->kind == OSL_INST_COMP) {
-			if (inst_type->kind != OSL_TYPE_COMPOSITE) {
-				spv->compiler->err_log = _osl_tprint_token(spv->compiler, _osl_get_node(expr)->first_token, tprint("Attempting to perform a composite instantiation on a non-composite type '%s'. This doesn't make sense.", inst->type_ident));
-				return spv->compiler->result = OSL_BAD_COMPOSITE_INSTANTIATE;
+			if (inst_type->kind != OSL_TYPE_VECTOR) {
+				spv->compiler->err_log = _osl_tprint_token(spv->compiler, _osl_get_node(expr)->first_token, tprint("Attempting to perform a vector instantiation on a non-vector type '%s'. This doesn't make sense.", inst->type_ident));
+				return spv->compiler->result = OSL_BAD_VECTOR_INSTANTIATE;
 			}
 			
-			if (inst_type->val.comp_type.component_count != inst->list.arg_count) {
-				spv->compiler->err_log = _osl_tprint_token(spv->compiler, _osl_get_node(expr)->first_token, tprint("Bad number of arguments passed to instantiation. Expected '%i', got '%i'", inst_type->val.comp_type.component_count, inst->list.arg_count));
-				return spv->compiler->result = OSL_BAD_COMPOSITE_INSTANTIATE;
+			if (inst_type->val.vec_type.component_count != inst->list.arg_count) {
+				spv->compiler->err_log = _osl_tprint_token(spv->compiler, _osl_get_node(expr)->first_token, tprint("Bad number of arguments passed to instantiation. Expected '%i', got '%i'", inst_type->val.vec_type.component_count, inst->list.arg_count));
+				return spv->compiler->result = OSL_BAD_VECTOR_INSTANTIATE;
 			}
-			underlying = inst_type->val.comp_type.underlying;
+			underlying = inst_type->val.vec_type.underlying;
 		} else if (inst->kind == OSL_INST_ARRAY) {
 			inst_type = arrayify_type(spv, inst_type, inst->list.arg_count);
 			underlying = inst_type->val.array_type.elem_type;
@@ -17191,14 +17184,14 @@ unit_local Osl_Result spv_emit_expr(Spv_Converter *spv, Spv_Block *block, Osl_Ex
 			} else {
 				string member_name = access->items[i].val.name;
 				
-				if (last_type->kind != OSL_TYPE_COMPOSITE && last_type->kind != OSL_TYPE_STRUCT) {
+				if (last_type->kind != OSL_TYPE_VECTOR && last_type->kind != OSL_TYPE_STRUCT) {
 					spv->compiler->err_log = _osl_tprint_token(spv->compiler, access->items[i].token, tprint("Type '%s' has no members, but it is being accessed here as if it does.", last_type->name));
 					return spv->compiler->result = OSL_INVALID_SUBSCRIPT;
 				}
 				
-				if (last_type->kind == OSL_TYPE_COMPOSITE) {
+				if (last_type->kind == OSL_TYPE_VECTOR) {
 					
-					Osl_Type_Info_Composite *comp_type = &last_type->val.comp_type;
+					Osl_Type_Info_Vector *vec_type = &last_type->val.vec_type;
 					
 					u32 indices[4] = {0, 1, 2, 3};
 					
@@ -17229,7 +17222,7 @@ unit_local Osl_Result spv_emit_expr(Spv_Converter *spv, Spv_Block *block, Osl_Ex
 							return spv->compiler->result = OSL_INVALID_SWIZZLE;
 						}
 						
-						if (index >= comp_type->component_count) {
+						if (index >= vec_type->component_count) {
 							// Make token point to the single err'd letter
 							Osl_Token *tok = access->items[i].token;
 							tok->length = 1;
@@ -17250,7 +17243,7 @@ unit_local Osl_Result spv_emit_expr(Spv_Converter *spv, Spv_Block *block, Osl_Ex
 						}
 						args[arg_count++] = arg;
 						
-						last_type = comp_type->underlying;
+						last_type = vec_type->underlying;
 						
 					} else {
 						// Swizzle
@@ -17281,23 +17274,23 @@ unit_local Osl_Result spv_emit_expr(Spv_Converter *spv, Spv_Block *block, Osl_Ex
 						
 						Osl_Type_Info *swizzle_result_type = 0;
 						
-						if (comp_type->underlying == &spv->type_f32 && member_name.count == 2)
+						if (vec_type->underlying == &spv->type_f32 && member_name.count == 2)
 							swizzle_result_type = &spv->type_f32v2;
-						else if (comp_type->underlying == &spv->type_f32 && member_name.count == 3)
+						else if (vec_type->underlying == &spv->type_f32 && member_name.count == 3)
 							swizzle_result_type = &spv->type_f32v3;
-						else if (comp_type->underlying == &spv->type_f32 && member_name.count == 4)
+						else if (vec_type->underlying == &spv->type_f32 && member_name.count == 4)
 							swizzle_result_type = &spv->type_f32v4;
-						else if (comp_type->underlying == &spv->type_u32 && member_name.count == 2)
+						else if (vec_type->underlying == &spv->type_u32 && member_name.count == 2)
 							swizzle_result_type = &spv->type_u32v2;
-						else if (comp_type->underlying == &spv->type_u32 && member_name.count == 3)
+						else if (vec_type->underlying == &spv->type_u32 && member_name.count == 3)
 							swizzle_result_type = &spv->type_u32v3;
-						else if (comp_type->underlying == &spv->type_u32 && member_name.count == 4)
+						else if (vec_type->underlying == &spv->type_u32 && member_name.count == 4)
 							swizzle_result_type = &spv->type_u32v4;
-						else if (comp_type->underlying == &spv->type_s32 && member_name.count == 2)
+						else if (vec_type->underlying == &spv->type_s32 && member_name.count == 2)
 							swizzle_result_type = &spv->type_s32v2;
-						else if (comp_type->underlying == &spv->type_s32 && member_name.count == 3)
+						else if (vec_type->underlying == &spv->type_s32 && member_name.count == 3)
 							swizzle_result_type = &spv->type_s32v3;
-						else if (comp_type->underlying == &spv->type_s32 && member_name.count == 4)
+						else if (vec_type->underlying == &spv->type_s32 && member_name.count == 4)
 							swizzle_result_type = &spv->type_s32v4;
 						else
 							assert(false);
@@ -17525,7 +17518,7 @@ unit_local Osl_Result spv_emit_expr(Spv_Converter *spv, Spv_Block *block, Osl_Ex
 			
 			Osl_Type_Info *underlying = arg_type;
 			
-			if (arg_type->kind == OSL_TYPE_COMPOSITE) underlying = arg_type->val.comp_type.underlying;
+			if (arg_type->kind == OSL_TYPE_VECTOR) underlying = arg_type->val.vec_type.underlying;
 			
 			if (underlying->kind != OSL_TYPE_FLOAT) {
 				spv->compiler->err_log = _osl_tprint_token(spv->compiler, _osl_get_node(arg)->first_token, tprint("Bad argument type. Expected a float type, got '%s'. Intrinsic signature is 'round :: (x: FloatType) -> FloatType'", arg_type->name));
@@ -17551,19 +17544,19 @@ unit_local Osl_Result spv_emit_expr(Spv_Converter *spv, Spv_Block *block, Osl_Ex
 			    Osl_Type_Info *int_type = &spv->type_s32;
 			    u32 bool_type = spv->type_bool.type_id;
 			    
-				if (arg_type->kind == OSL_TYPE_COMPOSITE) {
+				if (arg_type->kind == OSL_TYPE_VECTOR) {
 					u32 comps_half[4] = {const_half_id, const_half_id, const_half_id, const_half_id};
-					const_half_id = spv_push_op_composite_construct(spv, block, arg_type->type_id, comps_half, arg_type->val.comp_type.component_count);
+					const_half_id = spv_push_op_composite_construct(spv, block, arg_type->type_id, comps_half, arg_type->val.vec_type.component_count);
 					u32 comps_zero[4] = {const_zero_id, const_zero_id, const_zero_id, const_zero_id};
-					const_zero_id = spv_push_op_composite_construct(spv, block, arg_type->type_id, comps_zero, arg_type->val.comp_type.component_count);
+					const_zero_id = spv_push_op_composite_construct(spv, block, arg_type->type_id, comps_zero, arg_type->val.vec_type.component_count);
 					
-					if (arg_type->val.comp_type.component_count == 2) {
+					if (arg_type->val.vec_type.component_count == 2) {
 						int_type = &spv->type_s32v2;
 						bool_type = spv->type_boolv2.type_id;
-					} else if (arg_type->val.comp_type.component_count == 3) {
+					} else if (arg_type->val.vec_type.component_count == 3) {
 						int_type = &spv->type_s32v3;
 						bool_type = spv->type_boolv3.type_id;
-					} else if (arg_type->val.comp_type.component_count == 4) {
+					} else if (arg_type->val.vec_type.component_count == 4) {
 						int_type = &spv->type_s32v4;
 						bool_type = spv->type_boolv4.type_id;
 					} else assert(false);
@@ -17651,7 +17644,7 @@ unit_local Osl_Result spv_emit_expr(Spv_Converter *spv, Spv_Block *block, Osl_Ex
 			
 			Osl_Type_Info *underlying = arg_type;
 			
-			if (arg_type->kind == OSL_TYPE_COMPOSITE) underlying = arg_type->val.comp_type.underlying;
+			if (arg_type->kind == OSL_TYPE_VECTOR) underlying = arg_type->val.vec_type.underlying;
 			
 			if (underlying->kind != OSL_TYPE_FLOAT) {
 				spv->compiler->err_log = _osl_tprint_token(spv->compiler, _osl_get_node(arg)->first_token, tprint("Bad argument type. Expected a float type, got '%s'. Intrinsic signature is 'round :: (x: FloatType) -> FloatType'", arg_type->name));
@@ -17676,19 +17669,19 @@ unit_local Osl_Result spv_emit_expr(Spv_Converter *spv, Spv_Block *block, Osl_Ex
 			    Osl_Type_Info *int_type = &spv->type_s32;
 			    u32 bool_type = spv->type_bool.type_id;
 			    
-				if (arg_type->kind == OSL_TYPE_COMPOSITE) {
+				if (arg_type->kind == OSL_TYPE_VECTOR) {
 					u32 comps_one[4] = {const_one_id, const_one_id, const_one_id, const_one_id};
-					const_one_id = spv_push_op_composite_construct(spv, block, spv->type_s32.type_id, comps_one, arg_type->val.comp_type.component_count);
+					const_one_id = spv_push_op_composite_construct(spv, block, spv->type_s32.type_id, comps_one, arg_type->val.vec_type.component_count);
 					u32 comps_zero[4] = {const_zero_id, const_zero_id, const_zero_id, const_zero_id};
-					const_zero_id = spv_push_op_composite_construct(spv, block, spv->type_f32.type_id, comps_zero, arg_type->val.comp_type.component_count);
+					const_zero_id = spv_push_op_composite_construct(spv, block, spv->type_f32.type_id, comps_zero, arg_type->val.vec_type.component_count);
 					
-					if (arg_type->val.comp_type.component_count == 2) {
+					if (arg_type->val.vec_type.component_count == 2) {
 						int_type = &spv->type_s32v2;
 						bool_type = spv->type_boolv2.type_id;
-					} else if (arg_type->val.comp_type.component_count == 3) {
+					} else if (arg_type->val.vec_type.component_count == 3) {
 						int_type = &spv->type_s32v3;
 						bool_type = spv->type_boolv3.type_id;
-					} else if (arg_type->val.comp_type.component_count == 4) {
+					} else if (arg_type->val.vec_type.component_count == 4) {
 						int_type = &spv->type_s32v4;
 						bool_type = spv->type_boolv4.type_id;
 					} else assert(false);
@@ -17743,7 +17736,7 @@ unit_local Osl_Result spv_emit_expr(Spv_Converter *spv, Spv_Block *block, Osl_Ex
 			
 			Osl_Type_Info *underlying = arg_type;
 			
-			if (arg_type->kind == OSL_TYPE_COMPOSITE) underlying = arg_type->val.comp_type.underlying;
+			if (arg_type->kind == OSL_TYPE_VECTOR) underlying = arg_type->val.vec_type.underlying;
 			
 			if (underlying->kind != OSL_TYPE_FLOAT) {
 				spv->compiler->err_log = _osl_tprint_token(spv->compiler, _osl_get_node(arg)->first_token, tprint("Bad argument type. Expected a float type, got '%s'. Intrinsic signature is 'round :: (x: FloatType) -> FloatType'", arg_type->name));
@@ -17767,19 +17760,19 @@ unit_local Osl_Result spv_emit_expr(Spv_Converter *spv, Spv_Block *block, Osl_Ex
 			    Osl_Type_Info *int_type = &spv->type_s32;
 			    u32 bool_type = spv->type_bool.type_id;
 			    
-				if (arg_type->kind == OSL_TYPE_COMPOSITE) {
+				if (arg_type->kind == OSL_TYPE_VECTOR) {
 					u32 comps_one[4] = {const_one_id, const_one_id, const_one_id, const_one_id};
-					const_one_id = spv_push_op_composite_construct(spv, block, spv->type_s32.type_id, comps_one, arg_type->val.comp_type.component_count);
+					const_one_id = spv_push_op_composite_construct(spv, block, spv->type_s32.type_id, comps_one, arg_type->val.vec_type.component_count);
 					u32 comps_zero[4] = {const_zero_id, const_zero_id, const_zero_id, const_zero_id};
-					const_zero_id = spv_push_op_composite_construct(spv, block, spv->type_f32.type_id, comps_zero, arg_type->val.comp_type.component_count);
+					const_zero_id = spv_push_op_composite_construct(spv, block, spv->type_f32.type_id, comps_zero, arg_type->val.vec_type.component_count);
 					
-					if (arg_type->val.comp_type.component_count == 2) {
+					if (arg_type->val.vec_type.component_count == 2) {
 						int_type = &spv->type_s32v2;
 						bool_type = spv->type_boolv2.type_id;
-					} else if (arg_type->val.comp_type.component_count == 3) {
+					} else if (arg_type->val.vec_type.component_count == 3) {
 						int_type = &spv->type_s32v3;
 						bool_type = spv->type_boolv3.type_id;
-					} else if (arg_type->val.comp_type.component_count == 4) {
+					} else if (arg_type->val.vec_type.component_count == 4) {
 						int_type = &spv->type_s32v4;
 						bool_type = spv->type_boolv4.type_id;
 					} else assert(false);

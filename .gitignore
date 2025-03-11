@@ -40,3 +40,7 @@ tests/test_result
 *index.*
 
 tests/temp
+
+*.build
+
+!bindings/jai/ostd_windows.dll

@@ -58,14 +58,14 @@ typedef struct Arena {
     u64 allocated_size;
 } Arena;
 
-Arena make_arena(u64 reserved_size, u64 initial_allocated_size);
-void *arena_push(Arena *arena, u64 size);
-void *arena_push_copy(Arena *arena, void *src, u64 size);
-void arena_pop(Arena *arena, u64 size);
-void arena_reset(Arena *arena);
-void free_arena(Arena arena);
+OSTD_LIB Arena make_arena(u64 reserved_size, u64 initial_allocated_size);
+OSTD_LIB void *arena_push(Arena *arena, u64 size);
+OSTD_LIB void *arena_push_copy(Arena *arena, void *src, u64 size);
+OSTD_LIB void arena_pop(Arena *arena, u64 size);
+OSTD_LIB void arena_reset(Arena *arena);
+OSTD_LIB void free_arena(Arena arena);
 
-void* arena_allocator_proc(Allocator_Message msg, void *data, void *old, u64 old_n, u64 n, u64 alignment, u64 flags);
+unit_local void* arena_allocator_proc(Allocator_Message msg, void *data, void *old, u64 old_n, u64 n, u64 alignment, u64 flags);
 unit_local inline Allocator arena_allocator(Arena *a) { return (Allocator) { a, arena_allocator_proc }; }
 
 /////
@@ -75,45 +75,25 @@ unit_local inline Allocator arena_allocator(Arena *a) { return (Allocator) { a, 
 // todo(charlie) temporary storage might get bloated with large temporary allocations,
 // so we should provide a way to shrink temporary storage.
 
-Allocator get_temp(void);
-void reset_temporary_storage(void);
-void *tallocate(size_t n);
+OSTD_LIB Allocator get_temp(void);
+OSTD_LIB void reset_temporary_storage(void);
+OSTD_LIB void *tallocate(size_t n);
 
 
 
 
-inline void *allocate(Allocator a, u64 n) {
-    return a.proc(ALLOCATOR_ALLOCATE, a.data, 0, 0, n, 0, 0);
-}
-inline void *reallocate(Allocator a, void *p, u64 old_n, u64 n) {
-    return a.proc(ALLOCATOR_REALLOCATE, a.data, p, old_n, n, 0, 0);
-}
-inline void deallocate(Allocator a, void *p) {
-    a.proc(ALLOCATOR_FREE, a.data, p, 0, 0, 0, 0);
-}
+void *allocate(Allocator a, u64 n);
+void *reallocate(Allocator a, void *p, u64 old_n, u64 n);
+void deallocate(Allocator a, void *p);
 
-inline void *allocatef(Allocator a, u64 n, u64 flags) {
-    return a.proc(ALLOCATOR_ALLOCATE, a.data, 0, 0, n, flags, 0);
-}
-inline void *reallocatef(Allocator a, void *p, u64 old_n, u64 n, u64 flags) {
-    return a.proc(ALLOCATOR_REALLOCATE, a.data, p, old_n, n, flags, 0);
-}
-inline void deallocatef(Allocator a, void *p, u64 flags) {
-    a.proc(ALLOCATOR_FREE, a.data, p, 0, 0, flags, 0);
-}
+void *allocatef(Allocator a, u64 n, u64 flags);
+void *reallocatef(Allocator a, void *p, u64 old_n, u64 n, u64 flags);
+void deallocatef(Allocator a, void *p, u64 flags);
 
-inline string string_allocate(Allocator a, u64 n) {
-    return (string) {n, (u8*)allocate(a, n)};
-}
-inline void string_deallocate(Allocator a, string s) {
-    deallocate(a, s.data);
-}
+string string_allocate(Allocator a, u64 n);
+void string_deallocate(Allocator a, string s);
 
-inline string string_copy(Allocator a, string s) {
-    string new_s = string_allocate(a, s.count);
-    memcpy(new_s.data, s.data, (sys_uint)s.count);
-    return new_s;
-}
+string string_copy(Allocator a, string s);
 
 #ifdef OSTD_IMPL
 
@@ -277,6 +257,39 @@ void* arena_allocator_proc(Allocator_Message msg, void *data, void *old, u64 old
     }
 
     return 0;
+}
+
+void *allocate(Allocator a, u64 n) {
+    return a.proc(ALLOCATOR_ALLOCATE, a.data, 0, 0, n, 0, 0);
+}
+void *reallocate(Allocator a, void *p, u64 old_n, u64 n) {
+    return a.proc(ALLOCATOR_REALLOCATE, a.data, p, old_n, n, 0, 0);
+}
+void deallocate(Allocator a, void *p) {
+    a.proc(ALLOCATOR_FREE, a.data, p, 0, 0, 0, 0);
+}
+
+void *allocatef(Allocator a, u64 n, u64 flags) {
+    return a.proc(ALLOCATOR_ALLOCATE, a.data, 0, 0, n, flags, 0);
+}
+void *reallocatef(Allocator a, void *p, u64 old_n, u64 n, u64 flags) {
+    return a.proc(ALLOCATOR_REALLOCATE, a.data, p, old_n, n, flags, 0);
+}
+void deallocatef(Allocator a, void *p, u64 flags) {
+    a.proc(ALLOCATOR_FREE, a.data, p, 0, 0, flags, 0);
+}
+
+string string_allocate(Allocator a, u64 n) {
+    return (string) {n, (u8*)allocate(a, n)};
+}
+void string_deallocate(Allocator a, string s) {
+    deallocate(a, s.data);
+}
+
+string string_copy(Allocator a, string s) {
+    string new_s = string_allocate(a, s.count);
+    memcpy(new_s.data, s.data, (sys_uint)s.count);
+    return new_s;
 }
 
 #endif // OSTD_IMPL

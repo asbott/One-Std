@@ -729,7 +729,9 @@ unit_local inline VkInstance _vk_instance(void) {
 void oga_reset(void) {
     void (*untyped)(void) = vkGetInstanceProcAddr(__instance, "vkDestroyDebugUtilsMessengerEXT");
     PFN_vkDestroyDebugUtilsMessengerEXT _vkDestroyDebugUtilsMessengerEXT  = (PFN_vkDestroyDebugUtilsMessengerEXT)*(PFN_vkDestroyDebugUtilsMessengerEXT*)(void**)&untyped;
-    _vkDestroyDebugUtilsMessengerEXT(_vk_instance(), _vk_messenger, 0);
+    if (_vkDestroyDebugUtilsMessengerEXT) {
+        _vkDestroyDebugUtilsMessengerEXT(_vk_instance(), _vk_messenger, 0);
+    }
     vkDestroyInstance(_vk_instance(), 0);
     __instance = 0;
 }
