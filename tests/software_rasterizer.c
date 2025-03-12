@@ -66,14 +66,14 @@ int main(void) {
 
 	bool culling = false;
 
-    float2 verts[] = {
-        (float2){ -.25f,-.25f },
-        (float2){  0.f,  .25f },
-        (float2){  .25f,-.25f },
+    f32v2 verts[] = {
+        (f32v2){ -.25f,-.25f },
+        (f32v2){  0.f,  .25f },
+        (f32v2){  .25f,-.25f },
 
-        (float2){ -.25f+0.65f, .25f  },
-        (float2){  0.f+0.75f, -.25f  },
-        (float2){  .25f+0.75f, .25f  },
+        (f32v2){ -.25f+0.65f, .25f  },
+        (f32v2){  0.f+0.75f, -.25f  },
+        (f32v2){  .25f+0.75f, .25f  },
     };
     
     u32 colors[] = {
@@ -89,7 +89,7 @@ int main(void) {
     float target_frametime = 1.0f/60.0f;
 
 
-    u64 vertex_count = sizeof(verts)/sizeof(float2);
+    u64 vertex_count = sizeof(verts)/sizeof(f32v2);
 
     float rot = 0;
 
@@ -123,9 +123,9 @@ int main(void) {
 
 		rot += target_frametime*0.00001f;
 
-		float2 tri0 = m4_mulf2_trunc(m4_make_rotation_z(rot), (float2){ -.25f,-.25f });
-        float2 tri1 = m4_mulf2_trunc(m4_make_rotation_z(rot), (float2){  0.f,  .25f });
-        float2 tri2 = m4_mulf2_trunc(m4_make_rotation_z(rot), (float2){  .25f,-.25f });
+		f32v2 tri0 = m4_mulv2_trunc(m4_make_rotation_z(rot), (f32v2){ -.25f,-.25f });
+        f32v2 tri1 = m4_mulv2_trunc(m4_make_rotation_z(rot), (f32v2){  0.f,  .25f });
+        f32v2 tri2 = m4_mulv2_trunc(m4_make_rotation_z(rot), (f32v2){  .25f,-.25f });
 
 		verts[0] = tri0;
 	    verts[1] = tri1;
@@ -146,28 +146,28 @@ int main(void) {
 		float64 tt0 = sys_get_seconds_monotonic();
 		u64 cyc_tri0 = __rdtsc();
 		for (u64 i = 0; i+2 < vertex_count; i += 3) {
-			float2 p0 = verts[i+0];
-			float2 p1 = verts[i+1];
-			float2 p2 = verts[i+2];
+			f32v2 p0 = verts[i+0];
+			f32v2 p1 = verts[i+1];
+			f32v2 p2 = verts[i+2];
 			
 			u32 col0 = colors[i+0];
 			u32 col1 = colors[i+1];
 			u32 col2 = colors[i+2];
 
-			float2 p1_to_p0 = f2_sub(p0, p1);
-			float2 p1_to_p2 = f2_sub(p2, p1);
+			f32v2 p1_to_p0 = v2_sub(p0, p1);
+			f32v2 p1_to_p2 = v2_sub(p2, p1);
 
 			if (culling) {
-				float2 p1_to_p2_perp = f2(-p1_to_p2.y, p1_to_p2.x);
-				if (f2_dot(p1_to_p2_perp, p1_to_p0) < 0.0f) {
+				f32v2 p1_to_p2_perp = v2(-p1_to_p2.y, p1_to_p2.x);
+				if (v2_dot(p1_to_p2_perp, p1_to_p0) < 0.0f) {
 					continue;
 				}
 			}
 
 
-			float2 v0 = f2_sub(p1, p0);
-			float2 v1 = p1_to_p2;
-			float2 v2 = f2_sub(p0, p2);
+			f32v2 v0 = v2_sub(p1, p0);
+			f32v2 v1 = p1_to_p2;
+			f32v2 v2 = v2_sub(p0, p2);
 			float area = (p1.x - p0.x) * (p2.y - p0.y) - (p2.x - p0.x) * (p1.y - p0.y);
 
 			float min_x = min(p0.x, min(p1.x, p2.x));
@@ -176,12 +176,12 @@ int main(void) {
 			float max_y = max(p0.y, max(p1.y, p2.y));
 
 
-			float4 sl = (float4){0};
+			f32v4 sl = (f32v4){0};
 			sl.x = min_x;
 			sl.z = max_x;
 
 			// Scan line vector
-			float2 slv = (float2) { max_x-min_x, 0 };
+			f32v2 slv = (f32v2) { max_x-min_x, 0 };
 			(void)slv;
 
 			for (float y = min_y; y < max_y; y += frag_y) {
@@ -194,9 +194,9 @@ int main(void) {
 				float s_to_v2_perp = slv.x*v2.y-slv.y*v2.x;
 
 				// Vector from start of v0 to start of scanline
-				float2 vs0 = (float2){ p0.x-min_x, p0.y-y };
-				float2 vs1 = (float2){ p1.x-min_x, p1.y-y };
-				float2 vs2 = (float2){ p2.x-min_x, p2.y-y };
+				f32v2 vs0 = (f32v2){ p0.x-min_x, p0.y-y };
+				f32v2 vs1 = (f32v2){ p1.x-min_x, p1.y-y };
+				f32v2 vs2 = (f32v2){ p2.x-min_x, p2.y-y };
 
 				float vs0_to_sl_perp = vs0.x*slv.y-vs0.y*slv.x;
 				float vs0_to_v0_perp = vs0.x*v0.y-vs0.y*v0.x;

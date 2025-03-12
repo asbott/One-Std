@@ -8,6 +8,8 @@ VS_Out :: struct {
 Data :: struct {
 	tints:   [3]f32v4;
 	offsets: [3]f32v4;
+	rotations: [3]f32m4;
+	proj: f32m4;
 }
 
 pixel_coord: f32v4 $PixelCoord;

@@ -182,11 +182,11 @@ int main(void) {
     // Vertex & Index List + Image
     /////
     
-    struct { float4 pos; float3 col; float2 uv; } verts[] = {
-    	{ f4(-0.5f, -0.5f, 0.0f, 1.0f), f3(1.0f, 1.0f, 1.0f), f2(0.0f, 0.0f) },
-    	{ f4( 0.5f, -0.5f, 0.0f, 1.0f), f3(1.0f, 1.0f, 1.0f), f2(1.0f, 0.0f) },
-    	{ f4( 0.5f,  0.5f, 0.0f, 1.0f), f3(1.0f, 1.0f, 1.0f), f2(1.0f, 1.0f) },
-    	{ f4(-0.5f,  0.5f, 0.0f, 1.0f), f3(1.0f, 1.0f, 1.0f), f2(0.0f, 1.0f) }
+    struct { f32v4 pos; f32v3 col; f32v2 uv; } verts[] = {
+    	{ v4(-0.5f, -0.5f, 0.0f, 1.0f), v3(1.0f, 1.0f, 1.0f), v2(0.0f, 0.0f) },
+    	{ v4( 0.5f, -0.5f, 0.0f, 1.0f), v3(1.0f, 1.0f, 1.0f), v2(1.0f, 0.0f) },
+    	{ v4( 0.5f,  0.5f, 0.0f, 1.0f), v3(1.0f, 1.0f, 1.0f), v2(1.0f, 1.0f) },
+    	{ v4(-0.5f,  0.5f, 0.0f, 1.0f), v3(1.0f, 1.0f, 1.0f), v2(0.0f, 1.0f) }
     };
     
     u32 indices[] = {
@@ -342,7 +342,7 @@ int main(void) {
     
     // Vertex layout
     Oga_Vertex_List_Layout_Desc vertex_layout_desc = (Oga_Vertex_List_Layout_Desc) {0};
-    vertex_layout_desc.bindings[0].stride = sizeof(float4)+sizeof(float3)+sizeof(float2);
+    vertex_layout_desc.bindings[0].stride = sizeof(f32v4)+sizeof(f32v3)+sizeof(f32v2);
     vertex_layout_desc.bindings[0].input_rate = OGA_VERTEX_INPUT_RATE_VERTEX;
     vertex_layout_desc.binding_count = 1;
     
@@ -354,13 +354,13 @@ int main(void) {
     
     vertex_layout_desc.attributes[vertex_layout_desc.attribute_count].binding = 0;
     vertex_layout_desc.attributes[vertex_layout_desc.attribute_count].location = 1;
-    vertex_layout_desc.attributes[vertex_layout_desc.attribute_count].offset = sizeof(float4);
+    vertex_layout_desc.attributes[vertex_layout_desc.attribute_count].offset = sizeof(f32v4);
     vertex_layout_desc.attributes[vertex_layout_desc.attribute_count].type = OGA_VERTEX_ATTRIBUTE_TYPE_F32V3;
     vertex_layout_desc.attribute_count += 1;
     
     vertex_layout_desc.attributes[vertex_layout_desc.attribute_count].binding = 0;
     vertex_layout_desc.attributes[vertex_layout_desc.attribute_count].location = 2;
-    vertex_layout_desc.attributes[vertex_layout_desc.attribute_count].offset = sizeof(float4)+sizeof(float3);
+    vertex_layout_desc.attributes[vertex_layout_desc.attribute_count].offset = sizeof(f32v4)+sizeof(f32v3);
     vertex_layout_desc.attributes[vertex_layout_desc.attribute_count].type = OGA_VERTEX_ATTRIBUTE_TYPE_F32V2;
     vertex_layout_desc.attribute_count += 1;
     
@@ -519,7 +519,7 @@ int main(void) {
         attachment.image = swapchain->images[image_index];
         attachment.load_op = OGA_ATTACHMENT_LOAD_OP_CLEAR;
         attachment.store_op = OGA_ATTACHMENT_STORE_OP_STORE;
-        memcpy(attachment.clear_color, &(float32[4]){0.39f, 0.58f, 0.93f, 1.0f}, 16);
+        memcpy(attachment.clear_color, &(float[4]){0.39f, 0.58f, 0.93f, 1.0f}, 16);
         
         Oga_Begin_Render_Pass_Desc begin_desc = (Oga_Begin_Render_Pass_Desc){0};
         begin_desc.render_area_width = 800;

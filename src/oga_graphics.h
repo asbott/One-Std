@@ -907,7 +907,7 @@ typedef enum Oga_Vertex_Attribute_Type {
     We often only need one vertex list in one binding slot:
     
     Oga_Vertex_List_Layout_Desc desc = (Oga_Vertex_List_Layout_Desc) {0};
-    desc.bindings[0].stride = sizeof(float4)+sizeof(float3);
+    desc.bindings[0].stride = sizeof(f32v4)+sizeof(float3);
     desc.bindings[0].input_rate = OGA_VERTEX_INPUT_RATE_VERTEX;
     desc.binding_count = 1;
     
@@ -919,7 +919,7 @@ typedef enum Oga_Vertex_Attribute_Type {
     
     desc.attributes[desc.attribute_count].binding = 0;
     desc.attributes[desc.attribute_count].location = 1;
-    desc.attributes[desc.attribute_count].offset = sizeof(float4);
+    desc.attributes[desc.attribute_count].offset = sizeof(f32v4);
     desc.attributes[desc.attribute_count].type = OGA_VERTEX_ATTRIBUTE_TYPE_F32V3;
     desc.attribute_count += 1;
 */
@@ -1367,7 +1367,7 @@ OSTD_LIB void oga_cmd_copy_linear_to_image(Oga_Command_List cmd, Oga_Optimal_Cop
 OSTD_LIB void oga_cmd_copy_image_to_linear(Oga_Command_List cmd, Oga_Memory_Pointer dst, Oga_Optimal_Copy_View *src_view, Oga_Optimal_Copy_Desc src_desc);
 OSTD_LIB void oga_cmd_copy_image(Oga_Command_List cmd, Oga_Optimal_Copy_View *dst_view, Oga_Optimal_Copy_Desc dst_desc, Oga_Optimal_Copy_View *src_view, Oga_Optimal_Copy_Desc src_desc);
 
-OSTD_LIB void oga_cmd_fill_image(Oga_Command_List cmd, Oga_Optimal_Copy_View *dst_view, float4 color);
+OSTD_LIB void oga_cmd_fill_image(Oga_Command_List cmd, Oga_Optimal_Copy_View *dst_view, f32v4 color);
 
 #ifdef OGA_IMPL_AUTO
     #if (OS_FLAGS & OS_FLAG_WEB)

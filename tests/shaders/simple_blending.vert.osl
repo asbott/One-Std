@@ -7,8 +7,10 @@ VS_Out :: struct {
 }
 
 Data :: struct {
-	tints: [3]f32v4;
+	tints:   [3]f32v4;
 	offsets: [3]f32v4;
+	rotations: [3]f32m4;
+	proj: f32m4;
 }
 
 data: BlockView(Data) $UniformBinding(1);
@@ -22,7 +24,7 @@ in_position: f32v4 $Input(0);
 in_color: float3 $Input(1);
 in_uv: f32v2 $Input(2);
 
-out_position = in_position+data.offsets[instance_index];
+out_position = data.proj * data.rotations[instance_index] * (in_position+data.offsets[instance_index]);
 
 fs_in.color = in_color;
 fs_in.pos = out_position;

@@ -3527,7 +3527,7 @@ void oga_cmd_copy_image(Oga_Command_List cmd, Oga_Optimal_Copy_View *dst_view, O
     _vk_image_barrier_helper(cmd.id, dst_state->image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_GENERAL);
 }
 
-void oga_cmd_fill_image(Oga_Command_List cmd, Oga_Optimal_Copy_View *dst_view, float4 color) {
+void oga_cmd_fill_image(Oga_Command_List cmd, Oga_Optimal_Copy_View *dst_view, f32v4 color) {
     _Vk_Image_State *dst_state = (_Vk_Image_State*)(dst_view->id);
     
     VkClearColorValue vk_color;

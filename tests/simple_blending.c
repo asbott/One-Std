@@ -38,8 +38,10 @@ unit_local bool inline check_oga_result(Oga_Result result) {
 }
 
 typedef struct Data {
-    float4 tints[3];
-    float4 offsets[3];
+    f32v4 tints[3];
+    f32v4 offsets[3];
+    f32m4 rotations[3];
+    f32m4 proj;
 } Data;
 
 int main(void) {
@@ -204,11 +206,11 @@ int main(void) {
     // Vertex & Index List & Data Block
     /////
     
-    struct { float4 pos; float3 col; float2 uv; } verts[] = {
-    	{ f4(-0.5f, -0.5f, 0.0f, 1.0f), f3(1.0f, 1.0f, 1.0f), f2(0.0f, 0.0f) },
-    	{ f4( 0.5f, -0.5f, 0.0f, 1.0f), f3(1.0f, 1.0f, 1.0f), f2(1.0f, 0.0f) },
-    	{ f4( 0.5f,  0.5f, 0.0f, 1.0f), f3(1.0f, 1.0f, 1.0f), f2(1.0f, 1.0f) },
-    	{ f4(-0.5f,  0.5f, 0.0f, 1.0f), f3(1.0f, 1.0f, 1.0f), f2(0.0f, 1.0f) }
+    struct { f32v4 pos; f32v3 col; f32v2 uv; } verts[] = {
+    	{ v4(-0.5f, -0.5f, 0.0f, 1.0f), v3(1.0f, 1.0f, 1.0f), v2(0.0f, 0.0f) },
+    	{ v4( 0.5f, -0.5f, 0.0f, 1.0f), v3(1.0f, 1.0f, 1.0f), v2(1.0f, 0.0f) },
+    	{ v4( 0.5f,  0.5f, 0.0f, 1.0f), v3(1.0f, 1.0f, 1.0f), v2(1.0f, 1.0f) },
+    	{ v4(-0.5f,  0.5f, 0.0f, 1.0f), v3(1.0f, 1.0f, 1.0f), v2(0.0f, 1.0f) }
     };
     
     u32 indices[] = {
@@ -333,7 +335,7 @@ int main(void) {
     
     // Vertex layout
     Oga_Vertex_List_Layout_Desc vertex_layout_desc = (Oga_Vertex_List_Layout_Desc) {0};
-    vertex_layout_desc.bindings[0].stride = sizeof(float4)+sizeof(float3)+sizeof(float2);
+    vertex_layout_desc.bindings[0].stride = sizeof(f32v4)+sizeof(f32v3)+sizeof(f32v2);
     vertex_layout_desc.bindings[0].input_rate = OGA_VERTEX_INPUT_RATE_VERTEX;
     vertex_layout_desc.binding_count = 1;
     
@@ -345,13 +347,13 @@ int main(void) {
     
     vertex_layout_desc.attributes[vertex_layout_desc.attribute_count].binding = 0;
     vertex_layout_desc.attributes[vertex_layout_desc.attribute_count].location = 1;
-    vertex_layout_desc.attributes[vertex_layout_desc.attribute_count].offset = sizeof(float4);
+    vertex_layout_desc.attributes[vertex_layout_desc.attribute_count].offset = sizeof(f32v4);
     vertex_layout_desc.attributes[vertex_layout_desc.attribute_count].type = OGA_VERTEX_ATTRIBUTE_TYPE_F32V3;
     vertex_layout_desc.attribute_count += 1;
     
     vertex_layout_desc.attributes[vertex_layout_desc.attribute_count].binding = 0;
     vertex_layout_desc.attributes[vertex_layout_desc.attribute_count].location = 2;
-    vertex_layout_desc.attributes[vertex_layout_desc.attribute_count].offset = sizeof(float4)+sizeof(float3);
+    vertex_layout_desc.attributes[vertex_layout_desc.attribute_count].offset = sizeof(f32v4)+sizeof(f32v3);
     vertex_layout_desc.attributes[vertex_layout_desc.attribute_count].type = OGA_VERTEX_ATTRIBUTE_TYPE_F32V2;
     vertex_layout_desc.attribute_count += 1;
     
@@ -502,24 +504,26 @@ int main(void) {
         ///
         // Update the gpu data through the mapped memory
         // Make the color shift between red and normal
-        gpu_data->tints[0] = f4(1.0f, 0.0f, 0.0f, 0.6f);
-        gpu_data->tints[1] = f4(0.0f, 1.0f, 0.0f, 0.6f);
-        gpu_data->tints[2] = f4(0.0f, 0.0f, 1.0f, 0.6f);
+        gpu_data->tints[0] = v4(1.0f, 0.0f, 0.0f, 0.6f);
+        gpu_data->tints[1] = v4(0.0f, 1.0f, 0.0f, 0.6f);
+        gpu_data->tints[2] = v4(0.0f, 0.0f, 1.0f, 0.6f);
         
-        // Should appear in order, according to Z:
-        //  Nearest:  [1]
-        //  Middle:   [0]
-        //  Furthest: [3]
-        gpu_data->offsets[0] = f4(-0.5f,  0.25f, 0.5f, 0.0f);
-        gpu_data->offsets[1] = f4( 0.5f,  0.25f, 0.0f, 0.0f);
-        gpu_data->offsets[2] = f4( 0.0f, -0.25f, 1.0f, 0.0f);
+        gpu_data->offsets[0] = v4(-0.5f,  0.25f, 2.0f, 0.0f);
+        gpu_data->offsets[1] = v4( 0.5f,  0.25f, 3.0f, 0.0f);
+        gpu_data->offsets[2] = v4( 0.0f, -0.25f, 4.0f, 0.0f);
+        
+        gpu_data->rotations[0] = m4_make_rotation_z((f32)sys_get_seconds_monotonic());
+        gpu_data->rotations[1] = m4_make_rotation_z((f32)sys_get_seconds_monotonic());
+        gpu_data->rotations[2] = m4_make_rotation_z((f32)sys_get_seconds_monotonic());
+        
+        gpu_data->proj = m4_make_perspective_left_handed((f32)(PI*0.9), 800.f/600.f, 1.0f, 100.f);
         
         float64 now = sys_get_seconds_monotonic();
-        float32 scale = 0.1f;
+        float scale = 0.9f;
         float64 speed = 3.0;
-        gpu_data->offsets[0] = f4_add(gpu_data->offsets[0], f4((f32)sin(speed*now+PI*1)*scale, (f32)-sin(speed*now+PI*3)*scale, 0.0, 0.0));
-        gpu_data->offsets[1] = f4_add(gpu_data->offsets[1], f4((f32)sin(speed*now+PI*2)*scale, (f32)-sin(speed*now+PI*2)*scale, 0.0, 0.0));
-        gpu_data->offsets[2] = f4_add(gpu_data->offsets[2], f4((f32)sin(speed*now+PI*3)*scale, (f32)-sin(speed*now+PI*1)*scale, 0.0, 0.0));
+        gpu_data->offsets[0] = v4_add(gpu_data->offsets[0], v4((f32)sin(speed*now+PI*1)*scale, (f32)-sin(speed*now+PI*3)*scale, 0.0, 0.0));
+        gpu_data->offsets[1] = v4_add(gpu_data->offsets[1], v4((f32)sin(speed*now+PI*2)*scale, (f32)-sin(speed*now+PI*2)*scale, 0.0, 0.0));
+        gpu_data->offsets[2] = v4_add(gpu_data->offsets[2], v4((f32)sin(speed*now+PI*3)*scale, (f32)-sin(speed*now+PI*1)*scale, 0.0, 0.0));
         
         // Wait for frame to be ready, then reset it
         oga_wait_latch(cmd_latches[frame_index]);
@@ -550,9 +554,9 @@ int main(void) {
         attachment.image = swapchain->images[image_index];
         attachment.load_op = OGA_ATTACHMENT_LOAD_OP_CLEAR;
         attachment.store_op = OGA_ATTACHMENT_STORE_OP_STORE;
-        memcpy(attachment.clear_color, &(float32[4]){0.39f, 0.58f, 0.93f, 1.0f}, 16);
+        memcpy(attachment.clear_color, &(float[4]){0.39f, 0.58f, 0.93f, 1.0f}, 16);
         
-        oga_cmd_fill_image(cmd, blend_buffer_copy_dst, f4(0.39f, 0.58f, 0.93f, 1.0f));
+        oga_cmd_fill_image(cmd, blend_buffer_copy_dst, v4(0.39f, 0.58f, 0.93f, 1.0f));
         
         Oga_Begin_Render_Pass_Desc begin_desc = (Oga_Begin_Render_Pass_Desc){0};
         begin_desc.render_area_width = 800;
