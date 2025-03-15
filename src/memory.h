@@ -80,20 +80,65 @@ OSTD_LIB void reset_temporary_storage(void);
 OSTD_LIB void *tallocate(size_t n);
 
 
+/////
+// Allocation interface
+/////
+
+OSTD_LIB void *allocate(Allocator a, u64 n);
+OSTD_LIB void *reallocate(Allocator a, void *p, u64 old_n, u64 n);
+OSTD_LIB void deallocate(Allocator a, void *p);
+
+OSTD_LIB void *allocatef(Allocator a, u64 n, u64 flags);
+OSTD_LIB void *reallocatef(Allocator a, void *p, u64 old_n, u64 n, u64 flags);
+OSTD_LIB void deallocatef(Allocator a, void *p, u64 flags);
+
+OSTD_LIB string string_allocate(Allocator a, u64 n);
+OSTD_LIB void string_deallocate(Allocator a, string s);
+
+OSTD_LIB string string_copy(Allocator a, string s);
 
 
-void *allocate(Allocator a, u64 n);
-void *reallocate(Allocator a, void *p, u64 old_n, u64 n);
-void deallocate(Allocator a, void *p);
+/////
+// Arena-backed Persistent Growing Array
+/////
 
-void *allocatef(Allocator a, u64 n, u64 flags);
-void *reallocatef(Allocator a, void *p, u64 old_n, u64 n, u64 flags);
-void deallocatef(Allocator a, void *p, u64 flags);
+/*
+    Usage:
+    
+        Data *my_array;
+        persistent_array_init(allocator, (void**)&my_array, sizeof(Data));
+        
+        persistent_array_reserve(my_array, 7); // Optional, reserve memory for fewer grows
+        
+        Data elem = ...;
+        persistent_array_push_copy(my_array, &elem);
+        
+        Data *elem = persistent_array_push_empty(my_array);
+        
+        persistent_array_uninit(my_array);
+*/
 
-string string_allocate(Allocator a, u64 n);
-void string_deallocate(Allocator a, string s);
+OSTD_LIB void persistent_array_init(void **pparray, u64 element_size);
+OSTD_LIB void persistent_array_uninit(void *parray);
+OSTD_LIB void *persistent_array_push_copy(void *parray, void *item);
+OSTD_LIB void *persistent_array_push_empty(void *parray);
+OSTD_LIB void persistent_array_reserve(void *parray, u64 reserve_count);
+OSTD_LIB void persistent_array_shift_left(void *parray, u64 start_index, u64 shift_amount);
+OSTD_LIB void *persistent_array_shift_right(void *parray, u64 start_index, u64 shift_amount);
+OSTD_LIB void persistent_array_pop(void *parray);
+OSTD_LIB void persistent_array_swap_and_pop(void *parray, u64 index);
+OSTD_LIB s64 persistent_array_find_from_left(void *parray, void *pcompare_mem);
+OSTD_LIB s64 persistent_array_find_from_right(void *parray, void *pcompare_mem);
+OSTD_LIB void persistent_array_set_count(void *parray, u64 count);
+OSTD_LIB u64 persistent_array_count(void *parray);
 
-string string_copy(Allocator a, string s);
+typedef struct Arena_Backed_Array_Header {
+    Arena arena;
+    u64 capacity;
+    u64 count;
+    u64 elem_size;
+    u64 signature;
+} Arena_Backed_Array_Header;
 
 #ifdef OSTD_IMPL
 
@@ -152,8 +197,10 @@ Arena make_arena(u64 reserved_size, u64 initial_allocated_size) {
     if (reserved_size > initial_allocated_size) {
         arena.start = sys_map_pages(SYS_MEMORY_RESERVE, 0, reserved_size/info.page_size, false);
         assert(arena.start);
-        void *allocate_result = sys_map_pages(SYS_MEMORY_ALLOCATE, arena.start, initial_allocated_size/info.page_size, true);
-        assert(allocate_result == arena.start);
+        if (initial_allocated_size) {
+            void *allocate_result = sys_map_pages(SYS_MEMORY_ALLOCATE, arena.start, initial_allocated_size/info.page_size, true);
+            assert(allocate_result == arena.start);
+        }
     } else {
         arena.start = sys_map_pages(SYS_MEMORY_RESERVE | SYS_MEMORY_ALLOCATE, 0, reserved_size/info.page_size, false);
     }
@@ -290,6 +337,121 @@ string string_copy(Allocator a, string s) {
     string new_s = string_allocate(a, s.count);
     memcpy(new_s.data, s.data, (sys_uint)s.count);
     return new_s;
+}
+
+unit_local Arena_Backed_Array_Header *_persistent_header(void *parray) {
+    Arena_Backed_Array_Header *h = (Arena_Backed_Array_Header*)parray - 1;
+    assertmsg(h->signature == 0xfeedfacedeadbeef, "Pointer used as persistent array but it was not initialized with persistent_array_init()");
+    return h;
+}
+
+void persistent_array_init(void **pparray, u64 element_size) {
+    Arena arena = make_arena(1024ULL*1024ULL*1024ULL*4ULL, 0);
+    
+    Arena_Backed_Array_Header *header = (Arena_Backed_Array_Header*)arena_push(&arena, sizeof(Arena_Backed_Array_Header));
+    *header = (Arena_Backed_Array_Header){0};
+    header->arena = arena;
+    header->signature = 0xfeedfacedeadbeef;
+    header->elem_size = element_size;
+    
+    *pparray = header->arena.position;
+}
+void persistent_array_uninit(void *parray) {
+    Arena_Backed_Array_Header *h = _persistent_header(parray);
+    free_arena(h->arena);
+}
+void *persistent_array_push_copy(void *parray, void *src) {
+    Arena_Backed_Array_Header *h = _persistent_header(parray);
+    void *p = persistent_array_push_empty(parray);
+    memcpy(p, src, h->elem_size);
+    return p;
+}
+void *persistent_array_push_empty(void *parray) {
+    Arena_Backed_Array_Header *h = _persistent_header(parray);
+    
+    void *p;
+    if (h->count == h->capacity) {
+        p = arena_push(&h->arena, h->elem_size);
+        h->capacity += 1;
+    } else {
+        assert(h->count < h->capacity);
+        p = (u8*)parray + h->count*h->elem_size;
+    }
+    
+    h->count += 1;
+    
+    return p;
+}
+void persistent_array_reserve(void *parray, u64 reserve_count) {
+    Arena_Backed_Array_Header *h = _persistent_header(parray);
+    if (reserve_count <= h->capacity) return;
+    
+    u64 diff = reserve_count - h->capacity;
+    
+    arena_push(&h->arena, diff*h->elem_size);
+    h->capacity += diff;
+}
+void persistent_array_shift_left(void *parray, u64 start_index, u64 shift_amount) {
+    Arena_Backed_Array_Header *h = _persistent_header(parray);
+    assertmsg(start_index < h->count, "Index out of range");
+    u64 left_count = h->count-start_index-1;
+    assert(shift_amount <= left_count);
+    
+    memcpy(
+        (u8*)parray+(start_index-shift_amount)*h->elem_size, 
+        (u8*)parray+(h->count-start_index)*h->elem_size, 
+        shift_amount*h->elem_size
+    );
+}
+void *persistent_array_shift_right(void *parray, u64 start_index, u64 shift_amount) {
+    Arena_Backed_Array_Header *h = _persistent_header(parray);
+    assertmsg(start_index < h->count, "Index out of range");
+    
+    persistent_array_reserve(parray, h->count+shift_amount);
+    
+    memcpy(
+        (u8*)parray+(start_index+shift_amount)*h->elem_size, 
+        (u8*)parray+start_index*h->elem_size, 
+        shift_amount*h->elem_size
+    );
+    
+    return (u8*)parray+start_index*h->elem_size;
+}
+void persistent_array_pop(void *parray) {
+    Arena_Backed_Array_Header *h = _persistent_header(parray);
+    assert(h->count > 0);
+    h->count -= 1;
+}
+void persistent_array_swap_and_pop(void *parray, u64 index) {
+    Arena_Backed_Array_Header *h = _persistent_header(parray);
+    persistent_array_pop(parray);
+    memcpy((u8*)parray+index*h->elem_size, (u8*)parray+h->count*h->elem_size, h->elem_size);
+}
+s64 persistent_array_find_from_left(void *parray, void *pcompare_mem) {
+    Arena_Backed_Array_Header *h = _persistent_header(parray);
+    for (u64 i = 0; i < h->count; i += 1) {
+        if (memcmp(pcompare_mem, (u8*)parray + i*h->elem_size, h->elem_size) == 0)
+            return (s64)i;
+    }
+    return -1;
+}
+s64 persistent_array_find_from_right(void *parray, void *pcompare_mem) {
+    Arena_Backed_Array_Header *h = _persistent_header(parray);
+    for (s64 i = (s64)h->count-1; i >= 0; i -= 1) {
+        if (memcmp(pcompare_mem, (u8*)parray + (u64)i*h->elem_size, h->elem_size) == 0)
+            return i;
+    }
+    return -1;
+}
+
+void persistent_array_set_count(void *parray, u64 count) {
+    Arena_Backed_Array_Header *h = _persistent_header(parray);
+    persistent_array_reserve(parray, count);
+    h->count = count;
+}
+
+u64 persistent_array_count(void *parray) {
+    return _persistent_header(parray)->count;
 }
 
 #endif // OSTD_IMPL

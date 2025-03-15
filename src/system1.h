@@ -1084,10 +1084,17 @@ Socket_Result sys_set_socket_blocking_timeout(Socket socket, u64 ms) {
     return SOCKET_OK;
 }
 
-double sys_get_seconds_monotonic(void) {
+float64 sys_get_seconds_monotonic(void) {
     struct timespec ts;
     clock_gettime(CLOCK_MONOTONIC, &ts);
-    return (double)ts.tv_sec + (double)ts.tv_nsec / 1e9;
+    float64 t = (float64)ts.tv_sec + (float64)ts.tv_nsec / 1e9;
+    
+    local_persist float64 start_time = 0.0;
+	if (start_time == 0.0) {
+	   start_time = t;
+	}
+	
+	return t - start_time;
 }
 
 void sys_set_thread_affinity_mask(Thread_Handle thread, u64 bits) {
@@ -2371,7 +2378,14 @@ float64 sys_get_seconds_monotonic(void) {
     LARGE_INTEGER freq, counter = (LARGE_INTEGER){0};
 	QueryPerformanceFrequency(&freq);
 	QueryPerformanceCounter(&counter);
-	return (float64)counter.QuadPart / (float64)freq.QuadPart;
+	float64 t = (float64)counter.QuadPart / (float64)freq.QuadPart;
+	
+	local_persist float64 start_time = 0.0;
+	if (start_time == 0.0) {
+	   start_time = t;
+	}
+	
+	return t - start_time;
 }
 
 void sys_set_thread_affinity_mask(Thread_Handle thread, u64 bits) {

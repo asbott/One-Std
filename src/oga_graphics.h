@@ -267,11 +267,6 @@ typedef enum Oga_Format {
     OGA_FORMAT_R32G32B32A32_UINT,
     OGA_FORMAT_R32G32B32A32_SINT,
     
-    OGA_FORMAT_DEPTH16_UNORM,
-    OGA_FORMAT_DEPTH24_UNORM_S8_UINT,
-    OGA_FORMAT_DEPTH32_SFLOAT,
-    OGA_FORMAT_DEPTH32_SFLOAT_S8_UINT,
-
     OGA_FORMAT_BC1_RGB_UNORM_BLOCK,
     OGA_FORMAT_BC1_RGB_SRGB_BLOCK,
     OGA_FORMAT_BC1_RGBA_UNORM_BLOCK,
@@ -365,11 +360,6 @@ unit_local inline string oga_format_str(Oga_Format f) {
         case OGA_FORMAT_R32G32B32A32_SFLOAT:            return RSTR(R32G32B32A32_SFLOAT);
         case OGA_FORMAT_R32G32B32A32_UINT:              return RSTR(R32G32B32A32_UINT);
         case OGA_FORMAT_R32G32B32A32_SINT:              return RSTR(R32G32B32A32_SINT);
-
-        case OGA_FORMAT_DEPTH16_UNORM:                  return RSTR(DEPTH16_UNORM);
-        case OGA_FORMAT_DEPTH24_UNORM_S8_UINT:          return RSTR(DEPTH24_UNORM_S8_UINT);
-        case OGA_FORMAT_DEPTH32_SFLOAT:                 return RSTR(DEPTH32_SFLOAT);
-        case OGA_FORMAT_DEPTH32_SFLOAT_S8_UINT:         return RSTR(DEPTH32_SFLOAT_S8_UINT);
 
         case OGA_FORMAT_BC1_RGB_UNORM_BLOCK:            return RSTR(BC1_RGB_UNORM_BLOCK);
         case OGA_FORMAT_BC1_RGB_SRGB_BLOCK:             return RSTR(BC1_RGB_SRGB_BLOCK);
@@ -532,7 +522,7 @@ typedef u64 Oga_Device_Feature_Flag;
 #define OGA_DEVICE_FEATURE_GRAPHICS_TIMESTAMP (1 << 0)
 #define OGA_DEVICE_FEATURE_COMPUTE_TIMESTAMP  (1 << 1)
 #define OGA_DEVICE_FEATURE_PRESENT_MAILBOX    (1 << 2)
-#define OGA_DEVICE_FEATURE_DEPTH_CLAMP    (1 << 3)
+//#define OGA_DEVICE_FEATURE_DEPTH_CLAMP    (1 << 3)
 
 unit_local inline string oga_device_feature_str(Oga_Device_Feature_Flag f) {
     switch (f) {
@@ -573,8 +563,6 @@ typedef struct Oga_Device {
 
     Oga_Logical_Engine_Family_Info engine_family_infos[OGA_MAX_DEVICE_LOGICAL_ENGINE_FAMILIES];
     u32 engine_family_count;
-
-    Oga_Format depth_format;
 
     Oga_Memory_Heap memory_heaps[OGA_MAX_MEMORY_HEAPS_PER_DEVICE];
     u64 memory_heap_count;
@@ -949,7 +937,7 @@ typedef struct Oga_Vertex_List_Layout_Desc {
 typedef u64 Oga_Render_Pass_Flag;
 unit_local const Oga_Render_Pass_Flag OGA_RENDER_PASS_INHERITANCE_PARENT = 1 << 0;
 unit_local const Oga_Render_Pass_Flag OGA_RENDER_PASS_INHERITANCE_CHILD = 1 << 1;
-unit_local const Oga_Render_Pass_Flag OGA_RENDER_PASS_DISABLE_DEPTH_CLAMP = 1 << 2;
+//unit_local const Oga_Render_Pass_Flag OGA_RENDER_PASS_DISABLE_DEPTH_CLAMP = 1 << 2;
 
 // #Volatile values must map to same as vulkan equivalents
 typedef enum Oga_Primitive_Topology {

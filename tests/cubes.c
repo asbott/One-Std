@@ -13,6 +13,19 @@
 
 #include "third_party/stb_image_modified.h"
 
+unit_local void my_logger(string message, u64 flags, Source_Location location) {
+    print("%s:%i | ", location.file, location.line);
+    if (flags & OGA_LOG_VERBOSE) {
+        print("[OGA VERBOSE]: %s", message);
+    } else {
+        prints(message);
+    }
+    
+    if (message.count > 0 && message.data[message.count-1] != '\n') {
+        print("\n");
+    }
+}
+
 unit_local bool inline check_oga_result(Oga_Result result) {
     if (result != OGA_OK) {
         string err_name = oga_get_result_name(result);
@@ -24,9 +37,18 @@ unit_local bool inline check_oga_result(Oga_Result result) {
     return true;
 }
 
+typedef struct Data {
+    f32v4 tints[3];
+    f32m4 transforms[3];
+    f32m4 proj;
+} Data;
+
 int main(void) {
 
     stb_arena = make_arena(1024*1024*1024*69, 1024*1024*20);
+    
+    // Set the global logger, which all log() calls will go through
+    logger = my_logger;
 
 	////
 	// Pick an appropriate device.
@@ -129,33 +151,27 @@ int main(void) {
     // GPU Programs
     /////
     
-    string vert_src, frag_src;
+    string program_src;
     void *frag_code, *vert_code;
     u64 frag_code_size, vert_code_size;
     
-    bool vert_src_ok = sys_read_entire_file(get_temp(), STR("tests/shaders/basic.vert.osl"), &vert_src);
-    assert(vert_src_ok);
+    bool src_ok = sys_read_entire_file(get_temp(), STR("tests/shaders/cube.osl"), &program_src);
+    assert(src_ok);
     
-    bool frag_src_ok = sys_read_entire_file(get_temp(), STR("tests/shaders/image.frag.osl"), &frag_src);
-    assert(frag_src_ok);
-    
-    Osl_Compile_Desc vert_desc = (Osl_Compile_Desc){0};
-    vert_desc.code_text = vert_src;
-    vert_desc.target = OGA_OSL_TARGET;
-    vert_desc.program_kind = OSL_PROGRAM_GPU_VERTEX;
-    
-    Osl_Compile_Desc frag_desc = (Osl_Compile_Desc){0};
-    frag_desc.code_text = frag_src;
-    frag_desc.target = OGA_OSL_TARGET;
-    frag_desc.program_kind = OSL_PROGRAM_GPU_FRAGMENT;
+    Osl_Compile_Desc compile_desc = (Osl_Compile_Desc){0};
+    compile_desc.code_text = program_src;
+    compile_desc.target = OGA_OSL_TARGET;
     
     string compile_err;
     Osl_Result compile_result;
     
-    compile_result = osl_compile(get_temp(), vert_desc, &vert_code, &vert_code_size, &compile_err);
+    compile_desc.program_kind = OSL_PROGRAM_GPU_VERTEX;
+    compile_result = osl_compile(get_temp(), compile_desc, &vert_code, &vert_code_size, &compile_err);
     assertmsgs(compile_result == OSL_OK, compile_err);
     
-    compile_result = osl_compile(get_temp(), frag_desc, &frag_code, &frag_code_size, &compile_err);
+    compile_desc.enabled_features = OSL_FEATURE_INVOCATION_PIXEL_INTERLOCK;
+    compile_desc.program_kind = OSL_PROGRAM_GPU_FRAGMENT;
+    compile_result = osl_compile(get_temp(), compile_desc, &frag_code, &frag_code_size, &compile_err);
     assertmsgs(compile_result == OSL_OK, compile_err);
     
     Oga_Program *vert_program, *frag_program;
@@ -179,100 +195,134 @@ int main(void) {
     sys_write_entire_file(STR("test.frag.spv"), (string){frag_code_size, (u8*)frag_code});
     
     //////
-    // Vertex & Index List + Image
+    // Vertex & Index List & Data Block
     /////
     
-    struct { f32v4 pos; f32v3 col; f32v2 uv; } verts[] = {
-    	{ v4(-0.5f, -0.5f, 0.0f, 1.0f), v3(1.0f, 1.0f, 1.0f), v2(0.0f, 0.0f) },
-    	{ v4( 0.5f, -0.5f, 0.0f, 1.0f), v3(1.0f, 1.0f, 1.0f), v2(1.0f, 0.0f) },
-    	{ v4( 0.5f,  0.5f, 0.0f, 1.0f), v3(1.0f, 1.0f, 1.0f), v2(1.0f, 1.0f) },
-    	{ v4(-0.5f,  0.5f, 0.0f, 1.0f), v3(1.0f, 1.0f, 1.0f), v2(0.0f, 1.0f) }
+    struct { f32v4 pos; f32v3 col; f32v2 uv; f32v3 norm; } verts[] = {
+        // Front face (z = +0.5), normal (0, 0, 1)
+        { v4(-0.5f, -0.5f,  0.5f, 1.0f), v3(1,1,1), v2(0,0), v3(0,0,1) },
+        { v4( 0.5f,  0.5f,  0.5f, 1.0f), v3(1,1,1), v2(1,1), v3(0,0,1) },
+        { v4( 0.5f, -0.5f,  0.5f, 1.0f), v3(1,1,1), v2(1,0), v3(0,0,1) },
+    
+        { v4(-0.5f, -0.5f,  0.5f, 1.0f), v3(1,1,1), v2(0,0), v3(0,0,1) },
+        { v4(-0.5f,  0.5f,  0.5f, 1.0f), v3(1,1,1), v2(0,1), v3(0,0,1) },
+        { v4( 0.5f,  0.5f,  0.5f, 1.0f), v3(1,1,1), v2(1,1), v3(0,0,1) },
+    
+        // Back face (z = -0.5), normal (0, 0, -1)
+        { v4( 0.5f, -0.5f, -0.5f, 1.0f), v3(1,1,1), v2(0,0), v3(0,0,-1) },
+        { v4(-0.5f,  0.5f, -0.5f, 1.0f), v3(1,1,1), v2(1,1), v3(0,0,-1) },
+        { v4(-0.5f, -0.5f, -0.5f, 1.0f), v3(1,1,1), v2(1,0), v3(0,0,-1) },
+    
+        { v4( 0.5f, -0.5f, -0.5f, 1.0f), v3(1,1,1), v2(0,0), v3(0,0,-1) },
+        { v4( 0.5f,  0.5f, -0.5f, 1.0f), v3(1,1,1), v2(0,1), v3(0,0,-1) },
+        { v4(-0.5f,  0.5f, -0.5f, 1.0f), v3(1,1,1), v2(1,1), v3(0,0,-1) },
+    
+        // Left face (x = -0.5), normal (-1, 0, 0)
+        { v4(-0.5f, -0.5f, -0.5f, 1.0f), v3(1,1,1), v2(0,0), v3(-1,0,0) },
+        { v4(-0.5f,  0.5f,  0.5f, 1.0f), v3(1,1,1), v2(1,1), v3(-1,0,0) },
+        { v4(-0.5f, -0.5f,  0.5f, 1.0f), v3(1,1,1), v2(1,0), v3(-1,0,0) },
+    
+        { v4(-0.5f, -0.5f, -0.5f, 1.0f), v3(1,1,1), v2(0,0), v3(-1,0,0) },
+        { v4(-0.5f,  0.5f, -0.5f, 1.0f), v3(1,1,1), v2(0,1), v3(-1,0,0) },
+        { v4(-0.5f,  0.5f,  0.5f, 1.0f), v3(1,1,1), v2(1,1), v3(-1,0,0) },
+    
+        // Right face (x = +0.5), normal (1, 0, 0)
+        { v4( 0.5f, -0.5f,  0.5f, 1.0f), v3(1,1,1), v2(0,0), v3(1,0,0) },
+        { v4( 0.5f,  0.5f, -0.5f, 1.0f), v3(1,1,1), v2(1,1), v3(1,0,0) },
+        { v4( 0.5f, -0.5f, -0.5f, 1.0f), v3(1,1,1), v2(1,0), v3(1,0,0) },
+    
+        { v4( 0.5f, -0.5f,  0.5f, 1.0f), v3(1,1,1), v2(0,0), v3(1,0,0) },
+        { v4( 0.5f,  0.5f,  0.5f, 1.0f), v3(1,1,1), v2(0,1), v3(1,0,0) },
+        { v4( 0.5f,  0.5f, -0.5f, 1.0f), v3(1,1,1), v2(1,1), v3(1,0,0) },
+    
+        // Top face (y = +0.5), normal (0, 1, 0)
+        { v4(-0.5f,  0.5f,  0.5f, 1.0f), v3(1,1,1), v2(0,0), v3(0,1,0) },
+        { v4( 0.5f,  0.5f, -0.5f, 1.0f), v3(1,1,1), v2(1,1), v3(0,1,0) },
+        { v4( 0.5f,  0.5f,  0.5f, 1.0f), v3(1,1,1), v2(1,0), v3(0,1,0) },
+    
+        { v4(-0.5f,  0.5f,  0.5f, 1.0f), v3(1,1,1), v2(0,0), v3(0,1,0) },
+        { v4(-0.5f,  0.5f, -0.5f, 1.0f), v3(1,1,1), v2(0,1), v3(0,1,0) },
+        { v4( 0.5f,  0.5f, -0.5f, 1.0f), v3(1,1,1), v2(1,1), v3(0,1,0) },
+    
+        // Bottom face (y = -0.5), normal (0, -1, 0)
+        { v4(-0.5f, -0.5f, -0.5f, 1.0f), v3(1,1,1), v2(0,0), v3(0,-1,0) },
+        { v4( 0.5f, -0.5f,  0.5f, 1.0f), v3(1,1,1), v2(1,1), v3(0,-1,0) },
+        { v4( 0.5f, -0.5f, -0.5f, 1.0f), v3(1,1,1), v2(1,0), v3(0,-1,0) },
+    
+        { v4(-0.5f, -0.5f, -0.5f, 1.0f), v3(1,1,1), v2(0,0), v3(0,-1,0) },
+        { v4(-0.5f, -0.5f,  0.5f, 1.0f), v3(1,1,1), v2(0,1), v3(0,-1,0) },
+        { v4( 0.5f, -0.5f,  0.5f, 1.0f), v3(1,1,1), v2(1,1), v3(0,-1,0) },
     };
+
     
-    u32 indices[] = {
-        0, 1, 2,
-        0, 2, 3
-    };
+    Oga_Image_View_Desc depth_buffer_desc = (Oga_Image_View_Desc){0};
+    depth_buffer_desc.format = OGA_FORMAT_R16_UINT;
+    depth_buffer_desc.dimensions = OGA_2D;
+    depth_buffer_desc.width = (u64)sc_desc.width;
+    depth_buffer_desc.height = (u64)sc_desc.height;
+    depth_buffer_desc.graphics_engine_family_index = engine_family_index;
     
-    string img_raw;
-    bool img_ok = sys_read_entire_file(get_temp(), STR("tests/images/logo.png"), &img_raw);
-    assert(img_ok);
+    Oga_Memory_Pointer static_mem = (Oga_Memory_Pointer){0};
     
-    int width, height, channels;
-    unsigned char *img_data = stbi_load_from_memory(img_raw.data, (int)img_raw.count, &width, &height, &channels, STBI_rgb_alpha);
-    assert(img_data);
-    
-    // In general, as with regular CPU programming, you want to make few and large allocations up front.
-    // So this is what we do with our GPU memory as well.
-    // We do however need to follow some alignment rules.
-    
-    Oga_Memory_Pointer mem = (Oga_Memory_Pointer){0};
+    Oga_Memory_Pointer reflected_mem = (Oga_Memory_Pointer){0};
     
     // Memory views needs to start at memory_granularity to guarantee all alignment requirements are met
     // and no aliasing occurs.
-    // Image memory views needs to start at image_memory_granularity
-    u64 granularity = context->device.limits.memory_granularity;
-    u64 img_granularity = context->device.limits.image_memory_granularity;
+    //u64 granularity = context->device.limits.memory_granularity;
+    u64 fbuffer_granularity = context->device.limits.fbuffer_memory_granularity;
     
     u64 vertex_alloc_size = sizeof(verts);
     u64 vertex_offset = 0;
      
-    u64 index_alloc_size  = sizeof(indices);
-    u64 index_offset = align_next(vertex_alloc_size, granularity);
+    u64 depth_buffer_alloc_size  = oga_get_image_memory_requirement(context, depth_buffer_desc);
+    u64 depth_buffer_offset = align_next(vertex_offset+vertex_alloc_size, fbuffer_granularity);
     
-    // We fill out the image desc here because we need it to know beforehand what the memory
-    // requirement is for the image. If we do not meed to memory requirement (which is not always
-    // straight-forward and IS driver-specific), then we will get an error.
-    // The only field we cannot fill yet is image_desc.image_pointer, because that's what
-    // we need to allocate memory for.
-    Oga_Image_View_Desc image_desc = (Oga_Image_View_Desc){0};
-    image_desc.format = OGA_FORMAT_R8G8B8A8_UNORM;
-    image_desc.dimensions = OGA_2D;
-    image_desc.width = (u64)width;
-    image_desc.height = (u64)height;
-    image_desc.linear_tiling = false;
-    image_desc.graphics_engine_family_index = engine_family_index;
-    u64 image_alloc_size = oga_get_image_memory_requirement(context, image_desc);
-    u64 image_offset = align_next(index_offset+index_alloc_size, img_granularity);
-    
-    // We need image size * 2 in memory because we need to upload the raw image memory first
-    // and then copy it through an image view, so that its converted to the driver-specific
-    // image-optimal storage.
-    u64 image_staging_offset = align_next(image_offset+image_alloc_size, granularity);
-    
-    u64 alloc_size = image_staging_offset + image_alloc_size;
+    u64 alloc_size = depth_buffer_offset + depth_buffer_alloc_size;
     
     // Allocate the memory
+    
     Oga_Memory_Property_Flag mem_props = OGA_MEMORY_PROPERTY_GPU_LOCAL | OGA_MEMORY_PROPERTY_GPU_TO_CPU_MAPPABLE;
-    Oga_Memory_Usage mem_usage = OGA_MEMORY_USAGE_VERTEX_LIST | OGA_MEMORY_USAGE_INDEX_LIST | OGA_MEMORY_USAGE_IMAGE_2D;
-    if (!check_oga_result(oga_allocate_memory(context, alloc_size, mem_props, mem_usage, &mem)))
+    Oga_Memory_Usage mem_usage = 
+        OGA_MEMORY_USAGE_VERTEX_LIST 
+      | OGA_MEMORY_USAGE_INDEX_LIST 
+      | OGA_MEMORY_USAGE_IMAGE_2D; 
+    if (!check_oga_result(oga_allocate_memory(context, alloc_size, mem_props, mem_usage, &static_mem)))
         return 1;
         
-    // Vertex pointer should point to the start of the allocated memory, while the index pointer should
-    // point to after the vertex memory, image pointer to after index memory.
     
-    Oga_Memory_Pointer vertex_ptr, index_ptr, image_ptr, image_staging_ptr;
-    oga_memory_offset(mem, (s64)vertex_offset, &vertex_ptr);
-    oga_memory_offset(mem, (s64)index_offset, &index_ptr);
-    oga_memory_offset(mem, (s64)image_offset, &image_ptr);
-    oga_memory_offset(mem, (s64)image_staging_offset, &image_staging_ptr);
+    u64 block_alloc_size  = sizeof(Data);
+    u64 block_offset = 0;
+    mem_props = OGA_MEMORY_PROPERTY_GPU_LOCAL | OGA_MEMORY_PROPERTY_GPU_TO_CPU_MAPPABLE | OGA_MEMORY_PROPERTY_GPU_TO_CPU_REFLECTED;
+    mem_usage = OGA_MEMORY_USAGE_FAST_READONLY_DATA_BLOCK;
+    if (!check_oga_result(oga_allocate_memory(context, block_alloc_size, mem_props, mem_usage, &reflected_mem)))
+        return 1;
+        
+    // Offset pointers
     
-    // Map the memory and write to it, then unmap it
-    // This is simple enough for our lists because they expect regual, linear memory.
-    // The image is more complicated, but for now we put it in the staging memory
+    Oga_Memory_Pointer vertex_ptr, block_ptr, depth_buffer_ptr;
+    
+    oga_memory_offset(static_mem, (s64)vertex_offset, &vertex_ptr);
+    oga_memory_offset(static_mem, (s64)depth_buffer_offset, &depth_buffer_ptr);
+    
+    oga_memory_offset(reflected_mem, (s64)block_offset, &block_ptr);
+    
     void *mapped_memory = 0;
-    if (!check_oga_result(oga_map_memory(mem, alloc_size, &mapped_memory)))
+    if (!check_oga_result(oga_map_memory(static_mem, alloc_size, &mapped_memory)))
         return 1;
     memcpy((u8*)mapped_memory+0, verts, sizeof(verts));
-    memcpy((u8*)mapped_memory+index_offset, indices, sizeof(indices));
-    memcpy((u8*)mapped_memory+image_staging_offset, img_data, (u64)width*(u64)height*4); // Copy image into the staging memory
-    oga_unmap_memory(mem);
+    oga_unmap_memory(static_mem);
+    
+    // Map the gpu data block to our Data*, which we can write directly to and it will
+    // get written to the GPU memory.
+    Data *gpu_data;
+    if (!check_oga_result(oga_map_memory(reflected_mem, sizeof(Data), (void**)&gpu_data)))
+        return 1;
     
     // Create the memory views
     
     Oga_Vertex_List_View *vlist = 0;
-    Oga_Index_List_View *ilist = 0;
-    Oga_Image_View *image = 0;
+    Oga_Block_View *block = 0;
+    Oga_FBuffer_View *depth_buffer;
     
     Oga_Memory_View_Desc vlist_desc = (Oga_Memory_View_Desc){0};
     vlist_desc.memory_pointer = vertex_ptr;
@@ -280,69 +330,37 @@ int main(void) {
     if (!check_oga_result(oga_init_vertex_list_view(context, vlist_desc, &vlist)))
         return 1;
     
-    Oga_Memory_View_Desc ilist_desc = (Oga_Memory_View_Desc){0};
-    ilist_desc.memory_pointer = index_ptr;
-    ilist_desc.size = sizeof(indices);
-    if (!check_oga_result(oga_init_index_list_view(context, ilist_desc, &ilist)))
+    Oga_Memory_View_Desc block_desc = (Oga_Memory_View_Desc){0};
+    block_desc.memory_pointer = block_ptr;
+    block_desc.size = sizeof(Data);
+    if (!check_oga_result(oga_init_block_view(context, block_desc, &block)))
         return 1;
-    
-    // Now we can complete the image_desc
-    image_desc.memory_pointer = image_ptr;
-    if (!check_oga_result(oga_init_image_view(context, image_desc, &image)))
+        
+    depth_buffer_desc.memory_pointer = depth_buffer_ptr;
+    if (!check_oga_result(oga_init_fbuffer_view(context, depth_buffer_desc, &depth_buffer)))
         return 1;
-    
-    // Now we need to convert the staged raw image memory to image-optimal storage
-    // by copying through the optimal copy view.
-    
-    Oga_Optimal_Copy_View *copy_dst = 0;
-    Oga_Optimal_Copy_View_Desc copy_dst_desc = (Oga_Optimal_Copy_View_Desc){0};
-    copy_dst_desc.memory_pointer = image_desc.memory_pointer;
-    copy_dst_desc.format = image_desc.format;
-    copy_dst_desc.dimensions = image_desc.dimensions;
-    copy_dst_desc.width = image_desc.width;
-    copy_dst_desc.height = image_desc.height;
-    copy_dst_desc.depth = image_desc.depth;
-    copy_dst_desc.linear_tiling = image_desc.linear_tiling;
-    copy_dst_desc.graphics_engine_family_index = image_desc.graphics_engine_family_index;
-    copy_dst_desc.flags = OGA_OPTIMAL_COPY_DST;
-    if (!check_oga_result(oga_init_optimal_copy_view(context, copy_dst_desc, &copy_dst)))
+        
+    Oga_Optimal_Copy_View *depth_buffer_copy_dst = 0;
+    Oga_Optimal_Copy_View_Desc depth_buffer_copy_dst_desc = (Oga_Optimal_Copy_View_Desc){0};
+    depth_buffer_copy_dst_desc.memory_pointer = depth_buffer_desc.memory_pointer;
+    depth_buffer_copy_dst_desc.format = depth_buffer_desc.format;
+    depth_buffer_copy_dst_desc.dimensions = depth_buffer_desc.dimensions;
+    depth_buffer_copy_dst_desc.width = depth_buffer_desc.width;
+    depth_buffer_copy_dst_desc.height = depth_buffer_desc.height;
+    depth_buffer_copy_dst_desc.depth = depth_buffer_desc.depth;
+    depth_buffer_copy_dst_desc.linear_tiling = depth_buffer_desc.linear_tiling;
+    depth_buffer_copy_dst_desc.graphics_engine_family_index = depth_buffer_desc.graphics_engine_family_index;
+    depth_buffer_copy_dst_desc.flags = OGA_OPTIMAL_COPY_DST;
+    if (!check_oga_result(oga_init_optimal_copy_view(context, depth_buffer_copy_dst_desc, &depth_buffer_copy_dst)))
         return 1;
-    
-    Oga_Command_Pool_Desc copy_pool_desc = (Oga_Command_Pool_Desc){0};
-    copy_pool_desc.flags = OGA_COMMAND_POOL_SHORT_LIVED_ALLOCATIONS;
-    copy_pool_desc.engine_family_index = engine_family_index;
-    Oga_Command_Pool *copy_pool;
-    if (!check_oga_result(oga_init_command_pool(context, copy_pool_desc, &copy_pool)))
-        return 1;
-    Oga_Command_List copy_cmd;
-    if (!check_oga_result(oga_get_command_lists(copy_pool, &copy_cmd, 1)))
-        return 1;
-    
-    oga_cmd_begin(copy_cmd, OGA_COMMAND_LIST_USAGE_ONE_TIME_SUBMIT);
-    
-    Oga_Optimal_Copy_Desc image_dst_desc = (Oga_Optimal_Copy_Desc){0};
-    image_dst_desc.width = (u64)width;
-    image_dst_desc.height = (u64)height;
-    oga_cmd_copy_linear_to_image(copy_cmd, copy_dst, image_dst_desc, image_staging_ptr);
-    
-    oga_cmd_end(copy_cmd);
-    
-    Oga_Submit_Command_List_Desc copy_submit = (Oga_Submit_Command_List_Desc){0};
-    copy_submit.engine = engine;
-    oga_submit_command_list(copy_cmd, copy_submit);
-    
-    oga_uninit_command_pool(copy_pool);
-    oga_uninit_optimal_copy_view(copy_dst);
-    
-    oga_wait_engine_idle(engine);
-    
+        
     //////
     // Render pass
     /////
     
     // Vertex layout
     Oga_Vertex_List_Layout_Desc vertex_layout_desc = (Oga_Vertex_List_Layout_Desc) {0};
-    vertex_layout_desc.bindings[0].stride = sizeof(f32v4)+sizeof(f32v3)+sizeof(f32v2);
+    vertex_layout_desc.bindings[0].stride = sizeof(f32v4)+sizeof(f32v3)+sizeof(f32v2)+sizeof(f32v3);
     vertex_layout_desc.bindings[0].input_rate = OGA_VERTEX_INPUT_RATE_VERTEX;
     vertex_layout_desc.binding_count = 1;
     
@@ -364,22 +382,33 @@ int main(void) {
     vertex_layout_desc.attributes[vertex_layout_desc.attribute_count].type = OGA_VERTEX_ATTRIBUTE_TYPE_F32V2;
     vertex_layout_desc.attribute_count += 1;
     
-    Oga_Binding_Layout_Entry_Desc layout_bindings[2];
+    vertex_layout_desc.attributes[vertex_layout_desc.attribute_count].binding = 0;
+    vertex_layout_desc.attributes[vertex_layout_desc.attribute_count].location = 3;
+    vertex_layout_desc.attributes[vertex_layout_desc.attribute_count].offset = sizeof(f32v4)+sizeof(f32v3)+sizeof(f32v2);
+    vertex_layout_desc.attributes[vertex_layout_desc.attribute_count].type = OGA_VERTEX_ATTRIBUTE_TYPE_F32V3;
+    vertex_layout_desc.attribute_count += 1;
+    
+    Oga_Binding_Layout_Entry_Desc layout_bindings[3];
     layout_bindings[0].kind = OGA_BINDING_SAMPLE_MODE;
     layout_bindings[0].binding_slot = 0;
     layout_bindings[0].binding_count = 1;
     layout_bindings[0].stage_flags = OGA_PROGRAM_STAGE_FRAGMENT;
     
-    layout_bindings[1].kind = OGA_BINDING_IMAGE;
+    layout_bindings[1].kind = OGA_BINDING_BLOCK;
     layout_bindings[1].binding_slot = 1;
     layout_bindings[1].binding_count = 1;
-    layout_bindings[1].stage_flags = OGA_PROGRAM_STAGE_FRAGMENT;
+    layout_bindings[1].stage_flags = OGA_PROGRAM_STAGE_FRAGMENT | OGA_PROGRAM_STAGE_VERTEX;
+    
+    layout_bindings[2].kind = OGA_BINDING_FBUFFER;
+    layout_bindings[2].binding_slot = 2;
+    layout_bindings[2].binding_count = 1;
+    layout_bindings[2].stage_flags = OGA_PROGRAM_STAGE_FRAGMENT;
     
     Oga_Binding_List_Layout *binding_layout = 0;
     Oga_Binding_List_Layout_Desc binding_layout_desc = (Oga_Binding_List_Layout_Desc){0};
     binding_layout_desc.bindings = layout_bindings;
     binding_layout_desc.binding_count = sizeof(layout_bindings)/sizeof(layout_bindings[0]);
-    binding_layout_desc.binding_list_count = 3; // Frames in flight. We really only need one because it doesn't change. But this is what you could do if your descriptor sets were changing over frames.
+    binding_layout_desc.binding_list_count = 3; // Frames in flight. 
     if (!check_oga_result(oga_init_binding_list_layout(context, binding_layout_desc, &binding_layout)))
         return 1;
     
@@ -391,18 +420,24 @@ int main(void) {
     sample_mode.address_mode_u = OGA_SAMPLE_ADDRESS_MODE_CLAMP_TO_EDGE;
     sample_mode.address_mode_v = OGA_SAMPLE_ADDRESS_MODE_CLAMP_TO_EDGE;
     
-    Oga_Binding_Desc bindings[2] = {0};
+    Oga_Binding_Desc bindings[3] = {0};
     bindings[0].kind = OGA_BINDING_SAMPLE_MODE;
     bindings[0].count = 1;
     bindings[0].binding_slot = 0;
     bindings[0].array_index = 0;
     bindings[0].sample_modes = &sample_mode;
     
-    bindings[1].kind = OGA_BINDING_IMAGE;
+    bindings[1].kind = OGA_BINDING_BLOCK;
     bindings[1].count = 1;
     bindings[1].binding_slot = 1;
     bindings[1].array_index = 0;
-    bindings[1].images = &image;
+    bindings[1].blocks = &block;
+    
+    bindings[2].kind = OGA_BINDING_FBUFFER;
+    bindings[2].count = 1;
+    bindings[2].binding_slot = 2;
+    bindings[2].array_index = 0;
+    bindings[2].fbuffers = &depth_buffer;
     
     Oga_Binding_List_Desc binding_list_desc = (Oga_Binding_List_Desc){0};
     binding_list_desc.bindings = bindings;
@@ -491,6 +526,40 @@ int main(void) {
         }
 #endif // RUNNING_TESTS
         
+        float64 now = sys_get_seconds_monotonic();
+        float scale = 0.5f;
+        float64 speed = 1.0;
+        
+        ///
+        // Update the gpu data through the mapped memory
+        // Make the color shift between red and normal
+        gpu_data->tints[0] = v4(1.0f, 0.0f, 0.0f, 0.6f);
+        gpu_data->tints[1] = v4(0.0f, 1.0f, 0.0f, 0.6f);
+        gpu_data->tints[2] = v4(0.0f, 0.0f, 1.0f, 0.6f);
+        
+        f32v3 offsets[3];
+        offsets[0] = v3(-0.75f,  0.5f, 4.0f);
+        offsets[1] = v3( 0.75f,  0.5f, 6.0f);
+        offsets[2] = v3( 0.00f, -0.5f, 2.0f);
+        offsets[0] = v3_add(offsets[0], v3((f32)sin(speed*now+PI*1)*scale, (f32)-sin(speed*now+PI*3)*scale, 0.0));
+        offsets[1] = v3_add(offsets[1], v3((f32)sin(speed*now+PI*2)*scale, (f32)-sin(speed*now+PI*2)*scale, 0.0));
+        offsets[2] = v3_add(offsets[2], v3((f32)sin(speed*now+PI*3)*scale, (f32)-sin(speed*now+PI*1)*scale, 0.0));
+        
+        gpu_data->transforms[0] = m4_scalar(1.0f);
+        gpu_data->transforms[0] = m4_mulm4(gpu_data->transforms[0], m4_make_translation(offsets[0]));
+        gpu_data->transforms[0] = m4_mulm4(gpu_data->transforms[0], m4_make_rotation(v3(1, 1, 0), (f32)now));
+        
+        gpu_data->transforms[1] = m4_scalar(1.0f);
+        gpu_data->transforms[1] = m4_mulm4(gpu_data->transforms[1], m4_make_translation(offsets[1]));
+        gpu_data->transforms[1] = m4_mulm4(gpu_data->transforms[1], m4_make_rotation(v3(-1, 1, 0), (f32)now));
+        
+        gpu_data->transforms[2] = m4_scalar(1.0f);
+        gpu_data->transforms[2] = m4_mulm4(gpu_data->transforms[2], m4_make_translation(offsets[2]));
+        gpu_data->transforms[2] = m4_mulm4(gpu_data->transforms[2], m4_make_rotation(v3(-1, -1, 0), (f32)now));
+        
+        gpu_data->proj = m4_make_perspective_left_handed(0.5f*(f32)PI, 800.f/600.f, 0.1f, 100.f);
+        
+        
         // Wait for frame to be ready, then reset it
         oga_wait_latch(cmd_latches[frame_index]);
         oga_reset_latch(cmd_latches[frame_index]);
@@ -521,6 +590,9 @@ int main(void) {
         attachment.store_op = OGA_ATTACHMENT_STORE_OP_STORE;
         memcpy(attachment.clear_color, &(float[4]){0.39f, 0.58f, 0.93f, 1.0f}, 16);
         
+        u32 clear_depth = 0x00ffffff;
+        oga_cmd_fill_image(cmd, depth_buffer_copy_dst, v4(*(f32*)&clear_depth, *(f32*)&clear_depth, *(f32*)&clear_depth, *(f32*)&clear_depth));
+        
         Oga_Begin_Render_Pass_Desc begin_desc = (Oga_Begin_Render_Pass_Desc){0};
         begin_desc.render_area_width = 800;
         begin_desc.render_area_height = 600;
@@ -533,13 +605,11 @@ int main(void) {
         
         // The draw call
         Oga_Draw_Desc draw_desc = (Oga_Draw_Desc){0};
-        draw_desc.draw_type = OGA_DRAW_VERTEX_LIST_INDEXED;
+        draw_desc.draw_type = OGA_DRAW_VERTEX_LIST_INSTANCED;
         draw_desc.vertex_count = sizeof(verts)/sizeof(verts[0]);
         draw_desc.vertex_list_bindings[0] = vlist;
         draw_desc.vertex_list_binding_count = 1;
-        draw_desc.index_count = 6;
-        draw_desc.index_list = ilist;
-        draw_desc.index_type = OGA_INDEX_U32;
+        draw_desc.instance_count = 3;
         check_oga_result(oga_cmd_draw(cmd, draw_desc));
         
         oga_cmd_end_render_pass(cmd, render_pass);
@@ -591,10 +661,13 @@ int main(void) {
     oga_uninit_gpu_latch(commands_done_latches[0]);
     oga_uninit_gpu_latch(commands_done_latches[1]);
     oga_uninit_gpu_latch(commands_done_latches[2]);
-    oga_uninit_image_view(image);
-    oga_uninit_index_list_view(ilist);
+    oga_uninit_fbuffer_view(depth_buffer);
+    oga_uninit_optimal_copy_view(depth_buffer_copy_dst);
+    oga_uninit_block_view(block);
     oga_uninit_vertex_list_view(vlist);
-    oga_deallocate_memory(mem);
+    oga_unmap_memory(reflected_mem);
+    oga_deallocate_memory(static_mem);
+    oga_deallocate_memory(reflected_mem);
     oga_uninit_render_pass(render_pass);
     oga_uninit_binding_list_layout(binding_layout);
     oga_uninit_program(vert_program);
@@ -607,6 +680,4 @@ int main(void) {
 
     oga_reset(); // Only really necessary to get messages about leaked resources
 #endif
-
-    return 0;
 }

@@ -46,13 +46,21 @@ unit_local inline f64 ceil64(f64 f) {
     return (f64)((f) == (f64)(s64)(f) ? (s64)(f) : (f) > 0 ? (s64)(f) + 1 : (s64)(f));
 }
 
-#define trig_lookup(t, f) do { \
+
+#define trig_lookup_cyclic(t, f) do { \
     s64 c = sizeof(t) / sizeof(f64); \
     f64 norm_index = (f) * (f64)c; \
+    s64 ilo = ((s64)floor64(norm_index)) % c; \
+    s64 ihi = (ilo + 1) % c; \
+    f64 t_frac = norm_index - floor64(norm_index); \
+    return lerp64(t[ilo], t[ihi], t_frac); \
+} while (0)
+#define trig_lookup_noncyclic(t, f) do { \
+    s64 c = sizeof(t) / sizeof(f64); \
+    f64 norm_index = (f) * (f64)(c - 1); \
     s64 ilo = (s64)floor64(norm_index); \
-    s64 ihi = (s64)ceil64(norm_index); \
-    if (ihi >= c) return t[0]; \
-    f64 t_frac = norm_index - (f64)ilo;\
+    s64 ihi = (ilo + 1 < c) ? ilo + 1 : ilo; \
+    f64 t_frac = norm_index - (f64)ilo; \
     return lerp64(t[ilo], t[ihi], t_frac); \
 } while (0)
 
@@ -61,39 +69,39 @@ unit_local inline float64 fmod_cycling(float64 x, float64 y) {
     if (y == 0.0) {
         return 0.0;
     }
-    float64 n = (int)(x / y);
+    float64 n = floor64(x / y);
     return x - n * y;
 }
 
 unit_local inline float64 sin(float64 x) {
     if (x == 0.0) return 0.0;
     x = fmod_cycling(x, TAU);
-    trig_lookup(sine_table, x/TAU);
+    trig_lookup_cyclic(sine_table, x/TAU);
 }
 unit_local inline float64 asin(float64 x) {
-    if (x == 0.0) return 0.0;
     x = clamp(x, -1.0, 1.0);
-    trig_lookup(asine_table, ((x+1.0)/2.0)/TAU);
+    trig_lookup_noncyclic(asine_table, (x + 1.0) / 2.0);
 }
 unit_local inline float64 cos(float64 x) {
     if (x == 0.0) return 1.0;
     x = fmod_cycling(x, TAU);
-    trig_lookup(cosine_table, x/TAU);
+    trig_lookup_cyclic(cosine_table, x/TAU);
 }
 unit_local inline float64 acos(float64 x) {
-    if (x == 1.0) return 0.0;
     x = clamp(x, -1.0, 1.0);
-    trig_lookup(acosine_table, ((x+1.0)/2.0)/TAU);
+    trig_lookup_noncyclic(acosine_table, (x + 1.0) / 2.0);
 }
 unit_local inline float64 tan(float64 x) {
-    x = fmod_cycling(x, TAU);
-    s64 i = (s64)((x/TAU) * (f64)(sizeof(tan_table)/sizeof(float64)));
-    if (i >= (s64)(sizeof(tan_table)/sizeof(float64))) return tan_table[0];
+    x = fmod_cycling(x, PI);
+    const s64 table_size = sizeof(tan_table) / sizeof(float64);
+    s64 i = (s64)((x / PI) * (f64)table_size);
+    if (i >= table_size)
+        i = table_size - 1;
     return tan_table[i];
 }
 unit_local inline float64 atan(float64 x) {
     if (x == 0.0) return 0.0;
-    float64 theta = (x < 1.0 && x > -1.0) ? x : (x > 0.0 ? PI / 2 : -PI / 2);
+    float64 theta = (abs(x) <= 1.0) ? x : (x > 0.0 ? PI / 2 : -PI / 2);
     
     for (int i = 0; i < 5; ++i) { 
         float64 sin_theta = sin(theta);
@@ -453,20 +461,21 @@ unit_local inline f32m4x4 m4_make_rotation_x(float rad) {
     float c = (f32)cos((f64)rad);
     float s = (f32)sin((f64)rad);
     return (f32m4x4){{
-        {  c,  0, -s,  0 },
-        {  0,  1,  0,  0 },
-        {  0,  0,  c,  0 },
-        {  s,  0,  0,  1 },
+        { 1,  0,   0,  0 },
+        { 0,  c,   s,  0 }, 
+        { 0, -s,   c,  0 }, 
+        { 0,  0,   0,  1 } 
     }};
 }
+
 unit_local inline f32m4x4 m4_make_rotation_y(float rad) {
     float c = (f32)cos((f64)rad);
     float s = (f32)sin((f64)rad);
     return (f32m4x4){{
-        {  1,  0,  0,  0 },
-        {  0,  c,  s,  0 },
-        {  0, -s,  c,  0 },
-        {  0,  0,  0,  1 },
+        {  c,  0,  -s,  0 },
+        {  0,  1,   0,  0 }, 
+        {  s,  0,   c,  0 }, 
+        {  0,  0,   0,  1 } 
     }};
 }
 unit_local inline f32m4x4 m4_make_rotation_z(float rad) {
@@ -480,15 +489,32 @@ unit_local inline f32m4x4 m4_make_rotation_z(float rad) {
     }};
 }
 
+unit_local inline f32m4x4 m4_make_rotation(f32v3 axis, float rad) {
+    float c = (f32)cos((f64)rad);
+    float s = (f32)sin((f64)rad);
+    float t = 1.0f - c;
+    
+    float len = sqrt32(axis.x * axis.x + axis.y * axis.y + axis.z * axis.z);
+    f32v3 u = { axis.x / len, axis.y / len, axis.z / len };
+
+    return (f32m4x4){{
+        { t*u.x*u.x + c,    t*u.x*u.y + s*u.z,   t*u.x*u.z - s*u.y,   0 },
+        { t*u.x*u.y - s*u.z,  t*u.y*u.y + c,       t*u.y*u.z + s*u.x,   0 },
+        { t*u.x*u.z + s*u.y,  t*u.y*u.z - s*u.x,   t*u.z*u.z + c,       0 },
+        { 0,                 0,                   0,                   1 }
+    }};
+}
+
+#include "print.h"
+
 unit_local inline f32m4x4 m4_make_perspective_left_handed(f32 fov_rad, f32 aspect_ratio, f32 n, f32 f) {
     f32m4x4 proj = (f32m4x4){0};
-
     f32 s = 1.0f / (f32)tan((f64)fov_rad * 0.5);
-    proj.cols[0].x = 1/(aspect_ratio*s);
-    proj.cols[1].y = 1/s;
-    proj.cols[2].z = f/(f - n);
+    proj.cols[0].x = s / aspect_ratio;
+    proj.cols[1].y = s;
+    proj.cols[2].z = f / (f - n);
     proj.cols[2].w = 1.0f;
-    proj.cols[3].z = -n*f/(f - n);
+    proj.cols[3].z = -n * f / (f - n);
 
     return proj;
 }

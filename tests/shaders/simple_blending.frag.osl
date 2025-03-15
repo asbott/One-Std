@@ -31,13 +31,13 @@ src_alpha_inv: f32 = 1.0-out_color.a;
 src_color_multiplied: f32v4 = src_color*src_color.a;
 
 // We want to keep as little computation as possible inside this critical section
-invocationPixelInterlockBegin();
+invocation_pixel_interlock_begin();
 
 dst_color: f32v4 = fbuffer_fetch(blend_buffer, pixel_coord.xy -> s32v2);
 out_color = src_color_multiplied + dst_color*(src_alpha_inv);
 fbuffer_store(blend_buffer, pixel_coord.xy -> s32v2, out_color);
 
-invocationPixelInterlockEnd();
+invocation_pixel_interlock_end();
 
 
 

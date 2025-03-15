@@ -1,0 +1,103 @@
+
+U16_MAX :: 65535;
+AMBIENT :: 0.5;
+
+////
+// Stuff shared between vertex and fragment stages
+
+VS_Out :: struct {
+	color: f32v3;
+	clip:  f32v4;
+	world: f32v3;
+	index: f32;
+	norm:  f32v3;
+}
+
+Data :: struct {
+	tints:      [3]f32v4;
+	transforms: [3]f32m4;
+	proj:       f32m4;
+}
+
+data: BlockView(Data) $UniformBinding(1);
+
+#if STAGE_VERTEX {
+////
+// Only vertex stage stuff
+
+	out_position: f32v4 $VertexPosition;
+	instance_index: u32 $InstanceIndex;
+	
+	in_position: f32v4 $Input(0);
+	in_color:    f32v3 $Input(1);
+	in_uv:       f32v2 $Input(2);
+	in_norm:     f32v3 $Input(3);
+	
+	out: VS_Out $Output(0);
+	
+	transform: f32m4 = data.transforms[instance_index];
+	normnorm: f32v3  = normalize(in_norm);
+	
+	
+	out_position = data.proj * transform * (in_position);
+	out.color    = in_color;
+	out.clip     = out_position;
+	out.index    = instance_index->f32;
+	out.world    = (transform * in_position).xyz;
+	out.norm     = (transpose(inverse(transform)) * f32v4.(normnorm.x, normnorm.y, normnorm.z, 0.0)).xyz;
+	
+} #else if STAGE_FRAGMENT {
+////
+// Only fragment stage stuff
+
+	out_color: f32v4 $Output(0);
+	
+	pixel_coord_center: f32v4 $PixelCoord;
+	is_front_facing:    bool  $IsFrontFacing;
+
+	
+	sample_mode:  SampleMode      $UniformBinding(0);
+	depth_buffer: FBuffer2D(R32U) $UniformBinding(2);
+	
+	in: VS_Out $Input(0);
+	
+	ndc: f32v3 = in.clip.xyz / in.clip.w;
+	if (ndc.z < 0.0 || ndc.z > 1.0) discard;
+	
+	pixel_coord: s32v2 = floor(pixel_coord_center.xy) -> s32v2;
+	sun_dir:     f32v3 = f32v3.(-2.0, 0.3, 1.0);
+	view_pos:    f32v3 = f32v3.(0.0, 0.0, 0.0);
+	dir_to_view: f32v3 = normalize(view_pos-in.world);
+	
+	// Discard any fragment facing away
+	if dot(dir_to_view, in.norm) < 0.0  discard;
+	
+	index: u32 = round(in.index) -> u32;
+	
+	attenuation: f32   = (dot(-sun_dir, in.norm)+1.0)/2.0;
+	base:        f32v4 = f32v4.(in.color.x, in.color.y, in.color.z, 1.0)*data.tints[index];
+	
+	out_color = base * AMBIENT + attenuation * base * (1.0 - AMBIENT);
+	
+	///
+	// Depth testing & writing
+	
+	src_depth: u32 = (ndc.z * U16_MAX->f32) -> u32;
+	
+	invocation_pixel_interlock_begin();
+	
+		dst_depth: u32 = fbuffer_fetch(depth_buffer, pixel_coord);
+	
+	    if (dst_depth < src_depth) {
+	        discard;
+	    }
+	    
+	    fbuffer_store(depth_buffer, pixel_coord, src_depth);
+	
+	invocation_pixel_interlock_end();
+}
+
+
+
+
+

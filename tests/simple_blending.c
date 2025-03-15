@@ -516,10 +516,10 @@ int main(void) {
         gpu_data->rotations[1] = m4_make_rotation_z((f32)sys_get_seconds_monotonic());
         gpu_data->rotations[2] = m4_make_rotation_z((f32)sys_get_seconds_monotonic());
         
-        gpu_data->proj = m4_make_perspective_left_handed((f32)(PI*0.9), 800.f/600.f, 1.0f, 100.f);
+        gpu_data->proj = m4_make_perspective_left_handed(1.0f, 800.f/600.f, 1.0f, 100.f);
         
         float64 now = sys_get_seconds_monotonic();
-        float scale = 0.9f;
+        float scale = 0.4f;
         float64 speed = 3.0;
         gpu_data->offsets[0] = v4_add(gpu_data->offsets[0], v4((f32)sin(speed*now+PI*1)*scale, (f32)-sin(speed*now+PI*3)*scale, 0.0, 0.0));
         gpu_data->offsets[1] = v4_add(gpu_data->offsets[1], v4((f32)sin(speed*now+PI*2)*scale, (f32)-sin(speed*now+PI*2)*scale, 0.0, 0.0));

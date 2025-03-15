@@ -1,7 +1,9 @@
 import math
 
 # Constants
-TABLE_SIZE = 360
+TABLE_SIZE = 721
+
+EPSILON = 1e-6
 
 # Linear interpolation (lerp) implementation
 def lerp(start, end, t):
@@ -11,11 +13,12 @@ def lerp(start, end, t):
 sine_table = [math.sin(lerp(0, math.pi * 2, i / TABLE_SIZE)) for i in range(TABLE_SIZE)]
 cosine_table = [math.cos(lerp(0, math.pi * 2, i / TABLE_SIZE)) for i in range(TABLE_SIZE)]
 tan_table = [
-    math.tan(lerp(0, math.pi, i / TABLE_SIZE)) if i % (TABLE_SIZE // 4) != 0 else 0.0
+    0.0 if abs(lerp(0, math.pi, i / TABLE_SIZE) - (math.pi/2)) < EPSILON
+    else math.tan(lerp(0, math.pi, i / TABLE_SIZE))
     for i in range(TABLE_SIZE)
 ]
-asine_table = [math.asin(lerp(-1, 1, i / TABLE_SIZE)) for i in range(TABLE_SIZE)]
-acosine_table = [math.acos(lerp(-1, 1, i / TABLE_SIZE)) for i in range(TABLE_SIZE)]
+asine_table = [math.asin(lerp(-1, 1, i / TABLE_SIZE)) for i in range(TABLE_SIZE + 1)]
+acosine_table = [math.acos(lerp(-1, 1, i / TABLE_SIZE)) for i in range(TABLE_SIZE + 1)]
 
 # Function to generate C syntax array
 def generate_c_table(table_name, table_values):

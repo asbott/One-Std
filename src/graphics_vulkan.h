@@ -174,11 +174,6 @@ unit_local inline VkFormat _oga_to_vk_format(Oga_Format k) {
         case OGA_FORMAT_R32G32B32A32_UINT:             return VK_FORMAT_R32G32B32A32_UINT;
         case OGA_FORMAT_R32G32B32A32_SINT:             return VK_FORMAT_R32G32B32A32_SINT;
 
-        case OGA_FORMAT_DEPTH16_UNORM:                 return VK_FORMAT_D16_UNORM;
-        case OGA_FORMAT_DEPTH24_UNORM_S8_UINT:         return VK_FORMAT_D24_UNORM_S8_UINT;
-        case OGA_FORMAT_DEPTH32_SFLOAT:                return VK_FORMAT_D32_SFLOAT;
-        case OGA_FORMAT_DEPTH32_SFLOAT_S8_UINT:        return VK_FORMAT_D32_SFLOAT_S8_UINT;
-
         case OGA_FORMAT_BC1_RGB_UNORM_BLOCK:           return VK_FORMAT_BC1_RGB_UNORM_BLOCK;
         case OGA_FORMAT_BC1_RGB_SRGB_BLOCK:            return VK_FORMAT_BC1_RGB_SRGB_BLOCK;
         case OGA_FORMAT_BC1_RGBA_UNORM_BLOCK:          return VK_FORMAT_BC1_RGBA_UNORM_BLOCK;
@@ -276,12 +271,6 @@ unit_local inline Oga_Format _vk_to_oga_format(VkFormat k) {
         case VK_FORMAT_R32G32B32A32_UINT:              return OGA_FORMAT_R32G32B32A32_UINT;
         case VK_FORMAT_R32G32B32A32_SINT:              return OGA_FORMAT_R32G32B32A32_SINT;
 
-        // Depth and Stencil formats
-        case VK_FORMAT_D16_UNORM:                      return OGA_FORMAT_DEPTH16_UNORM;
-        case VK_FORMAT_D24_UNORM_S8_UINT:              return OGA_FORMAT_DEPTH24_UNORM_S8_UINT;
-        case VK_FORMAT_D32_SFLOAT:                     return OGA_FORMAT_DEPTH32_SFLOAT;
-        case VK_FORMAT_D32_SFLOAT_S8_UINT:             return OGA_FORMAT_DEPTH32_SFLOAT_S8_UINT;
-
         case VK_FORMAT_BC1_RGB_UNORM_BLOCK:            return OGA_FORMAT_BC1_RGB_UNORM_BLOCK;
         case VK_FORMAT_BC1_RGB_SRGB_BLOCK:             return OGA_FORMAT_BC1_RGB_SRGB_BLOCK;
         case VK_FORMAT_BC1_RGBA_UNORM_BLOCK:           return OGA_FORMAT_BC1_RGBA_UNORM_BLOCK;
@@ -299,7 +288,7 @@ unit_local inline Oga_Format _vk_to_oga_format(VkFormat k) {
         case VK_FORMAT_BC7_UNORM_BLOCK:                return OGA_FORMAT_BC7_UNORM_BLOCK;
         case VK_FORMAT_BC7_SRGB_BLOCK:                 return OGA_FORMAT_BC7_SRGB_BLOCK;
 
-        case OGA_FORMAT_ENUM_MAX:
+        //case OGA_FORMAT_ENUM_MAX:
         default:
             return (Oga_Format)0;
     }
@@ -976,7 +965,8 @@ u64 oga_query_devices(Oga_Device *buffer, u64 buffer_count) {
                 vk_depth_format = VK_FORMAT_D32_SFLOAT;
             }
 
-            device->depth_format = _vk_to_oga_format(vk_depth_format);
+            (void)vk_depth_format;
+            //device->depth_format = _vk_to_oga_format(vk_depth_format);
 
             /////
             // Memory heaps
@@ -1129,8 +1119,8 @@ u64 oga_query_devices(Oga_Device *buffer, u64 buffer_count) {
                     device->features |= OGA_DEVICE_FEATURE_PRESENT_MAILBOX;
             }
             
-            if (features.depthClamp)
-                device->features |= OGA_DEVICE_FEATURE_DEPTH_CLAMP;
+            //if (features.depthClamp)
+            //    device->features |= OGA_DEVICE_FEATURE_DEPTH_CLAMP;
                 
             /////
             // Limits
@@ -1258,9 +1248,9 @@ Oga_Result oga_init_context(Oga_Device target_device, Oga_Context_Desc desc, Oga
     VkPhysicalDeviceFeatures enabled_features = (VkPhysicalDeviceFeatures){0};
     // if (desc.enabled_features & OGA_DEVICE_FEATURE_XXXX) enabled_features.xxxx = true;
     
-    if (target_device.features & OGA_DEVICE_FEATURE_DEPTH_CLAMP) {
-        enabled_features.depthClamp = true;
-    }
+    // if (target_device.features & OGA_DEVICE_FEATURE_DEPTH_CLAMP) {
+    //     enabled_features.depthClamp = true;
+    // }
     
     enabled_features.samplerAnisotropy = VK_TRUE;
     // todo(charlie) device feature flag
@@ -2172,12 +2162,13 @@ Oga_Result oga_init_render_passes(Oga_Context *context, Oga_Render_Pass_Desc* de
             default: assert(false);
         }
         
-        VkBool32 depth_clamp_enable = (desc.flags & OGA_RENDER_PASS_DISABLE_DEPTH_CLAMP) == 0;
+        //VkBool32 depth_clamp_enable = (desc.flags & OGA_RENDER_PASS_DISABLE_DEPTH_CLAMP) == 0;
 
-        if (depth_clamp_enable && !(context->device.features & OGA_DEVICE_FEATURE_DEPTH_CLAMP)) {
+        /*if (depth_clamp_enable && !(context->device.features & OGA_DEVICE_FEATURE_DEPTH_CLAMP)) {
             depth_clamp_enable = false;
             log(OGA_LOG_VERBOSE, "Depth clamp was flagged as enabled, but device is missing feature flag OGA_RENDER_PASS_DISABLE_DEPTH_CLAMP");
-        }
+        }*/
+        VkBool32 depth_clamp_enable = VK_FALSE;
         
         VkPipelineRasterizationStateCreateInfo *rasterization = PushTemp(VkPipelineRasterizationStateCreateInfo);
         *rasterization = (VkPipelineRasterizationStateCreateInfo){0};
