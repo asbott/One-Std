@@ -1083,7 +1083,6 @@ typedef struct Oga_Image_View_Desc {
     u64 width, height, depth;
     bool linear_tiling;
     u64 graphics_engine_family_index;
-    
 } Oga_Image_View_Desc;
 
 typedef struct Oga_Image_View {
@@ -1146,7 +1145,8 @@ OSTD_LIB void oga_uninit_optimal_copy_view(Oga_Optimal_Copy_View *image);
 typedef struct Oga_Render_Image_View_Desc {
     Oga_Memory_Pointer memory_pointer;
     Oga_Format format;
-    u64 width, height;    
+    u64 width, height, depth;
+    u64 graphics_engine_family_index;
 } Oga_Render_Image_View_Desc;
 
 typedef struct Oga_Render_Image_View {
@@ -1156,11 +1156,10 @@ typedef struct Oga_Render_Image_View {
     u64 width, height;
 } Oga_Render_Image_View;
 
-// todo(charlie)
-// Oga_Result oga_init_render_image_view(Oga_Context *context, Oga_Render_Image_View_Desc desc, Oga_Render_Image_View **view);
-// void oga_uninit_render_image_view(Oga_Render_Image_View *view);
-//
-// u64 oga_get_render_image_memory_requirement(Oga_Context *context, Oga_Render_Image_View_Desc desc);
+Oga_Result oga_init_render_image_view(Oga_Context *context, Oga_Render_Image_View_Desc desc, Oga_Render_Image_View **view);
+void oga_uninit_render_image_view(Oga_Render_Image_View *view);
+
+u64 oga_get_render_image_memory_requirement(Oga_Context *context, Oga_Render_Image_View_Desc desc);
 
 
 

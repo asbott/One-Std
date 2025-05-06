@@ -121,8 +121,12 @@ typedef enum Spv_Op_Code_Enum {
     OpVariable             = 59,
     OpDecorate             = 71,
     OpMemberDecorate             = 72,
+    OpImageTexelPointer = 60,
     OpLoad                 = 61,
     OpStore                = 62,
+    OpAtomicLoad = 227,
+    OpAtomicStore = 228,
+    OpAtomicCompareExchange = 230,
     OpCopyMemory           = 63,
     OpCompositeExtract     = 81,
     OpCompositeConstruct   = 80,
@@ -715,28 +719,28 @@ unit_local u32 _osl_precedence(Osl_Op_Kind op) {
 	case OSL_OP_SUB:
 		return 1000;
 	
-	case OSL_OP_SET:
-		return 100;
-		
 	case OSL_OP_BAND: // fallthrough
 	case OSL_OP_BOR: // fallthrough
 	case OSL_OP_BSHIFT_LEFT: // fallthrough
 	case OSL_OP_BSHIFT_RIGHT:
-		return 50;
+		return 500;
 		
 	case OSL_OP_GT:
 	case OSL_OP_LT:
 	case OSL_OP_GTE:
 	case OSL_OP_LTE:
-		return 10;
+		return 100;
 	
 	case OSL_OP_EQ:
 	case OSL_OP_NEQ:
-		return 5;
+		return 50;
 		
 	case OSL_OP_LAND:
 	case OSL_OP_LOR:
-		return 1;
+		return 10;
+		
+	case OSL_OP_SET:
+		return 5;
 		
 	case OSL_OP_UNARY_NAUGHT: // fallthrough
 	case OSL_OP_UNARY_NEGATE: // fallthrough
@@ -1080,8 +1084,6 @@ unit_local inline void _spv_decl_fbuffer_type(Spv_Converter *spv, Osl_Type_Info 
     spv_push_word(&spv->const_block, sampled);
     spv_push_word(&spv->const_block, image_format);
     spv_end_op(&spv->const_block);
-    
-    
     
     type->val.fbuffer2d_type.view_type = view_type;
     
@@ -2085,7 +2087,7 @@ unit_local Osl_Result spv_emit_expr(Spv_Converter *spv, Spv_Block *block, Osl_Ex
 			}
 			
 			if (!_osl_is_op_allowed(op1_type, op2_type, op->op_kind)) {
-				string a = _osl_tprint_token(spv->compiler, op->op_token, STR("Cannot perform this operations on these types ..."));
+				string a = _osl_tprint_token(spv->compiler, op->op_token, STR("Cannot perform this operation on these types ..."));
 				string b = _osl_tprint_token(spv->compiler, _osl_get_node(op->lhs)->first_token, tprint("... Left hand side is of type '%s' ... ", op1_type->name));
 				string c = _osl_tprint_token(spv->compiler, _osl_get_node(op->rhs)->first_token, tprint("... Right hand side is of type '%s'", op2_type->name));
 				spv->compiler->err_log = tprint("%s\n%s\n%s", a, b, c);
@@ -2840,7 +2842,10 @@ unit_local Osl_Result spv_emit_expr(Spv_Converter *spv, Spv_Block *block, Osl_Ex
 			case OSL_STORAGE_INPUT:   base_storage_class = SpvStorageClass_Input;   break;
 			case OSL_STORAGE_OUTPUT:  base_storage_class = SpvStorageClass_Output;  break;
 			case OSL_STORAGE_BINDING: 
-				if (base_type->kind == OSL_TYPE_IMAGE2DF || base_type->kind == OSL_TYPE_FBUFFER2D || base_type->kind == OSL_TYPE_SAMPLE_MODE)
+				Osl_Type_Info *underlying = base_type;
+				if (base_type->kind == OSL_TYPE_ARRAY)
+					underlying = base_type->val.array_type.elem_type;
+				if (underlying->kind == OSL_TYPE_IMAGE2DF || underlying->kind == OSL_TYPE_FBUFFER2D || underlying->kind == OSL_TYPE_SAMPLE_MODE)
 					base_storage_class = SpvStorageClass_UniformConstant;
 				else
 					base_storage_class = SpvStorageClass_Uniform;
@@ -3203,6 +3208,65 @@ unit_local Osl_Result spv_emit_expr(Spv_Converter *spv, Spv_Block *block, Osl_Ex
 			spv_push_word(block, arg_ids[0]);
 			spv_push_word(block, arg_ids[1]);
 			spv_push_word(block, arg_ids[2]);
+			
+			*type = interp_type;
+			
+		} else if (strings_match(call->ident, STR("fbuffer_compare_and_swap"))) {
+			
+			if (call->arg_list.arg_count != 4) {
+				spv->compiler->err_log = _osl_tprint_token(spv->compiler, _osl_get_node(expr)->first_token, STR("Bad number of arguments. Intrinsic signature is 'fbuffer_compare_and_swap :: (src: FBufferX, coords: new: X, old: X) -> bool'"));
+				return spv->compiler->result = OSL_BAD_CALL_ARGUMENTS;
+			}
+			
+			u32 arg_ids[4];
+			Osl_Type_Info *arg_types[4];
+			
+			Osl_Result res = spv_emit_expr(spv, block, call->arg_list.args[0], &arg_ids[0], &arg_types[0], true);
+			if (res != OSL_OK) return res;
+			res = spv_emit_expr(spv, block, call->arg_list.args[1], &arg_ids[1], &arg_types[1], false);
+			if (res != OSL_OK) return res;
+			res = spv_emit_expr(spv, block, call->arg_list.args[2], &arg_ids[2], &arg_types[2], false);
+			if (res != OSL_OK) return res;
+			res = spv_emit_expr(spv, block, call->arg_list.args[3], &arg_ids[3], &arg_types[3], false);
+			if (res != OSL_OK) return res;
+			
+			Osl_Type_Info *interp_type = arg_types[0]->val.fbuffer2d_type.interp_type;
+			
+			if (arg_types[0]->kind != OSL_TYPE_FBUFFER2D || arg_types[1] != &spv->type_s32v2 || arg_types[2] != interp_type || arg_types[3] != interp_type) {
+				spv->compiler->err_log = _osl_tprint_token(spv->compiler, _osl_get_node(expr)->first_token, tprint("Bad argument types (%s, %s, %s). Intrinsic signature is 'fbuffer_compare_and_swap :: (src: FBufferX, coords: new: X, old: X) -> bool'", arg_types[0]->name, arg_types[1]->name, arg_types[2]->name, arg_types[3]->name));
+				return spv->compiler->result = OSL_BAD_CALL_ARGUMENTS;
+			}
+			
+			u32 id_zero = spv_push_decl_constant_u32(spv, &spv->const_block, spv->type_u32.type_id, 0);
+			u32 id_one = spv_push_decl_constant_u32(spv, &spv->const_block, spv->type_u32.type_id, 1);
+			
+			u32 img_type_id = spv_push_decl_pointer_type(spv, &spv->const_block, interp_type->type_id, SpvStorageClass_Image);
+			
+			// Get pointer to image data as its interp type
+			spv_begin_op(block, OpImageTexelPointer);
+			spv_push_word(block, img_type_id);
+			u32 pointer_id = spv_push_result_arg(spv, block);
+			spv_push_word(block, arg_ids[0]);
+			spv_push_word(block, arg_ids[1]);
+			spv_push_word(block, id_zero);
+			spv_end_op(block);
+			
+			// Equal: Aquire | ImageMemory
+			u32 equal_sem = spv_push_decl_constant_u32(spv, &spv->const_block, spv->type_u32.type_id, 0x2 | 0x800);
+			// Unequal: ImageMemory
+			u32 unequal_sem = spv_push_decl_constant_u32(spv, &spv->const_block, spv->type_u32.type_id, 0x800);
+			
+			// Perform CAS, returns original value
+			spv_begin_op(block, OpAtomicCompareExchange);
+			spv_push_word(block, interp_type->type_id);
+			*result_id = spv_push_result_arg(spv, block);
+			spv_push_word(block, pointer_id);
+			spv_push_word(block, id_one); // Scope: Device
+			spv_push_word(block, equal_sem); 
+			spv_push_word(block, unequal_sem);
+			spv_push_word(block, arg_ids[2]);
+			spv_push_word(block, arg_ids[3]);
+			spv_end_op(block);
 			
 			*type = interp_type;
 			
@@ -3831,7 +3895,12 @@ unit_local Osl_Result spv_emit_node(Spv_Converter *spv, Spv_Block *block, Osl_No
 			case OSL_STORAGE_INPUT:  storage_class = SpvStorageClass_Input; break;
 			case OSL_STORAGE_OUTPUT: storage_class = SpvStorageClass_Output; break;
 			case OSL_STORAGE_BINDING: 
-				if (decl_type->kind == OSL_TYPE_IMAGE2DF || decl_type->kind == OSL_TYPE_FBUFFER2D || decl_type->kind == OSL_TYPE_SAMPLE_MODE)
+				
+				Osl_Type_Info *underlying = decl_type;
+				if (decl_type->kind == OSL_TYPE_ARRAY)
+					underlying = underlying->val.array_type.elem_type;
+			
+				if (underlying->kind == OSL_TYPE_IMAGE2DF || underlying->kind == OSL_TYPE_FBUFFER2D || underlying->kind == OSL_TYPE_SAMPLE_MODE)
 					storage_class = SpvStorageClass_UniformConstant;
 				else
 					storage_class = SpvStorageClass_Uniform;
@@ -4454,9 +4523,12 @@ unit_local Osl_Result _osl_parse_type_ident(Osl_Compiler *compiler, Osl_Block *b
 	} else {
 		Osl_Token *next = first;
 		
+		Osl_Type_Indirection indirections[sizeof(result->indirections)/sizeof(Osl_Type_Indirection)] = {0};
+		u64 indirection_count = 0;
+		
 		while (next->kind == OSL_TOKEN_KIND_LBRACKET) {
 			
-			if (result->indirection_count >= 8) {
+			if (indirection_count >= 8) {
 				compiler->err_log = _osl_tprint_token(compiler, next, STR("The max number of type indirections is 8. This exceeds that."));
 				return compiler->result = OSL_EXCEED_MAX_TYPE_INDIRECTIONS;
 			}
@@ -4467,7 +4539,7 @@ unit_local Osl_Result _osl_parse_type_ident(Osl_Compiler *compiler, Osl_Block *b
 				if (!_osl_exp_token(compiler, count_tok+1, OSL_TOKEN_KIND_RBRACKET)) {
 					return compiler->result;
 				}
-				result->indirections[result->indirection_count++].array_count = 0;
+				indirections[indirection_count++].array_count = 0;
 				next = count_tok+2;
 			} else {
 				Osl_Token *close_bracket;
@@ -4479,7 +4551,7 @@ unit_local Osl_Result _osl_parse_type_ident(Osl_Compiler *compiler, Osl_Block *b
 				}
 				
 				
-				result->indirections[result->indirection_count++].array_count = count_expr->val.lit.lit_int;
+				indirections[indirection_count++].array_count = count_expr->val.lit.lit_int;
 				next = close_bracket+1;
 			}
 			
@@ -4490,9 +4562,14 @@ unit_local Osl_Result _osl_parse_type_ident(Osl_Compiler *compiler, Osl_Block *b
 			return compiler->result;
 		}
 		
-		result->name = (string) { next->length, compiler->source.data + next->source_pos };
 		
-		*done_token = next+1;
+		Osl_Result res = _osl_parse_type_ident(compiler, block, next, &next, result);
+		if (res != OSL_OK) return res;
+		
+		memcpy(result->indirections, indirections, sizeof(indirections));
+		result->indirection_count = indirection_count;
+		
+		*done_token = next;
 	}
 	
 	
@@ -4878,7 +4955,7 @@ unit_local Osl_Expr *_osl_parse_one_expr(Osl_Compiler *compiler, Osl_Block *bloc
 }
 
 unit_local Osl_Expr * _osl_try_resolve_op(Osl_Expr *lexpr, Osl_Expr *rexpr, Osl_Op_Kind op) {
-	if (lexpr->kind == rexpr->kind && lexpr->kind == OSL_EXPR_LITERAL_FLOAT) {
+	if (op != OSL_OP_SET && lexpr->kind == rexpr->kind && lexpr->kind == OSL_EXPR_LITERAL_FLOAT) {
 			
 			f64 left = lexpr->val.lit.lit_flt;
 			f64 right = rexpr->val.lit.lit_flt;
@@ -4941,7 +5018,7 @@ unit_local Osl_Expr * _osl_try_resolve_op(Osl_Expr *lexpr, Osl_Expr *rexpr, Osl_
 		
 		return lexpr;
 		
-	} else if (lexpr->kind == rexpr->kind && lexpr->kind == OSL_EXPR_LITERAL_INT) {
+	} else if (op != OSL_OP_SET && lexpr->kind == rexpr->kind && lexpr->kind == OSL_EXPR_LITERAL_INT) {
 		
 		u64 left = lexpr->val.lit.lit_int;
 		u64 right = rexpr->val.lit.lit_int;
@@ -5121,10 +5198,10 @@ unit_local Osl_Expr *_osl_parse_expr(Osl_Compiler *compiler, Osl_Block *block, O
 			next_op->val.op.rhs = next_expr;
 			rightmost_op_parent->val.op.rhs = next_op;
 		} else {
-			// Push entire expression down left, put new expression on right
 			Osl_Expr *resolved_expr = _osl_try_resolve_op(last_expr, next_expr, rop);
 			if (resolved_expr) return resolved_expr;
 			
+			// Push entire expression down left, put new expression on right
 			_osl_make_node(compiler, block, expr_start, OSL_NODE_EXPR, (void**)&next_op);
 			next_op->kind = OSL_EXPR_OP;
 			next_op->val.op.op_kind = rop;

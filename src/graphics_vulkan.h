@@ -2944,6 +2944,82 @@ void oga_uninit_optimal_copy_view(Oga_Optimal_Copy_View *image) {
     deallocate(a, image);
 }
 
+Oga_Result oga_init_render_image_view(Oga_Context *context, Oga_Render_Image_View_Desc desc, Oga_Render_Image_View **view) {
+    *view = allocate(context->state_allocator, sizeof(Oga_Render_Image_View) + sizeof(_Vk_Image_State));
+    if (!*view) {
+        return OGA_ERROR_STATE_ALLOCATION_FAILED;
+    }
+
+    **view = (Oga_Render_Image_View){0};
+    (*view)->context = context;
+    (*view)->id = (*view) + 1;
+
+    _Vk_Image_State *state = (_Vk_Image_State*)(*view)->id;
+
+    Oga_Image_View_Desc img_desc = {
+        .memory_pointer = desc.memory_pointer,
+        .format         = desc.format,
+        .width          = desc.width,
+        .height         = desc.height,
+        .depth          = desc.depth,
+        .dimensions     = OGA_2D,
+        .linear_tiling  = false
+    };
+
+    Oga_Result res = _oga_make_vk_image(context, state, img_desc, VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
+    if (res != OGA_OK) {
+        return res;
+    }
+
+    (*view)->memory_pointer = desc.memory_pointer;
+    (*view)->width = desc.width;
+    (*view)->height = desc.height;
+
+    return OGA_OK;
+}
+
+void oga_uninit_render_image_view(Oga_Render_Image_View *view) {
+    _Vk_Context_Internal *internal = (_Vk_Context_Internal*)view->context->internal;
+    _vk_assert1(vkDeviceWaitIdle(view->context->id));
+
+    _Vk_Image_State *state = (_Vk_Image_State*)view->id;
+
+    vkDestroyImageView(view->context->id, state->view, &internal->vk_allocs);
+    vkDestroyImage(view->context->id, state->image, &internal->vk_allocs);
+
+    Allocator a = view->context->state_allocator;
+    *view = (Oga_Render_Image_View){0};
+    deallocate(a, view);
+}
+
+u64 oga_get_render_image_memory_requirement(Oga_Context *context, Oga_Render_Image_View_Desc desc) {
+    VkImage dummy_image;
+    VkImageCreateInfo info = {0};
+    info.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
+    info.imageType = VK_IMAGE_TYPE_2D;
+    info.format = _oga_to_vk_format(desc.format);
+    info.extent.width = (u32)desc.width;
+    info.extent.height = (u32)desc.height;
+    info.extent.depth = 1;
+    info.mipLevels = 1;
+    info.arrayLayers = 1;
+    info.samples = VK_SAMPLE_COUNT_1_BIT;
+    info.tiling = VK_IMAGE_TILING_OPTIMAL;
+    info.usage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
+    info.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+    info.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+
+    _Vk_Context_Internal *internal = (_Vk_Context_Internal*)context->internal;
+    _vk_assert1(vkCreateImage(context->id, &info, &internal->vk_allocs, &dummy_image));
+
+    VkMemoryRequirements mem_req;
+    vkGetImageMemoryRequirements(context->id, dummy_image, &mem_req);
+
+    vkDestroyImage(context->id, dummy_image, &internal->vk_allocs);
+
+    return (u64)mem_req.size;
+}
+
 Oga_Result oga_init_block_view(Oga_Context *context, Oga_Memory_View_Desc desc, Oga_Block_View **block) {
     *block = allocate(context->state_allocator, sizeof(Oga_Block_View));
     if (!*block) {
