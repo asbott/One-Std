@@ -690,6 +690,8 @@ typedef struct Easy_Command_Result {
 } Easy_Command_Result;
 OSTD_LIB Easy_Command_Result sys_run_command_easy(string command_line, File_Handle stdout, File_Handle stderr, string workspace_dir);
 
+OSTD_LIB void sys_exit(s64 code);
+
 //////
 // Sockets
 //////
@@ -704,7 +706,7 @@ typedef enum Socket_Result {
     SOCKET_NOACCESS,
     SOCKET_IN_PROGRESS,
     SOCKET_NOT_A_SOCKET,
-    
+
     SOCKET_INVALID_ADDRESS,
     SOCKET_TIMED_OUT,
     SOCKET_CONNECTION_REFUSED,
@@ -948,27 +950,27 @@ unit_local _Ostd_Thread_Storage _ostd_main_thread_storage;
 
 _Ostd_Thread_Storage *_ostd_get_thread_storage(void) {
     u64 thread_id = sys_get_current_thread_id();
-    
+
     if (!_ostd_main_thread_is_unknown && _ostd_main_thread_id == thread_id) {
         return &_ostd_main_thread_storage;
     }
-    
+
     for (u64 i = 0; i < _ostd_thread_storage_allocated_count; i += 1) {
         _Ostd_Thread_Storage *s = &_ostd_thread_storage[i];
         if (s->thread_id == thread_id) return s;
     }
-    
+
     if (_ostd_main_thread_is_unknown) {
         _ostd_main_thread_id = thread_id;
         _ostd_main_thread_is_unknown = false;
         _ostd_main_thread_storage = (_Ostd_Thread_Storage){0};
         _ostd_main_thread_storage.taken = true;
         _ostd_main_thread_storage.thread_id = thread_id;
-        _ostd_main_thread_storage.temp 
+        _ostd_main_thread_storage.temp
             = (struct _Per_Thread_Temporary_Storage*)_ostd_main_thread_storage.temporary_storage_struct_backing;
         return &_ostd_main_thread_storage;
     }
-    
+
     return 0;
 }
 
@@ -989,11 +991,11 @@ unit_local void _ostd_register_thread_storage(u64 thread_id) {
             return;
         }
     }
-    
+
     u64 page_size = sys_get_info().page_size;
-    
+
     assertmsg(sizeof(_Ostd_Thread_Storage) < page_size, "refactor time");
-    
+
     if (!_ostd_thread_storage) {
         sys_mutex_init(&_ostd_thread_storage_register_mutex);
         _ostd_thread_storage = sys_map_pages(SYS_MEMORY_RESERVE, 0, 1024*1024*10, false);
@@ -1007,12 +1009,12 @@ unit_local void _ostd_register_thread_storage(u64 thread_id) {
         void *allocated = sys_map_pages(SYS_MEMORY_ALLOCATE, next_alloc, 1, false);
         assert(allocated == next_alloc);
         memset(allocated, 0, page_size);
-        
+
         _ostd_thread_storage_allocated_count += (page_size / sizeof(_Ostd_Thread_Storage));
-    } 
-    
+    }
+
     sys_mutex_release(_ostd_thread_storage_register_mutex);
-    
+
     // scary
     _ostd_register_thread_storage(thread_id);
 }
@@ -3976,29 +3978,33 @@ WINDOWS_IMPORT BOOL WINAPI CreateDirectoryW(
 #define SO_LINGER       0x0080          /* linger on close if data present */
 #define SO_OOBINLINE    0x0100          /* leave received OOB data in line */
 
+WINDOWS_IMPORT void WINAPI ExitProcess(UINT uExitCode);
+
 
 /* End include: windows_loader.h */
     #endif // _WINDOWS_
-    
+
 #endif// OS_FLAGS & OS_FLAG_WINDOWS
 
 #ifndef OSTD_HEADLESS
 
 #if OS_FLAGS & OS_FLAG_LINUX
     #if COMPILER_FLAGS & COMPILER_FLAG_GNU
-        #define _GNU_SOURCE
     #endif
-    
+
     #include <X11/Xlib.h>
     #include <X11/Xutil.h>
     #include <X11/extensions/Xrandr.h>
-    // For waiting for vblank. Unfortunately.
-    #include <GL/gl.h>
-    #include <GL/glx.h>
+    #undef NULL
+
     struct _XDisplay;
     typedef struct _XDisplay Display;
+    struct _XImage;
+    typedef struct _XImage XImage;
     struct wl_display;
     typedef struct wl_display wl_display;
+    struct _XGC;
+    typedef struct _XGC* GC;
 #endif // OS_FLAGS & OS_FLAG_LINUX
 
 
@@ -4011,6 +4017,7 @@ typedef struct _Surface_State {
 #elif OS_FLAGS & OS_FLAG_LINUX
     GC       gc;
     XImage*  ximage;
+    Display *xlib_display;
 #endif
     void *pixels;
     bool allocated;
@@ -4051,7 +4058,6 @@ unit_local _Surface_State *_get_surface_state(Surface_Handle h) {
 /////////////////////////////////////////////////////
 
 #define _GNU_SOURCE
-#define _POSIX_C_SOURCE
 
 // todo(charlie) dynamically link & manually  define some stuff to minimize namespace bloat here
 #include <unistd.h>
@@ -4067,10 +4073,32 @@ unit_local _Surface_State *_get_surface_state(Surface_Handle h) {
 #include <arpa/inet.h>
 #include <sys/socket.h>
 #include <unistd.h>
+#include <sys/time.h>
+#include <sys/select.h>
 
 #if (OS_FLAGS & OS_FLAG_LINUX)
+
 #include <execinfo.h>
+#include <time.h>
+// For waiting for vblank. Unfortunately.
+#include <GL/gl.h>
+#include <GL/glx.h>
+
+/* Stupid unix headers isnt giving me everything >?!>!>!>?!>? */
+
+#define CPU_ZERO(cpusetp)	 __CPU_ZERO_S (sizeof (cpu_set_t), cpusetp)
+#define CPU_ZERO_S(setsize, cpusetp)	    __CPU_ZERO_S (setsize, cpusetp)
+#define CPU_SETSIZE __CPU_SETSIZE
+#define CPU_SET(cpu, cpusetp)	 __CPU_SET_S (cpu, sizeof (cpu_set_t), cpusetp)
+#define CPU_SET_S(cpu, setsize, cpusetp)   __CPU_SET_S (cpu, setsize, cpusetp)
+
+extern int pthread_setaffinity_np (pthread_t __th, size_t __cpusetsize,
+                                   const cpu_set_t *__cpuset);
+
+
 #endif
+
+#undef NULL
 
 #undef bool
 
@@ -4101,7 +4129,7 @@ unit_local void _unix_add_mapped_region(void *start, u64 page_count) {
         _unix_mapped_region_buffers_allocated_count = info.page_size/sizeof(_Mapped_Region_Desc_Buffer);
         _unix_mapped_region_buffers_count = 0;
     }
-    
+
     // First, see if this is already mapped (we might be allocating reserved memory)
     for (u64 i = 0; i < _unix_mapped_region_buffers_count; i += 1) {
         _Mapped_Region_Desc_Buffer buffer = _unix_mapped_region_buffers[i];
@@ -4110,15 +4138,15 @@ unit_local void _unix_add_mapped_region(void *start, u64 page_count) {
 
         for (u32 j = 0; j < buffer.count; j += 1) {
             _Mapped_Region_Desc *region = buffer.regions + j;
-            
+
             void *end = (u8*)region->start + region->page_count*info.page_size;
-            
+
             if ((u64)start >= (u64)region->start && (u64)start < (u64)end) {
                 return;
             }
         }
     }
-    
+
     for (u64 i = 0; i < _unix_mapped_region_buffers_count; i += 1) {
         _Mapped_Region_Desc_Buffer buffer = _unix_mapped_region_buffers[i];
         assert(buffer.regions);
@@ -4271,9 +4299,9 @@ bool sys_deallocate_pages(void *address, u64 number_of_pages) {
 u64 sys_query_mapped_regions(void *start, void *end, Mapped_Memory_Info *result, u64 result_count) {
     u64 counter = 0;
     if (!result) result_count = U64_MAX;
-    
+
     System_Info info = sys_get_info();
-    
+
     start = (void*)(((u64)start + info.page_size-1) & ~(info.page_size-1));
 
     for (u64 i = 0; i < _unix_mapped_region_buffers_count; i += 1) {
@@ -4418,7 +4446,7 @@ Socket_Result sys_socket_init(Socket *s, Socket_Domain domain, Socket_Type type,
         default:
             return SOCKET_PROTOCOL_ERROR;
     }
-    
+
     int sock_type = 0;
     switch(type) {
         case SOCKET_TYPE_STREAM:
@@ -4439,7 +4467,7 @@ Socket_Result sys_socket_init(Socket *s, Socket_Domain domain, Socket_Type type,
         default:
             return SOCKET_PROTOCOL_ERROR;
     }
-    
+
     int proto = 0;
     switch(protocol) {
         case SOCKET_PROTOCOL_TCP:
@@ -4451,15 +4479,15 @@ Socket_Result sys_socket_init(Socket *s, Socket_Domain domain, Socket_Type type,
         default:
             return SOCKET_PROTOCOL_ERROR;
     }
-    
+
     int sock = socket(af, sock_type, proto);
     if (sock < 0) {
         return SOCKET_PROTOCOL_ERROR;
     }
-    
+
     int optval = 1;
-    setsockopt(sock, SOL_SOCKET, SO_REUSEADDR, &optval, sizeof(optval))
-    
+    setsockopt(sock, SOL_SOCKET, SO_REUSEADDR, &optval, sizeof(optval));
+
     *s = (Socket)sock;
     return SOCKET_OK;
 }
@@ -4522,14 +4550,14 @@ Socket_Result sys_socket_accept(Socket sock, Socket *accepted, u64 timeout_ms) {
 Socket_Result sys_socket_connect(Socket sock, u32 address, u16 port, Socket_Domain domain) {
     if (domain != SOCKET_DOMAIN_IPV4)
         return SOCKET_INVALID_ADDRESS;
-    
+
     struct sockaddr_in addr_in;
     addr_in.sin_family = AF_INET;
     addr_in.sin_port = htons(port);
     addr_in.sin_addr.s_addr = address;
     if (addr_in.sin_addr.s_addr == INADDR_NONE)
         return SOCKET_INVALID_ADDRESS;
-    
+
     int result = connect((int)sock, (struct sockaddr*)&addr_in, sizeof(addr_in));
     if (result < 0) {
         int err = errno;
@@ -4609,18 +4637,24 @@ Socket_Result sys_set_socket_blocking_timeout(Socket socket, u64 ms) {
     return SOCKET_OK;
 }
 
+u64 sys_get_current_thread_id(void) {
+    return (u64)pthread_self();
+}
+
 float64 sys_get_seconds_monotonic(void) {
     struct timespec ts;
     clock_gettime(CLOCK_MONOTONIC, &ts);
     float64 t = (float64)ts.tv_sec + (float64)ts.tv_nsec / 1e9;
-    
+
     local_persist float64 start_time = 0.0;
 	if (start_time == 0.0) {
 	   start_time = t;
 	}
-	
+
 	return t - start_time;
 }
+
+
 
 void sys_set_thread_affinity_mask(Thread_Handle thread, u64 bits) {
 #if (OS_FLAGS & OS_FLAG_ANDROID) || (OS_FLAGS & OS_FLAG_EMSCRIPTEN)
@@ -4635,7 +4669,7 @@ void sys_set_thread_affinity_mask(Thread_Handle thread, u64 bits) {
             CPU_SET(i, &cpuset);
         }
     }
-    
+
     pthread_setaffinity_np((pthread_t)thread, sizeof(cpu_set_t), &cpuset);
 #endif
 }
@@ -4697,7 +4731,7 @@ unit_local void _win_wide_to_utf8(u16 *s, string *utf8) {
     u64 len = _wide_strlen(s);
     int result = WideCharToMultiByte(CP_UTF8, 0, (LPCWCH)s, -1, (char*)utf8->data, (int)len+1, 0, 0);
     assert(result);
-    
+
     utf8->count = (u64)(len);
 }
 
@@ -5054,7 +5088,7 @@ void sys_close(File_Handle h) {
 File_Handle sys_open_file(string path, File_Open_Flags flags) {
     u16 cpath[MAX_PATH_LENGTH*2];
     _win_utf8_to_wide(path, cpath, MAX_PATH_LENGTH*2);
-    
+
     DWORD access_mode = 0;
     DWORD creation_flags = 0;
 
@@ -5072,7 +5106,7 @@ File_Handle sys_open_file(string path, File_Open_Flags flags) {
     } else {
         creation_flags = OPEN_EXISTING;
     }
-    
+
     SECURITY_ATTRIBUTES attr = (SECURITY_ATTRIBUTES){0};
     attr.nLength = sizeof(SECURITY_ATTRIBUTES);
     attr.bInheritHandle = 1;
@@ -5108,7 +5142,7 @@ bool sys_make_directory(string path, bool recursive) {
     if (path_len == 0) {
         return false;
     }
-    
+
     if (!recursive) {
         if (CreateDirectoryW(path_wide, 0) || GetLastError() == 0xB7 /* ERROR_ALREADY_EXISTS */) {
             return true;
@@ -5119,7 +5153,7 @@ bool sys_make_directory(string path, bool recursive) {
     u16 buffer[1024];
     if (path.count >= sizeof(buffer))
         return false;
-    
+
     memcpy(buffer, path_wide, path.count*sizeof(u16));
     buffer[path.count] = '\0';
 
@@ -5255,10 +5289,10 @@ void sys_walk_directory(string path, bool recursive, bool walk_directories, Walk
             has_slash = true;
         }
     }
-    
+
     u16 path_wide[2048];
     u64 path_len = _win_utf8_to_wide(path, path_wide, 2048);
-    
+
     u16 search_pattern[2048];
     u64 pos = 0;
     for (u64 i = 0; i < path_len; i++) {
@@ -5268,19 +5302,19 @@ void sys_walk_directory(string path, bool recursive, bool walk_directories, Walk
         search_pattern[pos++] = '\\';
     }
     search_pattern[pos++] = '*';
-    
+
     WIN32_FIND_DATAW findData;
     HANDLE hFind = FindFirstFileW((LPCWSTR)search_pattern, &findData);
     if (hFind == INVALID_HANDLE_VALUE) {
         return;
     }
-    
+
     do {
         if (_wide_strcmp(findData.cFileName, L".") == 0 ||
             _wide_strcmp(findData.cFileName, L"..") == 0) {
             continue;
         }
-        
+
         u64 entry_name_len = _wide_strlen(findData.cFileName);
         u64 new_path_len = path.count + (has_slash ? 0 : 1) + entry_name_len;
         u16 new_path_wide[2048];
@@ -5296,18 +5330,18 @@ void sys_walk_directory(string path, bool recursive, bool walk_directories, Walk
             //sys_write_string(sys_get_stdout(), (string){1, (u8*)&findData.cFileName[i]});
         }
         new_path_wide[new_pos++] = 0;
-        
+
         u8 new_path[2048];
-        
+
         string entry_str;
         entry_str.count = new_path_len;
         entry_str.data = new_path;
-        
+
         _win_wide_to_utf8(new_path_wide, &entry_str);
-        
-        
+
+
         bool is_dir = (findData.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) != 0;
-        
+
         if (is_dir) {
             if (walk_directories) {
                 if (!walk_proc(entry_str)) {
@@ -5324,48 +5358,52 @@ void sys_walk_directory(string path, bool recursive, bool walk_directories, Walk
                 return;
             }
         }
-        
+
     } while (FindNextFileW(hFind, &findData));
-    
+
     FindClose(hFind);
 }
 
 Easy_Command_Result sys_run_command_easy(string command_line, File_Handle stdout, File_Handle stderr, string workspace_dir) {
     Easy_Command_Result res = (Easy_Command_Result){0};
-    
+
     STARTUPINFOA si = {0};
     si.cb = sizeof(STARTUPINFOA);
     si.dwFlags |= 0x00000100; /*STARTF_USESTDHANDLES */
     si.hStdOutput = stdout;
     si.hStdError = stderr;
-    
+
     PROCESS_INFORMATION pi = (PROCESS_INFORMATION){ 0 };
-    
+
     char cmd[1024];
-    
+
     memcpy(cmd, command_line.data, command_line.count);
     cmd[command_line.count] = 0;
-    
+
     char wks[1024];
     memcpy(wks, workspace_dir.data, workspace_dir.count);
     wks[workspace_dir.count] = 0;
-    
+
     bool ok = (bool)(int)CreateProcessA(0, cmd, 0, 0, true, 0, 0, wks, &si, &pi);
-    
+
     if (!ok) {
         res.process_start_success = false;
         return res;
     }
-    
+
     WaitForSingleObject(pi.hProcess, S32_MAX);
-    
+
     DWORD exit_code;
     GetExitCodeProcess(pi.hProcess, &exit_code);
-    
+
     res.exit_code = (s64)exit_code;
     res.process_start_success = true;
-    
+
     return res;
+}
+
+OSTD_LIB void sys_exit(s64 code) {
+    ExitProcess((UINT)code);
 }
 
 inline unit_local int _to_winsock_err(Socket_Result r) {
@@ -5492,10 +5530,10 @@ Socket_Result sys_socket_init(Socket *s, Socket_Domain domain, Socket_Type type,
     if (win_sock == INVALID_SOCKET) {
         return SOCKET_PROTOCOL_ERROR;
     }
-    
+
     int optval = 1;
     setsockopt(win_sock, SOL_SOCKET, SO_REUSEADDR,  (const char *)&optval, sizeof(optval));
-    
+
     *s = (Socket)win_sock;
     return SOCKET_OK;
 }
@@ -5541,7 +5579,7 @@ Socket_Result sys_socket_accept(Socket sock, Socket *accepted, u64 timeout_ms) {
     if (select_result == SOCKET_ERROR) {
         return SOCKET_PROTOCOL_ERROR;
     }
-    
+
     struct sockaddr_in addr;
     int addr_len = sizeof(addr);
     SOCKET client = accept((SOCKET)sock, (struct sockaddr*)&addr, &addr_len);
@@ -5632,13 +5670,13 @@ void* sys_thread_key_read(Thread_Key key) {
 
 unit_local DWORD WINAPI _windows_thread_proc(LPVOID lpParameter) {
     Thread *t = (Thread*)lpParameter;
-    
+
     _ostd_register_thread_storage(t->id);
-    
+
     DWORD ret = (DWORD)t->proc(t);
-    
+
     _ostd_get_thread_storage()->taken = false;
-    
+
     return ret;
 }
 
@@ -5904,12 +5942,12 @@ float64 sys_get_seconds_monotonic(void) {
 	QueryPerformanceFrequency(&freq);
 	QueryPerformanceCounter(&counter);
 	float64 t = (float64)counter.QuadPart / (float64)freq.QuadPart;
-	
+
 	local_persist float64 start_time = 0.0;
 	if (start_time == 0.0) {
 	   start_time = t;
 	}
-	
+
 	return t - start_time;
 }
 
@@ -5961,7 +5999,7 @@ void* sys_get_library_symbol(void *lib, string symbol) {
     char cs[1024];
     memcpy(cs, symbol.data, symbol.count);
     cs[symbol.count] = 0;
-    
+
     return GetProcAddress(lib, cs);
 }
 
@@ -6955,11 +6993,11 @@ unit_local void _em_get_canvas_size_main_thread(void *arg) {
 bool surface_get_framebuffer_size(Surface_Handle h, s64 *width, s64 *height) {
     (void)h;
     _Em_Canvas_Size_Result result = {0};
-    
+
     emscripten_sync_run_in_main_runtime_thread(EM_FUNC_SIG_VI, _em_get_canvas_size_main_thread, &result);
     if (!result.success)
         return false;
-   
+
     *width = result.w;
     *height = result.h;
     return true;
@@ -6978,7 +7016,7 @@ void* surface_map_pixels(Surface_Handle h) {
         if (_em_pixel_buffer) {
             sys_unmap_pages(_em_pixel_buffer);
         }
-        
+
         u64 size = required * 4;
         u64 pages = (size+4096)/4096;
         _em_pixel_buffer = sys_map_pages(SYS_MEMORY_RESERVE | SYS_MEMORY_ALLOCATE, 0, pages, false);
@@ -7000,7 +7038,7 @@ void surface_blit_pixels(Surface_Handle h) {
     if (!surface_get_framebuffer_size(h, &width, &height))
         return;
 
-    const char *format = 
+    const char *format =
         "var canvas = document.getElementById('canvas');"
         "if (canvas) {"
             "var ctx = canvas.getContext('2d');"
@@ -7014,7 +7052,7 @@ void surface_blit_pixels(Surface_Handle h) {
 
     int w = (int)width;
     int h_int = (int)height;
-    
+
     #pragma clang diagnostic ignored "-Wformat-nonliteral"
     extern int snprintf(char*restrict, unsigned long, const char*restrict, ...);
     int script_len = snprintf(0, 0, format, w, h_int, w, h_int, (int)_em_pixel_buffer) + 1;
@@ -7034,7 +7072,7 @@ unit_local EM_BOOL animation_frame_callback(double time, void *userData) {
 unit_local void _em_main_thread_wait_animation_frame(void) {
     _em_frame_ready = 0;
     emscripten_request_animation_frame(animation_frame_callback, 0);
-    
+
     while (!_em_frame_ready) {
         // whatevs web is dumb
          _em_frame_ready = true;

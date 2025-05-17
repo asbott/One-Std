@@ -2931,3 +2931,5 @@ WINDOWS_IMPORT BOOL WINAPI CreateDirectoryW(
 #define SO_LINGER       0x0080          /* linger on close if data present */
 #define SO_OOBINLINE    0x0100          /* leave received OOB data in line */
 
+WINDOWS_IMPORT void WINAPI ExitProcess(UINT uExitCode);
+

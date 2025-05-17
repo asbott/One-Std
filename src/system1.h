@@ -100,6 +100,8 @@ typedef struct Easy_Command_Result {
 } Easy_Command_Result;
 OSTD_LIB Easy_Command_Result sys_run_command_easy(string command_line, File_Handle stdout, File_Handle stderr, string workspace_dir);
 
+OSTD_LIB void sys_exit(s64 code);
+
 //////
 // Sockets
 //////
@@ -1871,6 +1873,10 @@ Easy_Command_Result sys_run_command_easy(string command_line, File_Handle stdout
     res.process_start_success = true;
 
     return res;
+}
+
+OSTD_LIB void sys_exit(s64 code) {
+    ExitProcess((UINT)code);
 }
 
 inline unit_local int _to_winsock_err(Socket_Result r) {
