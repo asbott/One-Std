@@ -191,7 +191,7 @@ typedef struct Thread {
 
 OSTD_LIB bool sys_thread_init(Thread *thread, Thread_Proc proc, void *userdata);
 OSTD_LIB void sys_thread_start(Thread *thread);
-OSTD_LIB void sys_thread_join(Thread *thread);
+OSTD_LIB s64 sys_thread_join(Thread *thread);
 OSTD_LIB void sys_thread_close(Thread *thread);
 
 typedef struct Mutex {
@@ -2170,9 +2170,13 @@ void sys_thread_start(Thread *thread) {
     thread->is_suspended = false;
     ResumeThread(thread->handle);
 }
-void sys_thread_join(Thread *thread) {
+s64 sys_thread_join(Thread *thread) {
     assert(!thread->is_suspended);
     WaitForSingleObject(thread->handle, 0xFFFFFFFF);
+    
+    DWORD exit_code = 0;
+    GetExitCodeThread(thread->handle, &exit_code);
+    return (s64)exit_code;
 }
 void sys_thread_close(Thread *thread) {
     CloseHandle(thread->handle);
