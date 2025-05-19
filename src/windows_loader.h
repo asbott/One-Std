@@ -2933,3 +2933,6 @@ WINDOWS_IMPORT BOOL WINAPI CreateDirectoryW(
 
 WINDOWS_IMPORT void WINAPI ExitProcess(UINT uExitCode);
 
+WINDOWS_IMPORT void WINAPI ExitThread(DWORD dwExitCode);
+
+WINDOWS_IMPORT BOOL GetExitCodeThread(HANDLE hThread, LPDWORD lpExitCode);

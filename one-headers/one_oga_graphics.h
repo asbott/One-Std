@@ -711,6 +711,7 @@ typedef struct Easy_Command_Result {
 OSTD_LIB Easy_Command_Result sys_run_command_easy(string command_line, File_Handle stdout, File_Handle stderr, string workspace_dir);
 
 OSTD_LIB void sys_exit(s64 code);
+OSTD_LIB void sys_exit_current_thread(s64 code);
 
 //////
 // Sockets
@@ -4000,6 +4001,9 @@ WINDOWS_IMPORT BOOL WINAPI CreateDirectoryW(
 
 WINDOWS_IMPORT void WINAPI ExitProcess(UINT uExitCode);
 
+WINDOWS_IMPORT void WINAPI ExitThread(DWORD dwExitCode);
+
+WINDOWS_IMPORT BOOL GetExitCodeThread(HANDLE hThread, LPDWORD lpExitCode);
 
 /* End include: windows_loader.h */
     #endif // _WINDOWS_
@@ -5424,6 +5428,10 @@ Easy_Command_Result sys_run_command_easy(string command_line, File_Handle stdout
 
 OSTD_LIB void sys_exit(s64 code) {
     ExitProcess((UINT)code);
+}
+
+OSTD_LIB void sys_exit_current_thread(s64 code) {
+    ExitThread((DWORD)code);
 }
 
 inline unit_local int _to_winsock_err(Socket_Result r) {
@@ -7460,6 +7468,7 @@ unit_local Arena_Backed_Array_Header *_persistent_header(void *parray) {
 }
 
 void persistent_array_init(void **pparray, u64 element_size) {
+    // todo(charlie) configurable
     Arena arena = make_arena(1024ULL*1024ULL*1024ULL*4ULL, 0);
     
     Arena_Backed_Array_Header *header = (Arena_Backed_Array_Header*)arena_push(&arena, sizeof(Arena_Backed_Array_Header));

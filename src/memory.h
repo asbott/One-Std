@@ -346,6 +346,7 @@ unit_local Arena_Backed_Array_Header *_persistent_header(void *parray) {
 }
 
 void persistent_array_init(void **pparray, u64 element_size) {
+    // todo(charlie) configurable
     Arena arena = make_arena(1024ULL*1024ULL*1024ULL*4ULL, 0);
     
     Arena_Backed_Array_Header *header = (Arena_Backed_Array_Header*)arena_push(&arena, sizeof(Arena_Backed_Array_Header));
