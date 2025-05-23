@@ -534,6 +534,7 @@ unit_local _Surface_State *_get_surface_state(Surface_Handle h) {
 #define _GNU_SOURCE
 
 // todo(charlie) dynamically link & manually  define some stuff to minimize namespace bloat here
+#include <stdint.h>
 #include <unistd.h>
 #include <sched.h>
 #include <pthread.h>

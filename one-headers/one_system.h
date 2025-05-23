@@ -4064,6 +4064,7 @@ unit_local _Surface_State *_get_surface_state(Surface_Handle h) {
 #define _GNU_SOURCE
 
 // todo(charlie) dynamically link & manually  define some stuff to minimize namespace bloat here
+#include <stdint.h>
 #include <unistd.h>
 #include <sched.h>
 #include <pthread.h>
@@ -9366,6 +9367,9 @@ u64 format_string_args(void *buffer, u64 buffer_size, string fmt, u64 arg_count,
                     signed_val = *(s64*)&arg.int_val;
                 }
                 str.count = format_signed_int(signed_val, base, str.data, 32);
+                i += 1;
+            } else if (fmt.data[i+1] == 'x') {
+                str.count = format_unsigned_int(arg.int_val, 16, str.data, 32);
                 i += 1;
             } else if (fmt.data[i+1] == 'f') {
                 // todo(charlie)

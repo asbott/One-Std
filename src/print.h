@@ -221,6 +221,9 @@ u64 format_string_args(void *buffer, u64 buffer_size, string fmt, u64 arg_count,
                 }
                 str.count = format_signed_int(signed_val, base, str.data, 32);
                 i += 1;
+            } else if (fmt.data[i+1] == 'x') {
+                str.count = format_unsigned_int(arg.int_val, 16, str.data, 32);
+                i += 1;
             } else if (fmt.data[i+1] == 'f') {
                 // todo(charlie)
                 str.count = format_float(arg.flt_val, decimal_places, str.data, 32);
