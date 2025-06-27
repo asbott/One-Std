@@ -204,6 +204,12 @@ OSTD_LIB bool sys_mutex_uninit(Mutex *mutex);
 OSTD_LIB void sys_mutex_acquire(Mutex mutex);
 OSTD_LIB void sys_mutex_release(Mutex mutex);
 
+////////
+// Atomics
+
+inline unit_local u32 sys_atomic_add_32(volatile u32 *addend, u32 value);
+inline unit_local u64 sys_atomic_add_64(volatile u64 *addend, u64 value);
+
 //////
 // Surfaces (Window)
 //////
@@ -2204,6 +2210,20 @@ void sys_mutex_acquire(Mutex mutex) {
 void sys_mutex_release(Mutex mutex) {
     LeaveCriticalSection(mutex.handle);
 }
+
+inline unit_local u32 sys_atomic_add_32(volatile u32 *addend, u32 value) {
+    return (u32)_InterlockedExchangeAdd((volatile long*)addend, (long)value) + value;
+}
+inline unit_local u64 sys_atomic_add_64(volatile u64 *addend, u64 value) {
+    long long old;
+
+    do {
+        old = (long long)*addend;
+    } while (_InterlockedCompareExchange64((volatile long long*)addend, old + (long long)value, (long long)old) != (long long)old);
+
+    return (u64)(old + (long long)value);
+}
+
 #ifndef OSTD_HEADLESS
 
 Surface_Handle sys_make_surface(Surface_Desc desc) {

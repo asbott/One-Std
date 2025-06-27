@@ -814,6 +814,12 @@ OSTD_LIB bool sys_mutex_uninit(Mutex *mutex);
 OSTD_LIB void sys_mutex_acquire(Mutex mutex);
 OSTD_LIB void sys_mutex_release(Mutex mutex);
 
+////////
+// Atomics
+
+inline unit_local u32 sys_atomic_add_32(volatile u32 *addend, u32 value);
+inline unit_local u64 sys_atomic_add_64(volatile u64 *addend, u64 value);
+
 //////
 // Surfaces (Window)
 //////
@@ -1159,6 +1165,8 @@ typedef LONG32 LONG;
 
 typedef s64 ULONG64, *PULONG64;
 typedef s64 DWORD64, *PDWORD64;
+
+typedef u64 LONG64;
 
 typedef char CHAR;
 typedef CHAR *PCHAR, *LPCH, *PCH;
@@ -4003,7 +4011,7 @@ WINDOWS_IMPORT void WINAPI ExitProcess(UINT uExitCode);
 
 WINDOWS_IMPORT void WINAPI ExitThread(DWORD dwExitCode);
 
-WINDOWS_IMPORT BOOL GetExitCodeThread(HANDLE hThread, LPDWORD lpExitCode);
+WINDOWS_IMPORT BOOL WINAPI GetExitCodeThread(HANDLE hThread, LPDWORD lpExitCode);
 
 /* End include: windows_loader.h */
     #endif // _WINDOWS_
@@ -5753,6 +5761,20 @@ void sys_mutex_acquire(Mutex mutex) {
 void sys_mutex_release(Mutex mutex) {
     LeaveCriticalSection(mutex.handle);
 }
+
+inline unit_local u32 sys_atomic_add_32(volatile u32 *addend, u32 value) {
+    return (u32)_InterlockedExchangeAdd((volatile long*)addend, (long)value) + value;
+}
+inline unit_local u64 sys_atomic_add_64(volatile u64 *addend, u64 value) {
+    long long old;
+
+    do {
+        old = (long long)*addend;
+    } while (_InterlockedCompareExchange64((volatile long long*)addend, old + (long long)value, (long long)old) != (long long)old);
+
+    return (u64)(old + (long long)value);
+}
+
 #ifndef OSTD_HEADLESS
 
 Surface_Handle sys_make_surface(Surface_Desc desc) {
@@ -9602,6 +9624,11 @@ u64 format_float(float64 x, int decimal_places, void *buffer, u64 buffer_size) {
 
 u64 string_to_unsigned_int(string str, int base, bool *success)
 {
+    if (!str.data || !str.count) {
+        *success = false;
+        return 0;
+    }
+    
     u64 value = 0;
     if (base < 2 || base > 36) {
         if (success) *success = false;
@@ -9650,6 +9677,10 @@ u64 string_to_unsigned_int(string str, int base, bool *success)
 
 s64 string_to_signed_int(string str, int base, bool *success)
 {
+    if (!str.data || !str.count) {
+        *success = false;
+        return 0;
+    }
     u8 *p = str.data;
 
     while (*p == ' ' || *p == '\t' || *p == '\n' ||
@@ -9661,6 +9692,8 @@ s64 string_to_signed_int(string str, int base, bool *success)
     if (*p == '-') {
         sign = -1;
         p++;
+        str.data++;
+        str.count--;
     } else if (*p == '+') {
         p++;
     }

@@ -92,6 +92,8 @@ typedef LONG32 LONG;
 typedef s64 ULONG64, *PULONG64;
 typedef s64 DWORD64, *PDWORD64;
 
+typedef u64 LONG64;
+
 typedef char CHAR;
 typedef CHAR *PCHAR, *LPCH, *PCH;
 typedef const CHAR *LPCCH, *PCCH;
@@ -2935,4 +2937,4 @@ WINDOWS_IMPORT void WINAPI ExitProcess(UINT uExitCode);
 
 WINDOWS_IMPORT void WINAPI ExitThread(DWORD dwExitCode);
 
-WINDOWS_IMPORT BOOL GetExitCodeThread(HANDLE hThread, LPDWORD lpExitCode);
+WINDOWS_IMPORT BOOL WINAPI GetExitCodeThread(HANDLE hThread, LPDWORD lpExitCode);

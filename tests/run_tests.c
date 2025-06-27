@@ -201,6 +201,7 @@ int main(void) {
 		STR("string.h"),
 		STR("osl_compiler.h"),
 		STR("ostd.h"),
+		STR("print.h"),
 	};
 	
 	for (u64 i = 0; i < sizeof(concat_headers)/sizeof(string); i += 1) {

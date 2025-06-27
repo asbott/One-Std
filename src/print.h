@@ -457,6 +457,11 @@ u64 format_float(float64 x, int decimal_places, void *buffer, u64 buffer_size) {
 
 u64 string_to_unsigned_int(string str, int base, bool *success)
 {
+    if (!str.data || !str.count) {
+        *success = false;
+        return 0;
+    }
+    
     u64 value = 0;
     if (base < 2 || base > 36) {
         if (success) *success = false;
@@ -505,6 +510,10 @@ u64 string_to_unsigned_int(string str, int base, bool *success)
 
 s64 string_to_signed_int(string str, int base, bool *success)
 {
+    if (!str.data || !str.count) {
+        *success = false;
+        return 0;
+    }
     u8 *p = str.data;
 
     while (*p == ' ' || *p == '\t' || *p == '\n' ||
@@ -516,6 +525,8 @@ s64 string_to_signed_int(string str, int base, bool *success)
     if (*p == '-') {
         sign = -1;
         p++;
+        str.data++;
+        str.count--;
     } else if (*p == '+') {
         p++;
     }
