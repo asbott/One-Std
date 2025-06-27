@@ -5,7 +5,7 @@
 #include "base.h"
 #endif // _BASE_H
 
-typedef struct string {
+typedef struct string { 
     u64 count;
     u8 *data;
 

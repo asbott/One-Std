@@ -1,3 +1,7 @@
+// This file was generated from One-Std/src/string.h
+// The following files were included & concatenated:
+// - C:\jac\One-Std\src\string.h
+// - C:\jac\One-Std\src\base.h
 // I try to compile with -pedantic and -Weverything, but get really dumb warnings like these,
 // so I have to ignore them.
 #if defined(__GNUC__) || defined(__GNUG__)
@@ -498,7 +502,7 @@ unit_local inline u64 align_next(u64 n, u64 align) {
 /* End include: base.h */
 #endif // _BASE_H
 
-typedef struct string {
+typedef struct string { 
     u64 count;
     u8 *data;
 

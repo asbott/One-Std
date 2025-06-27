@@ -1,3 +1,26 @@
+// This file was generated from One-Std/src/ostd.h
+// The following files were included & concatenated:
+// - C:\jac\One-Std\src\path_utils.h
+// - C:\jac\One-Std\src\oga_graphics.h
+// - C:\jac\One-Std\src\trig_tables.h
+// - C:\jac\One-Std\src\ignore_warnings.h
+// - C:\jac\One-Std\src\string.h
+// - C:\jac\One-Std\src\memory.h
+// - C:\jac\One-Std\src\unignore_warnings.h
+// - C:\jac\One-Std\src\graphics_d3d12.h
+// - C:\jac\One-Std\src\ostd.h
+// - C:\jac\One-Std\src\var_args_macros.h
+// - C:\jac\One-Std\src\graphics_metal.h
+// - C:\jac\One-Std\src\system1.h
+// - C:\jac\One-Std\src\graphics_vulkan.h
+// - C:\jac\One-Std\src\windows_loader.h
+// - C:\jac\One-Std\src\math.h
+// - C:\jac\One-Std\src\base.h
+// - C:\jac\One-Std\src\unicode.h
+// - C:\jac\One-Std\src\system2.h
+// - C:\jac\One-Std\src\var_args.h
+// - C:\jac\One-Std\src\osl_compiler.h
+// - C:\jac\One-Std\src\print.h
 // I try to compile with -pedantic and -Weverything, but get really dumb warnings like these,
 // so I have to ignore them.
 #if defined(__GNUC__) || defined(__GNUG__)
@@ -1526,7 +1549,7 @@ unit_local inline f32m4x4 m4_make_rotation(f32v3 axis, float rad) {
 #ifndef _BASE_H
 #endif // _BASE_H
 
-typedef struct string {
+typedef struct string { 
     u64 count;
     u8 *data;
 
@@ -5111,6 +5134,7 @@ unit_local _Surface_State *_get_surface_state(Surface_Handle h) {
 #define _GNU_SOURCE
 
 // todo(charlie) dynamically link & manually  define some stuff to minimize namespace bloat here
+#include <stdint.h>
 #include <unistd.h>
 #include <sched.h>
 #include <pthread.h>
@@ -8954,8 +8978,7 @@ typedef struct Var_Arg {
 #endif // _VAR_ARGS_H
 #ifndef _SYSTEM_1_H
 #endif // _SYSTEM_1_H
-#ifndef _MATH_H
-#endif // _MATH_H
+
 
 /*
 
@@ -9158,6 +9181,9 @@ u64 format_string_args(void *buffer, u64 buffer_size, string fmt, u64 arg_count,
                 }
                 str.count = format_signed_int(signed_val, base, str.data, 32);
                 i += 1;
+            } else if (fmt.data[i+1] == 'x') {
+                str.count = format_unsigned_int(arg.int_val, 16, str.data, 32);
+                i += 1;
             } else if (fmt.data[i+1] == 'f') {
                 // todo(charlie)
                 str.count = format_float(arg.flt_val, decimal_places, str.data, 32);
@@ -9281,6 +9307,16 @@ void default_logger(string message, u64 flags, Source_Location location) {
     print("%s:%u: %s\n", location.file, location.line, message);
 }
 
+// Keeping this here so we dont need to include entire math module for this
+unit_local inline float64 ___ln64(float64 x) {
+    u64 bx = *(u64 *)(&x);
+    u64 ex = bx >> 52;
+    s32 t = (s32)ex - 1023;
+    bx = 4607182418800017408ULL | (bx & 4503599627370495ULL);
+    x = *(float64 *)(&bx);
+    return -1.49278 + (2.11263 + (-0.729104 + 0.10969 * x) * x) * x + 0.6931471806 * t;
+}
+
 // todo(charlie) make a less naive and slow version of this !
 unit_local u64 _format_int(void *px, int base, bool _signed, void *buffer, u64 buffer_size) {
     assert(base >= 2 && base <= 36); // 0-z
@@ -9312,7 +9348,7 @@ unit_local u64 _format_int(void *px, int base, bool _signed, void *buffer, u64 b
         return 1;
     }
 
-    u64 digit_count = (u64)(ln64((float64)abs_val)/ln64((float64)base));
+    u64 digit_count = (u64)(___ln64((float64)abs_val)/___ln64((float64)base));
 
     u64 skip = 0;
     if (digit_count > buffer_size) {

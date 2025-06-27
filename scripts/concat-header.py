@@ -76,6 +76,10 @@ def main():
     with open(output_file, 'w') as f:
         guard_start = f"#ifndef _ONE_{input_filename[0:len(input_filename)-2].upper()}_H\n#define _ONE_{input_filename[0:len(input_filename)-2].upper()}_H\n\n"
         guard_end = f"#endif // _ONE_{input_filename[0:len(input_filename)-2].upper()}_H\n"
+        f.write(f"// This file was generated from One-Std/src/{os.path.basename(input_file)}\n")
+        f.write(f"// The following files were included & concatenated:\n")
+        for path in included_files:
+            f.write(f"// - {path}\n")
         f.write(open(f'{base_dir}/ignore_warnings.h').read())
         f.write(guard_start)
         f.write(resolved)
