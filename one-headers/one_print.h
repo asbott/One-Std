@@ -1,0 +1,9802 @@
+// I try to compile with -pedantic and -Weverything, but get really dumb warnings like these,
+// so I have to ignore them.
+#if defined(__GNUC__) || defined(__GNUG__)
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wattributes"
+#pragma GCC diagnostic ignored "-Wunused-function"
+#pragma GCC diagnostic ignored "-Wunused-macros"
+#pragma GCC diagnostic ignored "-Wunused-const-variable"
+#endif
+#ifdef __clang__
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wattributes"
+#pragma clang diagnostic ignored "-Wreserved-identifier"
+#pragma clang diagnostic ignored "-Wdeclaration-after-statement"
+#pragma clang diagnostic ignored "-Wcovered-switch-default"
+#pragma clang diagnostic ignored "-Wcast-align"
+#pragma clang diagnostic ignored "-Wunused-function"
+#pragma clang diagnostic ignored "-Wunused-macros"
+#pragma clang diagnostic ignored "-Wunused-const-variable"
+#if __STDC_VERSION__ == 202311
+#pragma clang diagnostic ignored "-Wpre-c23-compat"
+#endif
+#ifdef __EMSCRIPTEN__
+#pragma clang diagnostic ignored "-Wpadded"
+#endif // __EMSCRIPTEN__
+#if defined(_MSC_VER) || defined(__EMSCRIPTEN__)
+#pragma clang diagnostic ignored "-Wunsafe-buffer-usage"
+#endif
+#endif // __clang__
+#ifndef _ONE_PRINT_H
+#define _ONE_PRINT_H
+
+#ifndef _PRINT_H
+#define _PRINT_H
+
+#ifndef _BASE_H
+
+/* Begin include: base.h */
+
+#ifndef _BASE_H
+#define _BASE_H
+
+
+/*
+            Compiler
+*/
+
+#define COMPILER_FLAG_CLANG       (1 << 0)
+#define COMPILER_FLAG_GNU         (1 << 1)
+#define COMPILER_FLAG_MSC         (1 << 2)
+#define COMPILER_FLAG_INTEL       (1 << 3)
+#define COMPILER_FLAG_TCC         (1 << 4)
+#define COMPILER_FLAG_EMSCRIPTEN  (1 << 5)
+#define COMPILER_FLAG_PGI         (1 << 6)
+#define COMPILER_FLAG_SUNPRO      (1 << 7)
+#define COMPILER_FLAG_CLANG_GNU   (1 << 8)
+
+#ifdef __clang__
+    #define CLANG 1
+#else
+    #define CLANG 0
+#endif
+
+#if defined(__GNUC__) || defined(__GNUG__)
+    #define GNU 1
+#else
+    #define GNU 0
+#endif
+
+#ifdef _MSC_VER
+    #define MSC 1
+#else
+    #define MSC 0
+#endif
+
+#ifdef __INTEL_COMPILER
+    #define INTEL 1
+#else
+    #define INTEL 0
+#endif
+
+#ifdef __TINYC__
+    #define TCC 1
+#else
+    #define TCC 0
+#endif
+
+#ifdef __EMSCRIPTEN__
+    #define EMSCRIPTEN 1
+#else
+    #define EMSCRIPTEN 0
+#endif
+
+#ifdef __PGI
+    #define PGI 1
+#else
+    #define PGI 0
+#endif
+
+#ifdef __SUNPRO_C
+    #define SUNPRO 1
+#else
+    #define SUNPRO 0
+#endif
+
+#define COMPILER_FLAGS ( \
+    (CLANG ? COMPILER_FLAG_CLANG : 0) | \
+    (GNU ? COMPILER_FLAG_GNU : 0) | \
+    (MSC ? COMPILER_FLAG_MSC : 0) | \
+    (INTEL ? COMPILER_FLAG_INTEL : 0) | \
+    (TCC ? COMPILER_FLAG_TCC : 0) | \
+    (EMSCRIPTEN ? COMPILER_FLAG_EMSCRIPTEN : 0) | \
+    (PGI ? COMPILER_FLAG_PGI : 0) | \
+    (SUNPRO ? COMPILER_FLAG_SUNPRO : 0) | \
+    ((CLANG && GNU) ? COMPILER_FLAG_CLANG_GNU : 0) \
+)
+
+// Architexture
+
+#if defined(_M_IX86) || defined(__i386__) || defined(__EMSCRIPTEN__)
+    #define ARCH_X86 1
+#elif defined(_M_X64) || defined(_M_AMD64) || defined(__x86_64__)
+    #define ARCH_X64 1
+#elif defined(_M_ARM) || defined(__arm__)
+    #define ARCH_ARM 1
+#elif defined(_M_ARM64) || defined(__aarch64__)
+    #define ARCH_ARM64 1
+#else
+    #error "Unknown architecture"
+#endif
+
+#define local_persist static
+#define forward_global extern
+#define unit_local static
+
+// make inline actually inline if supported by compiler
+
+#ifdef __clang__
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wkeyword-macro"
+#endif
+#if COMPILER_FLAGS & COMPILER_FLAG_GNU
+    #define inline __attribute__((always_inline))
+#elif COMPILER_FLAGS & COMPILER_FLAG_MSC
+    #define inline __forceinline
+#endif
+#ifdef __clang__
+#pragma clang diagnostic pop
+#endif
+
+#define CSTD_C90 1
+#ifdef __STDC_VERSION__
+    #if __STDC_VERSION__ == 199901
+        #define CSTD_C99 1
+    #else
+        #define CSTD_C99 0
+    #endif // CSTD_C99
+    #if __STDC_VERSION__ == 201112
+        #define CSTD_C11 1
+    #else
+        #define CSTD_C11 0
+    #endif // CSTD_C11
+    #if __STDC_VERSION__ == 201710
+        #define CSTD_C17 1
+    #else
+        #define CSTD_C17 0
+    #endif // CSTD_C17
+    #if __STDC_VERSION__ == 202311
+        #define CSTD_C23 1
+    #else
+        #define CSTD_C23 0
+    #endif // CSTD_C23
+#endif
+
+#if CSTD_C23
+    #define CSTD "C23"
+#elif CSTD_C17
+    #define CSTD "C17"
+#elif CSTD_C11
+    #define CSTD "C11"
+#elif CSTD_C99
+    #define CSTD "C99"
+#elif CSTD_C90
+    #define CSTD "C90"
+#else
+    #warning "Unknown C standard."
+    #define CSTD "CUnknown"
+#endif
+
+
+
+
+/*
+            Target system
+*/
+
+#define OS_FLAG_WINDOWS           (1 << 0)
+#define OS_FLAG_UNIX              (1 << 1)
+#define OS_FLAG_LINUX             (1 << 2)
+#define OS_FLAG_APPLE             (1 << 3)
+#define OS_FLAG_MACOS             (1 << 4)
+#define OS_FLAG_IOS               (1 << 5)
+#define OS_FLAG_ANDROID           (1 << 6)
+#define OS_FLAG_STEAMOS           (1 << 7)
+#define OS_FLAG_LINUX_BASED       (1 << 8)
+#define OS_FLAG_HAS_WINDOW_SYSTEM (1 << 9)
+#define OS_FLAG_EMSCRIPTEN        (1 << 10)
+
+#define OS_FLAG_WEB OS_FLAG_EMSCRIPTEN
+
+#ifdef _WIN32
+    #define OS_FLAGS (OS_FLAG_WINDOWS | OS_FLAG_HAS_WINDOW_SYSTEM)
+#elif defined(__APPLE__)
+    #include <TargetConditionals.h>
+    #if TARGET_OS_IPHONE || TARGET_IPHONE_SIMULATOR
+        #define OS_FLAGS (OS_FLAG_UNIX | OS_FLAG_APPLE | OS_FLAG_IOS)
+    #elif TARGET_OS_MAC
+        #define OS_FLAGS (OS_FLAG_UNIX | OS_FLAG_APPLE | OS_FLAG_MACOS | OS_FLAG_HAS_WINDOW_SYSTEM)
+    #else
+        #define OS_FLAGS (OS_FLAG_UNIX | OS_FLAG_APPLE)
+    #endif
+#elif defined(__ANDROID__)
+    #define OS_FLAGS (OS_FLAG_UNIX | OS_FLAG_LINUX_BASED | OS_FLAG_ANDROID)
+#elif defined(__STEAMOS__) /* You need to define this yourself when targetting steam */
+    #define OS_FLAGS (OS_FLAG_UNIX | OS_FLAG_LINUX_BASED | OS_FLAG_LINUX | OS_FLAG_STEAMOS)
+#elif defined(__linux__)
+    #define OS_FLAGS (OS_FLAG_UNIX | OS_FLAG_LINUX_BASED | OS_FLAG_LINUX | OS_FLAG_HAS_WINDOW_SYSTEM)
+#elif defined(__EMSCRIPTEN__)
+    #define OS_FLAGS (OS_FLAG_UNIX | OS_FLAG_EMSCRIPTEN)
+#elif defined(__unix__) || defined(__unix)
+    #define OS_FLAGS (OS_FLAG_UNIX)
+#else
+    #define OS_FLAGS (0)
+#endif
+
+#if COMPILER_FLAGS & COMPILER_FLAG_MSC
+
+    #pragma clang diagnostic push
+    #pragma clang diagnostic ignored "-Wlanguage-extension-token"
+    typedef unsigned __int8   u8;
+    typedef signed __int8     s8;
+    typedef unsigned __int16  u16;
+    typedef signed __int16    s16;
+    typedef unsigned __int32  u32;
+    typedef signed __int32    s32;
+    typedef unsigned __int64  u64;
+    typedef signed __int64    s64;
+    typedef unsigned __int64 uintptr;
+    #pragma clang diagnostic pop
+
+#elif COMPILER_FLAGS & COMPILER_FLAG_GNU
+
+    typedef __UINT64_TYPE__ u64;
+    typedef __INT64_TYPE__  s64;
+    typedef __UINT32_TYPE__ u32;
+    typedef __INT32_TYPE__  s32;
+    typedef __UINT16_TYPE__ u16;
+    typedef __INT16_TYPE__  s16;
+    typedef __UINT8_TYPE__  u8;
+    typedef __INT8_TYPE__   s8;
+
+    typedef __UINTPTR_TYPE__  uintptr;
+
+#else
+
+    #include <stdint.h>
+    typedef uint8_t  u8;
+    typedef int8_t   s8;
+    typedef uint16_t u16;
+    typedef int16_t  s16;
+    typedef uint32_t u32;
+    typedef int32_t  s32;
+    typedef uint64_t u64;
+    typedef int64_t  s64;
+
+     typedef uintptr_t uintptr;
+
+#endif
+
+typedef float float32;
+typedef double float64;
+#if defined(__SIZEOF_FLOAT128__) && __SIZEOF_FLOAT128__ == 16
+    typedef __float128 float128;
+    #define HAS_FLOAT128 1
+#elif defined(__SIZEOF_LONG_DOUBLE__) && __SIZEOF_LONG_DOUBLE__ == 16
+    typedef long double float128;
+    #define HAS_FLOAT128 1
+#else
+    #define HAS_FLOAT128 0
+#endif
+
+typedef u8 uint8;
+typedef s8 int8;
+typedef u16 uint16;
+typedef s16 int16;
+typedef u32 uint32;
+typedef s32 int32;
+typedef u64 uint64;
+typedef s64 int64;
+
+typedef float32 f32;
+typedef float64 f64;
+#if HAS_FLOAT128
+typedef float128 f128;
+#endif // HAS_FLOAT128
+
+#define U8_MIN 0
+#define U8_MAX 255U
+#define S8_MIN (-128)
+#define S8_MAX 127
+#define U16_MIN 0
+#define U16_MAX 65535U
+#define S16_MIN (-32768)
+#define S16_MAX 32767
+#define U32_MIN 0U
+#define U32_MAX 4294967295UL
+#define S32_MIN (-2147483648L)
+#define S32_MAX 2147483647L
+#define U64_MIN 0ULL
+#define U64_MAX 18446744073709551615ULL
+#define S64_MIN (-9223372036854775807LL - 1)
+#define S64_MAX 9223372036854775807LL
+
+#define UINT8_MIN 0
+#define UINT8_MAX 255U
+#define INT8_MIN (-128)
+#define INT8_MAX 127
+#define UINT16_MIN 0
+#define UINT16_MAX 65535U
+#define INT16_MIN (-32768)
+#define INT16_MAX 32767
+#define UINT32_MIN 0U
+#define UINT32_MAX 4294967295UL
+#define INT32_MIN (-2147483648L)
+#define INT32_MAX 2147483647L
+#define UINT64_MIN 0ULL
+#define UINT64_MAX 18446744073709551615ULL
+#define INT64_MIN (-9223372036854775807LL - 1)
+#define INT64_MAX 9223372036854775807LL
+
+#if defined(ARCH_X64) || defined (ARCH_ARM64)
+typedef s64 sys_int;
+typedef u64 sys_uint;
+#define SYS_INT_MAX SYS_S64_MAX
+#define SYS_UINT_MAX SYS_U64_MAX
+#else
+#if OS_FLAGS & OS_FLAG_EMSCRIPTEN
+typedef signed long sys_int;
+typedef unsigned long sys_uint;
+#else
+typedef s32 sys_int;
+typedef u32 sys_uint;
+#endif
+#define SYS_INT_MAX S32_MAX
+#define SYS_UINT_MAX U32_MAX
+#endif
+
+#if !CSTD_C23
+
+#if (COMPILER_FLAGS & COMPILER_FLAG_CLANG) && ((COMPILER_FLAGS & COMPILER_FLAG_MSC) || COMPILER_FLAGS & COMPILER_FLAG_EMSCRIPTEN)
+    #pragma clang diagnostic push
+    #pragma clang diagnostic ignored "-Wc23-compat"
+#endif // (COMPILER_FLAGS & COMPILER_FLAG_CLANG) && ((COMPILER_FLAGS & COMPILER_FLAG_MSC) || COMPILER_FLAGS & COMPILER_FLAG_EMSCRIPTEN)
+
+    typedef s8 bool;
+    #define true 1
+    #define false 0
+#if (COMPILER_FLAGS & COMPILER_FLAG_CLANG) && ((COMPILER_FLAGS & COMPILER_FLAG_MSC) || COMPILER_FLAGS & COMPILER_FLAG_EMSCRIPTEN)
+    #pragma clang diagnostic pop
+#endif // (COMPILER_FLAGS & COMPILER_FLAG_CLANG) && ((COMPILER_FLAGS & COMPILER_FLAG_MSC) || COMPILER_FLAGS & COMPILER_FLAG_EMSCRIPTEN)
+
+#else // !CSTD_C23
+
+#endif // CSTD_C23
+
+#if COMPILER_FLAGS & COMPILER_FLAG_MSC
+#define debug_break(...) __debugbreak()
+#elif COMPILER_FLAGS & COMPILER_FLAG_GNU
+#define debug_break(...) __builtin_trap()
+#else
+#define debug_break(...) *(volatile int*)0 = 1
+#endif
+
+#define STRINGIFY(x) #x
+#define TOSTRING(x) STRINGIFY(x)
+#define assertmsg(x, msg) assertmsgs(x, STR(msg))
+#define assertmsgs(x, msg)  do { \
+        if (!(x)) {\
+            sys_write_string(sys_get_stderr(), STR("\n========================================================\n"));\
+            sys_write_string(sys_get_stderr(), STR("==========!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!==========\n"));\
+            sys_write_string(sys_get_stderr(), STR("========================================================\n"));\
+            sys_write_string(sys_get_stderr(), STR("\nAssertion failed for expression: '"));\
+            sys_write_string(sys_get_stderr(), STR(#x));\
+            sys_write_string(sys_get_stderr(), STR("'.\n"));\
+            if (msg.data && msg.count) {\
+                sys_write_string(sys_get_stderr(), STR("\n\""));\
+                sys_write_string(sys_get_stderr(), msg);\
+                sys_write_string(sys_get_stderr(), STR("\"\n"));\
+            }\
+            sys_write_string(sys_get_stderr(), STR("\nIn File '"));\
+            sys_write_string(sys_get_stderr(), STR(__FILE__));\
+            sys_write_string(sys_get_stderr(), STR("' on line "));\
+            sys_write_string(sys_get_stderr(), STR(TOSTRING(__LINE__)));\
+            sys_write_string(sys_get_stderr(), STR("\n\nPrinting stack trace:\n"));\
+            sys_print_stack_trace(sys_get_stderr());\
+            sys_write_string(sys_get_stderr(), STR("\n\n========================================================\n"));\
+            sys_write_string(sys_get_stderr(), STR("==========!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!==========\n"));\
+            sys_write_string(sys_get_stderr(), STR("========================================================\n"));\
+            debug_break();\
+        } \
+    } while(0)
+#define assert(x) assertmsg(x, "")
+
+#ifndef OSTD_LIB
+    #define OSTD_LIB
+#endif
+
+inline void *memcpy(void *dst, const void * src, sys_uint n);
+// todo(charlie) inline asm / dynamically load crt's if msvc
+inline void *memset(void *dst, s32 c, sys_uint n) {
+    sys_uint i;
+    for (i = 0; i+4 < n; i += 4)  *((s32*)dst + (i/4)) = c;
+    if (i < n) memcpy(dst, &c, n-i);
+    return dst;
+}
+inline void *memcpy(void *dst, const void * src, sys_uint n) {
+    for (sys_uint i = 0; i < n; i += 1)  *((u8*)dst + i) = *((const u8*)src + i);
+    return dst;
+}
+inline void *memmove(void *dst, const void *src, sys_uint n) {
+    if (!n) return dst;
+    if ((sys_uint)dst > (sys_uint)src)
+        for (s64 i = (s64)n-1; i >= 0; i -= 1)  *((u8*)dst + i) = *((const u8*)src + i);
+    else
+        for (sys_uint i = 0; i < n; i += 1)  *((u8*)dst + i) = *((const u8*)src + i);
+    return dst;
+}
+
+inline int memcmp(const void* a, const void* b, sys_uint n) {
+    const u8 *p1 = (const u8 *)a;
+    const u8 *p2 = (const u8 *)b;
+
+    for (u32 i = 0; i < n; i++) {
+        if (p1[i] != p2[i]) {
+            return p1[i] - p2[i];
+        }
+    }
+    return 0;
+}
+
+#define DEFAULT(T) T##_default()
+
+
+// Forward decls
+u64 format_signed_int(s64 x, int base, void *buffer, u64 buffer_size);
+u64 format_unsigned_int(u64 x, int base, void *buffer, u64 buffer_size);
+u64 format_float(float64 x, int decimal_places, void *buffer, u64 buffer_size);
+
+
+
+#define PP_FIRST_ARG_HELPER(first, ...) first
+#define PP_FIRST_ARG(...) PP_FIRST_ARG_HELPER(__VA_ARGS__, 0)
+
+#define PP_EXCLUDE_FIRST_ARG_HELPER(first, ...) __VA_ARGS__
+#define PP_EXCLUDE_FIRST_ARG(...) PP_EXCLUDE_FIRST_ARG_HELPER(__VA_ARGS__)
+
+#define Swap(a, b) do {  u8 tmp__[sizeof(a)]; memcpy(tmp__, &a, sizeof(a)); a = b; memcpy(&b, tmp__, sizeof(b)); } while (0)
+
+#ifndef offsetof
+#define offsetof(t, d) ((sys_uint)&(((t *)0)->d))
+#endif
+
+
+void __cpuid(int cpuInfo[4], int function_id);
+
+#define min(a, b) ((a) < (b) ? (a) : (b))
+#define max(a, b) ((a) > (b) ? (a) : (b))
+
+unit_local inline bool is_alpha(u8 c) {
+	return (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z');
+}
+unit_local inline bool is_digit(u8 c) {
+	return (c >= '0' && c <= '9');
+}
+unit_local inline bool is_whitespace(u8 c) {
+	return c == '\n' || c == '\r' || c == '\t' || c == ' ';
+}
+
+unit_local inline u64 align_next(u64 n, u64 align) {
+    return (n+align-1) & ~(align-1);
+}
+
+#endif // _BASE_H
+
+
+
+
+/* End include: base.h */
+#endif // _BASE_H
+#ifndef _STRING_H
+
+/* Begin include: string.h */
+#ifndef _STRING_H
+#define _STRING_H
+
+#ifndef _BASE_H
+#endif // _BASE_H
+
+typedef struct string {
+    u64 count;
+    u8 *data;
+
+} string;
+
+unit_local inline u64 c_style_strlen(const char *s) {
+    const char *p = s;
+    while (*p++) {}
+    return (u64)(p-s-1);
+}
+unit_local inline u64 c_style_strcmp(const char *a, const char *b) {
+    while (*a && (*a == *b)) {
+        a++;
+        b++;
+    }
+    return (u64)(*a - *b);
+}
+
+
+#define STR(c) ((string){ c_style_strlen((const char*)c), (u8*)(uintptr)(const void*)(c) })
+#define STRN(n, c) ((string){ n, (u8*)(uintptr)(const void*)(c) })
+#define RSTR(...) STR(#__VA_ARGS__)
+
+inline int memcmp(const void* a, const void* b, sys_uint n);
+unit_local inline bool strings_match(string a, string b) {
+    if (a.count != b.count) return false;
+
+    if (a.data == b.data) return true; // Pointers and counts match
+
+    if (a.count == 0 || b.count == 0) return false;
+    if (a.data  == 0 || b.data  == 0) return false;
+
+    return memcmp(a.data, b.data, (sys_uint)a.count) == 0;
+}
+
+unit_local inline bool string_contains(string s, string sub) {
+    if (sub.count > s.count) return false;
+    for (u64 i = 0; i < s.count-sub.count; i += 1) {
+        string ssub = s;
+        ssub.data += i;
+        ssub.count = sub.count;
+        if (strings_match(ssub, sub)) return true;
+    }
+    return false;
+}
+
+unit_local inline string string_slice(string s, u64 index, u64 count) {
+    return (string){ count, s.data+index };
+}
+
+unit_local inline bool string_starts_with(string s, string sub) {
+    if (sub.count > s.count) return false;
+    
+    return memcmp(s.data, sub.data, (u32)sub.count) == 0;
+}
+unit_local inline bool string_ends_with(string s, string sub) {
+    if (sub.count > s.count) return false;
+    return strings_match(sub, string_slice(s, s.count-sub.count, sub.count));
+}
+
+unit_local s64 string_find_index_from_left(string s, string sub) {
+    if (sub.count > s.count) return -1;
+    
+    for (u64 i = 0; i < s.count-sub.count; i += 1) {
+        
+        if (strings_match((string){sub.count, s.data+i}, sub)) {
+            return (s64)i;
+        }
+    }
+    return -1;
+}
+unit_local s64 string_find_index_from_right(string s, string sub) {
+    if (sub.count > s.count) return -1;
+    
+    for (s64 i = (s64)(s.count-sub.count); i >= 0; i -= 1) {
+        
+        if (strings_match((string){sub.count, s.data+(u64)i}, sub)) {
+            return (s64)i;
+        }
+    }
+    return -1;
+}
+
+#endif // _STRING_H
+
+/* End include: string.h */
+#endif // _STRING_H
+#ifndef _MEMORY_H
+
+/* Begin include: memory.h */
+#ifndef _MEMORY_H
+#define _MEMORY_H
+
+#ifndef _BASE_H
+#endif // _BASE_H
+
+#ifndef _STRING_H
+#endif //_STRING_H
+
+#ifndef _SYSTEM_1_H
+
+/* Begin include: system1.h */
+#ifndef _SYSTEM_1_H
+#define _SYSTEM_1_H
+
+#ifndef _BASE_H
+#endif // _BASE_H
+#ifndef _STRING_H
+#endif // _STRING_H
+
+#define SYS_MEMORY_RESERVE (1 << 0)
+#define SYS_MEMORY_ALLOCATE (1 << 1)
+
+void *sys_map_pages(u64 action, void *virtual_base, u64 number_of_pages, bool strict_base_address);
+bool sys_unmap_pages(void *address);
+// Deallocates, but keeps pages mapped & reserved
+bool sys_deallocate_pages(void *address, u64 number_of_pages);
+
+typedef struct Mapped_Memory_Info {
+    void *base;
+    u64 page_count;
+} Mapped_Memory_Info;
+u64 sys_query_mapped_regions(void *start, void *end, Mapped_Memory_Info *result, u64 result_size);
+
+void *sys_find_mappable_range(u64 page_count);
+
+//////
+// System info
+//////
+
+typedef struct System_Info {
+    u64 page_size;
+    u64 granularity;
+    u64 logical_cpu_count;
+} System_Info;
+
+System_Info sys_get_info(void);
+
+typedef struct Physical_Monitor {
+    //  Do (string) {monitor.name_count, monitor.name}
+    u8 name[256];
+    u64 name_count;
+	int64 refresh_rate;
+	int64 resolution_x;
+	int64 resolution_y;
+	float64 scale;
+	int64 pos_x;
+	int64 pos_y;
+
+	void *handle;
+} Physical_Monitor;
+
+u64 sys_query_monitors(Physical_Monitor *buffer, u64 max_count);
+
+bool sys_wait_vertical_blank(Physical_Monitor monitor);
+
+
+
+//////
+// IO
+//////
+
+typedef void* File_Handle;
+typedef u64 File_Open_Flags;
+#define FILE_OPEN_WRITE  (1 << 0)
+#define FILE_OPEN_READ   (1 << 1)
+#define FILE_OPEN_RESET  (1 << 2)
+#define FILE_OPEN_CREATE (1 << 3)
+
+OSTD_LIB File_Handle sys_get_stdout(void);
+OSTD_LIB File_Handle sys_get_stderr(void);
+
+OSTD_LIB void sys_set_stdout(File_Handle h);
+OSTD_LIB void sys_set_stderr(File_Handle h);
+
+OSTD_LIB s64 sys_write(File_Handle h, void *data, u64 size);
+OSTD_LIB s64 sys_write_string(File_Handle h, string s);
+
+OSTD_LIB s64 sys_read(File_Handle h, void *buffer, u64 buffer_size);
+
+OSTD_LIB bool sys_make_pipe(File_Handle *read, File_Handle *write);
+
+OSTD_LIB void sys_close(File_Handle h);
+
+// Returns 0 on failure
+OSTD_LIB File_Handle sys_open_file(string path, File_Open_Flags flags);
+OSTD_LIB u64 sys_get_file_size(File_Handle f);
+
+OSTD_LIB bool sys_make_directory(string path, bool recursive);
+OSTD_LIB bool sys_remove_directory(string path, bool recursive);
+OSTD_LIB bool sys_is_file(string path);
+OSTD_LIB bool sys_is_directory(string path);
+
+typedef bool (*Walk_Proc)(string); // Return true to continue, false to break
+OSTD_LIB void sys_walk_directory(string path, bool recursive, bool walk_directories, Walk_Proc walk_proc);
+
+typedef struct Easy_Command_Result {
+    s64 exit_code;
+    bool process_start_success;
+} Easy_Command_Result;
+OSTD_LIB Easy_Command_Result sys_run_command_easy(string command_line, File_Handle stdout, File_Handle stderr, string workspace_dir);
+
+OSTD_LIB void sys_exit(s64 code);
+OSTD_LIB void sys_exit_current_thread(s64 code);
+
+//////
+// Sockets
+//////
+
+typedef u64 Socket;
+
+typedef enum Socket_Result {
+    SOCKET_OK = 0,
+
+    SOCKET_DISCONNECTED,
+    SOCKET_NOT_INITIALIZED,
+    SOCKET_NOACCESS,
+    SOCKET_IN_PROGRESS,
+    SOCKET_NOT_A_SOCKET,
+
+    SOCKET_INVALID_ADDRESS,
+    SOCKET_TIMED_OUT,
+    SOCKET_CONNECTION_REFUSED,
+    SOCKET_CONNECTION_RESET,
+    SOCKET_ALREADY_CONNECTED,
+    SOCKET_ADDRESS_IN_USE,
+    SOCKET_NETWORK_UNREACHABLE,
+    SOCKET_HOST_UNREACHABLE,
+    SOCKET_PROTOCOL_ERROR,
+} Socket_Result;
+
+
+typedef enum Socket_Domain {
+    SOCKET_DOMAIN_IPV4,
+    SOCKET_DOMAIN_BLUETOOTH,
+    SOCKET_DOMAIN_APPLETALK,
+#if OS_FLAGS & OS_FLAG_UNIX
+    SOCKET_DOMAIN_UNIX,
+#endif
+
+} Socket_Domain;
+
+typedef enum Socket_Type {
+    SOCKET_TYPE_STREAM,
+    SOCKET_TYPE_DGRAM,
+    SOCKET_TYPE_RAW,
+    SOCKET_TYPE_RDM,
+    SOCKET_TYPE_SEQPACKET,
+} Socket_Type;
+
+typedef enum Socket_Protocol {
+    SOCKET_PROTOCOL_TCP,
+    SOCKET_PROTOCOL_UDP,
+} Socket_Protocol;
+
+OSTD_LIB u32 sys_convert_address_string(string address);
+
+OSTD_LIB Socket_Result sys_socket_init(Socket *socket, Socket_Domain domain, Socket_Type type, Socket_Protocol protocol);
+OSTD_LIB Socket_Result sys_socket_bind(Socket socket, u32 address, u16 port);
+OSTD_LIB Socket_Result sys_socket_listen(Socket socket, s64 backlog);
+OSTD_LIB Socket_Result sys_socket_accept(Socket socket, Socket *accepted, u64 timeout_ms);
+OSTD_LIB Socket_Result sys_socket_connect(Socket sock, u32 address, u16 port, Socket_Domain domain);
+OSTD_LIB Socket_Result sys_socket_send(Socket socket, void *data, u64 length, u64 *sent);
+OSTD_LIB Socket_Result sys_socket_recv(Socket socket, void *buffer, u64 length, u64 *sent);
+OSTD_LIB Socket_Result sys_socket_close(Socket socket);
+OSTD_LIB Socket_Result sys_socket_set_blocking(Socket *socket, bool blocking);
+OSTD_LIB Socket_Result sys_set_socket_blocking_timeout(Socket socket, u64 ms);
+
+
+//////
+// Thread Primitives
+//////
+
+typedef void* Thread_Key;
+
+OSTD_LIB u64 sys_get_current_thread_id(void);
+
+OSTD_LIB bool sys_thread_key_init(Thread_Key *key);
+OSTD_LIB bool sys_thread_key_write(Thread_Key key, void* value);
+OSTD_LIB void* sys_thread_key_read(Thread_Key key);
+
+struct Thread;
+typedef s64 (*Thread_Proc)(struct Thread*);
+typedef struct Thread {
+    void *handle;
+    u64 id;
+    void *userdata;
+    Thread_Proc proc;
+    bool is_suspended;
+} Thread;
+
+OSTD_LIB bool sys_thread_init(Thread *thread, Thread_Proc proc, void *userdata);
+OSTD_LIB void sys_thread_start(Thread *thread);
+OSTD_LIB s64 sys_thread_join(Thread *thread);
+OSTD_LIB void sys_thread_close(Thread *thread);
+
+typedef struct Mutex {
+    void *handle;
+    u8 handle_backing[40]; // This is for windows critical section;
+} Mutex;
+
+OSTD_LIB bool sys_mutex_init(Mutex *mutex);
+OSTD_LIB bool sys_mutex_uninit(Mutex *mutex);
+OSTD_LIB void sys_mutex_acquire(Mutex mutex);
+OSTD_LIB void sys_mutex_release(Mutex mutex);
+
+////////
+// Atomics
+
+inline unit_local u32 sys_atomic_add_32(volatile u32 *addend, u32 value);
+inline unit_local u64 sys_atomic_add_64(volatile u64 *addend, u64 value);
+
+//////
+// Surfaces (Window)
+//////
+
+#ifndef OSTD_HEADLESS
+
+typedef void* Surface_Handle;
+
+// note(charlie)
+// Some systems have window systems, like win32, where you can create/destroy/manage
+// multiple windows, while other platforms, like android, only has a single surface
+// for your program to draw to.
+// Making a thin abstraction layer that works with both types of system doesn't really
+// make sense, unless we only allow a single full-screen surface on all platforms.
+// However, since this library aims to be useful on all systems, we can't really do that.
+// Instead, we disable the concept of creating/destroying surfaces on systems without
+// windowing systems, and leave that up to the programmer. To keep it simple, we only
+// compile different functions for creating/destroying/getting surfaces depending on
+// target system. This means, for example, on windows you need to create/destroy but
+// on mobiles you only ever get the surface.
+// Any setting functions will still be compiled to no-ops on systems where they don't
+// make sense. You also won't be able to get multiple surface handles on single-surface
+// systems.
+// Suggestions for "initialization" of a surface if your program needs to deploy on both
+// mobiles/consoles and desktops:
+//
+// // In init:
+// #if OS_FLAGS & OS_FLAG_HAS_WINDOW_SYSTEM
+//     Surface_Desc desc = ...;
+//     my_surface = sys_make_surface(desc);
+// #else
+//     my_surface = sys_get_surface();
+// #endif
+//
+// And after that, you can use surface functions in a completely portable way.
+
+// todo(charlie) more flags
+typedef u64 Surface_Flags;
+#define SURFACE_FLAG_HIDDEN (1 << 0)
+#define SURFACE_FLAG_TOPMOST (1 << 1)
+
+#if (OS_FLAGS & OS_FLAG_HAS_WINDOW_SYSTEM)
+
+typedef struct Surface_Desc {
+    // These don't do anything for main surface on phone/console systems
+    u32 width;
+    u32 height;
+    u32 x_pos;
+    u32 y_pos;
+    string title;
+    bool fullscreen;
+    Surface_Flags flags;
+} Surface_Desc;
+unit_local inline Surface_Desc Surface_Desc_default(void) {
+    Surface_Desc desc = (Surface_Desc) {0};
+    desc.width = 800;
+    desc.height = 600;
+    desc.x_pos = 0;
+    desc.y_pos = 0;
+    desc.title = RSTR(ostd window);
+    desc.flags = 0;
+    return desc;
+}
+OSTD_LIB Surface_Handle sys_make_surface(Surface_Desc desc);
+OSTD_LIB void surface_close(Surface_Handle s);
+
+
+#else // !(OS_FLAGS & OS_FLAG_HAS_WINDOW_SYSTEM)
+
+OSTD_LIB Surface_Handle sys_get_surface(void);
+
+#endif // !(OS_FLAGS & OS_FLAG_HAS_WINDOW_SYSTEM)
+
+OSTD_LIB void surface_poll_events(Surface_Handle surface);
+OSTD_LIB bool surface_should_close(Surface_Handle s);
+
+// Will return false on systems where the flag isn't implemented
+OSTD_LIB bool surface_set_flags(Surface_Handle h, Surface_Flags flags);
+OSTD_LIB bool surface_unset_flags(Surface_Handle h, Surface_Flags flags);
+
+OSTD_LIB bool surface_get_framebuffer_size(Surface_Handle h, s64 *width, s64 *height);
+
+OSTD_LIB void* surface_map_pixels(Surface_Handle h);
+OSTD_LIB void surface_blit_pixels(Surface_Handle h);
+
+OSTD_LIB bool surface_get_monitor(Surface_Handle h, Physical_Monitor *monitor);
+
+#endif // !OSTD_HEADLESS
+
+//////
+// Time
+//////
+
+OSTD_LIB float64 sys_get_seconds_monotonic(void);
+
+//////
+// Process & Thread
+//////
+
+typedef void* Thread_Handle;
+
+OSTD_LIB Thread_Handle sys_get_current_thread(void);
+OSTD_LIB void sys_set_thread_affinity_mask(Thread_Handle thread, u64 bits);
+
+typedef enum Priority_Level {
+    SYS_PRIORITY_LOW,
+    SYS_PRIORITY_MEDIUM,
+    SYS_PRIORITY_HIGH,
+} Priority_Level;
+
+OSTD_LIB void sys_set_local_process_priority_level(Priority_Level level);
+OSTD_LIB void sys_set_thread_priority_level(Thread_Handle thread, Priority_Level level);
+
+OSTD_LIB void *sys_load_library(string s);
+OSTD_LIB void sys_close_library(void *lib);
+OSTD_LIB void* sys_get_library_symbol(void *lib, string symbol);
+
+//////
+// Debug
+//////
+
+OSTD_LIB void sys_print_stack_trace(File_Handle handle);
+
+//////
+// System Constants
+/////
+
+#define MAX_SURFACES 64
+#define MAX_PATH_LENGTH 260
+
+
+//////
+// Implementations
+//////
+
+
+struct _Per_Thread_Temporary_Storage;
+typedef struct _Ostd_Thread_Storage {
+    u64 thread_id;
+    u8 temporary_storage_struct_backing[128];
+    struct _Per_Thread_Temporary_Storage *temp;
+    bool taken;
+} _Ostd_Thread_Storage;
+
+_Ostd_Thread_Storage *_ostd_get_thread_storage(void);
+
+#ifdef OSTD_IMPL
+
+unit_local _Ostd_Thread_Storage *_ostd_thread_storage = 0;
+unit_local u64 _ostd_thread_storage_allocated_count = 0;
+unit_local Mutex _ostd_thread_storage_register_mutex;
+unit_local u64 _ostd_main_thread_id;
+unit_local bool _ostd_main_thread_is_unknown = true;
+unit_local _Ostd_Thread_Storage _ostd_main_thread_storage;
+
+_Ostd_Thread_Storage *_ostd_get_thread_storage(void) {
+    u64 thread_id = sys_get_current_thread_id();
+
+    if (!_ostd_main_thread_is_unknown && _ostd_main_thread_id == thread_id) {
+        return &_ostd_main_thread_storage;
+    }
+
+    for (u64 i = 0; i < _ostd_thread_storage_allocated_count; i += 1) {
+        _Ostd_Thread_Storage *s = &_ostd_thread_storage[i];
+        if (s->thread_id == thread_id) return s;
+    }
+
+    if (_ostd_main_thread_is_unknown) {
+        _ostd_main_thread_id = thread_id;
+        _ostd_main_thread_is_unknown = false;
+        _ostd_main_thread_storage = (_Ostd_Thread_Storage){0};
+        _ostd_main_thread_storage.taken = true;
+        _ostd_main_thread_storage.thread_id = thread_id;
+        _ostd_main_thread_storage.temp
+            = (struct _Per_Thread_Temporary_Storage*)_ostd_main_thread_storage.temporary_storage_struct_backing;
+        return &_ostd_main_thread_storage;
+    }
+
+    return 0;
+}
+
+unit_local void _ostd_register_thread_storage(u64 thread_id) {
+
+    if (_ostd_thread_storage) {
+        sys_mutex_acquire(_ostd_thread_storage_register_mutex);
+    }
+
+    for (u64 i = 0; i < _ostd_thread_storage_allocated_count; i += 1) {
+        _Ostd_Thread_Storage *s = &_ostd_thread_storage[i];
+        if (!s->taken) {
+            *s = (_Ostd_Thread_Storage) {0};
+            s->taken = true;
+            s->thread_id = thread_id;
+            s->temp = (struct _Per_Thread_Temporary_Storage*)s->temporary_storage_struct_backing;
+            sys_mutex_release(_ostd_thread_storage_register_mutex);
+            return;
+        }
+    }
+
+    u64 page_size = sys_get_info().page_size;
+
+    assertmsg(sizeof(_Ostd_Thread_Storage) < page_size, "refactor time");
+
+    if (!_ostd_thread_storage) {
+        sys_mutex_init(&_ostd_thread_storage_register_mutex);
+        _ostd_thread_storage = sys_map_pages(SYS_MEMORY_RESERVE, 0, 1024*1024*10, false);
+        assert(_ostd_thread_storage);
+        void *allocated = sys_map_pages(SYS_MEMORY_ALLOCATE, _ostd_thread_storage, 1, false);
+        assert(allocated == _ostd_thread_storage);
+        memset(allocated, 0, page_size);
+        _ostd_thread_storage_allocated_count = page_size/sizeof(_Ostd_Thread_Storage);
+    } else {
+        void *next_alloc = (void*)(uintptr)align_next((u64)(_ostd_thread_storage+_ostd_thread_storage_allocated_count), page_size);
+        void *allocated = sys_map_pages(SYS_MEMORY_ALLOCATE, next_alloc, 1, false);
+        assert(allocated == next_alloc);
+        memset(allocated, 0, page_size);
+
+        _ostd_thread_storage_allocated_count += (page_size / sizeof(_Ostd_Thread_Storage));
+    }
+
+    sys_mutex_release(_ostd_thread_storage_register_mutex);
+
+    // scary
+    _ostd_register_thread_storage(thread_id);
+}
+
+#if (OS_FLAGS & OS_FLAG_HAS_WINDOW_SYSTEM)
+
+#if OS_FLAGS & OS_FLAG_WINDOWS
+    //#define WIN32_LEAN_AND_MEAN
+    //#include <Windows.h>
+
+    #if defined(_WINDOWS_) // User included windows.h
+        #ifndef  WIN32_LEAN_AND_MEAN
+            #error For ostd to work with windows.h included, you need to #define WIN32_LEAN_AND_MEAN
+        #endif // WIN32_LEAN_AND_MEAN
+        #ifndef _DBGHELP_
+            #include <DbgHelp.h>
+        #endif // _DBGHELP_
+    #endif // defined(_WINDOWS_)
+
+    // If user for some reason wants to include the full standard windows files,
+    // then he can define OSTD_INCLUDE_WINDOWS
+    #ifdef OSTD_INCLUDE_WINDOWS
+        #define WIN32_LEAN_AND_MEAN
+        #include <Windows.h>
+        #include <DbgHelp.h>
+    #endif // OSTD_INCLUDE_WINDOWS
+    // We manually declare windows functions so we don't need to bloat compilation and
+    // namespace with windows.h
+    #ifndef _WINDOWS_ /* This is defined in windows.h */
+
+/* Begin include: windows_loader.h */
+
+#ifndef _WINDOWS_LOADER_H
+#define _WINDOWS_LOADER_H
+
+#ifndef _BASE_H
+#endif // _BASE_H
+
+#define WINVER 0x0A00
+#define _WIN32_WINNT 0x0A00
+
+
+#define DECLSPEC_ALIGN(x) __declspec(align(x))
+#define DECLSPEC_NOINITALL
+
+typedef void *HANDLE;
+typedef void* HWND;
+typedef unsigned long* PDWORD;
+typedef void* HMONITOR;
+typedef u32 HRESULT;
+typedef void* HDC;
+typedef HANDLE HINSTANCE;
+typedef HANDLE HICON;
+typedef HANDLE HBRUSH;
+typedef HANDLE HCURSOR;
+typedef HANDLE HMODULE;
+typedef HANDLE HMENU;
+typedef HANDLE HBITMAP;
+typedef HANDLE HGDIOBJ;
+
+typedef unsigned long ULONG;
+typedef ULONG *PULONG;
+typedef unsigned short USHORT;
+typedef USHORT *PUSHORT;
+typedef unsigned char UCHAR;
+typedef UCHAR *PUCHAR;
+
+typedef unsigned long       DWORD;
+typedef int                 BOOL;
+typedef unsigned char       BYTE;
+typedef unsigned short      WORD;
+typedef float               FLOAT;
+typedef FLOAT               *PFLOAT;
+typedef BOOL                *PBOOL;
+typedef BOOL                *LPBOOL;
+typedef BYTE                *PBYTE;
+typedef BYTE                *LPBYTE;
+typedef int                 *PINT;
+typedef int                 *LPINT;
+typedef WORD                *PWORD;
+typedef WORD                *LPWORD;
+typedef long                *LPLONG;
+typedef DWORD               *PDWORD;
+typedef DWORD               *LPDWORD;
+typedef void                *LPVOID;
+typedef const void          *LPCVOID;
+typedef void                *PVOID;
+
+typedef WORD ATOM;
+
+typedef s64 INT_PTR, *PINT_PTR;
+typedef u64 UINT_PTR, *PUINT_PTR;
+
+typedef s64 LONG_PTR, *PLONG_PTR;
+typedef u64 ULONG_PTR, *PULONG_PTR;
+
+
+typedef UINT_PTR            WPARAM;
+typedef LONG_PTR            LPARAM;
+typedef LONG_PTR            LRESULT;
+
+typedef int                 INT;
+typedef unsigned int        UINT;
+typedef unsigned int        *PUINT;
+
+typedef signed char         INT8, *PINT8;
+typedef signed short        INT16, *PINT16;
+typedef signed int          INT32, *PINT32;
+typedef s64      INT64, *PINT64;
+typedef unsigned char       UINT8, *PUINT8;
+typedef unsigned short      UINT16, *PUINT16;
+typedef unsigned int        UINT32, *PUINT32;
+typedef s64    UINT64, *PUINT64;
+
+typedef signed int LONG32, *PLONG32;
+
+typedef unsigned int ULONG32, *PULONG32;
+typedef unsigned int DWORD32, *PDWORD32;
+
+typedef LONG32 LONG;
+
+typedef s64 ULONG64, *PULONG64;
+typedef s64 DWORD64, *PDWORD64;
+
+typedef u64 LONG64;
+
+typedef char CHAR;
+typedef CHAR *PCHAR, *LPCH, *PCH;
+typedef const CHAR *LPCCH, *PCCH;
+
+typedef DWORD *DWORD_PTR;
+
+typedef CHAR *NPSTR, *LPSTR, *PSTR;
+typedef PSTR *PZPSTR;
+typedef const PSTR *PCZPSTR;
+typedef const CHAR *LPCSTR, *PCSTR;
+typedef PCSTR *PZPCSTR;
+typedef const PCSTR *PCZPCSTR;
+
+typedef CHAR *PZZSTR;
+typedef const CHAR *PCZZSTR;
+
+typedef  CHAR *PNZCH;
+typedef  const CHAR *PCNZCH;
+
+typedef unsigned short WCHAR;
+
+typedef WCHAR *NWPSTR, *LPWSTR, *PWSTR;
+typedef PWSTR *PZPWSTR;
+typedef const PWSTR *PCZPWSTR;
+typedef WCHAR *LPUWSTR, *PUWSTR;
+typedef const WCHAR *LPCWSTR, *PCWSTR;
+typedef PCWSTR *PZPCWSTR;
+typedef const PCWSTR *PCZPCWSTR;
+typedef const WCHAR *LPCUWSTR, *PCUWSTR;
+
+// what the fuck
+
+// who thought this was a good idea
+
+typedef WCHAR *PZZWSTR;
+typedef const WCHAR *PCZZWSTR;
+typedef WCHAR *PUZZWSTR;
+typedef const WCHAR *PCUZZWSTR;
+
+typedef  WCHAR *PNZWCH;
+typedef  const WCHAR *PCNZWCH;
+typedef  WCHAR *PUNZWCH;
+typedef  const WCHAR *PCUNZWCH;
+
+typedef const WCHAR *LPCWCH;
+
+typedef long long LONGLONG;
+
+typedef union _LARGE_INTEGER {
+  struct {
+    DWORD LowPart;
+    LONG  HighPart;
+  } DUMMYSTRUCTNAME;
+  struct {
+    DWORD LowPart;
+    LONG  HighPart;
+  } u;
+  LONGLONG QuadPart;
+} LARGE_INTEGER, *PLARGE_INTEGER;
+
+typedef LARGE_INTEGER LARGE_INTEGER;
+
+typedef LRESULT (*WNDPROC)( HWND unnamedParam1, UINT unnamedParam2, WPARAM unnamedParam3, LPARAM unnamedParam4);
+
+
+// #Portability x64
+#define CONTEXT_AMD64   0x00100000L
+
+#define CONTEXT_CONTROL         (CONTEXT_AMD64 | 0x00000001L)
+#define CONTEXT_INTEGER         (CONTEXT_AMD64 | 0x00000002L)
+#define CONTEXT_SEGMENTS        (CONTEXT_AMD64 | 0x00000004L)
+#define CONTEXT_FLOATING_POINT  (CONTEXT_AMD64 | 0x00000008L)
+#define CONTEXT_DEBUG_REGISTERS (CONTEXT_AMD64 | 0x00000010L)
+
+#define CONTEXT_FULL            (CONTEXT_CONTROL | CONTEXT_INTEGER | \
+    CONTEXT_FLOATING_POINT)
+
+#define CONTEXT_ALL             (CONTEXT_CONTROL | CONTEXT_INTEGER | \
+    CONTEXT_SEGMENTS | CONTEXT_FLOATING_POINT | \
+    CONTEXT_DEBUG_REGISTERS)
+
+#define CONTEXT_XSTATE          (CONTEXT_AMD64 | 0x00000040L)
+
+
+
+
+#define WINAPI __stdcall
+
+#if COMPILER_FLAGS & COMPILER_FLAG_GNU
+#define WINDOWS_IMPORT __attribute__((dllimport))
+#elif COMPILER_FLAGS & COMPILER_FLAG_MSC
+
+#define WINDOWS_IMPORT __declspec(dllimport)
+#else
+#define WINDOWS_IMPORT
+#endif
+
+typedef struct tagRECT {
+    LONG left;
+    LONG top;
+    LONG right;
+    LONG bottom;
+} RECT, *PRECT, *NPRECT, *LPRECT;
+typedef const RECT* LPCRECT;
+
+// ?!?!?!?!?!?!??!?!?!?!?!??!?!?!?!?!?!?!?!??!?!!??!?!?!?!?
+typedef struct _POINTL {
+  LONG x;
+  LONG y;
+} POINTL, *PPOINTL;
+typedef struct tagPOINT {
+  LONG x;
+  LONG y;
+} POINT, *PPOINT, *NPPOINT, *LPPOINT;
+
+#ifdef __clang__
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wmicrosoft-anon-tag"
+#endif // __clang__
+typedef struct _SYSTEM_INFO {
+    union _SYSTEM_INFO_DUMMYUNION {
+        DWORD dwOemId;
+        struct _SYSTEM_INFO_DUMMYSTRUCT {
+            WORD wProcessorArchitecture;
+            WORD wReserved;
+        } ;
+    } ;
+    DWORD dwPageSize;
+    LPVOID lpMinimumApplicationAddress;
+    LPVOID lpMaximumApplicationAddress;
+    DWORD_PTR dwActiveProcessorMask;
+    DWORD dwNumberOfProcessors;
+    DWORD dwProcessorType;
+    DWORD dwAllocationGranularity;
+    WORD wProcessorLevel;
+    WORD wProcessorRevision;
+} SYSTEM_INFO, *LPSYSTEM_INFO;
+#ifdef __clang__
+#pragma clang diagnostic pop
+#endif //__clang__
+
+typedef struct _MEMORY_BASIC_INFORMATION {
+    void*  BaseAddress;
+    void*  AllocationBase;
+    u32  AllocationProtect;
+    u16   PartitionId;
+    size_t RegionSize;
+    u32  State;
+    u32  Protect;
+    u32  Type;
+} MEMORY_BASIC_INFORMATION, *PMEMORY_BASIC_INFORMATION;
+
+typedef struct DECLSPEC_ALIGN(16) _M128A {
+    unsigned long long Low;
+    long long High;
+} M128A, *PM128A;
+
+typedef struct DECLSPEC_ALIGN(16) _XMM_SAVE_AREA32
+{
+    WORD   ControlWord;
+    WORD   StatusWord;
+    BYTE  TagWord;
+    BYTE  Reserved1;
+    WORD   ErrorOpcode;
+    DWORD ErrorOffset;
+    WORD   ErrorSelector;
+    WORD   Reserved2;
+    DWORD DataOffset;
+    WORD   DataSelector;
+    WORD   Reserved3;
+    DWORD MxCsr;
+    DWORD MxCsr_Mask;
+    M128A FloatRegisters[8];
+
+    #if defined(_WIN64)
+
+    M128A XmmRegisters[16];
+    BYTE  Reserved4[96];
+
+    #else
+
+    M128A XmmRegisters[8];
+    BYTE  Reserved4[224];
+
+    #endif
+
+} XMM_SAVE_AREA32;
+typedef struct DECLSPEC_ALIGN(16) _CONTEXT {
+
+    //
+    // Register parameter home addresses.
+    //
+    // N.B. These fields are for convience - they could be used to extend the
+    //      context record in the future.
+    //
+
+    DWORD64 P1Home;
+    DWORD64 P2Home;
+    DWORD64 P3Home;
+    DWORD64 P4Home;
+    DWORD64 P5Home;
+    DWORD64 P6Home;
+
+    //
+    // Control flags.
+    //
+
+    DWORD ContextFlags;
+    DWORD MxCsr;
+
+    //
+    // Segment Registers and processor flags.
+    //
+
+    WORD   SegCs;
+    WORD   SegDs;
+    WORD   SegEs;
+    WORD   SegFs;
+    WORD   SegGs;
+    WORD   SegSs;
+    DWORD EFlags;
+
+    //
+    // Debug registers
+    //
+
+    DWORD64 Dr0;
+    DWORD64 Dr1;
+    DWORD64 Dr2;
+    DWORD64 Dr3;
+    DWORD64 Dr6;
+    DWORD64 Dr7;
+
+    //
+    // Integer registers.
+    //
+
+    DWORD64 Rax;
+    DWORD64 Rcx;
+    DWORD64 Rdx;
+    DWORD64 Rbx;
+    DWORD64 Rsp;
+    DWORD64 Rbp;
+    DWORD64 Rsi;
+    DWORD64 Rdi;
+    DWORD64 R8;
+    DWORD64 R9;
+    DWORD64 R10;
+    DWORD64 R11;
+    DWORD64 R12;
+    DWORD64 R13;
+    DWORD64 R14;
+    DWORD64 R15;
+
+    //
+    // Program counter.
+    //
+
+    DWORD64 Rip;
+
+    //
+    // Floating point state.
+    //
+
+    union {
+        XMM_SAVE_AREA32 FltSave;
+        struct {
+            M128A Header[2];
+            M128A Legacy[8];
+            M128A Xmm0;
+            M128A Xmm1;
+            M128A Xmm2;
+            M128A Xmm3;
+            M128A Xmm4;
+            M128A Xmm5;
+            M128A Xmm6;
+            M128A Xmm7;
+            M128A Xmm8;
+            M128A Xmm9;
+            M128A Xmm10;
+            M128A Xmm11;
+            M128A Xmm12;
+            M128A Xmm13;
+            M128A Xmm14;
+            M128A Xmm15;
+        } DUMMYSTRUCTNAME;
+    } DUMMYUNIONNAME;
+
+    //
+    // Vector registers.
+    //
+
+    M128A VectorRegister[26];
+    DWORD64 VectorControl;
+
+    //
+    // Special debug control registers.
+    //
+
+    DWORD64 DebugControl;
+    DWORD64 LastBranchToRip;
+    DWORD64 LastBranchFromRip;
+    DWORD64 LastExceptionToRip;
+    DWORD64 LastExceptionFromRip;
+} CONTEXT, *PCONTEXT;
+
+typedef enum {
+    AddrMode1616,
+    AddrMode1632,
+    AddrModeReal,
+    AddrModeFlat
+} ADDRESS_MODE;
+typedef struct _tagADDRESS64 {
+    DWORD64       Offset;
+    WORD          Segment;
+    ADDRESS_MODE  Mode;
+} ADDRESS64, *LPADDRESS64;
+
+typedef struct _KDHELP64 {
+
+    DWORD64   Thread;
+    DWORD   ThCallbackStack;
+    DWORD   ThCallbackBStore;
+    DWORD   NextCallback;
+    DWORD   FramePointer;
+    DWORD64   KiCallUserMode;
+    DWORD64   KeUserCallbackDispatcher;
+    DWORD64   SystemRangeStart;
+    DWORD64   KiUserExceptionDispatcher;
+    DWORD64   StackBase;
+    DWORD64   StackLimit;
+    DWORD     BuildVersion;
+    DWORD     RetpolineStubFunctionTableSize;
+    DWORD64   RetpolineStubFunctionTable;
+    DWORD     RetpolineStubOffset;
+    DWORD     RetpolineStubSize;
+    DWORD64   Reserved0[2];
+
+} KDHELP64, *PKDHELP64;
+
+typedef struct _tagSTACKFRAME64 {
+    ADDRESS64   AddrPC;               // program counter
+    ADDRESS64   AddrReturn;           // return address
+    ADDRESS64   AddrFrame;            // frame pointer
+    ADDRESS64   AddrStack;            // stack pointer
+    ADDRESS64   AddrBStore;           // backing store pointer
+    PVOID       FuncTableEntry;       // pointer to pdata/fpo or NULL
+    DWORD64     Params[4];            // possible arguments to the function
+    BOOL        Far;                  // WOW far call
+    BOOL        Virtual;              // is this a virtual frame?
+    DWORD64     Reserved[3];
+    KDHELP64    KdHelp;
+} STACKFRAME64, *LPSTACKFRAME64;
+
+typedef struct _SYMBOL_INFO {
+    ULONG       SizeOfStruct;
+    ULONG       TypeIndex;        // Type Index of symbol
+    ULONG64     Reserved[2];
+    ULONG       Index;
+    ULONG       Size;
+    ULONG64     ModBase;          // Base Address of module comtaining this symbol
+    ULONG       Flags;
+    ULONG64     Value;            // Value of symbol, ValuePresent should be 1
+    ULONG64     Address;          // Address of symbol including base address of module
+    ULONG       Register;         // register holding value or pointer to value
+    ULONG       Scope;            // scope of the symbol
+    ULONG       Tag;              // pdb classification
+    ULONG       NameLen;          // Actual length of name
+    ULONG       MaxNameLen;
+    CHAR        Name[1];          // Name of symbol
+} SYMBOL_INFO, *PSYMBOL_INFO;
+
+typedef struct _IMAGEHLP_LINE64 {
+    DWORD    SizeOfStruct;           // set to sizeof(IMAGEHLP_LINE64)
+    PVOID    Key;                    // internal
+    DWORD    LineNumber;             // line number in file
+    PCHAR    FileName;               // full filename
+    DWORD64  Address;                // first instruction of line
+} IMAGEHLP_LINE64, *PIMAGEHLP_LINE64;
+
+#ifdef __clang__
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wmicrosoft-anon-tag"
+#endif // __clang__
+typedef struct _OVERLAPPED {
+    ULONG_PTR Internal;
+    ULONG_PTR InternalHigh;
+    union _OVERLAPPED_DUMMYUNION {
+        struct _OVERLAPPED_DUMMYSTRUCT {
+            DWORD Offset;
+            DWORD OffsetHigh;
+        } ;
+        PVOID Pointer;
+    } ;
+
+    HANDLE hEvent;
+} OVERLAPPED, *LPOVERLAPPED;
+#ifdef __clang__
+#pragma clang diagnostic pop
+#endif //__clang__
+
+typedef struct tagMSG {
+  HWND   hwnd;
+  UINT   message;
+  WPARAM wParam;
+  LPARAM lParam;
+  DWORD  time;
+  POINT  pt;
+  DWORD  lPrivate;
+} MSG, *PMSG, *NPMSG, *LPMSG;
+
+#define CCHDEVICENAME 32
+#define CCHFORMNAME 32
+
+#ifdef __clang__
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wmicrosoft-anon-tag"
+#endif // __clang__
+typedef struct _devicemodeW {
+  WCHAR dmDeviceName[CCHDEVICENAME];
+  WORD  dmSpecVersion;
+  WORD  dmDriverVersion;
+  WORD  dmSize;
+  WORD  dmDriverExtra;
+  DWORD dmFields;
+  union {
+    struct {
+      short dmOrientation;
+      short dmPaperSize;
+      short dmPaperLength;
+      short dmPaperWidth;
+      short dmScale;
+      short dmCopies;
+      short dmDefaultSource;
+      short dmPrintQuality;
+    } DUMMYSTRUCTNAME;
+    POINTL dmPosition;
+    struct {
+      POINTL dmPosition;
+      DWORD  dmDisplayOrientation;
+      DWORD  dmDisplayFixedOutput;
+    } DUMMYSTRUCTNAME2;
+  } DUMMYUNIONNAME;
+  short dmColor;
+  short dmDuplex;
+  short dmYResolution;
+  short dmTTOption;
+  short dmCollate;
+  WCHAR dmFormName[CCHFORMNAME];
+  WORD  dmLogPixels;
+  DWORD dmBitsPerPel;
+  DWORD dmPelsWidth;
+  DWORD dmPelsHeight;
+  union {
+    DWORD dmDisplayFlags;
+    DWORD dmNup;
+  } DUMMYUNIONNAME2;
+  DWORD dmDisplayFrequency;
+  DWORD dmICMMethod;
+  DWORD dmICMIntent;
+  DWORD dmMediaType;
+  DWORD dmDitherType;
+  DWORD dmReserved1;
+  DWORD dmReserved2;
+  DWORD dmPanningWidth;
+  DWORD dmPanningHeight;
+} DEVMODEW, *PDEVMODEW, *NPDEVMODEW, *LPDEVMODEW;
+#ifdef __clang__
+#pragma clang diagnostic pop
+#endif //__clang__
+
+typedef struct tagMONITORINFO {
+    DWORD cbSize;
+    RECT  rcMonitor;
+    RECT  rcWork;
+    DWORD dwFlags;
+} MONITORINFO, *LPMONITORINFO;
+
+typedef struct tagMONITORINFOEXW {
+    DWORD cbSize;
+    RECT  rcMonitor;
+    RECT  rcWork;
+    DWORD dwFlags;
+    WCHAR szDevice[CCHDEVICENAME];
+} MONITORINFOEXW, *LPMONITORINFOEXW;
+
+typedef struct _DISPLAY_DEVICEW {
+  DWORD cb;
+  WCHAR DeviceName[32];
+  WCHAR DeviceString[128];
+  DWORD StateFlags;
+  WCHAR DeviceID[128];
+  WCHAR DeviceKey[128];
+} DISPLAY_DEVICEW, *PDISPLAY_DEVICEW, *LPDISPLAY_DEVICEW;
+
+typedef struct tagWNDCLASSEXW {
+  UINT      cbSize;
+  UINT      style;
+  WNDPROC   lpfnWndProc;
+  int       cbClsExtra;
+  int       cbWndExtra;
+  HINSTANCE hInstance;
+  HICON     hIcon;
+  HCURSOR   hCursor;
+  HBRUSH    hbrBackground;
+  LPCWSTR   lpszMenuName;
+  LPCWSTR   lpszClassName;
+  HICON     hIconSm;
+} WNDCLASSEXW, *PWNDCLASSEXW, *NPWNDCLASSEXW, *LPWNDCLASSEXW;
+
+typedef struct _SECURITY_ATTRIBUTES {
+  DWORD  nLength;
+  LPVOID lpSecurityDescriptor;
+  BOOL   bInheritHandle;
+} SECURITY_ATTRIBUTES, *PSECURITY_ATTRIBUTES, *LPSECURITY_ATTRIBUTES;
+
+typedef struct _GUID {
+  unsigned long  Data1;
+  unsigned short Data2;
+  unsigned short Data3;
+  unsigned char  Data4[8];
+} GUID;
+typedef struct tagRGBQUAD {
+  BYTE rgbBlue;
+  BYTE rgbGreen;
+  BYTE rgbRed;
+  BYTE rgbReserved;
+} RGBQUAD;
+typedef struct tagBITMAPINFOHEADER {
+  DWORD biSize;
+  LONG  biWidth;
+  LONG  biHeight;
+  WORD  biPlanes;
+  WORD  biBitCount;
+  DWORD biCompression;
+  DWORD biSizeImage;
+  LONG  biXPelsPerMeter;
+  LONG  biYPelsPerMeter;
+  DWORD biClrUsed;
+  DWORD biClrImportant;
+} BITMAPINFOHEADER, *LPBITMAPINFOHEADER, *PBITMAPINFOHEADER;
+typedef struct tagBITMAPINFO {
+  BITMAPINFOHEADER bmiHeader;
+  RGBQUAD          bmiColors[1];
+} BITMAPINFO, *LPBITMAPINFO, *PBITMAPINFO;
+
+typedef struct _STARTUPINFOA {
+  DWORD  cb;
+  LPSTR  lpReserved;
+  LPSTR  lpDesktop;
+  LPSTR  lpTitle;
+  DWORD  dwX;
+  DWORD  dwY;
+  DWORD  dwXSize;
+  DWORD  dwYSize;
+  DWORD  dwXCountChars;
+  DWORD  dwYCountChars;
+  DWORD  dwFillAttribute;
+  DWORD  dwFlags;
+  WORD   wShowWindow;
+  WORD   cbReserved2;
+  LPBYTE lpReserved2;
+  HANDLE hStdInput;
+  HANDLE hStdOutput;
+  HANDLE hStdError;
+} STARTUPINFOA, *LPSTARTUPINFOA;
+
+typedef struct _PROCESS_INFORMATION {
+  HANDLE hProcess;
+  HANDLE hThread;
+  DWORD  dwProcessId;
+  DWORD  dwThreadId;
+} PROCESS_INFORMATION, *PPROCESS_INFORMATION, *LPPROCESS_INFORMATION;
+
+#define MEM_COMMIT 0x00001000
+#define MEM_RESERVE 0x00002000
+#define MEM_DECOMMIT 0x00004000
+#define MEM_RELEASE 0x00008000
+
+#define PAGE_NOACCESS  0x01
+#define PAGE_READWRITE 0x04
+
+#define IMAGE_FILE_MACHINE_UNKNOWN           0
+#define IMAGE_FILE_MACHINE_TARGET_HOST       0x0001  // Useful for indicating we want to interact with the host and not a WoW guest.
+#define IMAGE_FILE_MACHINE_I386              0x014c  // Intel 386.
+#define IMAGE_FILE_MACHINE_R3000             0x0162  // MIPS little-endian, 0x160 big-endian
+#define IMAGE_FILE_MACHINE_R4000             0x0166  // MIPS little-endian
+#define IMAGE_FILE_MACHINE_R10000            0x0168  // MIPS little-endian
+#define IMAGE_FILE_MACHINE_WCEMIPSV2         0x0169  // MIPS little-endian WCE v2
+#define IMAGE_FILE_MACHINE_ALPHA             0x0184  // Alpha_AXP
+#define IMAGE_FILE_MACHINE_SH3               0x01a2  // SH3 little-endian
+#define IMAGE_FILE_MACHINE_SH3DSP            0x01a3
+#define IMAGE_FILE_MACHINE_SH3E              0x01a4  // SH3E little-endian
+#define IMAGE_FILE_MACHINE_SH4               0x01a6  // SH4 little-endian
+#define IMAGE_FILE_MACHINE_SH5               0x01a8  // SH5
+#define IMAGE_FILE_MACHINE_ARM               0x01c0  // ARM Little-Endian
+#define IMAGE_FILE_MACHINE_THUMB             0x01c2  // ARM Thumb/Thumb-2 Little-Endian
+#define IMAGE_FILE_MACHINE_ARMNT             0x01c4  // ARM Thumb-2 Little-Endian
+#define IMAGE_FILE_MACHINE_AM33              0x01d3
+#define IMAGE_FILE_MACHINE_POWERPC           0x01F0  // IBM PowerPC Little-Endian
+#define IMAGE_FILE_MACHINE_POWERPCFP         0x01f1
+#define IMAGE_FILE_MACHINE_IA64              0x0200  // Intel 64
+#define IMAGE_FILE_MACHINE_MIPS16            0x0266  // MIPS
+#define IMAGE_FILE_MACHINE_ALPHA64           0x0284  // ALPHA64
+#define IMAGE_FILE_MACHINE_MIPSFPU           0x0366  // MIPS
+#define IMAGE_FILE_MACHINE_MIPSFPU16         0x0466  // MIPS
+#define IMAGE_FILE_MACHINE_AXP64             IMAGE_FILE_MACHINE_ALPHA64
+#define IMAGE_FILE_MACHINE_TRICORE           0x0520  // Infineon
+#define IMAGE_FILE_MACHINE_CEF               0x0CEF
+#define IMAGE_FILE_MACHINE_EBC               0x0EBC  // EFI Byte Code
+#define IMAGE_FILE_MACHINE_AMD64             0x8664  // AMD64 (K8)
+#define IMAGE_FILE_MACHINE_M32R              0x9041  // M32R little-endian
+#define IMAGE_FILE_MACHINE_ARM64             0xAA64  // ARM64 Little-Endian
+#define IMAGE_FILE_MACHINE_CEE               0xC0EE
+
+#define ENUM_CURRENT_SETTINGS       ((DWORD)-1)
+#define ENUM_REGISTRY_SETTINGS      ((DWORD)-2)
+
+#define MONITOR_DEFAULTTONULL       0x00000000
+#define MONITOR_DEFAULTTOPRIMARY    0x00000001
+#define MONITOR_DEFAULTTONEAREST    0x00000002
+
+#define MONITORINFOF_PRIMARY        0x00000001
+
+#define CP_ACP                    0           // default to ANSI code page
+#define CP_OEMCP                  1           // default to OEM  code page
+#define CP_MACCP                  2           // default to MAC  code page
+#define CP_THREAD_ACP             3           // current thread's ANSI code page
+#define CP_SYMBOL                 42          // SYMBOL translations
+
+#define CP_UTF7                   65000       // UTF-7 translation
+#define CP_UTF8                   65001       // UTF-8 translation
+
+typedef void* DPI_AWARENESS_CONTEXT;
+#define DPI_AWARENESS_CONTEXT_UNAWARE              ((DPI_AWARENESS_CONTEXT)-1)
+#define DPI_AWARENESS_CONTEXT_SYSTEM_AWARE         ((DPI_AWARENESS_CONTEXT)-2)
+#define DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE    ((DPI_AWARENESS_CONTEXT)-3)
+#define DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2 ((DPI_AWARENESS_CONTEXT)-4)
+#define DPI_AWARENESS_CONTEXT_UNAWARE_GDISCALED    ((DPI_AWARENESS_CONTEXT)-5)
+
+/*
+ * Window Styles
+ */
+#define WS_OVERLAPPED       0x00000000L
+#define WS_POPUP            0x80000000L
+#define WS_CHILD            0x40000000L
+#define WS_MINIMIZE         0x20000000L
+#define WS_VISIBLE          0x10000000L
+#define WS_DISABLED         0x08000000L
+#define WS_CLIPSIBLINGS     0x04000000L
+#define WS_CLIPCHILDREN     0x02000000L
+#define WS_MAXIMIZE         0x01000000L
+#define WS_CAPTION          0x00C00000L     /* WS_BORDER | WS_DLGFRAME  */
+#define WS_BORDER           0x00800000L
+#define WS_DLGFRAME         0x00400000L
+#define WS_VSCROLL          0x00200000L
+#define WS_HSCROLL          0x00100000L
+#define WS_SYSMENU          0x00080000L
+#define WS_THICKFRAME       0x00040000L
+#define WS_GROUP            0x00020000L
+#define WS_TABSTOP          0x00010000L
+
+#define WS_MINIMIZEBOX      0x00020000L
+#define WS_MAXIMIZEBOX      0x00010000L
+
+
+#define WS_TILED            WS_OVERLAPPED
+#define WS_ICONIC           WS_MINIMIZE
+#define WS_SIZEBOX          WS_THICKFRAME
+#define WS_TILEDWINDOW      WS_OVERLAPPEDWINDOW
+
+/*
+ * Common Window Styles
+ */
+#define WS_OVERLAPPEDWINDOW (WS_OVERLAPPED     | \
+                             WS_CAPTION        | \
+                             WS_SYSMENU        | \
+                             WS_THICKFRAME     | \
+                             WS_MINIMIZEBOX    | \
+                             WS_MAXIMIZEBOX)
+
+#define WS_POPUPWINDOW      (WS_POPUP          | \
+                             WS_BORDER         | \
+                             WS_SYSMENU)
+
+#define WS_CHILDWINDOW      (WS_CHILD)
+
+/*
+ * Extended Window Styles
+ */
+#define WS_EX_DLGMODALFRAME     0x00000001L
+#define WS_EX_NOPARENTNOTIFY    0x00000004L
+#define WS_EX_TOPMOST           0x00000008L
+#define WS_EX_ACCEPTFILES       0x00000010L
+#define WS_EX_TRANSPARENT       0x00000020L
+#if(WINVER >= 0x0400)
+#define WS_EX_MDICHILD          0x00000040L
+#define WS_EX_TOOLWINDOW        0x00000080L
+#define WS_EX_WINDOWEDGE        0x00000100L
+#define WS_EX_CLIENTEDGE        0x00000200L
+#define WS_EX_CONTEXTHELP       0x00000400L
+
+#endif /* WINVER >= 0x0400 */
+#if(WINVER >= 0x0400)
+
+#define WS_EX_RIGHT             0x00001000L
+#define WS_EX_LEFT              0x00000000L
+#define WS_EX_RTLREADING        0x00002000L
+#define WS_EX_LTRREADING        0x00000000L
+#define WS_EX_LEFTSCROLLBAR     0x00004000L
+#define WS_EX_RIGHTSCROLLBAR    0x00000000L
+
+#define WS_EX_CONTROLPARENT     0x00010000L
+#define WS_EX_STATICEDGE        0x00020000L
+#define WS_EX_APPWINDOW         0x00040000L
+
+
+#define WS_EX_OVERLAPPEDWINDOW  (WS_EX_WINDOWEDGE | WS_EX_CLIENTEDGE)
+#define WS_EX_PALETTEWINDOW     (WS_EX_WINDOWEDGE | WS_EX_TOOLWINDOW | WS_EX_TOPMOST)
+
+#endif /* WINVER >= 0x0400 */
+
+#define GWL_STYLE -16
+#define GWL_EXSTYLE -20
+
+#if(_WIN32_WINNT >= 0x0500)
+#define WS_EX_LAYERED           0x00080000
+
+#endif /* _WIN32_WINNT >= 0x0500 */
+
+
+#if(WINVER >= 0x0500)
+#define WS_EX_NOINHERITLAYOUT   0x00100000L // Disable inheritence of mirroring by children
+#endif /* WINVER >= 0x0500 */
+
+#if(WINVER >= 0x0602)
+#define WS_EX_NOREDIRECTIONBITMAP 0x00200000L
+#endif /* WINVER >= 0x0602 */
+
+#if(WINVER >= 0x0500)
+#define WS_EX_LAYOUTRTL         0x00400000L // Right to left mirroring
+#endif /* WINVER >= 0x0500 */
+
+#if(_WIN32_WINNT >= 0x0501)
+#define WS_EX_COMPOSITED        0x02000000L
+#endif /* _WIN32_WINNT >= 0x0501 */
+#if(_WIN32_WINNT >= 0x0500)
+#define WS_EX_NOACTIVATE        0x08000000L
+#endif /* _WIN32_WINNT >= 0x0500 */
+
+
+/*
+ * Class styles
+ */
+#define CS_VREDRAW          0x0001
+#define CS_HREDRAW          0x0002
+#define CS_DBLCLKS          0x0008
+#define CS_OWNDC            0x0020
+#define CS_CLASSDC          0x0040
+#define CS_PARENTDC         0x0080
+#define CS_NOCLOSE          0x0200
+#define CS_SAVEBITS         0x0800
+#define CS_BYTEALIGNCLIENT  0x1000
+#define CS_BYTEALIGNWINDOW  0x2000
+#define CS_GLOBALCLASS      0x4000
+
+#define CS_IME              0x00010000
+#if(_WIN32_WINNT >= 0x0501)
+#define CS_DROPSHADOW       0x00020000
+#endif /* _WIN32_WINNT >= 0x0501 */
+
+#define SW_HIDE             0
+#define SW_SHOWNORMAL       1
+#define SW_NORMAL           1
+#define SW_SHOWMINIMIZED    2
+#define SW_SHOWMAXIMIZED    3
+#define SW_MAXIMIZE         3
+#define SW_SHOWNOACTIVATE   4
+#define SW_SHOW             5
+#define SW_MINIMIZE         6
+#define SW_SHOWMINNOACTIVE  7
+#define SW_SHOWNA           8
+#define SW_RESTORE          9
+#define SW_SHOWDEFAULT      10
+#define SW_FORCEMINIMIZE    11
+#define SW_MAX              11
+
+#define CW_USEDEFAULT       ((int)0x80000000)
+
+/*
+ * Window Messages
+ */
+
+#define WM_NULL                         0x0000
+#define WM_CREATE                       0x0001
+#define WM_DESTROY                      0x0002
+#define WM_MOVE                         0x0003
+#define WM_SIZE                         0x0005
+
+#define WM_ACTIVATE                     0x0006
+/*
+ * WM_ACTIVATE state values
+ */
+#define     WA_INACTIVE     0
+#define     WA_ACTIVE       1
+#define     WA_CLICKACTIVE  2
+
+#define WM_SETFOCUS                     0x0007
+#define WM_KILLFOCUS                    0x0008
+#define WM_ENABLE                       0x000A
+#define WM_SETREDRAW                    0x000B
+#define WM_SETTEXT                      0x000C
+#define WM_GETTEXT                      0x000D
+#define WM_GETTEXTLENGTH                0x000E
+#define WM_PAINT                        0x000F
+#define WM_CLOSE                        0x0010
+#ifndef _WIN32_WCE
+#define WM_QUERYENDSESSION              0x0011
+#define WM_QUERYOPEN                    0x0013
+#define WM_ENDSESSION                   0x0016
+#endif
+#define WM_QUIT                         0x0012
+#define WM_ERASEBKGND                   0x0014
+#define WM_SYSCOLORCHANGE               0x0015
+#define WM_SHOWWINDOW                   0x0018
+#define WM_WININICHANGE                 0x001A
+#if(WINVER >= 0x0400)
+#define WM_SETTINGCHANGE                WM_WININICHANGE
+#endif /* WINVER >= 0x0400 */
+
+
+#define WM_DEVMODECHANGE                0x001B
+#define WM_ACTIVATEAPP                  0x001C
+#define WM_FONTCHANGE                   0x001D
+#define WM_TIMECHANGE                   0x001E
+#define WM_CANCELMODE                   0x001F
+#define WM_SETCURSOR                    0x0020
+#define WM_MOUSEACTIVATE                0x0021
+#define WM_CHILDACTIVATE                0x0022
+#define WM_QUEUESYNC                    0x0023
+
+#define WM_GETMINMAXINFO                0x0024
+
+/*
+ * Struct pointed to by WM_GETMINMAXINFO lParam
+ */
+typedef struct tagMINMAXINFO {
+    POINT ptReserved;
+    POINT ptMaxSize;
+    POINT ptMaxPosition;
+    POINT ptMinTrackSize;
+    POINT ptMaxTrackSize;
+} MINMAXINFO, *PMINMAXINFO, *LPMINMAXINFO;
+
+
+#define WM_PAINTICON                    0x0026
+#define WM_ICONERASEBKGND               0x0027
+#define WM_NEXTDLGCTL                   0x0028
+#define WM_SPOOLERSTATUS                0x002A
+#define WM_DRAWITEM                     0x002B
+#define WM_MEASUREITEM                  0x002C
+#define WM_DELETEITEM                   0x002D
+#define WM_VKEYTOITEM                   0x002E
+#define WM_CHARTOITEM                   0x002F
+#define WM_SETFONT                      0x0030
+#define WM_GETFONT                      0x0031
+#define WM_SETHOTKEY                    0x0032
+#define WM_GETHOTKEY                    0x0033
+#define WM_QUERYDRAGICON                0x0037
+#define WM_COMPAREITEM                  0x0039
+#if(WINVER >= 0x0500)
+#ifndef _WIN32_WCE
+#define WM_GETOBJECT                    0x003D
+#endif
+#endif /* WINVER >= 0x0500 */
+#define WM_COMPACTING                   0x0041
+#define WM_COMMNOTIFY                   0x0044  /* no longer suported */
+#define WM_WINDOWPOSCHANGING            0x0046
+#define WM_WINDOWPOSCHANGED             0x0047
+
+#define WM_POWER                        0x0048
+/*
+ * wParam for WM_POWER window message and DRV_POWER driver notification
+ */
+#define PWR_OK              1
+#define PWR_FAIL            (-1)
+#define PWR_SUSPENDREQUEST  1
+#define PWR_SUSPENDRESUME   2
+#define PWR_CRITICALRESUME  3
+
+#define WM_COPYDATA                     0x004A
+#define WM_CANCELJOURNAL                0x004B
+
+
+
+/*
+ * lParam of WM_COPYDATA message points to...
+ */
+typedef struct tagCOPYDATASTRUCT {
+    ULONG_PTR dwData;
+    DWORD cbData;
+    PVOID lpData;
+} COPYDATASTRUCT, *PCOPYDATASTRUCT;
+
+#if(WINVER >= 0x0400)
+typedef struct tagMDINEXTMENU
+{
+    HMENU   hmenuIn;
+    HMENU   hmenuNext;
+    HWND    hwndNext;
+} MDINEXTMENU, * PMDINEXTMENU, * LPMDINEXTMENU;
+#endif /* WINVER >= 0x0400 */
+
+#if(WINVER >= 0x0400)
+#define WM_NOTIFY                       0x004E
+#define WM_INPUTLANGCHANGEREQUEST       0x0050
+#define WM_INPUTLANGCHANGE              0x0051
+#define WM_TCARD                        0x0052
+#define WM_HELP                         0x0053
+#define WM_USERCHANGED                  0x0054
+#define WM_NOTIFYFORMAT                 0x0055
+
+#define NFR_ANSI                             1
+#define NFR_UNICODE                          2
+#define NF_QUERY                             3
+#define NF_REQUERY                           4
+
+#define WM_CONTEXTMENU                  0x007B
+#define WM_STYLECHANGING                0x007C
+#define WM_STYLECHANGED                 0x007D
+#define WM_DISPLAYCHANGE                0x007E
+#define WM_GETICON                      0x007F
+#define WM_SETICON                      0x0080
+#endif /* WINVER >= 0x0400 */
+
+#define WM_NCCREATE                     0x0081
+#define WM_NCDESTROY                    0x0082
+#define WM_NCCALCSIZE                   0x0083
+#define WM_NCHITTEST                    0x0084
+#define WM_NCPAINT                      0x0085
+#define WM_NCACTIVATE                   0x0086
+#define WM_GETDLGCODE                   0x0087
+#ifndef _WIN32_WCE
+#define WM_SYNCPAINT                    0x0088
+#endif
+#define WM_NCMOUSEMOVE                  0x00A0
+#define WM_NCLBUTTONDOWN                0x00A1
+#define WM_NCLBUTTONUP                  0x00A2
+#define WM_NCLBUTTONDBLCLK              0x00A3
+#define WM_NCRBUTTONDOWN                0x00A4
+#define WM_NCRBUTTONUP                  0x00A5
+#define WM_NCRBUTTONDBLCLK              0x00A6
+#define WM_NCMBUTTONDOWN                0x00A7
+#define WM_NCMBUTTONUP                  0x00A8
+#define WM_NCMBUTTONDBLCLK              0x00A9
+
+
+
+#if(_WIN32_WINNT >= 0x0500)
+#define WM_NCXBUTTONDOWN                0x00AB
+#define WM_NCXBUTTONUP                  0x00AC
+#define WM_NCXBUTTONDBLCLK              0x00AD
+#endif /* _WIN32_WINNT >= 0x0500 */
+
+
+#if(_WIN32_WINNT >= 0x0501)
+#define WM_INPUT_DEVICE_CHANGE          0x00FE
+#endif /* _WIN32_WINNT >= 0x0501 */
+
+#if(_WIN32_WINNT >= 0x0501)
+#define WM_INPUT                        0x00FF
+#endif /* _WIN32_WINNT >= 0x0501 */
+
+#define WM_KEYFIRST                     0x0100
+#define WM_KEYDOWN                      0x0100
+#define WM_KEYUP                        0x0101
+#define WM_CHAR                         0x0102
+#define WM_DEADCHAR                     0x0103
+#define WM_SYSKEYDOWN                   0x0104
+#define WM_SYSKEYUP                     0x0105
+#define WM_SYSCHAR                      0x0106
+#define WM_SYSDEADCHAR                  0x0107
+#if(_WIN32_WINNT >= 0x0501)
+#define WM_UNICHAR                      0x0109
+#define WM_KEYLAST                      0x0109
+#define UNICODE_NOCHAR                  0xFFFF
+#else
+#define WM_KEYLAST                      0x0108
+#endif /* _WIN32_WINNT >= 0x0501 */
+
+#if(WINVER >= 0x0400)
+#define WM_IME_STARTCOMPOSITION         0x010D
+#define WM_IME_ENDCOMPOSITION           0x010E
+#define WM_IME_COMPOSITION              0x010F
+#define WM_IME_KEYLAST                  0x010F
+#endif /* WINVER >= 0x0400 */
+
+#define WM_INITDIALOG                   0x0110
+#define WM_COMMAND                      0x0111
+#define WM_SYSCOMMAND                   0x0112
+#define WM_TIMER                        0x0113
+#define WM_HSCROLL                      0x0114
+#define WM_VSCROLL                      0x0115
+#define WM_INITMENU                     0x0116
+#define WM_INITMENUPOPUP                0x0117
+#if(WINVER >= 0x0601)
+#define WM_GESTURE                      0x0119
+#define WM_GESTURENOTIFY                0x011A
+#endif /* WINVER >= 0x0601 */
+#define WM_MENUSELECT                   0x011F
+#define WM_MENUCHAR                     0x0120
+#define WM_ENTERIDLE                    0x0121
+#if(WINVER >= 0x0500)
+#ifndef _WIN32_WCE
+#define WM_MENURBUTTONUP                0x0122
+#define WM_MENUDRAG                     0x0123
+#define WM_MENUGETOBJECT                0x0124
+#define WM_UNINITMENUPOPUP              0x0125
+#define WM_MENUCOMMAND                  0x0126
+
+#ifndef _WIN32_WCE
+#if(_WIN32_WINNT >= 0x0500)
+#define WM_CHANGEUISTATE                0x0127
+#define WM_UPDATEUISTATE                0x0128
+#define WM_QUERYUISTATE                 0x0129
+
+/*
+ * LOWORD(wParam) values in WM_*UISTATE*
+ */
+#define UIS_SET                         1
+#define UIS_CLEAR                       2
+#define UIS_INITIALIZE                  3
+
+/*
+ * HIWORD(wParam) values in WM_*UISTATE*
+ */
+#define UISF_HIDEFOCUS                  0x1
+#define UISF_HIDEACCEL                  0x2
+#if(_WIN32_WINNT >= 0x0501)
+#define UISF_ACTIVE                     0x4
+#endif /* _WIN32_WINNT >= 0x0501 */
+#endif /* _WIN32_WINNT >= 0x0500 */
+#endif
+
+#endif
+#endif /* WINVER >= 0x0500 */
+
+#define WM_CTLCOLORMSGBOX               0x0132
+#define WM_CTLCOLOREDIT                 0x0133
+#define WM_CTLCOLORLISTBOX              0x0134
+#define WM_CTLCOLORBTN                  0x0135
+#define WM_CTLCOLORDLG                  0x0136
+#define WM_CTLCOLORSCROLLBAR            0x0137
+#define WM_CTLCOLORSTATIC               0x0138
+#define MN_GETHMENU                     0x01E1
+
+#define WM_MOUSEFIRST                   0x0200
+#define WM_MOUSEMOVE                    0x0200
+#define WM_LBUTTONDOWN                  0x0201
+#define WM_LBUTTONUP                    0x0202
+#define WM_LBUTTONDBLCLK                0x0203
+#define WM_RBUTTONDOWN                  0x0204
+#define WM_RBUTTONUP                    0x0205
+#define WM_RBUTTONDBLCLK                0x0206
+#define WM_MBUTTONDOWN                  0x0207
+#define WM_MBUTTONUP                    0x0208
+#define WM_MBUTTONDBLCLK                0x0209
+#if (_WIN32_WINNT >= 0x0400) || (_WIN32_WINDOWS > 0x0400)
+#define WM_MOUSEWHEEL                   0x020A
+#endif
+#if (_WIN32_WINNT >= 0x0500)
+#define WM_XBUTTONDOWN                  0x020B
+#define WM_XBUTTONUP                    0x020C
+#define WM_XBUTTONDBLCLK                0x020D
+#endif
+#if (_WIN32_WINNT >= 0x0600)
+#define WM_MOUSEHWHEEL                  0x020E
+#endif
+
+#if (_WIN32_WINNT >= 0x0600)
+#define WM_MOUSELAST                    0x020E
+#elif (_WIN32_WINNT >= 0x0500)
+#define WM_MOUSELAST                    0x020D
+#elif (_WIN32_WINNT >= 0x0400) || (_WIN32_WINDOWS > 0x0400)
+#define WM_MOUSELAST                    0x020A
+#else
+#define WM_MOUSELAST                    0x0209
+#endif /* (_WIN32_WINNT >= 0x0600) */
+
+
+#if(_WIN32_WINNT >= 0x0400)
+/* Value for rolling one detent */
+#define WHEEL_DELTA                     120
+#define GET_WHEEL_DELTA_WPARAM(wParam)  ((short)HIWORD(wParam))
+
+/* Setting to scroll one page for SPI_GET/SETWHEELSCROLLLINES */
+#define WHEEL_PAGESCROLL                (UINT_MAX)
+#endif /* _WIN32_WINNT >= 0x0400 */
+
+#if(_WIN32_WINNT >= 0x0500)
+#define GET_KEYSTATE_WPARAM(wParam)     (LOWORD(wParam))
+#define GET_NCHITTEST_WPARAM(wParam)    ((short)LOWORD(wParam))
+#define GET_XBUTTON_WPARAM(wParam)      (HIWORD(wParam))
+
+/* XButton values are WORD flags */
+#define XBUTTON1      0x0001
+#define XBUTTON2      0x0002
+/* Were there to be an XBUTTON3, its value would be 0x0004 */
+#endif /* _WIN32_WINNT >= 0x0500 */
+
+#define WM_PARENTNOTIFY                 0x0210
+#define WM_ENTERMENULOOP                0x0211
+#define WM_EXITMENULOOP                 0x0212
+
+#if(WINVER >= 0x0400)
+#define WM_NEXTMENU                     0x0213
+#define WM_SIZING                       0x0214
+#define WM_CAPTURECHANGED               0x0215
+#define WM_MOVING                       0x0216
+#endif /* WINVER >= 0x0400 */
+
+#if(WINVER >= 0x0400)
+
+
+#define WM_POWERBROADCAST               0x0218
+
+#ifndef _WIN32_WCE
+#define PBT_APMQUERYSUSPEND             0x0000
+#define PBT_APMQUERYSTANDBY             0x0001
+
+#define PBT_APMQUERYSUSPENDFAILED       0x0002
+#define PBT_APMQUERYSTANDBYFAILED       0x0003
+
+#define PBT_APMSUSPEND                  0x0004
+#define PBT_APMSTANDBY                  0x0005
+
+#define PBT_APMRESUMECRITICAL           0x0006
+#define PBT_APMRESUMESUSPEND            0x0007
+#define PBT_APMRESUMESTANDBY            0x0008
+
+#define PBTF_APMRESUMEFROMFAILURE       0x00000001
+
+#define PBT_APMBATTERYLOW               0x0009
+#define PBT_APMPOWERSTATUSCHANGE        0x000A
+
+#define PBT_APMOEMEVENT                 0x000B
+
+
+#define PBT_APMRESUMEAUTOMATIC          0x0012
+#if (_WIN32_WINNT >= 0x0502)
+#ifndef PBT_POWERSETTINGCHANGE
+#define PBT_POWERSETTINGCHANGE          0x8013
+
+typedef struct {
+    GUID PowerSetting;
+    DWORD DataLength;
+    UCHAR Data[1];
+} POWERBROADCAST_SETTING, *PPOWERBROADCAST_SETTING;
+
+
+#endif // PBT_POWERSETTINGCHANGE
+
+#endif // (_WIN32_WINNT >= 0x0502)
+#endif
+
+#endif /* WINVER >= 0x0400 */
+
+#if(WINVER >= 0x0400)
+#define WM_DEVICECHANGE                 0x0219
+#endif /* WINVER >= 0x0400 */
+
+#define WM_MDICREATE                    0x0220
+#define WM_MDIDESTROY                   0x0221
+#define WM_MDIACTIVATE                  0x0222
+#define WM_MDIRESTORE                   0x0223
+#define WM_MDINEXT                      0x0224
+#define WM_MDIMAXIMIZE                  0x0225
+#define WM_MDITILE                      0x0226
+#define WM_MDICASCADE                   0x0227
+#define WM_MDIICONARRANGE               0x0228
+#define WM_MDIGETACTIVE                 0x0229
+
+
+#define WM_MDISETMENU                   0x0230
+#define WM_ENTERSIZEMOVE                0x0231
+#define WM_EXITSIZEMOVE                 0x0232
+#define WM_DROPFILES                    0x0233
+#define WM_MDIREFRESHMENU               0x0234
+
+#if(WINVER >= 0x0602)
+#define WM_POINTERDEVICECHANGE          0x238
+#define WM_POINTERDEVICEINRANGE         0x239
+#define WM_POINTERDEVICEOUTOFRANGE      0x23A
+#endif /* WINVER >= 0x0602 */
+
+
+#if(WINVER >= 0x0601)
+#define WM_TOUCH                        0x0240
+#endif /* WINVER >= 0x0601 */
+
+#if(WINVER >= 0x0602)
+#define WM_NCPOINTERUPDATE              0x0241
+#define WM_NCPOINTERDOWN                0x0242
+#define WM_NCPOINTERUP                  0x0243
+#define WM_POINTERUPDATE                0x0245
+#define WM_POINTERDOWN                  0x0246
+#define WM_POINTERUP                    0x0247
+#define WM_POINTERENTER                 0x0249
+#define WM_POINTERLEAVE                 0x024A
+#define WM_POINTERACTIVATE              0x024B
+#define WM_POINTERCAPTURECHANGED        0x024C
+#define WM_TOUCHHITTESTING              0x024D
+#define WM_POINTERWHEEL                 0x024E
+#define WM_POINTERHWHEEL                0x024F
+#define DM_POINTERHITTEST               0x0250
+#define WM_POINTERROUTEDTO              0x0251
+#define WM_POINTERROUTEDAWAY            0x0252
+#define WM_POINTERROUTEDRELEASED        0x0253
+#endif /* WINVER >= 0x0602 */
+
+
+#if(WINVER >= 0x0400)
+#define WM_IME_SETCONTEXT               0x0281
+#define WM_IME_NOTIFY                   0x0282
+#define WM_IME_CONTROL                  0x0283
+#define WM_IME_COMPOSITIONFULL          0x0284
+#define WM_IME_SELECT                   0x0285
+#define WM_IME_CHAR                     0x0286
+#endif /* WINVER >= 0x0400 */
+#if(WINVER >= 0x0500)
+#define WM_IME_REQUEST                  0x0288
+#endif /* WINVER >= 0x0500 */
+#if(WINVER >= 0x0400)
+#define WM_IME_KEYDOWN                  0x0290
+#define WM_IME_KEYUP                    0x0291
+#endif /* WINVER >= 0x0400 */
+
+#if((_WIN32_WINNT >= 0x0400) || (WINVER >= 0x0500))
+#define WM_MOUSEHOVER                   0x02A1
+#define WM_MOUSELEAVE                   0x02A3
+#endif
+#if(WINVER >= 0x0500)
+#define WM_NCMOUSEHOVER                 0x02A0
+#define WM_NCMOUSELEAVE                 0x02A2
+#endif /* WINVER >= 0x0500 */
+
+#if(_WIN32_WINNT >= 0x0501)
+#define WM_WTSSESSION_CHANGE            0x02B1
+
+#define WM_TABLET_FIRST                 0x02c0
+#define WM_TABLET_LAST                  0x02df
+#endif /* _WIN32_WINNT >= 0x0501 */
+
+#if(WINVER >= 0x0601)
+#define WM_DPICHANGED                   0x02E0
+#endif /* WINVER >= 0x0601 */
+#if(WINVER >= 0x0605)
+#define WM_DPICHANGED_BEFOREPARENT      0x02E2
+#define WM_DPICHANGED_AFTERPARENT       0x02E3
+#define WM_GETDPISCALEDSIZE             0x02E4
+#endif /* WINVER >= 0x0605 */
+
+#define WM_CUT                          0x0300
+#define WM_COPY                         0x0301
+#define WM_PASTE                        0x0302
+#define WM_CLEAR                        0x0303
+#define WM_UNDO                         0x0304
+#define WM_RENDERFORMAT                 0x0305
+#define WM_RENDERALLFORMATS             0x0306
+#define WM_DESTROYCLIPBOARD             0x0307
+#define WM_DRAWCLIPBOARD                0x0308
+#define WM_PAINTCLIPBOARD               0x0309
+#define WM_VSCROLLCLIPBOARD             0x030A
+#define WM_SIZECLIPBOARD                0x030B
+#define WM_ASKCBFORMATNAME              0x030C
+#define WM_CHANGECBCHAIN                0x030D
+#define WM_HSCROLLCLIPBOARD             0x030E
+#define WM_QUERYNEWPALETTE              0x030F
+#define WM_PALETTEISCHANGING            0x0310
+#define WM_PALETTECHANGED               0x0311
+#define WM_HOTKEY                       0x0312
+
+#if(WINVER >= 0x0400)
+#define WM_PRINT                        0x0317
+#define WM_PRINTCLIENT                  0x0318
+#endif /* WINVER >= 0x0400 */
+
+#if(_WIN32_WINNT >= 0x0500)
+#define WM_APPCOMMAND                   0x0319
+#endif /* _WIN32_WINNT >= 0x0500 */
+
+#if(_WIN32_WINNT >= 0x0501)
+#define WM_THEMECHANGED                 0x031A
+#endif /* _WIN32_WINNT >= 0x0501 */
+
+
+#if(_WIN32_WINNT >= 0x0501)
+#define WM_CLIPBOARDUPDATE              0x031D
+#endif /* _WIN32_WINNT >= 0x0501 */
+
+#if(_WIN32_WINNT >= 0x0600)
+#define WM_DWMCOMPOSITIONCHANGED        0x031E
+#define WM_DWMNCRENDERINGCHANGED        0x031F
+#define WM_DWMCOLORIZATIONCOLORCHANGED  0x0320
+#define WM_DWMWINDOWMAXIMIZEDCHANGE     0x0321
+#endif /* _WIN32_WINNT >= 0x0600 */
+
+#if(_WIN32_WINNT >= 0x0601)
+#define WM_DWMSENDICONICTHUMBNAIL           0x0323
+#define WM_DWMSENDICONICLIVEPREVIEWBITMAP   0x0326
+#endif /* _WIN32_WINNT >= 0x0601 */
+
+
+#if(WINVER >= 0x0600)
+#define WM_GETTITLEBARINFOEX            0x033F
+#endif /* WINVER >= 0x0600 */
+
+#if(WINVER >= 0x0400)
+#endif /* WINVER >= 0x0400 */
+
+
+#if(WINVER >= 0x0400)
+#define WM_HANDHELDFIRST                0x0358
+#define WM_HANDHELDLAST                 0x035F
+
+#define WM_AFXFIRST                     0x0360
+#define WM_AFXLAST                      0x037F
+#endif /* WINVER >= 0x0400 */
+
+#define WM_PENWINFIRST                  0x0380
+#define WM_PENWINLAST                   0x038F
+
+
+#if(WINVER >= 0x0400)
+#define WM_APP                          0x8000
+#endif /* WINVER >= 0x0400 */
+
+
+/*
+ * NOTE: All Message Numbers below 0x0400 are RESERVED.
+ *
+ * Private Window Messages Start Here:
+ */
+#define WM_USER                         0x0400
+
+#if(WINVER >= 0x0400)
+
+/*  wParam for WM_SIZING message  */
+#define WMSZ_LEFT           1
+#define WMSZ_RIGHT          2
+#define WMSZ_TOP            3
+#define WMSZ_TOPLEFT        4
+#define WMSZ_TOPRIGHT       5
+#define WMSZ_BOTTOM         6
+#define WMSZ_BOTTOMLEFT     7
+#define WMSZ_BOTTOMRIGHT    8
+#endif /* WINVER >= 0x0400 */
+
+#ifndef NONCMESSAGES
+
+/*
+ * WM_NCHITTEST and MOUSEHOOKSTRUCT Mouse Position Codes
+ */
+#define HTERROR             (-2)
+#define HTTRANSPARENT       (-1)
+#define HTNOWHERE           0
+#define HTCLIENT            1
+#define HTCAPTION           2
+#define HTSYSMENU           3
+#define HTGROWBOX           4
+#define HTSIZE              HTGROWBOX
+#define HTMENU              5
+#define HTHSCROLL           6
+#define HTVSCROLL           7
+#define HTMINBUTTON         8
+#define HTMAXBUTTON         9
+#define HTLEFT              10
+#define HTRIGHT             11
+#define HTTOP               12
+#define HTTOPLEFT           13
+#define HTTOPRIGHT          14
+#define HTBOTTOM            15
+#define HTBOTTOMLEFT        16
+#define HTBOTTOMRIGHT       17
+#define HTBORDER            18
+#define HTREDUCE            HTMINBUTTON
+#define HTZOOM              HTMAXBUTTON
+#define HTSIZEFIRST         HTLEFT
+#define HTSIZELAST          HTBOTTOMRIGHT
+#if(WINVER >= 0x0400)
+#define HTOBJECT            19
+#define HTCLOSE             20
+#define HTHELP              21
+#endif /* WINVER >= 0x0400 */
+
+
+/*
+ * SendMessageTimeout values
+ */
+#define SMTO_NORMAL         0x0000
+#define SMTO_BLOCK          0x0001
+#define SMTO_ABORTIFHUNG    0x0002
+#if(WINVER >= 0x0500)
+#define SMTO_NOTIMEOUTIFNOTHUNG 0x0008
+#endif /* WINVER >= 0x0500 */
+#if(WINVER >= 0x0600)
+#define SMTO_ERRORONEXIT    0x0020
+#endif /* WINVER >= 0x0600 */
+#if(WINVER >= 0x0602)
+#endif /* WINVER >= 0x0602 */
+
+#endif /* !NONCMESSAGES */
+
+/*
+ * WM_MOUSEACTIVATE Return Codes
+ */
+#define MA_ACTIVATE         1
+#define MA_ACTIVATEANDEAT   2
+#define MA_NOACTIVATE       3
+#define MA_NOACTIVATEANDEAT 4
+
+/*
+ * WM_SETICON / WM_GETICON Type Codes
+ */
+#define ICON_SMALL          0
+#define ICON_BIG            1
+#if(_WIN32_WINNT >= 0x0501)
+#define ICON_SMALL2         2
+#endif /* _WIN32_WINNT >= 0x0501 */
+
+
+
+/*
+ * WM_SIZE message wParam values
+ */
+#define SIZE_RESTORED       0
+#define SIZE_MINIMIZED      1
+#define SIZE_MAXIMIZED      2
+#define SIZE_MAXSHOW        3
+#define SIZE_MAXHIDE        4
+
+/*
+ * Obsolete constant names
+ */
+#define SIZENORMAL          SIZE_RESTORED
+#define SIZEICONIC          SIZE_MINIMIZED
+#define SIZEFULLSCREEN      SIZE_MAXIMIZED
+#define SIZEZOOMSHOW        SIZE_MAXSHOW
+#define SIZEZOOMHIDE        SIZE_MAXHIDE
+
+
+/*
+ * WM_WINDOWPOSCHANGING/CHANGED struct pointed to by lParam
+ */
+typedef struct tagWINDOWPOS {
+    HWND    hwnd;
+    HWND    hwndInsertAfter;
+    int     x;
+    int     y;
+    int     cx;
+    int     cy;
+    UINT    flags;
+} WINDOWPOS, *LPWINDOWPOS, *PWINDOWPOS;
+
+/*
+ * WM_NCCALCSIZE parameter structure
+ */
+typedef struct tagNCCALCSIZE_PARAMS {
+    RECT       rgrc[3];
+    PWINDOWPOS lppos;
+} NCCALCSIZE_PARAMS, *LPNCCALCSIZE_PARAMS;
+
+/*
+ * WM_NCCALCSIZE "window valid rect" return values
+ */
+#define WVR_ALIGNTOP        0x0010
+#define WVR_ALIGNLEFT       0x0020
+#define WVR_ALIGNBOTTOM     0x0040
+#define WVR_ALIGNRIGHT      0x0080
+#define WVR_HREDRAW         0x0100
+#define WVR_VREDRAW         0x0200
+#define WVR_REDRAW         (WVR_HREDRAW | \
+                            WVR_VREDRAW)
+#define WVR_VALIDRECTS      0x0400
+
+
+#ifndef NOKEYSTATES
+
+/*
+ * Key State Masks for Mouse Messages
+ */
+#define MK_LBUTTON          0x0001
+#define MK_RBUTTON          0x0002
+#define MK_SHIFT            0x0004
+#define MK_CONTROL          0x0008
+#define MK_MBUTTON          0x0010
+#if(_WIN32_WINNT >= 0x0500)
+#define MK_XBUTTON1         0x0020
+#define MK_XBUTTON2         0x0040
+#endif /* _WIN32_WINNT >= 0x0500 */
+
+#endif /* !NOKEYSTATES */
+
+
+#if(_WIN32_WINNT >= 0x0400)
+#ifndef NOTRACKMOUSEEVENT
+
+#define TME_HOVER       0x00000001
+#define TME_LEAVE       0x00000002
+#if(WINVER >= 0x0500)
+#define TME_NONCLIENT   0x00000010
+#endif /* WINVER >= 0x0500 */
+#define TME_QUERY       0x40000000
+#define TME_CANCEL      0x80000000
+
+
+#define HOVER_DEFAULT   0xFFFFFFFF
+#endif /* _WIN32_WINNT >= 0x0400 */
+
+#if(_WIN32_WINNT >= 0x0400)
+
+typedef struct tagTRACKMOUSEEVENT {
+    DWORD cbSize;
+    DWORD dwFlags;
+    HWND  hwndTrack;
+    DWORD dwHoverTime;
+} TRACKMOUSEEVENT, *LPTRACKMOUSEEVENT;
+
+
+#endif /* _WIN32_WINNT >= 0x0400 */
+
+#if(_WIN32_WINNT >= 0x0400)
+
+#endif /* !NOTRACKMOUSEEVENT */
+#endif /* _WIN32_WINNT >= 0x0400 */
+
+#define PM_NOREMOVE         0x0000
+#define PM_REMOVE           0x0001
+#define PM_NOYIELD          0x0002
+
+#define HWND_BOTTOM ((HWND)1)
+#define HWND_NOTOPMOST ((HWND)-2)
+#define HWND_TOP ((HWND)0)
+#define HWND_TOPMOST ((HWND)-1)
+
+/*
+ * SetWindowPos Flags
+ */
+#define SWP_NOSIZE          0x0001
+#define SWP_NOMOVE          0x0002
+#define SWP_NOZORDER        0x0004
+#define SWP_NOREDRAW        0x0008
+#define SWP_NOACTIVATE      0x0010
+#define SWP_FRAMECHANGED    0x0020  /* The frame changed: send WM_NCCALCSIZE */
+#define SWP_SHOWWINDOW      0x0040
+#define SWP_HIDEWINDOW      0x0080
+#define SWP_NOCOPYBITS      0x0100
+#define SWP_NOOWNERZORDER   0x0200  /* Don't do owner Z ordering */
+#define SWP_NOSENDCHANGING  0x0400  /* Don't send WM_WINDOWPOSCHANGING */
+
+#define SWP_DRAWFRAME       SWP_FRAMECHANGED
+#define SWP_NOREPOSITION    SWP_NOOWNERZORDER
+
+#if(WINVER >= 0x0400)
+#define SWP_DEFERERASE      0x2000 // same as SWP_DEFERDRAWING
+#define SWP_ASYNCWINDOWPOS  0x4000 // same as SWP_CREATESPB
+#endif /* WINVER >= 0x0400 */
+
+#define FILE_READ_DATA            ( 0x0001 )    // file & pipe
+#define FILE_LIST_DIRECTORY       ( 0x0001 )    // directory
+
+#define FILE_WRITE_DATA           ( 0x0002 )    // file & pipe
+#define FILE_ADD_FILE             ( 0x0002 )    // directory
+
+#define FILE_APPEND_DATA          ( 0x0004 )    // file
+#define FILE_ADD_SUBDIRECTORY     ( 0x0004 )    // directory
+#define FILE_CREATE_PIPE_INSTANCE ( 0x0004 )    // named pipe
+
+
+#define FILE_READ_EA              ( 0x0008 )    // file & directory
+
+#define FILE_WRITE_EA             ( 0x0010 )    // file & directory
+
+#define FILE_EXECUTE              ( 0x0020 )    // file
+#define FILE_TRAVERSE             ( 0x0020 )    // directory
+
+#define FILE_DELETE_CHILD         ( 0x0040 )    // directory
+
+#define FILE_READ_ATTRIBUTES      ( 0x0080 )    // all
+
+#define FILE_WRITE_ATTRIBUTES     ( 0x0100 )    // all
+
+#define FILE_ALL_ACCESS (STANDARD_RIGHTS_REQUIRED | SYNCHRONIZE | 0x1FF)
+
+#define FILE_GENERIC_READ         (STANDARD_RIGHTS_READ     |\
+                                   FILE_READ_DATA           |\
+                                   FILE_READ_ATTRIBUTES     |\
+                                   FILE_READ_EA             |\
+                                   SYNCHRONIZE)
+
+
+#define FILE_GENERIC_WRITE        (STANDARD_RIGHTS_WRITE    |\
+                                   FILE_WRITE_DATA          |\
+                                   FILE_WRITE_ATTRIBUTES    |\
+                                   FILE_WRITE_EA            |\
+                                   FILE_APPEND_DATA         |\
+                                   SYNCHRONIZE)
+
+
+#define FILE_GENERIC_EXECUTE      (STANDARD_RIGHTS_EXECUTE  |\
+                                   FILE_READ_ATTRIBUTES     |\
+                                   FILE_EXECUTE             |\
+                                   SYNCHRONIZE)
+
+// end_access
+#define FILE_SHARE_READ                 0x00000001  
+#define FILE_SHARE_WRITE                0x00000002  
+#define FILE_SHARE_DELETE               0x00000004  
+#define FILE_ATTRIBUTE_READONLY             0x00000001  
+#define FILE_ATTRIBUTE_HIDDEN               0x00000002  
+#define FILE_ATTRIBUTE_SYSTEM               0x00000004  
+#define FILE_ATTRIBUTE_DIRECTORY            0x00000010  
+#define FILE_ATTRIBUTE_ARCHIVE              0x00000020  
+#define FILE_ATTRIBUTE_DEVICE               0x00000040  
+#define FILE_ATTRIBUTE_NORMAL               0x00000080  
+#define FILE_ATTRIBUTE_TEMPORARY            0x00000100  
+#define FILE_ATTRIBUTE_SPARSE_FILE          0x00000200  
+#define FILE_ATTRIBUTE_REPARSE_POINT        0x00000400  
+#define FILE_ATTRIBUTE_COMPRESSED           0x00000800  
+#define FILE_ATTRIBUTE_OFFLINE              0x00001000  
+#define FILE_ATTRIBUTE_NOT_CONTENT_INDEXED  0x00002000  
+#define FILE_ATTRIBUTE_ENCRYPTED            0x00004000  
+#define FILE_ATTRIBUTE_INTEGRITY_STREAM     0x00008000  
+#define FILE_ATTRIBUTE_VIRTUAL              0x00010000  
+#define FILE_ATTRIBUTE_NO_SCRUB_DATA        0x00020000  
+#define FILE_ATTRIBUTE_EA                   0x00040000  
+#define FILE_ATTRIBUTE_PINNED               0x00080000  
+#define FILE_ATTRIBUTE_UNPINNED             0x00100000  
+#define FILE_ATTRIBUTE_RECALL_ON_OPEN       0x00040000  
+#define FILE_ATTRIBUTE_RECALL_ON_DATA_ACCESS 0x00400000 
+#define TREE_CONNECT_ATTRIBUTE_PRIVACY      0x00004000  
+#define TREE_CONNECT_ATTRIBUTE_INTEGRITY    0x00008000  
+#define TREE_CONNECT_ATTRIBUTE_GLOBAL       0x00000004  
+#define TREE_CONNECT_ATTRIBUTE_PINNED       0x00000002  
+#define FILE_ATTRIBUTE_STRICTLY_SEQUENTIAL  0x20000000  
+#define FILE_NOTIFY_CHANGE_FILE_NAME    0x00000001   
+#define FILE_NOTIFY_CHANGE_DIR_NAME     0x00000002   
+#define FILE_NOTIFY_CHANGE_ATTRIBUTES   0x00000004   
+#define FILE_NOTIFY_CHANGE_SIZE         0x00000008   
+#define FILE_NOTIFY_CHANGE_LAST_WRITE   0x00000010   
+#define FILE_NOTIFY_CHANGE_LAST_ACCESS  0x00000020   
+#define FILE_NOTIFY_CHANGE_CREATION     0x00000040   
+#define FILE_NOTIFY_CHANGE_SECURITY     0x00000100   
+#define FILE_ACTION_ADDED                   0x00000001   
+#define FILE_ACTION_REMOVED                 0x00000002   
+#define FILE_ACTION_MODIFIED                0x00000003   
+#define FILE_ACTION_RENAMED_OLD_NAME        0x00000004   
+#define FILE_ACTION_RENAMED_NEW_NAME        0x00000005   
+#define MAILSLOT_NO_MESSAGE             ((DWORD)-1) 
+#define MAILSLOT_WAIT_FOREVER           ((DWORD)-1) 
+#define FILE_CASE_SENSITIVE_SEARCH          0x00000001  
+#define FILE_CASE_PRESERVED_NAMES           0x00000002  
+#define FILE_UNICODE_ON_DISK                0x00000004  
+#define FILE_PERSISTENT_ACLS                0x00000008  
+#define FILE_FILE_COMPRESSION               0x00000010  
+#define FILE_VOLUME_QUOTAS                  0x00000020  
+#define FILE_SUPPORTS_SPARSE_FILES          0x00000040  
+#define FILE_SUPPORTS_REPARSE_POINTS        0x00000080  
+#define FILE_SUPPORTS_REMOTE_STORAGE        0x00000100  
+#define FILE_RETURNS_CLEANUP_RESULT_INFO    0x00000200  
+#define FILE_SUPPORTS_POSIX_UNLINK_RENAME   0x00000400  
+
+
+
+
+#define FILE_VOLUME_IS_COMPRESSED           0x00008000  
+#define FILE_SUPPORTS_OBJECT_IDS            0x00010000  
+#define FILE_SUPPORTS_ENCRYPTION            0x00020000  
+#define FILE_NAMED_STREAMS                  0x00040000  
+#define FILE_READ_ONLY_VOLUME               0x00080000  
+#define FILE_SEQUENTIAL_WRITE_ONCE          0x00100000  
+#define FILE_SUPPORTS_TRANSACTIONS          0x00200000  
+#define FILE_SUPPORTS_HARD_LINKS            0x00400000  
+#define FILE_SUPPORTS_EXTENDED_ATTRIBUTES   0x00800000  
+#define FILE_SUPPORTS_OPEN_BY_FILE_ID       0x01000000  
+#define FILE_SUPPORTS_USN_JOURNAL           0x02000000  
+#define FILE_SUPPORTS_INTEGRITY_STREAMS     0x04000000  
+#define FILE_SUPPORTS_BLOCK_REFCOUNTING     0x08000000  
+#define FILE_SUPPORTS_SPARSE_VDL            0x10000000  
+#define FILE_DAX_VOLUME                     0x20000000  
+#define FILE_SUPPORTS_GHOSTING              0x40000000  
+
+#define FILE_INVALID_FILE_ID               ((LONGLONG)-1LL) 
+
+#define DELETE                           (0x00010000L)
+#define READ_CONTROL                     (0x00020000L)
+#define WRITE_DAC                        (0x00040000L)
+#define WRITE_OWNER                      (0x00080000L)
+#define SYNCHRONIZE                      (0x00100000L)
+
+#define STANDARD_RIGHTS_REQUIRED         (0x000F0000L)
+
+#define STANDARD_RIGHTS_READ             (READ_CONTROL)
+#define STANDARD_RIGHTS_WRITE            (READ_CONTROL)
+#define STANDARD_RIGHTS_EXECUTE          (READ_CONTROL)
+
+#define STANDARD_RIGHTS_ALL              (0x001F0000L)
+
+#define SPECIFIC_RIGHTS_ALL              (0x0000FFFFL)
+
+#define CREATE_ALWAYS 2
+#define CREATE_NEW 1
+#define OPEN_ALWAYS 4
+#define OPEN_EXISTING 3
+#define TRUNCATE_EXISTING 5
+
+#define INVALID_HANDLE_VALUE ((HANDLE)-1)
+
+#define BI_RGB        0L
+#define BI_RLE8       1L
+#define BI_RLE4       2L
+#define BI_BITFIELDS  3L
+#define BI_JPEG       4L
+#define BI_PNG        5L
+
+#define DIB_RGB_COLORS      0 /* color table in RGBs */
+#define DIB_PAL_COLORS      1 /* color table in palette indices */
+
+#define SRCCOPY             (DWORD)0x00CC0020 /* dest = source                   */
+#define SRCPAINT            (DWORD)0x00EE0086 /* dest = source OR dest           */
+#define SRCAND              (DWORD)0x008800C6 /* dest = source AND dest          */
+#define SRCINVERT           (DWORD)0x00660046 /* dest = source XOR dest          */
+#define SRCERASE            (DWORD)0x00440328 /* dest = source AND (NOT dest )   */
+#define NOTSRCCOPY          (DWORD)0x00330008 /* dest = (NOT source)             */
+#define NOTSRCERASE         (DWORD)0x001100A6 /* dest = (NOT src) AND (NOT dest) */
+#define MERGECOPY           (DWORD)0x00C000CA /* dest = (source AND pattern)     */
+#define MERGEPAINT          (DWORD)0x00BB0226 /* dest = (NOT source) OR dest     */
+#define PATCOPY             (DWORD)0x00F00021 /* dest = pattern                  */
+#define PATPAINT            (DWORD)0x00FB0A09 /* dest = DPSnoo                   */
+#define PATINVERT           (DWORD)0x005A0049 /* dest = pattern XOR dest         */
+#define DSTINVERT           (DWORD)0x00550009 /* dest = (NOT dest)               */
+#define BLACKNESS           (DWORD)0x00000042 /* dest = BLACK                    */
+#define WHITENESS           (DWORD)0x00FF0062 /* dest = WHITE                    */
+
+#define MONITOR_DEFAULTTONULL       0x00000000
+#define MONITOR_DEFAULTTOPRIMARY    0x00000001
+#define MONITOR_DEFAULTTONEAREST    0x00000002
+
+WINDOWS_IMPORT void WINAPI GetSystemInfo(LPSYSTEM_INFO lpSystemInfo);
+
+WINDOWS_IMPORT void* WINAPI VirtualAlloc(void *lpAddress, size_t dwSize, u32 flAllocationType, u32 flProtect);
+WINDOWS_IMPORT s32 WINAPI VirtualFree(void *lpAddress, size_t dwSize, u32 dwFreeType);
+
+WINDOWS_IMPORT size_t WINAPI VirtualQuery(void* lpAddress, PMEMORY_BASIC_INFORMATION lpBuffer, u32 dwLength);
+
+WINDOWS_IMPORT void* WINAPI GetStdHandle(u32 nStdHandle);
+WINDOWS_IMPORT BOOL WINAPI SetStdHandle( DWORD nStdHandle, HANDLE hHandle);
+
+WINDOWS_IMPORT s32 WINAPI WriteFile(HANDLE hFile, LPCVOID lpBuffer, DWORD nNumberOfBytesToWrite, LPDWORD lpNumberOfBytesWritten, LPOVERLAPPED lpOverlapped);
+WINDOWS_IMPORT BOOL WINAPI ReadFile( HANDLE hFile, LPVOID lpBuffer, DWORD nNumberOfBytesToRead, LPDWORD lpNumberOfBytesRead, LPOVERLAPPED lpOverlapped);
+
+WINDOWS_IMPORT void* WINAPI GetCurrentProcess(void);
+WINDOWS_IMPORT void* WINAPI GetCurrentThread(void);
+WINDOWS_IMPORT BOOL WINAPI SymInitialize(HANDLE hProcess, PCSTR UserSearchPath, BOOL fInvadeProcess);
+WINDOWS_IMPORT int WINAPI SymCleanup(HANDLE hProcess);
+WINDOWS_IMPORT BOOL WINAPI SymFromAddr(HANDLE hProcess, DWORD64 Address, PDWORD64 Displacement, PSYMBOL_INFO Symbol);
+WINDOWS_IMPORT int WINAPI SymGetLineFromAddr64(HANDLE hProcess, DWORD64 dwAddr, PDWORD pdwDisplacement, PIMAGEHLP_LINE64 Line);
+WINDOWS_IMPORT HANDLE WINAPI SymFunctionTableAccess64(HANDLE hProcess, DWORD64 AddrBase);
+WINDOWS_IMPORT DWORD64 WINAPI SymGetModuleBase64(HANDLE hProcess, DWORD64 Address);
+typedef BOOL (__stdcall *PREAD_PROCESS_MEMORY_ROUTINE64)( HANDLE hProcess, DWORD64 qwBaseAddress,  PVOID lpBuffer, DWORD nSize, LPDWORD lpNumberOfBytesRead);
+typedef PVOID (__stdcall *PFUNCTION_TABLE_ACCESS_ROUTINE64)( HANDLE ahProcess, DWORD64 AddrBase);
+typedef DWORD64 (__stdcall *PGET_MODULE_BASE_ROUTINE64)( HANDLE hProcess, DWORD64 Address);
+typedef DWORD64 (__stdcall *PTRANSLATE_ADDRESS_ROUTINE64)( HANDLE hProcess, HANDLE hThread, LPADDRESS64 lpaddr);
+WINDOWS_IMPORT BOOL WINAPI StackWalk64( DWORD MachineType, HANDLE hProcess, HANDLE hThread, LPSTACKFRAME64 StackFrame, PVOID ContextRecord, PREAD_PROCESS_MEMORY_ROUTINE64 ReadMemoryRoutine, PFUNCTION_TABLE_ACCESS_ROUTINE64 FunctionTableAccessRoutine, PGET_MODULE_BASE_ROUTINE64 GetModuleBaseRoutine, PTRANSLATE_ADDRESS_ROUTINE64 TranslateAddress);
+WINDOWS_IMPORT void WINAPI RtlCaptureContext(PCONTEXT ContextRecord);
+
+WINDOWS_IMPORT BOOL WINAPI GetMonitorInfoW( HMONITOR hMonitor, LPMONITORINFO lpmi);
+WINDOWS_IMPORT BOOL WINAPI EnumDisplaySettingsW( LPCWSTR lpszDeviceName, DWORD iModeNum, DEVMODEW *lpDevMode);
+
+WINDOWS_IMPORT BOOL WINAPI EnumDisplayDevicesW( LPCWSTR lpDevice, DWORD iDevNum, PDISPLAY_DEVICEW lpDisplayDevice, DWORD dwFlags);
+
+
+
+WINDOWS_IMPORT HMONITOR WINAPI MonitorFromWindow( HWND hwnd, DWORD dwFlags);
+
+WINDOWS_IMPORT int WINAPI WideCharToMultiByte( UINT CodePage, DWORD dwFlags, LPCWCH lpWideCharStr, int cchWideChar, LPSTR lpMultiByteStr, int cbMultiByte, LPCCH lpDefaultChar, LPBOOL lpUsedDefaultChar);
+
+typedef BOOL (*MONITORENUMPROC)( HMONITOR unnamedParam1, HDC unnamedParam2, LPRECT unnamedParam3, LPARAM unnamedParam4);
+WINDOWS_IMPORT BOOL WINAPI EnumDisplayMonitors( HDC hdc, LPCRECT lprcClip, MONITORENUMPROC lpfnEnum, LPARAM dwData);
+
+WINDOWS_IMPORT HMODULE WINAPI GetModuleHandleA(LPCSTR lpModuleName);
+WINDOWS_IMPORT HMODULE WINAPI GetModuleHandleW(LPCWSTR lpModuleName);
+
+WINDOWS_IMPORT ATOM WINAPI RegisterClassExW(const WNDCLASSEXW *unnamedParam1);
+
+WINDOWS_IMPORT BOOL WINAPI AdjustWindowRectEx( LPRECT lpRect, DWORD  dwStyle, BOOL   bMenu, DWORD  dwExStyle);
+
+WINDOWS_IMPORT DWORD WINAPI GetLastError(void);
+WINDOWS_IMPORT void WINAPI SetLastError(DWORD);
+
+WINDOWS_IMPORT HWND WINAPI CreateWindowExW(
+    DWORD     dwExStyle,
+    LPCWSTR   lpClassName,
+    LPCWSTR   lpWindowName,
+    DWORD     dwStyle,
+    int       X,
+    int       Y,
+    int       nWidth,
+    int       nHeight,
+    HWND      hWndParent,
+    HMENU     hMenu,
+    HINSTANCE hInstance,
+    LPVOID    lpParam
+);
+WINDOWS_IMPORT BOOL WINAPI UpdateWindow(HWND hWnd);
+WINDOWS_IMPORT BOOL WINAPI ShowWindow( HWND hWnd, int  nCmdShow);
+
+WINDOWS_IMPORT int WINAPI MultiByteToWideChar( UINT CodePage, DWORD dwFlags, LPCCH lpMultiByteStr, int cbMultiByte, LPWSTR lpWideCharStr, int cchWideChar);
+
+WINDOWS_IMPORT BOOL WINAPI PeekMessageW( LPMSG lpMsg, HWND  hWnd, UINT  wMsgFilterMin, UINT  wMsgFilterMax, UINT  wRemoveMsg);
+
+WINDOWS_IMPORT BOOL WINAPI TranslateMessage(const MSG *lpMsg);
+
+WINDOWS_IMPORT LRESULT WINAPI DispatchMessageW(const MSG *lpMsg);
+
+WINDOWS_IMPORT LRESULT WINAPI DefWindowProcW(HWND hWnd,UINT Msg,WPARAM wParam,LPARAM lParam);
+
+WINDOWS_IMPORT BOOL WINAPI DestroyWindow(HWND hWnd);
+
+WINDOWS_IMPORT LONG WINAPI GetWindowLongW( HWND hWnd, int nIndex);
+WINDOWS_IMPORT LONG WINAPI SetWindowLongW(HWND hWnd, int nIndex, LONG dwNewLong);
+WINDOWS_IMPORT BOOL WINAPI SetWindowPos( HWND hWnd, HWND hWndInsertAfter, int X, int Y, int cx, int cy, UINT uFlags);
+
+WINDOWS_IMPORT BOOL WINAPI CreatePipe( HANDLE* hReadPipe, HANDLE* hWritePipe, LPSECURITY_ATTRIBUTES lpPipeAttributes, DWORD nSize);
+
+WINDOWS_IMPORT BOOL WINAPI CloseHandle(HANDLE hObject);
+
+WINDOWS_IMPORT HANDLE WINAPI CreateFileW( LPCWSTR lpFileName, DWORD dwDesiredAccess, DWORD dwShareMode, LPSECURITY_ATTRIBUTES lpSecurityAttributes, DWORD dwCreationDisposition, DWORD dwFlagsAndAttributes, HANDLE hTemplateFile);
+
+WINDOWS_IMPORT BOOL WINAPI GetFileSizeEx( HANDLE hFile, PLARGE_INTEGER lpFileSize);
+
+WINDOWS_IMPORT BOOL WINAPI QueryPerformanceFrequency(LARGE_INTEGER *lpFrequency);
+WINDOWS_IMPORT BOOL WINAPI QueryPerformanceCounter(LARGE_INTEGER *lpPerformanceCount);
+
+WINDOWS_IMPORT DWORD_PTR WINAPI SetThreadAffinityMask( HANDLE hThread, DWORD_PTR dwThreadAffinityMask);
+
+WINDOWS_IMPORT BOOL WINAPI GetClientRect( HWND hWnd, LPRECT lpRect);
+
+WINDOWS_IMPORT HBITMAP WINAPI CreateDIBSection( HDC hdc, BITMAPINFO  *pbmi, UINT usage, void **ppvBits, HANDLE hSection, DWORD offset);
+
+WINDOWS_IMPORT HDC WINAPI GetDC(HWND hWnd);
+
+WINDOWS_IMPORT int WINAPI StretchDIBits( HDC hdc, int xDest, int yDest, int DestWidth, int DestHeight, int xSrc, int ySrc, int SrcWidth, int SrcHeight, PVOID lpBits, PBITMAPINFO lpbmi, UINT iUsage, DWORD rop);
+
+WINDOWS_IMPORT BOOL WINAPI DeleteObject(HGDIOBJ ho);
+
+WINDOWS_IMPORT HMONITOR WINAPI MonitorFromWindow(HWND hwnd,DWORD dwFlags);
+
+WINDOWS_IMPORT HMODULE WINAPI LoadLibraryA(LPCSTR lpLibFileName);
+WINDOWS_IMPORT void* WINAPI GetProcAddress(HMODULE hModule,LPCSTR  lpProcName);
+
+WINDOWS_IMPORT u32 WINAPI timeBeginPeriod(UINT uPeriod);
+
+WINDOWS_IMPORT BOOL WINAPI SetPriorityClass(HANDLE hProcess,DWORD  dwPriorityClass);
+
+WINDOWS_IMPORT BOOL WINAPI SetThreadPriority(HANDLE hThread,int    nPriority);
+
+WINDOWS_IMPORT HMODULE WINAPI LoadLibraryA(LPCSTR lpLibFileName);
+
+WINDOWS_IMPORT BOOL WINAPI CreateProcessA( LPCSTR lpApplicationName, LPSTR lpCommandLine, LPSECURITY_ATTRIBUTES lpProcessAttributes, LPSECURITY_ATTRIBUTES lpThreadAttributes, BOOL bInheritHandles, DWORD dwCreationFlags, LPVOID lpEnvironment, LPCSTR lpCurrentDirectory, LPSTARTUPINFOA lpStartupInfo, LPPROCESS_INFORMATION lpProcessInformation);
+
+WINDOWS_IMPORT DWORD WINAPI WaitForSingleObject(HANDLE hHandle,DWORD  dwMilliseconds);
+
+WINDOWS_IMPORT BOOL WINAPI GetExitCodeProcess(HANDLE  hProcess,LPDWORD lpExitCode);
+
+typedef enum DXGI_FORMAT {
+  DXGI_FORMAT_UNKNOWN = 0,
+  DXGI_FORMAT_R32G32B32A32_TYPELESS = 1,
+  DXGI_FORMAT_R32G32B32A32_FLOAT = 2,
+  DXGI_FORMAT_R32G32B32A32_UINT = 3,
+  DXGI_FORMAT_R32G32B32A32_SINT = 4,
+  DXGI_FORMAT_R32G32B32_TYPELESS = 5,
+  DXGI_FORMAT_R32G32B32_FLOAT = 6,
+  DXGI_FORMAT_R32G32B32_UINT = 7,
+  DXGI_FORMAT_R32G32B32_SINT = 8,
+  DXGI_FORMAT_R16G16B16A16_TYPELESS = 9,
+  DXGI_FORMAT_R16G16B16A16_FLOAT = 10,
+  DXGI_FORMAT_R16G16B16A16_UNORM = 11,
+  DXGI_FORMAT_R16G16B16A16_UINT = 12,
+  DXGI_FORMAT_R16G16B16A16_SNORM = 13,
+  DXGI_FORMAT_R16G16B16A16_SINT = 14,
+  DXGI_FORMAT_R32G32_TYPELESS = 15,
+  DXGI_FORMAT_R32G32_FLOAT = 16,
+  DXGI_FORMAT_R32G32_UINT = 17,
+  DXGI_FORMAT_R32G32_SINT = 18,
+  DXGI_FORMAT_R32G8X24_TYPELESS = 19,
+  DXGI_FORMAT_D32_FLOAT_S8X24_UINT = 20,
+  DXGI_FORMAT_R32_FLOAT_X8X24_TYPELESS = 21,
+  DXGI_FORMAT_X32_TYPELESS_G8X24_UINT = 22,
+  DXGI_FORMAT_R10G10B10A2_TYPELESS = 23,
+  DXGI_FORMAT_R10G10B10A2_UNORM = 24,
+  DXGI_FORMAT_R10G10B10A2_UINT = 25,
+  DXGI_FORMAT_R11G11B10_FLOAT = 26,
+  DXGI_FORMAT_R8G8B8A8_TYPELESS = 27,
+  DXGI_FORMAT_R8G8B8A8_UNORM = 28,
+  DXGI_FORMAT_R8G8B8A8_UNORM_SRGB = 29,
+  DXGI_FORMAT_R8G8B8A8_UINT = 30,
+  DXGI_FORMAT_R8G8B8A8_SNORM = 31,
+  DXGI_FORMAT_R8G8B8A8_SINT = 32,
+  DXGI_FORMAT_R16G16_TYPELESS = 33,
+  DXGI_FORMAT_R16G16_FLOAT = 34,
+  DXGI_FORMAT_R16G16_UNORM = 35,
+  DXGI_FORMAT_R16G16_UINT = 36,
+  DXGI_FORMAT_R16G16_SNORM = 37,
+  DXGI_FORMAT_R16G16_SINT = 38,
+  DXGI_FORMAT_R32_TYPELESS = 39,
+  DXGI_FORMAT_D32_FLOAT = 40,
+  DXGI_FORMAT_R32_FLOAT = 41,
+  DXGI_FORMAT_R32_UINT = 42,
+  DXGI_FORMAT_R32_SINT = 43,
+  DXGI_FORMAT_R24G8_TYPELESS = 44,
+  DXGI_FORMAT_D24_UNORM_S8_UINT = 45,
+  DXGI_FORMAT_R24_UNORM_X8_TYPELESS = 46,
+  DXGI_FORMAT_X24_TYPELESS_G8_UINT = 47,
+  DXGI_FORMAT_R8G8_TYPELESS = 48,
+  DXGI_FORMAT_R8G8_UNORM = 49,
+  DXGI_FORMAT_R8G8_UINT = 50,
+  DXGI_FORMAT_R8G8_SNORM = 51,
+  DXGI_FORMAT_R8G8_SINT = 52,
+  DXGI_FORMAT_R16_TYPELESS = 53,
+  DXGI_FORMAT_R16_FLOAT = 54,
+  DXGI_FORMAT_D16_UNORM = 55,
+  DXGI_FORMAT_R16_UNORM = 56,
+  DXGI_FORMAT_R16_UINT = 57,
+  DXGI_FORMAT_R16_SNORM = 58,
+  DXGI_FORMAT_R16_SINT = 59,
+  DXGI_FORMAT_R8_TYPELESS = 60,
+  DXGI_FORMAT_R8_UNORM = 61,
+  DXGI_FORMAT_R8_UINT = 62,
+  DXGI_FORMAT_R8_SNORM = 63,
+  DXGI_FORMAT_R8_SINT = 64,
+  DXGI_FORMAT_A8_UNORM = 65,
+  DXGI_FORMAT_R1_UNORM = 66,
+  DXGI_FORMAT_R9G9B9E5_SHAREDEXP = 67,
+  DXGI_FORMAT_R8G8_B8G8_UNORM = 68,
+  DXGI_FORMAT_G8R8_G8B8_UNORM = 69,
+  DXGI_FORMAT_BC1_TYPELESS = 70,
+  DXGI_FORMAT_BC1_UNORM = 71,
+  DXGI_FORMAT_BC1_UNORM_SRGB = 72,
+  DXGI_FORMAT_BC2_TYPELESS = 73,
+  DXGI_FORMAT_BC2_UNORM = 74,
+  DXGI_FORMAT_BC2_UNORM_SRGB = 75,
+  DXGI_FORMAT_BC3_TYPELESS = 76,
+  DXGI_FORMAT_BC3_UNORM = 77,
+  DXGI_FORMAT_BC3_UNORM_SRGB = 78,
+  DXGI_FORMAT_BC4_TYPELESS = 79,
+  DXGI_FORMAT_BC4_UNORM = 80,
+  DXGI_FORMAT_BC4_SNORM = 81,
+  DXGI_FORMAT_BC5_TYPELESS = 82,
+  DXGI_FORMAT_BC5_UNORM = 83,
+  DXGI_FORMAT_BC5_SNORM = 84,
+  DXGI_FORMAT_B5G6R5_UNORM = 85,
+  DXGI_FORMAT_B5G5R5A1_UNORM = 86,
+  DXGI_FORMAT_B8G8R8A8_UNORM = 87,
+  DXGI_FORMAT_B8G8R8X8_UNORM = 88,
+  DXGI_FORMAT_R10G10B10_XR_BIAS_A2_UNORM = 89,
+  DXGI_FORMAT_B8G8R8A8_TYPELESS = 90,
+  DXGI_FORMAT_B8G8R8A8_UNORM_SRGB = 91,
+  DXGI_FORMAT_B8G8R8X8_TYPELESS = 92,
+  DXGI_FORMAT_B8G8R8X8_UNORM_SRGB = 93,
+  DXGI_FORMAT_BC6H_TYPELESS = 94,
+  DXGI_FORMAT_BC6H_UF16 = 95,
+  DXGI_FORMAT_BC6H_SF16 = 96,
+  DXGI_FORMAT_BC7_TYPELESS = 97,
+  DXGI_FORMAT_BC7_UNORM = 98,
+  DXGI_FORMAT_BC7_UNORM_SRGB = 99,
+  DXGI_FORMAT_AYUV = 100,
+  DXGI_FORMAT_Y410 = 101,
+  DXGI_FORMAT_Y416 = 102,
+  DXGI_FORMAT_NV12 = 103,
+  DXGI_FORMAT_P010 = 104,
+  DXGI_FORMAT_P016 = 105,
+  DXGI_FORMAT_420_OPAQUE = 106,
+  DXGI_FORMAT_YUY2 = 107,
+  DXGI_FORMAT_Y210 = 108,
+  DXGI_FORMAT_Y216 = 109,
+  DXGI_FORMAT_NV11 = 110,
+  DXGI_FORMAT_AI44 = 111,
+  DXGI_FORMAT_IA44 = 112,
+  DXGI_FORMAT_P8 = 113,
+  DXGI_FORMAT_A8P8 = 114,
+  DXGI_FORMAT_B4G4R4A4_UNORM = 115,
+  DXGI_FORMAT_P208 = 130,
+  DXGI_FORMAT_V208 = 131,
+  DXGI_FORMAT_V408 = 132,
+  DXGI_FORMAT_SAMPLER_FEEDBACK_MIN_MIP_OPAQUE,
+  DXGI_FORMAT_SAMPLER_FEEDBACK_MIP_REGION_USED_OPAQUE,
+ 
+} DXGI_FORMAT ;
+#define  DXGI_FORMAT_FORCE_UINT 0xffffffff
+
+typedef enum DXGI_MODE_ROTATION { 
+  DXGI_MODE_ROTATION_UNSPECIFIED  = 0,
+  DXGI_MODE_ROTATION_IDENTITY     = 1,
+  DXGI_MODE_ROTATION_ROTATE90     = 2,
+  DXGI_MODE_ROTATION_ROTATE180    = 3,
+  DXGI_MODE_ROTATION_ROTATE270    = 4
+} DXGI_MODE_ROTATION;
+
+typedef struct DXGI_OUTPUT_DESC
+    {
+    WCHAR DeviceName[ 32 ];
+    RECT DesktopCoordinates;
+    BOOL AttachedToDesktop;
+    DXGI_MODE_ROTATION Rotation;
+    HMONITOR Monitor;
+    } 	DXGI_OUTPUT_DESC;
+
+typedef struct DXGI_RATIONAL
+{
+    UINT Numerator;
+    UINT Denominator;
+} DXGI_RATIONAL;
+
+typedef enum DXGI_MODE_SCANLINE_ORDER { 
+  DXGI_MODE_SCANLINE_ORDER_UNSPECIFIED        = 0,
+  DXGI_MODE_SCANLINE_ORDER_PROGRESSIVE        = 1,
+  DXGI_MODE_SCANLINE_ORDER_UPPER_FIELD_FIRST  = 2,
+  DXGI_MODE_SCANLINE_ORDER_LOWER_FIELD_FIRST  = 3
+} DXGI_MODE_SCANLINE_ORDER;
+
+typedef enum DXGI_MODE_SCALING { 
+  DXGI_MODE_SCALING_UNSPECIFIED  = 0,
+  DXGI_MODE_SCALING_CENTERED     = 1,
+  DXGI_MODE_SCALING_STRETCHED    = 2
+} DXGI_MODE_SCALING;
+typedef struct DXGI_MODE_DESC
+{
+    UINT Width;
+    UINT Height;
+    DXGI_RATIONAL RefreshRate;
+    DXGI_FORMAT Format;
+    DXGI_MODE_SCANLINE_ORDER ScanlineOrdering;
+    DXGI_MODE_SCALING Scaling;
+} DXGI_MODE_DESC;
+
+
+typedef struct DXGI_GAMMA_CONTROL_CAPABILITIES
+{
+    BOOL ScaleAndOffsetSupported;
+    float MaxConvertedValue;
+    float MinConvertedValue;
+    UINT NumGammaControlPoints;
+    float ControlPointPositions[1025];
+} DXGI_GAMMA_CONTROL_CAPABILITIES;
+
+
+typedef struct DXGI_RGB {
+    float Red;
+    float Green;
+    float Blue;
+} DXGI_RGB;
+typedef struct DXGI_GAMMA_CONTROL
+{
+    DXGI_RGB Scale;
+    DXGI_RGB Offset;
+    DXGI_RGB GammaCurve[ 1025 ];
+} DXGI_GAMMA_CONTROL;
+
+typedef struct DXGI_FRAME_STATISTICS
+    {
+    UINT PresentCount;
+    UINT PresentRefreshCount;
+    UINT SyncRefreshCount;
+    LARGE_INTEGER SyncQPCTime;
+    LARGE_INTEGER SyncGPUTime;
+    } 	DXGI_FRAME_STATISTICS;
+
+typedef struct LUID {
+    DWORD LowPart;
+    LONG HighPart;
+} LUID;
+typedef struct DXGI_ADAPTER_DESC
+    {
+    WCHAR Description[ 128 ];
+    UINT VendorId;
+    UINT DeviceId;
+    UINT SubSysId;
+    UINT Revision;
+    size_t DedicatedVideoMemory;
+    size_t DedicatedSystemMemory;
+    size_t SharedSystemMemory;
+    LUID AdapterLuid;
+    } 	DXGI_ADAPTER_DESC;
+
+typedef struct DXGI_SAMPLE_DESC {
+  UINT Count;
+  UINT Quality;
+} DXGI_SAMPLE_DESC;
+typedef enum DXGI_SWAP_EFFECT {
+  DXGI_SWAP_EFFECT_DISCARD = 0,
+  DXGI_SWAP_EFFECT_SEQUENTIAL = 1,
+  DXGI_SWAP_EFFECT_FLIP_SEQUENTIAL = 3,
+  DXGI_SWAP_EFFECT_FLIP_DISCARD = 4
+} DXGI_SWAP_EFFECT;
+#define DXGI_CPU_ACCESS_NONE    ( 0 )
+#define DXGI_CPU_ACCESS_DYNAMIC    ( 1 )
+#define DXGI_CPU_ACCESS_READ_WRITE    ( 2 )
+#define DXGI_CPU_ACCESS_SCRATCH    ( 3 )
+#define DXGI_CPU_ACCESS_FIELD        15
+#define DXGI_USAGE_SHADER_INPUT             ( 1L << (0 + 4) )
+#define DXGI_USAGE_RENDER_TARGET_OUTPUT     ( 1L << (1 + 4) )
+#define DXGI_USAGE_BACK_BUFFER              ( 1L << (2 + 4) )
+#define DXGI_USAGE_SHARED                   ( 1L << (3 + 4) )
+#define DXGI_USAGE_READ_ONLY                ( 1L << (4 + 4) )
+#define DXGI_USAGE_DISCARD_ON_PRESENT       ( 1L << (5 + 4) )
+#define DXGI_USAGE_UNORDERED_ACCESS         ( 1L << (6 + 4) )
+typedef UINT DXGI_USAGE;
+typedef struct DXGI_SWAP_CHAIN_DESC {
+  DXGI_MODE_DESC   BufferDesc;
+  DXGI_SAMPLE_DESC SampleDesc;
+  DXGI_USAGE       BufferUsage;
+  UINT             BufferCount;
+  HWND             OutputWindow;
+  BOOL             Windowed;
+  DXGI_SWAP_EFFECT SwapEffect;
+  UINT             Flags;
+} DXGI_SWAP_CHAIN_DESC;
+
+typedef struct IUnknownVtbl {
+    HRESULT (*QueryInterface)(void *This, const GUID *riid, void **ppvObject);
+    ULONG (*AddRef)(void *This);
+    ULONG (*Release)(void *This);
+} IUnknownVtbl;
+typedef struct IDXGIObjectVtbl {
+    IUnknownVtbl parent; // Inherits from IUnknown
+
+    HRESULT (*SetPrivateData)(void *This, const GUID *Name, UINT DataSize, const void *pData);
+    HRESULT (*SetPrivateDataInterface)(void *This, const GUID *Name, const void *pUnknown);
+    HRESULT (*GetPrivateData)(void *This, const GUID *Name, UINT *pDataSize, void *pData);
+    HRESULT (*GetParent)(void *This, const GUID *riid, void **ppParent);
+} IDXGIObjectVtbl;
+
+typedef struct IDXGIObject {
+    const IDXGIObjectVtbl *lpVtbl;
+} IDXGIObject;
+
+
+typedef struct IDXGIOutputVtbl {
+    IUnknownVtbl parent; // Inherits from IUnknown
+
+    HRESULT (*SetPrivateData)(void *This, const GUID *Name, UINT DataSize, const void *pData);
+    HRESULT (*SetPrivateDataInterface)(void *This, const GUID *Name, const void *pUnknown);
+    HRESULT (*GetPrivateData)(void *This, const GUID *Name, UINT *pDataSize, void *pData);
+    HRESULT (*GetParent)(void *This, const GUID *riid, void **ppParent);
+
+    HRESULT (*GetDesc)(void *This, DXGI_OUTPUT_DESC *pDesc);
+    HRESULT (*GetDisplayModeList)(void *This, DXGI_FORMAT EnumFormat, UINT Flags, UINT *pNumModes, DXGI_MODE_DESC *pDesc);
+    HRESULT (*FindClosestMatchingMode)(void *This, const DXGI_MODE_DESC *pModeToMatch, DXGI_MODE_DESC *pClosestMatch, void *pConcernedDevice);
+    HRESULT (*WaitForVBlank)(void *This);
+    HRESULT (*TakeOwnership)(void *This, void *pDevice, BOOL Exclusive);
+    void (*ReleaseOwnership)(void *This);
+    HRESULT (*GetGammaControlCapabilities)(void *This, DXGI_GAMMA_CONTROL_CAPABILITIES *pGammaCaps);
+    HRESULT (*SetGammaControl)(void *This, const DXGI_GAMMA_CONTROL *pArray);
+    HRESULT (*GetGammaControl)(void *This, DXGI_GAMMA_CONTROL *pArray);
+    HRESULT (*SetDisplaySurface)(void *This, void *pScanoutSurface);
+    HRESULT (*GetDisplaySurfaceData)(void *This, void *pDestination);
+    HRESULT (*GetFrameStatistics)(void *This, DXGI_FRAME_STATISTICS *pStats);
+} IDXGIOutputVtbl;
+
+typedef struct IDXGIOutput {
+    const IDXGIOutputVtbl *lpVtbl;
+} IDXGIOutput;
+
+typedef struct IDXGIAdapterVtbl {
+    IUnknownVtbl parent; // Inherits from IUnknown
+
+    HRESULT (*SetPrivateData)(void *This, const GUID *Name, UINT DataSize, const void *pData);
+    HRESULT (*SetPrivateDataInterface)(void *This, const GUID *Name, const void *pUnknown);
+    HRESULT (*GetPrivateData)(void *This, const GUID *Name, UINT *pDataSize, void *pData);
+    HRESULT (*GetParent)(void *This, const GUID *riid, void **ppParent);
+
+    HRESULT (*EnumOutputs)(void *This, UINT Output, IDXGIOutput **ppOutput);
+    HRESULT (*GetDesc)(void *This, DXGI_ADAPTER_DESC *pDesc);
+    HRESULT (*CheckInterfaceSupport)(void *This, const GUID *InterfaceName, LARGE_INTEGER *pUMDVersion);
+} IDXGIAdapterVtbl;
+
+typedef struct IDXGIAdapter {
+    const IDXGIAdapterVtbl *lpVtbl;
+} IDXGIAdapter;
+
+struct IDXGISwapChain;
+typedef struct IDXGIFactoryVtbl {
+    IUnknownVtbl parent; // Inherits from IUnknown
+
+    HRESULT (*SetPrivateData)(void *This, const GUID *Name, UINT DataSize, const void *pData);
+    HRESULT (*SetPrivateDataInterface)(void *This, const GUID *Name, const void *pUnknown);
+    HRESULT (*GetPrivateData)(void *This, const GUID *Name, UINT *pDataSize, void *pData);
+    HRESULT (*GetParent)(void *This, const GUID *riid, void **ppParent);
+
+    HRESULT (*EnumAdapters)(void *This, UINT Adapter, IDXGIAdapter **ppAdapter);
+    HRESULT (*MakeWindowAssociation)(void *This, HWND WindowHandle, UINT Flags);
+    HRESULT (*GetWindowAssociation)(void *This, HWND *pWindowHandle);
+    HRESULT (*CreateSwapChain)(void *This, void *pDevice, const DXGI_SWAP_CHAIN_DESC *pDesc, struct IDXGISwapChain **ppSwapChain);
+    HRESULT (*CreateSoftwareAdapter)(void *This, HMODULE Module, IDXGIAdapter **ppAdapter);
+} IDXGIFactoryVtbl;
+
+typedef struct IDXGIFactory {
+    const IDXGIFactoryVtbl *lpVtbl;
+} IDXGIFactory;
+
+typedef GUID IID;
+extern const IID IID_IDXGIFactory;
+#define DEFINE_GUID(name, l, w1, w2, b1, b2, b3, b4, b5, b6, b7, b8) \
+    const GUID name = { l, w1, w2, { b1, b2, b3, b4, b5, b6, b7, b8 } }
+DEFINE_GUID(IID_IDXGIFactory,0x7b7166ec,0x21c7,0x44ae,0xb2,0x1a,0xc9,0xae,0x32,0x1a,0xe3,0x69);
+unit_local const HRESULT DXGI_ERROR_NOT_FOUND = 0x887A0002;
+
+
+WINDOWS_IMPORT HRESULT WINAPI CreateDXGIFactory(const GUID *riid, void **ppFactory);
+
+
+
+
+
+
+
+#define WSABASEERR 10000
+#define WSAEINTR                         10004L
+#define WSAEBADF                         10009L
+#define WSAEACCES                        10013L
+#define WSAEFAULT                        10014L
+#define WSAEINVAL                        10022L
+#define WSAEMFILE                        10024L
+#define WSAEWOULDBLOCK                   10035L
+#define WSAEINPROGRESS                   10036L
+#define WSAEALREADY                      10037L
+#define WSAENOTSOCK                      10038L
+#define WSAEDESTADDRREQ                  10039L
+#define WSAEMSGSIZE                      10040L
+#define WSAEPROTOTYPE                    10041L
+#define WSAENOPROTOOPT                   10042L
+#define WSAEPROTONOSUPPORT               10043L
+#define WSAESOCKTNOSUPPORT               10044L
+#define WSAEOPNOTSUPP                    10045L
+#define WSAEPFNOSUPPORT                  10046L
+#define WSAEAFNOSUPPORT                  10047L
+#define WSAEADDRINUSE                    10048L
+#define WSAEADDRNOTAVAIL                 10049L
+#define WSAENETDOWN                      10050L
+#define WSAENETUNREACH                   10051L
+#define WSAENETRESET                     10052L
+#define WSAECONNABORTED                  10053L
+#define WSAECONNRESET                    10054L
+#define WSAENOBUFS                       10055L
+#define WSAEISCONN                       10056L
+#define WSAENOTCONN                      10057L
+#define WSAESHUTDOWN                     10058L
+#define WSAETOOMANYREFS                  10059L
+#define WSAETIMEDOUT                     10060L
+#define WSAECONNREFUSED                  10061L
+#define WSAELOOP                         10062L
+#define WSAENAMETOOLONG                  10063L
+#define WSAEHOSTDOWN                     10064L
+#define WSAEHOSTUNREACH                  10065L
+#define WSAENOTEMPTY                     10066L
+#define WSAEPROCLIM                      10067L
+#define WSAEUSERS                        10068L
+#define WSAEDQUOT                        10069L
+#define WSAESTALE                        10070L
+#define WSAEREMOTE                       10071L
+#define WSASYSNOTREADY                   10091L
+#define WSAVERNOTSUPPORTED               10092L
+#define WSANOTINITIALISED                10093L
+#define WSAEDISCON                       10101L
+#define WSAENOMORE                       10102L
+#define WSAECANCELLED                    10103L
+#define WSAEINVALIDPROCTABLE             10104L
+#define WSAEINVALIDPROVIDER              10105L
+#define WSAEPROVIDERFAILEDINIT           10106L
+#define WSASYSCALLFAILURE                10107L
+#define WSASERVICE_NOT_FOUND             10108L
+#define WSATYPE_NOT_FOUND                10109L
+#define WSA_E_NO_MORE                    10110L
+#define WSA_E_CANCELLED                  10111L
+#define WSAEREFUSED                      10112L
+#define WSAHOST_NOT_FOUND                11001L
+#define WSATRY_AGAIN                     11002L
+#define WSANO_RECOVERY                   11003L
+#define WSANO_DATA                       11004L
+#define WSA_QOS_RECEIVERS                11005L
+#define WSA_QOS_SENDERS                  11006L
+#define WSA_QOS_NO_SENDERS               11007L
+#define WSA_QOS_NO_RECEIVERS             11008L
+#define WSA_QOS_REQUEST_CONFIRMED        11009L
+#define WSA_QOS_ADMISSION_FAILURE        11010L
+#define WSA_QOS_POLICY_FAILURE           11011L
+#define WSA_QOS_BAD_STYLE                11012L
+#define WSA_QOS_BAD_OBJECT               11013L
+#define WSA_QOS_TRAFFIC_CTRL_ERROR       11014L
+#define WSA_QOS_GENERIC_ERROR            11015L
+#define WSA_QOS_ESERVICETYPE             11016L
+#define WSA_QOS_EFLOWSPEC                11017L
+#define WSA_QOS_EPROVSPECBUF             11018L
+#define WSA_QOS_EFILTERSTYLE             11019L
+#define WSA_QOS_EFILTERTYPE              11020L
+#define WSA_QOS_EFILTERCOUNT             11021L
+#define WSA_QOS_EOBJLENGTH               11022L
+#define WSA_QOS_EFLOWCOUNT               11023L
+#define WSA_QOS_EUNKOWNPSOBJ             11024L
+#define WSA_QOS_EPOLICYOBJ               11025L
+#define WSA_QOS_EFLOWDESC                11026L
+#define WSA_QOS_EPSFLOWSPEC              11027L
+#define WSA_QOS_EPSFILTERSPEC            11028L
+#define WSA_QOS_ESDMODEOBJ               11029L
+#define WSA_QOS_ESHAPERATEOBJ            11030L
+#define WSA_QOS_RESERVED_PETYPE          11031L
+#define WSA_SECURE_HOST_NOT_FOUND        11032L
+#define WSA_IPSEC_NAME_POLICY_ERROR      11033L
+
+#define WSADESCRIPTION_LEN      256
+#define WSASYS_STATUS_LEN       128
+
+typedef UINT_PTR        SOCKET;
+
+typedef struct WSAData {
+        WORD                    wVersion;
+        WORD                    wHighVersion;
+#ifdef _WIN64
+        unsigned short          iMaxSockets;
+        unsigned short          iMaxUdpDg;
+        char *              lpVendorInfo;
+        char                    szDescription[WSADESCRIPTION_LEN+1];
+        char                    szSystemStatus[WSASYS_STATUS_LEN+1];
+#else
+        char                    szDescription[WSADESCRIPTION_LEN+1];
+        char                    szSystemStatus[WSASYS_STATUS_LEN+1];
+        unsigned short          iMaxSockets;
+        unsigned short          iMaxUdpDg;
+        char *              lpVendorInfo;
+#endif
+} WSADATA;
+
+typedef WSADATA *LPWSADATA;
+
+WINDOWS_IMPORT int WINAPI WSAStartup( WORD      wVersionRequired, LPWSADATA lpWSAData);
+
+/*
+ * Address families.
+ */
+#define AF_UNSPEC       0               /* unspecified */
+#define AF_UNIX         1               /* local to host (pipes, portals) */
+#define AF_INET         2               /* internetwork: UDP, TCP, etc. */
+#define AF_IMPLINK      3               /* arpanet imp addresses */
+#define AF_PUP          4               /* pup protocols: e.g. BSP */
+#define AF_CHAOS        5               /* mit CHAOS protocols */
+#define AF_IPX          6               /* IPX and SPX */
+#define AF_NS           6               /* XEROX NS protocols */
+#define AF_ISO          7               /* ISO protocols */
+#define AF_OSI          AF_ISO          /* OSI is ISO */
+#define AF_ECMA         8               /* european computer manufacturers */
+#define AF_DATAKIT      9               /* datakit protocols */
+#define AF_CCITT        10              /* CCITT protocols, X.25 etc */
+#define AF_SNA          11              /* IBM SNA */
+#define AF_DECnet       12              /* DECnet */
+#define AF_DLI          13              /* Direct data link interface */
+#define AF_LAT          14              /* LAT */
+#define AF_HYLINK       15              /* NSC Hyperchannel */
+#define AF_APPLETALK    16              /* AppleTalk */
+#define AF_NETBIOS      17              /* NetBios-style addresses */
+#define AF_VOICEVIEW    18              /* VoiceView */
+#define AF_FIREFOX      19              /* FireFox */
+#define AF_UNKNOWN1     20              /* Somebody is using this! */
+#define AF_BAN          21              /* Banyan */
+
+#define AF_MAX          22
+
+/*
+ * Types
+ */
+#define SOCK_STREAM     1               /* stream socket */
+#define SOCK_DGRAM      2               /* datagram socket */
+#define SOCK_RAW        3               /* raw-protocol interface */
+#define SOCK_RDM        4               /* reliably-delivered message */
+#define SOCK_SEQPACKET  5               /* sequenced packet stream */
+
+
+#define IPPROTO_IP              0               /* dummy for IP */
+#define IPPROTO_ICMP            1               /* control message protocol */
+#define IPPROTO_IGMP            2               /* group management protocol */
+#define IPPROTO_GGP             3               /* gateway^2 (deprecated) */
+#define IPPROTO_TCP             6               /* tcp */
+#define IPPROTO_PUP             12              /* pup */
+#define IPPROTO_UDP             17              /* user datagram protocol */
+#define IPPROTO_IDP             22              /* xns idp */
+#define IPPROTO_ND              77              /* UNOFFICIAL net disk proto */
+
+#define IPPROTO_RAW             255             /* raw IP packet */
+#define IPPROTO_MAX             256
+
+
+
+
+
+           
+typedef struct in_addr {
+        union {
+                struct { UCHAR s_b1,s_b2,s_b3,s_b4; } S_un_b;
+                struct { USHORT s_w1,s_w2; } S_un_w;
+                ULONG S_addr;
+        } S_un;
+#define s_addr  S_un.S_addr /* can be used for most tcp & ip code */
+#define s_host  S_un.S_un_b.s_b2    // host on imp
+#define s_net   S_un.S_un_b.s_b1    // network
+#define s_imp   S_un.S_un_w.s_w2    // imp
+#define s_impno S_un.S_un_b.s_b4    // imp #
+#define s_lh    S_un.S_un_b.s_b3    // logical host
+} IN_ADDR, *PIN_ADDR,  *LPIN_ADDR;
+
+    
+#define INVALID_SOCKET  (SOCKET)(~0)
+#define SOCKET_ERROR            (-1)
+    
+  typedef struct sockaddr_in SOCKADDR_IN;
+typedef struct sockaddr_in *PSOCKADDR_IN;
+typedef struct sockaddr_in *LPSOCKADDR_IN;
+
+typedef USHORT ADDRESS_FAMILY;
+
+typedef struct sockaddr_in {
+
+#if(_WIN32_WINNT < 0x0600)
+    short   sin_family;
+#else //(_WIN32_WINNT < 0x0600)
+    ADDRESS_FAMILY sin_family;
+#endif //(_WIN32_WINNT < 0x0600)
+
+    USHORT sin_port;
+    IN_ADDR sin_addr;
+    CHAR sin_zero[8];
+} SOCKADDR_IN, *PSOCKADDR_IN;
+
+struct sockaddr {
+        USHORT sa_family;              /* address family */
+        char    sa_data[14];            /* up to 14 bytes of direct address */
+};
+
+
+WINDOWS_IMPORT
+SOCKET
+WINAPI
+socket(
+    int af,
+    int type,
+    int protocol
+    );
+    
+WINDOWS_IMPORT
+USHORT
+WINAPI
+htons(
+    USHORT hostshort
+    );
+WINDOWS_IMPORT
+USHORT
+WINAPI
+htonl(
+   USHORT hostlong
+    );
+        
+WINDOWS_IMPORT
+int
+WINAPI
+bind(
+     SOCKET s,
+    const struct sockaddr * name,
+     int namelen
+    );
+    
+WINDOWS_IMPORT
+int
+WINAPI
+WSAGetLastError(
+    void
+    );    
+
+WINDOWS_IMPORT
+int
+WINAPI
+listen(
+     SOCKET s,
+     int backlog
+    );
+
+WINDOWS_IMPORT
+SOCKET
+WINAPI
+accept(
+    SOCKET s,
+    struct sockaddr * addr,
+    int * addrlen
+    );
+    
+
+WINDOWS_IMPORT
+unsigned long
+WINAPI
+inet_addr(
+     const char * cp
+    );
+    
+#define INADDR_NONE             0xffffffff
+
+
+WINDOWS_IMPORT
+int
+WINAPI
+connect(
+    SOCKET s,
+    const struct sockaddr * name,
+    int namelen
+    );
+
+
+WINDOWS_IMPORT
+int
+WINAPI
+send(
+    SOCKET s,
+    const char * buf,
+    int len,
+    int flags
+    );
+    
+WINDOWS_IMPORT
+int
+WINAPI
+recv(
+    SOCKET s,
+    char * buf,
+    int len,
+    int flags
+    );
+
+
+
+WINDOWS_IMPORT
+int
+WINAPI
+closesocket(
+    SOCKET s
+    );
+
+WINDOWS_IMPORT
+int
+WINAPI
+ioctlsocket(
+     SOCKET s,
+     long cmd,
+    unsigned long * argp
+    );
+    
+
+#define IOCPARM_MASK    0x7f            /* parameters must be < 128 bytes */
+#define IOC_VOID        0x20000000      /* no parameters */
+#define IOC_OUT         0x40000000      /* copy out parameters */
+#define IOC_IN          0x80000000      /* copy in parameters */
+#define IOC_INOUT       (IOC_IN|IOC_OUT)
+#define _IO(x,y)        (IOC_VOID|((x)<<8)|(y))
+
+#define _IOR(x,y,t)     (IOC_OUT|(((long)sizeof(t)&IOCPARM_MASK)<<16)|((x)<<8)|(y))
+
+#define _IOW(x,y,t)     (IOC_IN|(((long)sizeof(t)&IOCPARM_MASK)<<16)|((x)<<8)|(y))
+#define FIONREAD    _IOR('f', 127, unsigned long) /* get # bytes to read */
+#define FIONBIO     _IOW('f', 126, unsigned long) /* set/clear non-blocking i/o */
+#define FIOASYNC    _IOW('f', 125, unsigned long) /* set/clear async i/o */
+
+#define NO_ERROR 0L                                                 // dderror
+
+int setsockopt (
+                           SOCKET s,
+                           int level,
+                           int optname,
+                           const char * optval,
+                           int optlen);
+                           
+#define SOL_SOCKET      0xffff          /* options for socket level */
+
+#define SO_SNDBUF       0x1001          /* send buffer size */
+#define SO_RCVBUF       0x1002          /* receive buffer size */
+#define SO_SNDLOWAT     0x1003          /* send low-water mark */
+#define SO_RCVLOWAT     0x1004          /* receive low-water mark */
+#define SO_SNDTIMEO     0x1005          /* send timeout */
+#define SO_RCVTIMEO     0x1006          /* receive timeout */
+#define SO_ERROR        0x1007          /* get error status and clear */
+#define SO_TYPE         0x1008          /* get socket type */
+
+#define FD_SETSIZE      64
+
+#define FD_CLR(fd, set) do { \
+    u_int __i; \
+    for (__i = 0; __i < ((fd_set *)(set))->fd_count ; __i++) { \
+        if (((fd_set *)(set))->fd_array[__i] == fd) { \
+            while (__i < ((fd_set *)(set))->fd_count-1) { \
+                ((fd_set *)(set))->fd_array[__i] = \
+                    ((fd_set *)(set))->fd_array[__i+1]; \
+                __i++; \
+            } \
+            ((fd_set *)(set))->fd_count--; \
+            break; \
+        } \
+    } \
+} while(0)
+
+#define FD_SET(fd, set) do { \
+    if (((fd_set *)(set))->fd_count < FD_SETSIZE) \
+        ((fd_set *)(set))->fd_array[((fd_set *)(set))->fd_count++]=(fd);\
+} while(0)
+
+#define FD_ZERO(set) (((fd_set *)(set))->fd_count=0)
+
+#define FD_ISSET(fd, set) __WSAFDIsSet((SOCKET)(fd), (fd_set *)(set))
+
+/*
+ * Structure used in select() call, taken from the BSD file sys/time.h.
+ */
+struct timeval {
+        long    tv_sec;         /* seconds */
+        long    tv_usec;        /* and microseconds */
+};
+
+/*
+ * Operations on timevals.
+ *
+ * NB: timercmp does not work for >= or <=.
+ */
+#define timerisset(tvp)         ((tvp)->tv_sec || (tvp)->tv_usec)
+#define timercmp(tvp, uvp, cmp) \
+        ((tvp)->tv_sec cmp (uvp)->tv_sec || \
+         (tvp)->tv_sec == (uvp)->tv_sec && (tvp)->tv_usec cmp (uvp)->tv_usec)
+#define timerclear(tvp)         (tvp)->tv_sec = (tvp)->tv_usec = 0
+
+typedef struct fd_set {
+        unsigned int   fd_count;               /* how many are SET? */
+        SOCKET  fd_array[FD_SETSIZE];   /* an array of SOCKETs */
+} fd_set;
+
+WINDOWS_IMPORT
+int
+WINAPI
+select(
+    int nfds,
+    fd_set * readfds,
+    fd_set * writefds,
+    fd_set * exceptfds,
+    const struct timeval * timeout
+    );
+    
+#endif // _WINDOWS_LOADER_H
+
+typedef struct _FILETIME {
+  DWORD dwLowDateTime;
+  DWORD dwHighDateTime;
+} FILETIME, *PFILETIME, *LPFILETIME;
+
+WINDOWS_IMPORT BOOL WINAPI FindClose(
+  HANDLE hFindFile
+);
+
+typedef struct _WIN32_FIND_DATAW {
+  DWORD    dwFileAttributes;
+  FILETIME ftCreationTime;
+  FILETIME ftLastAccessTime;
+  FILETIME ftLastWriteTime;
+  DWORD    nFileSizeHigh;
+  DWORD    nFileSizeLow;
+  DWORD    dwReserved0;
+  DWORD    dwReserved1;
+  WCHAR    cFileName[260];
+  WCHAR    cAlternateFileName[14];
+  DWORD    dwFileType; // Obsolete. Do not use.
+  DWORD    dwCreatorType; // Obsolete. Do not use
+  WORD     wFinderFlags; // Obsolete. Do not use
+} WIN32_FIND_DATAW, *PWIN32_FIND_DATAW, *LPWIN32_FIND_DATAW;
+
+WINDOWS_IMPORT HANDLE WINAPI FindFirstFileW(
+  LPCWSTR            lpFileName,
+  LPWIN32_FIND_DATAW lpFindFileData
+);
+
+WINDOWS_IMPORT BOOL WINAPI FindNextFileW(
+  HANDLE             hFindFile,
+  LPWIN32_FIND_DATAW lpFindFileData
+);
+
+WINDOWS_IMPORT DWORD WINAPI GetFileAttributesW(
+  LPCWSTR lpFileName
+);
+
+WINDOWS_IMPORT BOOL WINAPI RemoveDirectoryW(
+  LPCWSTR lpPathName
+);
+
+WINDOWS_IMPORT BOOL WINAPI DeleteFileW(
+  LPCWSTR lpFileName
+);
+
+// end_access
+#define FILE_SHARE_READ                 0x00000001  
+#define FILE_SHARE_WRITE                0x00000002  
+#define FILE_SHARE_DELETE               0x00000004  
+#define FILE_ATTRIBUTE_READONLY             0x00000001  
+#define FILE_ATTRIBUTE_HIDDEN               0x00000002  
+#define FILE_ATTRIBUTE_SYSTEM               0x00000004  
+#define FILE_ATTRIBUTE_DIRECTORY            0x00000010  
+#define FILE_ATTRIBUTE_ARCHIVE              0x00000020  
+#define FILE_ATTRIBUTE_DEVICE               0x00000040  
+#define FILE_ATTRIBUTE_NORMAL               0x00000080  
+#define FILE_ATTRIBUTE_TEMPORARY            0x00000100  
+#define FILE_ATTRIBUTE_SPARSE_FILE          0x00000200  
+#define FILE_ATTRIBUTE_REPARSE_POINT        0x00000400  
+#define FILE_ATTRIBUTE_COMPRESSED           0x00000800  
+#define FILE_ATTRIBUTE_OFFLINE              0x00001000  
+#define FILE_ATTRIBUTE_NOT_CONTENT_INDEXED  0x00002000  
+#define FILE_ATTRIBUTE_ENCRYPTED            0x00004000  
+#define FILE_ATTRIBUTE_INTEGRITY_STREAM     0x00008000  
+#define FILE_ATTRIBUTE_VIRTUAL              0x00010000  
+#define FILE_ATTRIBUTE_NO_SCRUB_DATA        0x00020000  
+#define FILE_ATTRIBUTE_EA                   0x00040000  
+#define FILE_ATTRIBUTE_PINNED               0x00080000  
+#define FILE_ATTRIBUTE_UNPINNED             0x00100000  
+#define FILE_ATTRIBUTE_RECALL_ON_OPEN       0x00040000  
+#define FILE_ATTRIBUTE_RECALL_ON_DATA_ACCESS 0x00400000 
+#define TREE_CONNECT_ATTRIBUTE_PRIVACY      0x00004000  
+#define TREE_CONNECT_ATTRIBUTE_INTEGRITY    0x00008000  
+#define TREE_CONNECT_ATTRIBUTE_GLOBAL       0x00000004  
+#define TREE_CONNECT_ATTRIBUTE_PINNED       0x00000002  
+#define FILE_ATTRIBUTE_STRICTLY_SEQUENTIAL  0x20000000  
+#define FILE_NOTIFY_CHANGE_FILE_NAME    0x00000001   
+#define FILE_NOTIFY_CHANGE_DIR_NAME     0x00000002   
+#define FILE_NOTIFY_CHANGE_ATTRIBUTES   0x00000004   
+#define FILE_NOTIFY_CHANGE_SIZE         0x00000008   
+#define FILE_NOTIFY_CHANGE_LAST_WRITE   0x00000010   
+#define FILE_NOTIFY_CHANGE_LAST_ACCESS  0x00000020   
+#define FILE_NOTIFY_CHANGE_CREATION     0x00000040   
+#define FILE_NOTIFY_CHANGE_SECURITY     0x00000100   
+#define FILE_ACTION_ADDED                   0x00000001   
+#define FILE_ACTION_REMOVED                 0x00000002   
+#define FILE_ACTION_MODIFIED                0x00000003   
+#define FILE_ACTION_RENAMED_OLD_NAME        0x00000004   
+#define FILE_ACTION_RENAMED_NEW_NAME        0x00000005   
+#define MAILSLOT_NO_MESSAGE             ((DWORD)-1) 
+#define MAILSLOT_WAIT_FOREVER           ((DWORD)-1) 
+#define FILE_CASE_SENSITIVE_SEARCH          0x00000001  
+#define FILE_CASE_PRESERVED_NAMES           0x00000002  
+#define FILE_UNICODE_ON_DISK                0x00000004  
+#define FILE_PERSISTENT_ACLS                0x00000008  
+#define FILE_FILE_COMPRESSION               0x00000010  
+#define FILE_VOLUME_QUOTAS                  0x00000020  
+#define FILE_SUPPORTS_SPARSE_FILES          0x00000040  
+#define FILE_SUPPORTS_REPARSE_POINTS        0x00000080  
+#define FILE_SUPPORTS_REMOTE_STORAGE        0x00000100  
+#define FILE_RETURNS_CLEANUP_RESULT_INFO    0x00000200  
+#define FILE_SUPPORTS_POSIX_UNLINK_RENAME   0x00000400  
+
+
+
+
+#define FILE_VOLUME_IS_COMPRESSED           0x00008000  
+#define FILE_SUPPORTS_OBJECT_IDS            0x00010000  
+#define FILE_SUPPORTS_ENCRYPTION            0x00020000  
+#define FILE_NAMED_STREAMS                  0x00040000  
+#define FILE_READ_ONLY_VOLUME               0x00080000  
+#define FILE_SEQUENTIAL_WRITE_ONCE          0x00100000  
+#define FILE_SUPPORTS_TRANSACTIONS          0x00200000  
+#define FILE_SUPPORTS_HARD_LINKS            0x00400000  
+#define FILE_SUPPORTS_EXTENDED_ATTRIBUTES   0x00800000  
+#define FILE_SUPPORTS_OPEN_BY_FILE_ID       0x01000000  
+#define FILE_SUPPORTS_USN_JOURNAL           0x02000000  
+#define FILE_SUPPORTS_INTEGRITY_STREAMS     0x04000000  
+#define FILE_SUPPORTS_BLOCK_REFCOUNTING     0x08000000  
+#define FILE_SUPPORTS_SPARSE_VDL            0x10000000  
+#define FILE_DAX_VOLUME                     0x20000000  
+#define FILE_SUPPORTS_GHOSTING              0x40000000  
+
+
+WINDOWS_IMPORT DWORD WINAPI TlsAlloc(void);
+WINDOWS_IMPORT LPVOID WINAPI TlsGetValue(
+  DWORD dwTlsIndex
+);
+WINDOWS_IMPORT BOOL WINAPI TlsSetValue(
+  DWORD  dwTlsIndex,
+  LPVOID lpTlsValue
+);
+
+WINDOWS_IMPORT DWORD WINAPI GetCurrentThreadId(void);
+
+typedef DWORD (__stdcall *LPTHREAD_START_ROUTINE) (LPVOID lpThreadParameter);  
+
+WINDOWS_IMPORT HANDLE WINAPI CreateThread(LPSECURITY_ATTRIBUTES lpThreadAttributes, size_t dwStackSize, LPTHREAD_START_ROUTINE lpStartAddress, LPVOID lpParameter, DWORD dwCreationFlags, LPDWORD lpThreadId);
+
+WINDOWS_IMPORT DWORD WINAPI ResumeThread(HANDLE hThread);
+
+typedef struct CRITICAL_SECTION {
+  u8 _[40]; // todo(charlie) #portability 32-bit
+} CRITICAL_SECTION, *LPCRITICAL_SECTION, *PCRITICAL_SECTION;
+
+WINDOWS_IMPORT void WINAPI InitializeCriticalSection(
+  LPCRITICAL_SECTION lpCriticalSection
+);
+
+WINDOWS_IMPORT void WINAPI EnterCriticalSection(
+  LPCRITICAL_SECTION lpCriticalSection
+);
+
+WINDOWS_IMPORT void WINAPI LeaveCriticalSection(
+  LPCRITICAL_SECTION lpCriticalSection
+);
+
+WINDOWS_IMPORT void WINAPI DeleteCriticalSection(
+  LPCRITICAL_SECTION lpCriticalSection
+);
+
+WINDOWS_IMPORT BOOL WINAPI CreateDirectoryW(
+  LPCWSTR               lpPathName,
+  LPSECURITY_ATTRIBUTES lpSecurityAttributes
+);
+
+
+#define SO_DEBUG        0x0001          /* turn on debugging info recording */
+#define SO_ACCEPTCONN   0x0002          /* socket has had listen() */
+#define SO_REUSEADDR    0x0004          /* allow local address reuse */
+#define SO_KEEPALIVE    0x0008          /* keep connections alive */
+#define SO_DONTROUTE    0x0010          /* just use interface addresses */
+#define SO_BROADCAST    0x0020          /* permit sending of broadcast msgs */
+#define SO_USELOOPBACK  0x0040          /* bypass hardware when possible */
+#define SO_LINGER       0x0080          /* linger on close if data present */
+#define SO_OOBINLINE    0x0100          /* leave received OOB data in line */
+
+WINDOWS_IMPORT void WINAPI ExitProcess(UINT uExitCode);
+
+WINDOWS_IMPORT void WINAPI ExitThread(DWORD dwExitCode);
+
+WINDOWS_IMPORT BOOL WINAPI GetExitCodeThread(HANDLE hThread, LPDWORD lpExitCode);
+
+/* End include: windows_loader.h */
+    #endif // _WINDOWS_
+
+#endif// OS_FLAGS & OS_FLAG_WINDOWS
+
+#ifndef OSTD_HEADLESS
+
+#if OS_FLAGS & OS_FLAG_LINUX
+    #if COMPILER_FLAGS & COMPILER_FLAG_GNU
+    #endif
+
+    #include <X11/Xlib.h>
+    #include <X11/Xutil.h>
+    #include <X11/extensions/Xrandr.h>
+    #undef NULL
+
+    struct _XDisplay;
+    typedef struct _XDisplay Display;
+    struct _XImage;
+    typedef struct _XImage XImage;
+    struct wl_display;
+    typedef struct wl_display wl_display;
+    struct _XGC;
+    typedef struct _XGC* GC;
+#endif // OS_FLAGS & OS_FLAG_LINUX
+
+
+
+typedef struct _Surface_State {
+    Surface_Handle handle;
+#if OS_FLAGS & OS_FLAG_WINDOWS
+    BITMAPINFO bmp_info;
+    HBITMAP bmp;
+#elif OS_FLAGS & OS_FLAG_LINUX
+    GC       gc;
+    XImage*  ximage;
+    Display *xlib_display;
+#endif
+    void *pixels;
+    bool allocated;
+    bool should_close;
+} _Surface_State;
+unit_local _Surface_State _surface_states[MAX_SURFACES] = {0};
+
+unit_local _Surface_State *_alloc_surface_state(void) {
+    for (u64 i = 0; i < MAX_SURFACES; i += 1) {
+        if (!_surface_states[i].allocated) {
+            memset(&_surface_states[i], 0, sizeof(_Surface_State));
+            _surface_states[i].allocated = true;
+            return &_surface_states[i];
+        }
+    }
+    return 0;
+}
+
+unit_local _Surface_State *_get_surface_state(Surface_Handle h) {
+    for (u64 i = 0; i < MAX_SURFACES; i += 1) {
+        if (_surface_states[i].allocated && _surface_states[i].handle == h) {
+            return &_surface_states[i];
+        }
+    }
+    return 0;
+}
+
+#endif // !OSTD_HEADLESS
+#endif // (OS_FLAGS & OS_FLAG_HAS_WINDOW_SYSTEM)
+
+
+#if (OS_FLAGS & OS_FLAG_UNIX)
+
+/////////////////////////////////////////////////////
+//////
+// :Unix
+//////
+/////////////////////////////////////////////////////
+
+#define _GNU_SOURCE
+
+// todo(charlie) dynamically link & manually  define some stuff to minimize namespace bloat here
+#include <unistd.h>
+#include <sched.h>
+#include <pthread.h>
+#include <sys/mman.h>
+#include <sys/types.h>
+#include <sys/stat.h>
+#include <errno.h>
+//#include <execinfo.h>
+#include <fcntl.h>
+#include <netinet/in.h>
+#include <arpa/inet.h>
+#include <sys/socket.h>
+#include <unistd.h>
+#include <sys/time.h>
+#include <sys/select.h>
+
+#if (OS_FLAGS & OS_FLAG_LINUX)
+
+#include <execinfo.h>
+#include <time.h>
+// For waiting for vblank. Unfortunately.
+#include <GL/gl.h>
+#include <GL/glx.h>
+
+/* Stupid unix headers isnt giving me everything >?!>!>!>?!>? */
+
+#define CPU_ZERO(cpusetp)	 __CPU_ZERO_S (sizeof (cpu_set_t), cpusetp)
+#define CPU_ZERO_S(setsize, cpusetp)	    __CPU_ZERO_S (setsize, cpusetp)
+#define CPU_SETSIZE __CPU_SETSIZE
+#define CPU_SET(cpu, cpusetp)	 __CPU_SET_S (cpu, sizeof (cpu_set_t), cpusetp)
+#define CPU_SET_S(cpu, setsize, cpusetp)   __CPU_SET_S (cpu, setsize, cpusetp)
+
+extern int pthread_setaffinity_np (pthread_t __th, size_t __cpusetsize,
+                                   const cpu_set_t *__cpuset);
+
+
+#endif
+
+#undef NULL
+
+#undef bool
+
+typedef struct _Mapped_Region_Desc {
+    void *start;
+    u32 page_count;
+    u32 taken;
+} _Mapped_Region_Desc;
+
+typedef struct _Mapped_Region_Desc_Buffer {
+    _Mapped_Region_Desc *regions;
+    u32 count;
+} _Mapped_Region_Desc_Buffer;
+
+// Buffers of mapped regions, each the size of a page
+// (with a count of sizeof(_Mapped_Region_Desc) / page_size
+unit_local _Mapped_Region_Desc_Buffer *_unix_mapped_region_buffers = 0;
+unit_local u64 _unix_mapped_region_buffers_allocated_count = 0;
+unit_local u64 _unix_mapped_region_buffers_count = 0;
+
+// todo(charlie): mutex
+unit_local void _unix_add_mapped_region(void *start, u64 page_count) {
+    System_Info info = sys_get_info();
+    if (!_unix_mapped_region_buffers) {
+        _unix_mapped_region_buffers = (_Mapped_Region_Desc_Buffer *)mmap(0, (sys_uint)info.page_size, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+        assert(_unix_mapped_region_buffers); // todo(charlie) revise
+        memset(_unix_mapped_region_buffers, 0, (sys_uint)info.page_size);
+        _unix_mapped_region_buffers_allocated_count = info.page_size/sizeof(_Mapped_Region_Desc_Buffer);
+        _unix_mapped_region_buffers_count = 0;
+    }
+
+    // First, see if this is already mapped (we might be allocating reserved memory)
+    for (u64 i = 0; i < _unix_mapped_region_buffers_count; i += 1) {
+        _Mapped_Region_Desc_Buffer buffer = _unix_mapped_region_buffers[i];
+        assert(buffer.regions);
+        assert(buffer.count);
+
+        for (u32 j = 0; j < buffer.count; j += 1) {
+            _Mapped_Region_Desc *region = buffer.regions + j;
+
+            void *end = (u8*)region->start + region->page_count*info.page_size;
+
+            if ((u64)start >= (u64)region->start && (u64)start < (u64)end) {
+                return;
+            }
+        }
+    }
+
+    for (u64 i = 0; i < _unix_mapped_region_buffers_count; i += 1) {
+        _Mapped_Region_Desc_Buffer buffer = _unix_mapped_region_buffers[i];
+        assert(buffer.regions);
+        assert(buffer.count);
+
+        for (u32 j = 0; j < buffer.count; j += 1) {
+            _Mapped_Region_Desc *region = buffer.regions + j;
+
+            if (!region->taken) {
+                region->taken = true;
+                region->start = start;
+                region->page_count = (sys_uint)page_count;
+                return;
+            }
+        }
+    }
+
+    ///
+    // We did not find free memory for a region descriptor,
+    // so allocate a new one
+
+
+    // Grow buffer of buffers one page at a time
+    if (_unix_mapped_region_buffers_count == _unix_mapped_region_buffers_allocated_count) {
+        u64 old_count = _unix_mapped_region_buffers_allocated_count/info.page_size;
+        u64 new_count = old_count + 1;
+
+        _Mapped_Region_Desc_Buffer *new_buffers = (_Mapped_Region_Desc_Buffer *)mmap(0, (sys_uint)(info.page_size*new_count), PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+        assert(new_buffers); // todo(charlie) revise
+
+        memcpy(new_buffers, _unix_mapped_region_buffers, (sys_uint)(old_count*info.page_size));
+
+        munmap(_unix_mapped_region_buffers, (sys_uint)(info.page_size*old_count));
+        _unix_mapped_region_buffers = new_buffers;
+
+        memset((u8*)_unix_mapped_region_buffers + info.page_size*old_count, 0, (sys_uint)info.page_size);
+
+        _unix_mapped_region_buffers_allocated_count = new_count;
+    }
+
+    assert(_unix_mapped_region_buffers_count < _unix_mapped_region_buffers_allocated_count);
+
+    // Grab & initialize next buffer
+    _Mapped_Region_Desc_Buffer *buffer = &_unix_mapped_region_buffers[_unix_mapped_region_buffers_count++];
+    buffer->count = (sys_uint)(info.page_size/sizeof(_Mapped_Region_Desc));
+    buffer->regions = mmap(0, (sys_uint)info.page_size, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+    memset(buffer->regions, 0, (sys_uint)info.page_size);
+    assert(buffer->regions); // todo(charlie) revise
+
+    buffer->regions[0].taken = true;
+    buffer->regions[0].start = start;
+    buffer->regions[0].page_count = (sys_uint)page_count;
+}
+
+unit_local _Mapped_Region_Desc *_unix_find_mapped_region(void *start) {
+    for (u64 i = 0; i < _unix_mapped_region_buffers_count; i += 1) {
+        _Mapped_Region_Desc_Buffer buffer = _unix_mapped_region_buffers[i];
+        assert(buffer.regions);
+        assert(buffer.count);
+
+        for (u32 j = 0; j < buffer.count; j += 1) {
+            _Mapped_Region_Desc *region = buffer.regions + j;
+            if (!region->taken) continue;
+
+            if (region->start == start) {
+                return region;
+            }
+        }
+    }
+    return 0;
+}
+
+
+System_Info sys_get_info(void) {
+    static System_Info info;
+    static bool has_retrieved_info = false;
+
+    if (!has_retrieved_info) {
+        has_retrieved_info = true;
+        long page_size = sysconf(_SC_PAGESIZE);
+        if (page_size == -1) {
+            info.page_size = 4096;
+        } else {
+            info.page_size = (u64)page_size;
+        }
+        info.logical_cpu_count = (u64)sysconf(_SC_NPROCESSORS_ONLN);
+
+        // On Unix, allocation granularity is typically the same as page size
+        info.granularity = info.page_size;
+    }
+
+    return info;
+}
+
+void *sys_map_pages(u64 action, void *virtual_base, u64 number_of_pages, bool strict_base_address) {
+    System_Info info = sys_get_info();
+    u64 amount_in_bytes = info.page_size * number_of_pages;
+
+    int flags = MAP_ANONYMOUS | MAP_PRIVATE;
+    int prot = 0;
+
+    if (action & SYS_MEMORY_RESERVE) {
+        prot |= PROT_NONE;
+    }
+    if (action & SYS_MEMORY_ALLOCATE) {
+        prot |= PROT_READ | PROT_WRITE;
+    }
+
+    if (virtual_base) {
+        if (strict_base_address) flags |= MAP_FIXED;
+    }
+
+    void *result = mmap(virtual_base, (sys_uint)amount_in_bytes, prot, flags, -1, 0);
+    if (result == MAP_FAILED) {
+        return 0;
+    }
+
+    _unix_add_mapped_region(result, number_of_pages);
+
+    return result;
+}
+
+bool sys_unmap_pages(void *address) {
+    System_Info info = sys_get_info();
+
+    _Mapped_Region_Desc *region = _unix_find_mapped_region(address);
+    if (region) {
+        munmap(region->start, (sys_uint)(info.page_size * region->page_count));
+        region->taken = false;
+    }
+
+    return region != 0;
+}
+
+bool sys_deallocate_pages(void *address, u64 number_of_pages) {
+#if !(COMPILER_FLAGS & COMPILER_FLAG_EMSCRIPTEN)
+    System_Info info = sys_get_info();
+    u64 amount_in_bytes = info.page_size * number_of_pages;
+
+    if (madvise(address, amount_in_bytes, MADV_DONTNEED) != 0) {
+        return false;
+    }
+    return true;
+#else
+    (void)address; (void)number_of_pages;
+    return true;
+#endif
+}
+
+u64 sys_query_mapped_regions(void *start, void *end, Mapped_Memory_Info *result, u64 result_count) {
+    u64 counter = 0;
+    if (!result) result_count = U64_MAX;
+
+    System_Info info = sys_get_info();
+
+    start = (void*)(((u64)start + info.page_size-1) & ~(info.page_size-1));
+
+    for (u64 i = 0; i < _unix_mapped_region_buffers_count; i += 1) {
+        _Mapped_Region_Desc_Buffer buffer = _unix_mapped_region_buffers[i];
+        assert(buffer.regions);
+        assert(buffer.count);
+
+        for (u32 j = 0; j < buffer.count; j += 1) {
+            _Mapped_Region_Desc *region = buffer.regions + j;
+            if (!region->taken) continue;
+
+            if ((u64)region->start >= (u64)start && (u64)region->start < (u64)end) {
+                if (result && result_count > counter) {
+                    Mapped_Memory_Info m = (Mapped_Memory_Info){ 0 };
+                    m.base = region->start;
+                    m.page_count = region->page_count;
+                    result[counter] = m;
+                }
+                counter += 1;
+            }
+        }
+    }
+
+    return counter;
+}
+
+void *sys_find_mappable_range(u64 page_count) {
+    (void)page_count;
+    assertmsg(false, "sys_find_mappable_range unimplemented on linux"); // todo(charlie)
+    return 0;
+}
+
+s64 sys_write(File_Handle f, void *data, u64 size) {
+    s64 written = (s64)write((int)(u64)f, data, (sys_uint)size);
+    if (written < 0) written = 0;
+    return written;
+}
+
+s64 sys_write_string(File_Handle f, string s) {
+    return sys_write(f, s.data, s.count);
+}
+
+s64 sys_read(File_Handle h, void *buffer, u64 buffer_size) {
+    s64 readeded = (s64)read((int)(u64)h, buffer, (sys_uint)buffer_size);
+    return readeded < 0 ? 0 : readeded;
+}
+
+bool sys_make_pipe(File_Handle *read, File_Handle *write) {
+    int pipe_fds[2];
+    if (pipe(pipe_fds) == -1) return false;
+    *read = (File_Handle)(u64)pipe_fds[0];
+    *write = (File_Handle)(u64)pipe_fds[1];
+    return true;
+}
+
+void sys_close(File_Handle h) {
+    close((int)(u64)h);
+}
+
+File_Handle sys_open_file(string path, File_Open_Flags flags) {
+    char cpath[MAX_PATH_LENGTH];
+    u64 path_len = min(path.count, MAX_PATH_LENGTH - 1);
+    memcpy(cpath, path.data, (sys_uint)path_len);
+    cpath[path_len] = 0;
+
+    int unix_flags = 0;
+
+    if (flags & FILE_OPEN_WRITE) {
+        unix_flags |= (flags & FILE_OPEN_READ) ? O_RDWR : O_WRONLY;
+    } else if (flags & FILE_OPEN_READ) {
+        unix_flags |= O_RDONLY;
+    }
+
+    if (flags & FILE_OPEN_CREATE) {
+        unix_flags |= O_CREAT;
+    }
+    if (flags & FILE_OPEN_RESET) {
+        unix_flags |= O_TRUNC;
+    } else {
+        unix_flags |= O_APPEND;
+    }
+
+    int fd = open(cpath, unix_flags, 0644);
+    if (fd < 0) return 0;
+
+    return (File_Handle)(u64)fd;
+}
+
+u64 sys_get_file_size(File_Handle f) {
+    struct stat file_stat;
+    if (fstat((int)(u64)f, &file_stat) == -1) {
+        return 0;
+    }
+    return (u64)file_stat.st_size;
+}
+
+
+
+unit_local int _to_win_sock_err(Socket_Result r) {
+    switch(r) {
+        case SOCKET_OK:                  return 0;
+        case SOCKET_DISCONNECTED:        return ECONNRESET;
+        case SOCKET_NOT_INITIALIZED:     return EINVAL;
+        case SOCKET_NOACCESS:            return EACCES;
+        case SOCKET_IN_PROGRESS:         return EWOULDBLOCK;
+        case SOCKET_NOT_A_SOCKET:        return ENOTSOCK;
+        case SOCKET_INVALID_ADDRESS:     return EFAULT;
+        case SOCKET_TIMED_OUT:           return ETIMEDOUT;
+        case SOCKET_CONNECTION_REFUSED:  return ECONNREFUSED;
+        case SOCKET_CONNECTION_RESET:    return ECONNRESET;
+        case SOCKET_ALREADY_CONNECTED:   return EISCONN;
+        case SOCKET_ADDRESS_IN_USE:      return EADDRINUSE;
+        case SOCKET_NETWORK_UNREACHABLE: return ENETUNREACH;
+        case SOCKET_HOST_UNREACHABLE:    return EHOSTUNREACH;
+        case SOCKET_PROTOCOL_ERROR:      return EPROTONOSUPPORT;
+        default:                         return -1;
+    }
+}
+
+u32 sys_convert_address_string(string address) {
+    assert(address.count < 1024);
+    char addr_str[1024] = {0};
+    memcpy(addr_str, address.data, (sys_uint)address.count);
+    addr_str[address.count] = '\0';
+    return inet_addr(addr_str);
+}
+
+Socket_Result sys_socket_init(Socket *s, Socket_Domain domain, Socket_Type type, Socket_Protocol protocol) {
+    int af = 0;
+    switch(domain) {
+        case SOCKET_DOMAIN_IPV4:
+            af = AF_INET;
+            break;
+        case SOCKET_DOMAIN_BLUETOOTH:
+            return SOCKET_INVALID_ADDRESS;
+        case SOCKET_DOMAIN_APPLETALK:
+            return SOCKET_INVALID_ADDRESS;
+#if OS_FLAGS & OS_FLAG_UNIX
+        case SOCKET_DOMAIN_UNIX:
+            return SOCKET_INVALID_ADDRESS;
+#endif
+        default:
+            return SOCKET_PROTOCOL_ERROR;
+    }
+
+    int sock_type = 0;
+    switch(type) {
+        case SOCKET_TYPE_STREAM:
+            sock_type = SOCK_STREAM;
+            break;
+        case SOCKET_TYPE_DGRAM:
+            sock_type = SOCK_DGRAM;
+            break;
+        case SOCKET_TYPE_RAW:
+            sock_type = SOCK_RAW;
+            break;
+        case SOCKET_TYPE_RDM:
+            sock_type = SOCK_RDM;
+            break;
+        case SOCKET_TYPE_SEQPACKET:
+            sock_type = SOCK_SEQPACKET;
+            break;
+        default:
+            return SOCKET_PROTOCOL_ERROR;
+    }
+
+    int proto = 0;
+    switch(protocol) {
+        case SOCKET_PROTOCOL_TCP:
+            proto = IPPROTO_TCP;
+            break;
+        case SOCKET_PROTOCOL_UDP:
+            proto = IPPROTO_UDP;
+            break;
+        default:
+            return SOCKET_PROTOCOL_ERROR;
+    }
+
+    int sock = socket(af, sock_type, proto);
+    if (sock < 0) {
+        return SOCKET_PROTOCOL_ERROR;
+    }
+
+    int optval = 1;
+    setsockopt(sock, SOL_SOCKET, SO_REUSEADDR, &optval, sizeof(optval));
+
+    *s = (Socket)sock;
+    return SOCKET_OK;
+}
+
+Socket_Result sys_socket_bind(Socket sock, u32 address, u16 port) {
+    struct sockaddr_in addr;
+    addr.sin_family = AF_INET;
+    addr.sin_port = htons(port);
+    addr.sin_addr.s_addr = htonl((u16)address);
+    int result = bind((int)sock, (struct sockaddr*)&addr, sizeof(addr));
+    if (result < 0) {
+        int err = errno;
+        switch(err) {
+            case EADDRINUSE: return SOCKET_ADDRESS_IN_USE;
+            case EACCES:     return SOCKET_NOACCESS;
+            default:         return SOCKET_PROTOCOL_ERROR;
+        }
+    }
+    return SOCKET_OK;
+}
+
+Socket_Result sys_socket_listen(Socket sock, s64 backlog) {
+    int result = listen((int)sock, (int)backlog);
+    if (result < 0) {
+        return SOCKET_PROTOCOL_ERROR;
+    }
+    return SOCKET_OK;
+}
+
+Socket_Result sys_socket_accept(Socket sock, Socket *accepted, u64 timeout_ms) {
+    fd_set readfds;
+    FD_ZERO(&readfds);
+    FD_SET(sock, &readfds);
+
+    struct timeval tv;
+    tv.tv_sec  = (long)(timeout_ms / 1000);
+    tv.tv_usec = (long)((timeout_ms % 1000) * 1000);
+
+    int select_result = select((int)sock + 1, &readfds, 0, 0, &tv);
+    if (select_result == 0) {
+        return SOCKET_TIMED_OUT;
+    }
+    if (select_result < 0) {
+        return SOCKET_PROTOCOL_ERROR;
+    }
+
+    // Socket is ready for reading (an incoming connection)
+    struct sockaddr_in addr;
+    socklen_t addr_len = sizeof(addr);
+    int client = accept((int)sock, (struct sockaddr*)&addr, &addr_len);
+    if (client < 0) {
+        if (errno == EWOULDBLOCK || errno == EAGAIN)
+            return SOCKET_IN_PROGRESS;
+        return SOCKET_PROTOCOL_ERROR;
+    }
+    *accepted = (Socket)client;
+    return SOCKET_OK;
+}
+
+Socket_Result sys_socket_connect(Socket sock, u32 address, u16 port, Socket_Domain domain) {
+    if (domain != SOCKET_DOMAIN_IPV4)
+        return SOCKET_INVALID_ADDRESS;
+
+    struct sockaddr_in addr_in;
+    addr_in.sin_family = AF_INET;
+    addr_in.sin_port = htons(port);
+    addr_in.sin_addr.s_addr = address;
+    if (addr_in.sin_addr.s_addr == INADDR_NONE)
+        return SOCKET_INVALID_ADDRESS;
+
+    int result = connect((int)sock, (struct sockaddr*)&addr_in, sizeof(addr_in));
+    if (result < 0) {
+        int err = errno;
+        if (err == EINPROGRESS || err == EWOULDBLOCK)
+            return SOCKET_IN_PROGRESS;
+        if (err == ETIMEDOUT)
+            return SOCKET_TIMED_OUT;
+        if (err == ECONNREFUSED)
+            return SOCKET_CONNECTION_REFUSED;
+        if (err == EALREADY)
+            return SOCKET_ALREADY_CONNECTED;
+        return SOCKET_PROTOCOL_ERROR;
+    }
+    return SOCKET_OK;
+}
+
+Socket_Result sys_socket_send(Socket sock, void *data, u64 length, u64 *sent) {
+    ssize_t result = send((int)sock, data, (sys_uint)length, 0);
+    if (result < 0) {
+        if (errno == EWOULDBLOCK || errno == EAGAIN) {
+            if (sent)
+                *sent = 0;
+            return SOCKET_IN_PROGRESS;
+        }
+        return SOCKET_PROTOCOL_ERROR;
+    }
+    if (sent)
+        *sent = result > 0 ? (u64)result : 0;
+    return SOCKET_OK;
+}
+
+Socket_Result sys_socket_recv(Socket sock, void *buffer, u64 length, u64 *received) {
+    ssize_t result = recv((int)sock, buffer, (sys_uint)length, 0);
+    if (result < 0) {
+        if (errno == EWOULDBLOCK || errno == EAGAIN) {
+            if (received)
+                *received = 0;
+            return SOCKET_IN_PROGRESS;
+        }
+        return SOCKET_PROTOCOL_ERROR;
+    } else if (result == 0) {
+        if (received)
+            *received = 0;
+        return SOCKET_DISCONNECTED;
+    }
+    if (received)
+        *received = result > 0 ? (u64)result : 0;
+    return SOCKET_OK;
+}
+
+Socket_Result sys_socket_close(Socket sock) {
+    int result = close((int)sock);
+    if (result < 0)
+        return SOCKET_PROTOCOL_ERROR;
+    return SOCKET_OK;
+}
+
+Socket_Result sys_socket_set_blocking(Socket *sock, bool blocking) {
+    int fd = (int)(*sock);
+    int flags = fcntl(fd, F_GETFL, 0);
+    if (flags < 0)
+        return SOCKET_PROTOCOL_ERROR;
+    if (!blocking)
+        flags |= O_NONBLOCK;
+    else
+        flags &= ~O_NONBLOCK;
+    if (fcntl(fd, F_SETFL, flags) < 0)
+        return SOCKET_PROTOCOL_ERROR;
+    return SOCKET_OK;
+}
+
+Socket_Result sys_set_socket_blocking_timeout(Socket socket, u64 ms) {
+    struct timeval tv;
+    tv.tv_sec = 0;
+    tv.tv_usec = (sys_int)ms*1000;
+    setsockopt((int)socket, SOL_SOCKET, SO_RCVTIMEO, (const char*)&tv, sizeof(tv));
+    return SOCKET_OK;
+}
+
+u64 sys_get_current_thread_id(void) {
+    return (u64)pthread_self();
+}
+
+float64 sys_get_seconds_monotonic(void) {
+    struct timespec ts;
+    clock_gettime(CLOCK_MONOTONIC, &ts);
+    float64 t = (float64)ts.tv_sec + (float64)ts.tv_nsec / 1e9;
+
+    local_persist float64 start_time = 0.0;
+	if (start_time == 0.0) {
+	   start_time = t;
+	}
+
+	return t - start_time;
+}
+
+
+
+void sys_set_thread_affinity_mask(Thread_Handle thread, u64 bits) {
+#if (OS_FLAGS & OS_FLAG_ANDROID) || (OS_FLAGS & OS_FLAG_EMSCRIPTEN)
+    (void)thread; (void)bits;
+    return;
+#else
+    cpu_set_t cpuset;
+    CPU_ZERO(&cpuset);
+
+    for (int i = 0; i < 64; i++) {
+        if (bits & (1ULL << i)) {
+            CPU_SET(i, &cpuset);
+        }
+    }
+
+    pthread_setaffinity_np((pthread_t)thread, sizeof(cpu_set_t), &cpuset);
+#endif
+}
+
+Thread_Handle sys_get_current_thread(void) {
+    return (Thread_Handle)pthread_self();
+}
+
+#endif // OS_FLAGS & OS_FLAG_UNIX
+
+#if (OS_FLAGS & OS_FLAG_WINDOWS)
+
+/////////////////////////////////////////////////////
+//////
+// :Windows
+//////
+/////////////////////////////////////////////////////
+
+#if COMPILER_FLAGS & COMPILER_FLAG_MSC
+    #pragma comment(lib, "kernel32")
+    #pragma comment(lib, "user32")
+    #pragma comment(lib, "shcore")
+    #pragma comment(lib, "dbghelp")
+    #pragma comment(lib, "pdh")
+    #pragma comment(lib, "winmm")
+    #pragma comment(lib, "ws2_32.lib")
+#ifndef OSTD_HEADLESS
+    #pragma comment(lib, "gdi32")
+    #pragma comment(lib, "dxgi")
+#endif // !OSTD_HEADLESS
+
+#endif // COMPILER_FLAGS & COMPILER_FLAG_MSC
+
+
+unit_local u64 _win_utf8_to_wide(string utf8, u16 *result, u64 result_max) {
+    u64 n = (u64)MultiByteToWideChar(CP_UTF8, 0, (LPCCH)utf8.data, (int)utf8.count, (LPWSTR)result, (int)result_max);
+    if (n < result_max) result[n] = 0;
+    return n;
+}
+
+
+unit_local u64 _wide_strlen(u16 *str) {
+    u64 len = 0;
+    while (str[len] != 0) {
+        len++;
+    }
+    return len;
+}
+
+unit_local s64 _wide_strcmp(u16 *s1, u16 *s2) {
+    while (*s1 && (*s1 == *s2)) {
+        s1++;
+        s2++;
+    }
+    return (s64)*s1 - (s64)*s2;
+}
+
+unit_local void _win_wide_to_utf8(u16 *s, string *utf8) {
+    u64 len = _wide_strlen(s);
+    int result = WideCharToMultiByte(CP_UTF8, 0, (LPCWCH)s, -1, (char*)utf8->data, (int)len+1, 0, 0);
+    assert(result);
+
+    utf8->count = (u64)(len);
+}
+
+#ifndef OSTD_HEADLESS
+
+typedef enum MONITOR_DPI_TYPE {
+  MDT_EFFECTIVE_DPI = 0,
+  MDT_ANGULAR_DPI = 1,
+  MDT_RAW_DPI = 2,
+  MDT_DEFAULT
+} MONITOR_DPI_TYPE;
+
+typedef enum PROCESS_DPI_AWARENESS {
+  PROCESS_DPI_UNAWARE = 0,
+  PROCESS_SYSTEM_DPI_AWARE = 1,
+  PROCESS_PER_MONITOR_DPI_AWARE = 2
+} PROCESS_DPI_AWARENESS;
+__declspec(dllimport) HRESULT __stdcall SetProcessDpiAwareness(PROCESS_DPI_AWARENESS value);
+
+__declspec(dllimport) BOOL __stdcall SetProcessDpiAwarenessContext(DPI_AWARENESS_CONTEXT value);
+
+__declspec(dllimport) HRESULT __stdcall GetDpiForMonitor( HMONITOR hmonitor, MONITOR_DPI_TYPE dpiType, UINT *dpiX, UINT *dpiY);
+
+
+unit_local void _win_lazy_enable_dpi_awarness(void) {
+    local_persist bool enabled = false;
+    if (!enabled) {
+        enabled = true;
+        BOOL ok = SetProcessDpiAwarenessContext(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2);
+		if (!ok) {
+			SetProcessDpiAwareness(PROCESS_PER_MONITOR_DPI_AWARE);
+		}
+    }
+}
+
+
+unit_local LRESULT window_proc ( HWND hwnd,  u32 message,  WPARAM wparam,  LPARAM lparam) {
+
+    _Surface_State *state = _get_surface_state(hwnd);
+    if (!state) return DefWindowProcW(hwnd, message, wparam, lparam);
+
+    switch (message) {
+        case WM_QUIT:
+        case WM_CLOSE:
+            state->should_close = true;
+            break;
+        case WM_SIZE:
+            state->pixels = 0;
+            if (state->bmp) DeleteObject(state->bmp);
+            break;
+        default: {
+            return DefWindowProcW(hwnd, message, wparam, lparam);
+        }
+    }
+
+    return 0;
+}
+
+#endif // !OSTD_HEADLESS
+
+
+void *sys_map_pages(u64 action, void *virtual_base, u64 number_of_pages, bool strict_base_address) {
+    (void)strict_base_address;
+    // todo(charlie) attempt multiple times in case of failure.
+
+    System_Info info = sys_get_info();
+
+    u64 amount_in_bytes = info.page_size * number_of_pages;
+
+    u32 flags = 0;
+    u32 protection = 0;
+
+    if (action & SYS_MEMORY_RESERVE)  {
+        flags |= MEM_RESERVE;
+        protection = PAGE_NOACCESS;
+    }
+    if (action & SYS_MEMORY_ALLOCATE) {
+        flags |= MEM_COMMIT;
+        protection = PAGE_READWRITE;
+    }
+
+    void *result = VirtualAlloc(virtual_base, amount_in_bytes, flags, protection);
+    // todo(charlie)
+    // Some error reporting so user can see what went wrong if !result
+
+    return result;
+}
+
+
+
+bool sys_unmap_pages(void *address) {
+    // todo(charlie) attempt multiple times in case of failure.
+    return VirtualFree(address, 0, MEM_RELEASE) != 0;
+}
+
+bool sys_deallocate_pages(void *address, u64 number_of_pages) {
+    System_Info info = sys_get_info();
+
+    u64 amount_in_bytes = info.page_size*number_of_pages;
+
+    return VirtualFree(address, amount_in_bytes, MEM_DECOMMIT) != 0;
+}
+
+u64 sys_query_mapped_regions(void *start, void *end, Mapped_Memory_Info *result, u64 result_count) {
+    System_Info info = sys_get_info();
+
+    start = (void*)(((u64)start + info.page_size-1) & ~(info.page_size-1));
+
+    void *p = start;
+    u64 counter = 0;
+
+    void *current_base = 0;
+
+    MEMORY_BASIC_INFORMATION last_info;
+    bool trailing_pointer = false;
+    while ((u64)p < (u64)end) {
+
+        MEMORY_BASIC_INFORMATION mem_info = (MEMORY_BASIC_INFORMATION){0};
+
+        size_t r = VirtualQuery(p, &mem_info, sizeof(MEMORY_BASIC_INFORMATION));
+        // todo(charlie)  VirtualQuery might fail for random reasons
+        if (r != 0 && mem_info.AllocationBase) {
+            if (current_base && (u64)current_base < (u64)mem_info.AllocationBase) {
+
+                if (result && result_count > counter) {
+                    Mapped_Memory_Info m = (Mapped_Memory_Info){0};
+                    m.base = current_base;
+                    m.page_count = (u64)last_info.RegionSize / info.page_size;
+                    result[counter] = m;
+                    trailing_pointer = false;
+                }
+
+                counter += 1;
+
+            }
+            current_base = mem_info.AllocationBase;
+        }
+
+        if (r != 0) {
+            p = (u8*)p + mem_info.RegionSize;
+            if (mem_info.AllocationBase) {
+                last_info = mem_info;
+                trailing_pointer = true;
+            }
+        }
+    }
+
+    if (trailing_pointer) {
+        // todo(charlie) multiple attempts
+        if (result_count > counter) {
+            Mapped_Memory_Info m = (Mapped_Memory_Info){0};
+            m.base = current_base;
+            m.page_count = (u64)last_info.RegionSize / info.page_size;
+            result[counter] = m;
+        }
+        counter += 1;
+    }
+
+    return counter;
+}
+
+void *sys_find_mappable_range(u64 page_count) {
+
+    System_Info info = sys_get_info();
+
+    u64 amount_in_bytes = page_count*info.page_size;
+
+    MEMORY_BASIC_INFORMATION mbi;
+    void *address = (void *)0x0000100000000000; // Start at a high user-space address
+    while (address) {
+        size_t query_size = VirtualQuery(address, &mbi, sizeof(mbi));
+        if (query_size == 0) {
+            return 0;
+        }
+
+        if (mbi.State == 0x10000 /*MEM_FREE*/ && mbi.RegionSize >= amount_in_bytes) {
+            // Align the base address to the granularity
+            u64 aligned_base = ((u64)mbi.BaseAddress + info.granularity - 1) & ~(info.granularity - 1);
+            if (aligned_base + amount_in_bytes <= (u64)mbi.BaseAddress + mbi.RegionSize) {
+                return (void *)aligned_base;
+            }
+        }
+
+        address = (void *)((u64)mbi.BaseAddress + mbi.RegionSize);
+    }
+
+    return 0;
+}
+
+System_Info sys_get_info(void) {
+    local_persist System_Info info;
+    local_persist bool has_retrieved_info = false;
+
+    if (!has_retrieved_info) {
+        has_retrieved_info = true;
+
+        SYSTEM_INFO win32_info;
+        GetSystemInfo(&win32_info);
+
+        info.page_size = (u64)win32_info.dwPageSize;
+        info.granularity = win32_info.dwAllocationGranularity;
+        info.logical_cpu_count = (u64)win32_info.dwNumberOfProcessors;
+    }
+
+    return info;
+}
+
+#ifndef OSTD_HEADLESS
+
+typedef struct MonitorContext {
+    Physical_Monitor *buffer;
+    u64 max_count;
+    u64 count;
+} MonitorContext;
+
+unit_local int __wcscmp(const u16 *s1, const u16 *s2) {
+    while (*s1 && (*s1 == *s2)) {
+        s1++;
+        s2++;
+    }
+    return (int)(*s1) - (int)(*s2);
+}
+unit_local BOOL WINAPI _win_query_monitors_callback(HMONITOR monitor_handle, HDC dc, RECT *rect, LPARAM param) {
+    (void)dc; (void)rect;
+    MonitorContext *ctx = (MonitorContext*)param;
+    if(ctx->buffer && ctx->count >= ctx->max_count) return false;
+    MONITORINFOEXW info;
+    info.cbSize = sizeof(MONITORINFOEXW);
+    if(!GetMonitorInfoW(monitor_handle, (LPMONITORINFO)&info)) return true;
+    DEVMODEW more_info;
+    more_info.dmSize = sizeof(DEVMODEW);
+    if(!EnumDisplaySettingsW(info.szDevice, ENUM_CURRENT_SETTINGS, &more_info)) return true;
+    DISPLAY_DEVICEW even_more_info;
+    even_more_info.cb = sizeof(DISPLAY_DEVICEW);
+    int i = 0;
+    BOOL found = false;
+    while(EnumDisplayDevicesW(0, (DWORD)i, &even_more_info, 0)) {
+        if(__wcscmp(even_more_info.DeviceName, info.szDevice) == 0){
+            found = true;
+            break;
+        }
+        i++;
+    }
+    if(!found) return true;
+    if(ctx->buffer){
+        Physical_Monitor *monitor = &ctx->buffer[ctx->count];
+        monitor->name_count = (u64)WideCharToMultiByte(CP_UTF8, 0, even_more_info.DeviceString, -1, (LPSTR)monitor->name, 256, 0, 0);
+        monitor->refresh_rate = more_info.dmDisplayFrequency;
+        monitor->resolution_x = info.rcMonitor.right - info.rcMonitor.left;
+        monitor->resolution_y = info.rcMonitor.bottom - info.rcMonitor.top;
+        monitor->pos_x = info.rcMonitor.left;
+        monitor->pos_y = info.rcMonitor.top;
+        UINT dpix, dpiy;
+        GetDpiForMonitor(monitor_handle, MDT_EFFECTIVE_DPI, &dpix, &dpiy);
+        monitor->scale = (float64)dpix/96.0;
+        monitor->handle = monitor_handle;
+    }
+    ctx->count++;
+    return true;
+}
+
+u64 sys_query_monitors(Physical_Monitor *buffer, u64 max_count) {
+    _win_lazy_enable_dpi_awarness();
+    MonitorContext ctx;
+    ctx.buffer = buffer;
+    ctx.max_count = max_count;
+    ctx.count = 0;
+    EnumDisplayMonitors(0, 0, _win_query_monitors_callback, (LPARAM)&ctx);
+    return ctx.count;
+}
+
+unit_local IDXGIOutput* _win_get_output_for_monitor(HMONITOR hMonitor)
+{
+    IDXGIFactory* factory = 0;
+    if (CreateDXGIFactory(&IID_IDXGIFactory, (void**)&factory) != 0)
+    {
+        return 0;
+    }
+
+    IDXGIAdapter* adapter = 0;
+    IDXGIOutput* output = 0;
+
+    for (UINT i = 0; factory->lpVtbl->EnumAdapters(factory, i, &adapter) != DXGI_ERROR_NOT_FOUND; ++i)
+    {
+        for (UINT j = 0; adapter->lpVtbl->EnumOutputs(adapter, j, &output) != DXGI_ERROR_NOT_FOUND; ++j)
+        {
+            DXGI_OUTPUT_DESC desc;
+            output->lpVtbl->GetDesc(output, &desc);
+
+            if (desc.Monitor == hMonitor)
+            {
+                adapter->lpVtbl->parent.Release(adapter);
+                factory->lpVtbl->parent.Release(factory);
+                return output;
+            }
+
+            output->lpVtbl->parent.Release(output);
+        }
+        adapter->lpVtbl->parent.Release(adapter);
+    }
+
+    factory->lpVtbl->parent.Release(factory);
+    return 0;
+}
+bool sys_wait_vertical_blank(Physical_Monitor monitor) {
+    IDXGIOutput *output = _win_get_output_for_monitor(monitor.handle);
+
+    if (output) {
+        output->lpVtbl->WaitForVBlank(output);
+        return true;
+    }
+    return false;
+}
+
+#endif // !OSTD_HEADLESS
+
+File_Handle sys_get_stdout(void) {
+    return (File_Handle)GetStdHandle((u32)-11);
+}
+File_Handle sys_get_stderr(void) {
+    return (File_Handle)GetStdHandle((u32)-12);
+}
+
+bool sys_make_pipe(File_Handle *read, File_Handle *write) {
+    HANDLE read_handle, write_handle;
+    SECURITY_ATTRIBUTES sa = {sizeof(SECURITY_ATTRIBUTES), 0, true};
+    if (!CreatePipe(&read_handle, &write_handle, &sa, 0)) return false;
+    *read = (File_Handle)read_handle;
+    *write = (File_Handle)write_handle;
+    return true;
+}
+
+s64 sys_write(File_Handle f, void *data, u64 size) {
+    u32 written = 0;
+    WriteFile(f, data, (DWORD)size, (unsigned long*)&written, 0);
+    return (s64)written;
+}
+
+s64 sys_write_string(File_Handle f, string s) {
+    return sys_write(f, s.data, s.count);
+}
+
+s64 sys_read(File_Handle h, void *buffer, u64 buffer_size) {
+    DWORD read = 0;
+    ReadFile(h, (LPVOID)buffer, (DWORD)buffer_size, &read, 0);
+
+    return (s64)read;
+}
+
+void sys_close(File_Handle h) {
+    CloseHandle((HANDLE)h);
+}
+
+File_Handle sys_open_file(string path, File_Open_Flags flags) {
+    u16 cpath[MAX_PATH_LENGTH*2];
+    _win_utf8_to_wide(path, cpath, MAX_PATH_LENGTH*2);
+
+    DWORD access_mode = 0;
+    DWORD creation_flags = 0;
+
+    if (flags & FILE_OPEN_WRITE) {
+        access_mode |= FILE_GENERIC_WRITE;
+    }
+    if (flags & FILE_OPEN_READ) {
+        access_mode |= FILE_GENERIC_READ;
+    }
+
+    if (flags & FILE_OPEN_RESET) {
+        creation_flags = CREATE_ALWAYS;
+    } else if (flags & FILE_OPEN_CREATE) {
+        creation_flags = OPEN_ALWAYS;
+    } else {
+        creation_flags = OPEN_EXISTING;
+    }
+
+    SECURITY_ATTRIBUTES attr = (SECURITY_ATTRIBUTES){0};
+    attr.nLength = sizeof(SECURITY_ATTRIBUTES);
+    attr.bInheritHandle = 1;
+
+    HANDLE handle = CreateFileW(
+        cpath,
+        access_mode,
+        FILE_SHARE_READ | FILE_SHARE_WRITE,
+        &attr,
+        creation_flags,
+        FILE_ATTRIBUTE_NORMAL,
+        0
+    );
+
+    if (handle == INVALID_HANDLE_VALUE) {
+        return 0;
+    }
+
+    return handle;
+}
+
+u64 sys_get_file_size(File_Handle f) {
+    LARGE_INTEGER size;
+    if (!GetFileSizeEx(f, &size)) {
+        return 0; // Indicate failure
+    }
+    return (u64)size.QuadPart;
+}
+
+bool sys_make_directory(string path, bool recursive) {
+    u16 path_wide[2048];
+    u64 path_len = _win_utf8_to_wide(path, path_wide, 2048);
+    if (path_len == 0) {
+        return false;
+    }
+
+    if (!recursive) {
+        if (CreateDirectoryW(path_wide, 0) || GetLastError() == 0xB7 /* ERROR_ALREADY_EXISTS */) {
+            return true;
+        }
+        return false;
+    }
+
+    u16 buffer[1024];
+    if (path.count >= sizeof(buffer))
+        return false;
+
+    memcpy(buffer, path_wide, path.count*sizeof(u16));
+    buffer[path.count] = '\0';
+
+    for (size_t i = 0; i < path.count; i++) {
+        if (buffer[i] == '\\' || buffer[i] == '/') {
+            if (i == 0 || (i == 2 && buffer[1] == ':'))
+                continue;
+
+            u16 saved = buffer[i];
+            buffer[i] = '\0';
+            if (!CreateDirectoryW(buffer, 0) && GetLastError() != 0xB7 /* ERROR_ALREADY_EXISTS */) {
+                return false;
+            }
+            buffer[i] = saved;
+        }
+    }
+
+    if (!CreateDirectoryW(buffer, 0) && GetLastError() != 0xB7 /* ERROR_ALREADY_EXISTS */) {
+        return false;
+    }
+    return true;
+}
+
+bool sys_remove_directory(string path, bool recursive) {
+    u16 path_wide[2048];
+    u64 path_len = _win_utf8_to_wide(path, path_wide, 2048);
+    if (path_len == 0) {
+        return false;
+    }
+
+    if (!recursive) {
+        return (RemoveDirectoryW((LPCWSTR)path_wide) != 0);
+    }
+
+    bool has_slash = false;
+    if (path.count > 0) {
+        char last = ((char*)path.data)[path.count - 1];
+        if (last == '\\' || last == '/') {
+            has_slash = true;
+        }
+    }
+    u16 search_pattern[2048];
+    u64 pos = 0;
+    for (u64 i = 0; i < path_len; i++) {
+        search_pattern[pos++] = path_wide[i];
+    }
+    if (!has_slash) {
+        search_pattern[pos++] = '\\';
+    }
+    search_pattern[pos++] = '*';
+    search_pattern[pos] = 0;
+
+    WIN32_FIND_DATAW findData;
+    HANDLE hFind = FindFirstFileW((LPCWSTR)search_pattern, &findData);
+    if (hFind == INVALID_HANDLE_VALUE) {
+        return false;
+    }
+
+    do {
+        if (_wide_strcmp(findData.cFileName, L".") == 0 ||
+            _wide_strcmp(findData.cFileName, L"..") == 0) {
+            continue;
+        }
+
+        u16 entry_path[2048];
+        u64 new_pos = 0;
+        for (u64 i = 0; i < path_len; i++) {
+            entry_path[new_pos++] = path_wide[i];
+        }
+        if (!has_slash) {
+            entry_path[new_pos++] = '\\';
+        }
+        u64 entry_name_len = _wide_strlen(findData.cFileName);
+        for (u64 i = 0; i < entry_name_len; i++) {
+            entry_path[new_pos++] = findData.cFileName[i];
+        }
+        entry_path[new_pos] = 0;
+
+        if (findData.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) {
+            u8 entry_utf8[2048];
+            string entry_str;
+            entry_str.data = entry_utf8;
+            entry_str.count = _wide_strlen(entry_path);
+            _win_wide_to_utf8(entry_path, &entry_str);
+            if (!sys_remove_directory(entry_str, true)) {
+                FindClose(hFind);
+                return false;
+            }
+        } else {
+            if (!DeleteFileW((LPCWSTR)entry_path)) {
+                FindClose(hFind);
+                return false;
+            }
+        }
+    } while (FindNextFileW(hFind, &findData));
+
+    FindClose(hFind);
+
+    return (RemoveDirectoryW((LPCWSTR)path_wide) != 0);
+}
+
+bool sys_is_file(string path) {
+    u16 path_wide[2048];
+    u64 path_len = _win_utf8_to_wide(path, path_wide, 2048);
+    if (path_len == 0) {
+        return false;
+    }
+    DWORD attr = GetFileAttributesW((LPCWSTR)path_wide);
+    if (attr == 0xFFFFFFFF)
+        return false;
+    return ((attr & FILE_ATTRIBUTE_DIRECTORY) == 0);
+}
+
+bool sys_is_directory(string path) {
+    u16 path_wide[2048];
+    u64 path_len = _win_utf8_to_wide(path, path_wide, 2048);
+    if (path_len == 0) {
+        return false;
+    }
+    DWORD attr = GetFileAttributesW((LPCWSTR)path_wide);
+    if (attr == 0xFFFFFFFF)
+        return false;
+    return ((attr & FILE_ATTRIBUTE_DIRECTORY) != 0);
+}
+
+
+
+void sys_walk_directory(string path, bool recursive, bool walk_directories, Walk_Proc walk_proc) {
+    bool has_slash = false;
+    if (path.count > 0) {
+        char last = ((char*)path.data)[path.count - 1];
+        if (last == '\\' || last == '/') {
+            has_slash = true;
+        }
+    }
+
+    u16 path_wide[2048];
+    u64 path_len = _win_utf8_to_wide(path, path_wide, 2048);
+
+    u16 search_pattern[2048];
+    u64 pos = 0;
+    for (u64 i = 0; i < path_len; i++) {
+        search_pattern[pos++] = path_wide[i];
+    }
+    if (!has_slash) {
+        search_pattern[pos++] = '\\';
+    }
+    search_pattern[pos++] = '*';
+
+    WIN32_FIND_DATAW findData;
+    HANDLE hFind = FindFirstFileW((LPCWSTR)search_pattern, &findData);
+    if (hFind == INVALID_HANDLE_VALUE) {
+        return;
+    }
+
+    do {
+        if (_wide_strcmp(findData.cFileName, L".") == 0 ||
+            _wide_strcmp(findData.cFileName, L"..") == 0) {
+            continue;
+        }
+
+        u64 entry_name_len = _wide_strlen(findData.cFileName);
+        u64 new_path_len = path.count + (has_slash ? 0 : 1) + entry_name_len;
+        u16 new_path_wide[2048];
+        u64 new_pos = 0;
+        for (u64 i = 0; i < path.count; i++) {
+            new_path_wide[new_pos++] = path_wide[i];
+        }
+        if (!has_slash) {
+            new_path_wide[new_pos++] = '\\';
+        }
+        for (u64 i = 0; i < entry_name_len; i++) {
+            new_path_wide[new_pos++] = findData.cFileName[i];
+            //sys_write_string(sys_get_stdout(), (string){1, (u8*)&findData.cFileName[i]});
+        }
+        new_path_wide[new_pos++] = 0;
+
+        u8 new_path[2048];
+
+        string entry_str;
+        entry_str.count = new_path_len;
+        entry_str.data = new_path;
+
+        _win_wide_to_utf8(new_path_wide, &entry_str);
+
+
+        bool is_dir = (findData.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) != 0;
+
+        if (is_dir) {
+            if (walk_directories) {
+                if (!walk_proc(entry_str)) {
+                    FindClose(hFind);
+                    return;
+                }
+            }
+            if (recursive) {
+                sys_walk_directory(entry_str, recursive, walk_directories, walk_proc);
+            }
+        } else {
+            if (!walk_proc(entry_str)) {
+                FindClose(hFind);
+                return;
+            }
+        }
+
+    } while (FindNextFileW(hFind, &findData));
+
+    FindClose(hFind);
+}
+
+Easy_Command_Result sys_run_command_easy(string command_line, File_Handle stdout, File_Handle stderr, string workspace_dir) {
+    Easy_Command_Result res = (Easy_Command_Result){0};
+
+    STARTUPINFOA si = {0};
+    si.cb = sizeof(STARTUPINFOA);
+    si.dwFlags |= 0x00000100; /*STARTF_USESTDHANDLES */
+    si.hStdOutput = stdout;
+    si.hStdError = stderr;
+
+    PROCESS_INFORMATION pi = (PROCESS_INFORMATION){ 0 };
+
+    char cmd[1024];
+
+    memcpy(cmd, command_line.data, command_line.count);
+    cmd[command_line.count] = 0;
+
+    char wks[1024];
+    memcpy(wks, workspace_dir.data, workspace_dir.count);
+    wks[workspace_dir.count] = 0;
+
+    bool ok = (bool)(int)CreateProcessA(0, cmd, 0, 0, true, 0, 0, wks, &si, &pi);
+
+    if (!ok) {
+        res.process_start_success = false;
+        return res;
+    }
+
+    WaitForSingleObject(pi.hProcess, S32_MAX);
+
+    DWORD exit_code;
+    GetExitCodeProcess(pi.hProcess, &exit_code);
+
+    res.exit_code = (s64)exit_code;
+    res.process_start_success = true;
+
+    return res;
+}
+
+OSTD_LIB void sys_exit(s64 code) {
+    ExitProcess((UINT)code);
+}
+
+OSTD_LIB void sys_exit_current_thread(s64 code) {
+    ExitThread((DWORD)code);
+}
+
+inline unit_local int _to_winsock_err(Socket_Result r) {
+    switch(r) {
+        case SOCKET_OK: return 0;
+        case SOCKET_DISCONNECTED: return WSAECONNRESET;
+        case SOCKET_NOT_INITIALIZED: return WSANOTINITIALISED;
+        case SOCKET_NOACCESS: return WSAEACCES;
+        case SOCKET_IN_PROGRESS: return WSAEWOULDBLOCK;
+        case SOCKET_NOT_A_SOCKET: return WSAENOTSOCK;
+        case SOCKET_INVALID_ADDRESS: return WSAEFAULT;
+        case SOCKET_TIMED_OUT: return WSAETIMEDOUT;
+        case SOCKET_CONNECTION_REFUSED: return WSAECONNREFUSED;
+        case SOCKET_CONNECTION_RESET: return WSAECONNRESET;
+        case SOCKET_ALREADY_CONNECTED: return WSAEISCONN;
+        case SOCKET_ADDRESS_IN_USE: return WSAEADDRINUSE;
+        case SOCKET_NETWORK_UNREACHABLE: return WSAENETUNREACH;
+        case SOCKET_HOST_UNREACHABLE: return WSAEHOSTUNREACH;
+        case SOCKET_PROTOCOL_ERROR: return WSAEPROTONOSUPPORT;
+        default: return -1;
+    }
+}
+
+
+static Socket_Result _ensure_winsock_initialized(void) {
+    static bool winsock_initialized = false;
+    if (!winsock_initialized) {
+        WSADATA wsaData;
+        int result = WSAStartup(2 | (2 << 8), &wsaData);
+        if (result != 0) {
+            return SOCKET_NOT_INITIALIZED;
+        }
+        winsock_initialized = true;
+    }
+    return SOCKET_OK;
+}
+
+unit_local int _to_win_sock_err(Socket_Result r) {
+    switch(r) {
+        case SOCKET_OK: return 0;
+        case SOCKET_DISCONNECTED: return WSAECONNRESET;
+        case SOCKET_NOT_INITIALIZED: return WSANOTINITIALISED;
+        case SOCKET_NOACCESS: return WSAEACCES;
+        case SOCKET_IN_PROGRESS: return WSAEWOULDBLOCK;
+        case SOCKET_NOT_A_SOCKET: return WSAENOTSOCK;
+        case SOCKET_INVALID_ADDRESS: return WSAEFAULT;
+        case SOCKET_TIMED_OUT: return WSAETIMEDOUT;
+        case SOCKET_CONNECTION_REFUSED: return WSAECONNREFUSED;
+        case SOCKET_CONNECTION_RESET: return WSAECONNRESET;
+        case SOCKET_ALREADY_CONNECTED: return WSAEISCONN;
+        case SOCKET_ADDRESS_IN_USE: return WSAEADDRINUSE;
+        case SOCKET_NETWORK_UNREACHABLE: return WSAENETUNREACH;
+        case SOCKET_HOST_UNREACHABLE: return WSAEHOSTUNREACH;
+        case SOCKET_PROTOCOL_ERROR: return WSAEPROTONOSUPPORT;
+        default: return -1;
+    }
+}
+
+u32 sys_convert_address_string(string address) {
+    assert(address.count < 1024);
+    char addr_str[1024] = {0};
+    memcpy(addr_str, address.data, address.count);
+    addr_str[address.count] = '\0';
+    return inet_addr(addr_str);
+}
+
+Socket_Result sys_socket_init(Socket *s, Socket_Domain domain, Socket_Type type, Socket_Protocol protocol) {
+    Socket_Result init_res = _ensure_winsock_initialized();
+    if (init_res != SOCKET_OK)
+        return init_res;
+
+    int af = 0;
+    switch (domain) {
+        case SOCKET_DOMAIN_IPV4:
+            af = AF_INET;
+            break;
+        case SOCKET_DOMAIN_BLUETOOTH:
+            // todo(charlie)
+            return SOCKET_INVALID_ADDRESS;
+        case SOCKET_DOMAIN_APPLETALK:
+            return SOCKET_INVALID_ADDRESS;
+#if OS_FLAGS & OS_FLAG_UNIX
+        case SOCKET_DOMAIN_UNIX:
+            return SOCKET_INVALID_ADDRESS;
+#endif
+        default:
+            return SOCKET_PROTOCOL_ERROR;
+    }
+
+    int sock_type = 0;
+    switch (type) {
+        case SOCKET_TYPE_STREAM:
+            sock_type = SOCK_STREAM;
+            break;
+        case SOCKET_TYPE_DGRAM:
+            sock_type = SOCK_DGRAM;
+            break;
+        case SOCKET_TYPE_RAW:
+            sock_type = SOCK_RAW;
+            break;
+        case SOCKET_TYPE_RDM:
+            sock_type = SOCK_RDM;
+            break;
+        case SOCKET_TYPE_SEQPACKET:
+            sock_type = SOCK_SEQPACKET;
+            break;
+        default:
+            return SOCKET_PROTOCOL_ERROR;
+    }
+
+    int proto = 0;
+    switch (protocol) {
+        case SOCKET_PROTOCOL_TCP:
+            proto = IPPROTO_TCP;
+            break;
+        case SOCKET_PROTOCOL_UDP:
+            proto = IPPROTO_UDP;
+            break;
+        default:
+            return SOCKET_PROTOCOL_ERROR;
+    }
+
+    SOCKET win_sock = socket(af, sock_type, proto);
+    if (win_sock == INVALID_SOCKET) {
+        return SOCKET_PROTOCOL_ERROR;
+    }
+
+    int optval = 1;
+    setsockopt(win_sock, SOL_SOCKET, SO_REUSEADDR,  (const char *)&optval, sizeof(optval));
+
+    *s = (Socket)win_sock;
+    return SOCKET_OK;
+}
+
+Socket_Result sys_socket_bind(Socket sock, u32 address, u16 port) {
+    struct sockaddr_in addr;
+    addr.sin_family = AF_INET;
+    addr.sin_port = htons(port);
+    addr.sin_addr.s_addr = htonl((u16)address);
+    int result = bind((SOCKET)sock, (struct sockaddr*)&addr, sizeof(addr));
+    if (result == SOCKET_ERROR) {
+        int err = WSAGetLastError();
+        switch(err) {
+            case WSAEADDRINUSE: return SOCKET_ADDRESS_IN_USE;
+            case WSAEACCES:   return SOCKET_NOACCESS;
+            default:         return SOCKET_PROTOCOL_ERROR;
+        }
+    }
+    return SOCKET_OK;
+}
+
+Socket_Result sys_socket_listen(Socket sock, s64 backlog) {
+    int result = listen((SOCKET)sock, (int)backlog);
+    if (result == SOCKET_ERROR) {
+        return SOCKET_PROTOCOL_ERROR;
+    }
+    return SOCKET_OK;
+}
+
+Socket_Result sys_socket_accept(Socket sock, Socket *accepted, u64 timeout_ms) {
+    fd_set readfds;
+    FD_ZERO(&readfds);
+    FD_SET(sock, &readfds);
+
+    struct timeval tv;
+    tv.tv_sec  = (long)(timeout_ms / 1000);
+    tv.tv_usec = (long)((timeout_ms % 1000) * 1000);
+
+    int select_result = select(0, &readfds, 0, 0, &tv);
+    if (select_result == 0) {
+        return SOCKET_TIMED_OUT;
+    }
+    if (select_result == SOCKET_ERROR) {
+        return SOCKET_PROTOCOL_ERROR;
+    }
+
+    struct sockaddr_in addr;
+    int addr_len = sizeof(addr);
+    SOCKET client = accept((SOCKET)sock, (struct sockaddr*)&addr, &addr_len);
+    if (client == INVALID_SOCKET) {
+        int err = WSAGetLastError();
+        if (err == WSAEWOULDBLOCK)
+            return SOCKET_IN_PROGRESS;
+        return SOCKET_PROTOCOL_ERROR;
+    }
+    *accepted = (Socket)client;
+    return SOCKET_OK;
+}
+
+Socket_Result sys_socket_send(Socket sock, void *data, u64 length, u64 *sent) {
+    int result = send((SOCKET)sock, (const char*)data, (int)length, 0);
+    if (result == SOCKET_ERROR) {
+        int err = WSAGetLastError();
+        if (err == WSAEWOULDBLOCK) {
+            if (sent)
+                *sent = 0;
+            return SOCKET_IN_PROGRESS;
+        }
+        if (err == WSAETIMEDOUT)
+            return SOCKET_TIMED_OUT;
+        return SOCKET_PROTOCOL_ERROR;
+    }
+    if (sent)
+        *sent = result > 0 ? (u64)result : 0;
+    return SOCKET_OK;
+}
+
+Socket_Result sys_socket_recv(Socket sock, void *buffer, u64 length, u64 *received) {
+    int result = recv((SOCKET)sock, (char*)buffer, (int)length, 0);
+    if (result == SOCKET_ERROR) {
+        int err = WSAGetLastError();
+        if (err == WSAEWOULDBLOCK) {
+            if (received)
+                *received = 0;
+            return SOCKET_IN_PROGRESS;
+        }
+        if (err == WSAETIMEDOUT)
+            return SOCKET_TIMED_OUT;
+        return SOCKET_PROTOCOL_ERROR;
+    } else if (result == 0) {
+        if (received)
+            *received = 0;
+        return SOCKET_DISCONNECTED;
+    }
+    if (received)
+        *received = result > 0 ? (u64)result : 0;
+    return SOCKET_OK;
+}
+
+Socket_Result sys_socket_close(Socket sock) {
+    int result = closesocket((SOCKET)sock);
+    if (result == SOCKET_ERROR)
+        return SOCKET_PROTOCOL_ERROR;
+    return SOCKET_OK;
+}
+
+Socket_Result sys_socket_set_blocking(Socket *sock, bool blocking) {
+    unsigned long mode = blocking ? 0 : 1;
+    int result = ioctlsocket((SOCKET)(*sock), (long)FIONBIO, &mode);
+    if (result != NO_ERROR)
+        return SOCKET_PROTOCOL_ERROR;
+    return SOCKET_OK;
+}
+Socket_Result sys_set_socket_blocking_timeout(Socket socket, u64 ms) {
+    setsockopt(socket, SOL_SOCKET, SO_RCVTIMEO, (char*)&ms, sizeof(ms));
+    setsockopt(socket, SOL_SOCKET, SO_SNDTIMEO, (char*)&ms, sizeof(ms));
+    return SOCKET_OK;
+}
+
+u64 sys_get_current_thread_id(void) {
+    return (u64)GetCurrentThreadId();
+}
+
+bool sys_thread_key_init(Thread_Key *key) {
+    *key = (Thread_Key)(u64)TlsAlloc();
+    return (u64)*key != 0xFFFFFFFF;
+}
+bool sys_thread_key_write(Thread_Key key, void* value) {
+    return (bool)(int)TlsSetValue((DWORD)(u64)key, value);
+}
+void* sys_thread_key_read(Thread_Key key) {
+    return TlsGetValue((DWORD)(u64)key);
+}
+
+unit_local DWORD WINAPI _windows_thread_proc(LPVOID lpParameter) {
+    Thread *t = (Thread*)lpParameter;
+
+    _ostd_register_thread_storage(t->id);
+
+    DWORD ret = (DWORD)t->proc(t);
+
+    _ostd_get_thread_storage()->taken = false;
+
+    return ret;
+}
+
+bool sys_thread_init(Thread *thread, Thread_Proc proc, void *userdata) {
+    thread->userdata = userdata;
+    thread->id = 0;
+    thread->handle = CreateThread(0, 0, _windows_thread_proc, thread, 0x00000004, (LPDWORD)&thread->id);
+    thread->is_suspended = true;
+    thread->proc = proc;
+    return thread->handle != 0;
+}
+void sys_thread_start(Thread *thread) {
+    thread->is_suspended = false;
+    ResumeThread(thread->handle);
+}
+s64 sys_thread_join(Thread *thread) {
+    assert(!thread->is_suspended);
+    WaitForSingleObject(thread->handle, 0xFFFFFFFF);
+    
+    DWORD exit_code = 0;
+    GetExitCodeThread(thread->handle, &exit_code);
+    return (s64)exit_code;
+}
+void sys_thread_close(Thread *thread) {
+    CloseHandle(thread->handle);
+}
+
+bool sys_mutex_init(Mutex *mutex) {
+    if (!mutex) return false;
+    mutex->handle = mutex->handle_backing;
+    InitializeCriticalSection(mutex->handle);
+    return true;
+}
+
+bool sys_mutex_uninit(Mutex *mutex) {
+    if (!mutex || !mutex->handle) return false;
+    DeleteCriticalSection(mutex->handle);
+    mutex->handle = 0;
+    return true;
+}
+
+void sys_mutex_acquire(Mutex mutex) {
+    EnterCriticalSection(mutex.handle);
+}
+
+void sys_mutex_release(Mutex mutex) {
+    LeaveCriticalSection(mutex.handle);
+}
+
+inline unit_local u32 sys_atomic_add_32(volatile u32 *addend, u32 value) {
+    return (u32)_InterlockedExchangeAdd((volatile long*)addend, (long)value) + value;
+}
+inline unit_local u64 sys_atomic_add_64(volatile u64 *addend, u64 value) {
+    long long old;
+
+    do {
+        old = (long long)*addend;
+    } while (_InterlockedCompareExchange64((volatile long long*)addend, old + (long long)value, (long long)old) != (long long)old);
+
+    return (u64)(old + (long long)value);
+}
+
+#ifndef OSTD_HEADLESS
+
+Surface_Handle sys_make_surface(Surface_Desc desc) {
+    _Surface_State *s = _alloc_surface_state();
+    if (!s) {
+        // todo(charlie) sys_error
+        return 0;
+    }
+
+    HINSTANCE instance = GetModuleHandleW(0);
+
+    local_persist bool class_initted = false;
+    if (!class_initted) {
+        class_initted = true;
+        WNDCLASSEXW wc = (WNDCLASSEXW){0};
+        wc.cbSize = sizeof(WNDCLASSEXW);
+        wc.style = CS_OWNDC;
+        wc.lpfnWndProc = window_proc;
+        wc.hInstance = instance;
+        wc.lpszClassName = L"abc123";
+        wc.cbClsExtra = 0;
+        wc.cbWndExtra = 0;
+        wc.hCursor = 0;
+        wc.hIcon = 0;
+        wc.lpszMenuName = 0;
+        wc.hbrBackground = 0;
+
+    	ATOM res = RegisterClassExW(&wc);
+    	assert(res);
+    }
+
+	RECT rect = (RECT){0, 0, (LONG)desc.width, (LONG)desc.height};
+
+
+	DWORD style = WS_OVERLAPPEDWINDOW;
+	DWORD style_ex = WS_EX_CLIENTEDGE;
+
+	AdjustWindowRectEx(&rect, style, 0, style_ex);
+
+	u16 title[256];
+	u64 title_length = _win_utf8_to_wide(desc.title, title, 256);
+	title[title_length] = 0;
+
+    // Create the window
+    HWND hwnd = CreateWindowExW(
+        style_ex,
+        L"abc123",
+        title,
+        style,
+        CW_USEDEFAULT, CW_USEDEFAULT, rect.right-rect.left, rect.bottom-rect.top,
+        0, 0, instance, 0
+    );
+
+    if (!hwnd) return 0;
+
+    s->handle = hwnd;
+
+    UpdateWindow(hwnd);
+
+    surface_unset_flags(hwnd, ~desc.flags);
+    surface_set_flags(hwnd, desc.flags);
+
+
+
+    return hwnd;
+}
+void surface_close(Surface_Handle s) {
+    _Surface_State *state = _get_surface_state(s);
+    if (!state) return; // todo(charlie) sys_error
+
+    DestroyWindow((HWND)s);
+    state->allocated = false;
+    state->handle = 0;
+}
+
+
+void surface_poll_events(Surface_Handle surface) {
+    MSG msg;
+    BOOL result = PeekMessageW(&msg, (HWND)surface, 0, 0, PM_REMOVE);
+	while (result) {
+    	TranslateMessage(&msg);
+    	DispatchMessageW(&msg);
+    	result = PeekMessageW(&msg, (HWND)surface, 0, 0, PM_REMOVE);
+    }
+}
+
+bool surface_should_close(Surface_Handle s) {
+    _Surface_State *state = _get_surface_state(s);
+    if (!state) return true;
+    return state->should_close;
+}
+
+bool surface_set_flags(Surface_Handle h, Surface_Flags flags) {
+    int ex_style = GetWindowLongW((HWND)h, GWL_EXSTYLE);
+    int style = GetWindowLongW((HWND)h, GWL_STYLE);
+
+    if (flags & SURFACE_FLAG_HIDDEN) {
+        ex_style |= WS_EX_TOOLWINDOW;
+    }
+
+    if (flags & SURFACE_FLAG_TOPMOST) {
+        ex_style |= WS_EX_TOPMOST;
+    }
+
+    SetWindowLongW((HWND)h, GWL_EXSTYLE, ex_style);
+    SetWindowLongW((HWND)h, GWL_STYLE, style);
+
+    if (flags & SURFACE_FLAG_HIDDEN) {
+        ShowWindow((HWND)h, SW_HIDE);
+    }
+
+    if (flags & SURFACE_FLAG_TOPMOST) {
+        SetWindowPos((HWND)h, HWND_TOPMOST, 0, 0, 0, 0, SWP_NOREPOSITION | SWP_NOSIZE | SWP_NOMOVE);
+    }
+
+    return true;
+}
+bool surface_unset_flags(Surface_Handle h, Surface_Flags flags) {
+    int ex_style = GetWindowLongW((HWND)h, GWL_EXSTYLE);
+    int style = GetWindowLongW((HWND)h, GWL_STYLE);
+
+    if (flags & SURFACE_FLAG_HIDDEN) {
+        ex_style &= ~(WS_EX_TOOLWINDOW);
+    }
+
+    if (flags & SURFACE_FLAG_TOPMOST) {
+        ex_style &= ~(WS_EX_TOPMOST);
+    }
+
+    SetWindowLongW((HWND)h, GWL_EXSTYLE, ex_style);
+    SetWindowLongW((HWND)h, GWL_STYLE, style);
+
+    if (flags & SURFACE_FLAG_HIDDEN) {
+        ShowWindow((HWND)h, SW_SHOW);
+    }
+    if (flags & SURFACE_FLAG_TOPMOST) {
+        SetWindowPos((HWND)h, HWND_NOTOPMOST, 0, 0, 0, 0, SWP_NOREPOSITION | SWP_NOSIZE | SWP_NOMOVE);
+    }
+    return true;
+}
+
+bool surface_get_framebuffer_size(Surface_Handle h, s64 *width, s64 *height) {
+    RECT r;
+    if (GetClientRect((HWND)h, &r)) {
+        *width = r.right - r.left;
+        *height = r.bottom - r.top;
+        return true;
+    } else {
+        return false;
+    }
+}
+
+void* surface_map_pixels(Surface_Handle h) {
+    _Surface_State *state = _get_surface_state(h);
+    if (!state) return 0;
+
+    s64 width, height;
+    if (!surface_get_framebuffer_size(h, &width, &height)) {
+        return 0;
+    }
+
+    if (!state->pixels) {
+        state->bmp_info.bmiHeader.biSize        = sizeof(state->bmp_info.bmiHeader);
+        state->bmp_info.bmiHeader.biWidth       = (LONG)width;
+        state->bmp_info.bmiHeader.biHeight      = (LONG)-height;
+        state->bmp_info.bmiHeader.biPlanes      = 1;
+        state->bmp_info.bmiHeader.biBitCount    = 32;
+        state->bmp_info.bmiHeader.biCompression = BI_RGB;
+        state->bmp_info.bmiHeader.biSizeImage   = 0;
+
+        state->bmp = CreateDIBSection(GetDC((HWND)h), &state->bmp_info, DIB_RGB_COLORS, &state->pixels, 0, 0);
+    }
+
+    return state->pixels;
+}
+void surface_blit_pixels(Surface_Handle h) {
+    _Surface_State *state = _get_surface_state(h);
+    if (!state) return;
+
+    s64 width, height;
+    if (!surface_get_framebuffer_size(h, &width, &height)) return;
+
+    HDC hdc = GetDC((HWND)h);
+
+    StretchDIBits(
+        hdc,
+        0, 0, (LONG)width, (LONG)height,
+        0, 0, (LONG)width, (LONG)height,
+        state->pixels,
+        &state->bmp_info,
+        DIB_RGB_COLORS,
+        SRCCOPY
+    );
+}
+
+bool surface_get_monitor(Surface_Handle h, Physical_Monitor *monitor) {
+    HMONITOR hmon = MonitorFromWindow((HWND)h, MONITOR_DEFAULTTONEAREST);
+    if (!hmon) return false;
+
+    Physical_Monitor mons[256];
+
+
+    u64 count = sys_query_monitors(mons, 256);
+
+    for (u64 i = 0; i < count; i += 1) {
+        if (mons[i].handle == hmon) {
+            *monitor = mons[i];
+            return true;
+        }
+    }
+
+    return false;
+}
+
+#endif // !OSTD_HEADLESS
+
+float64 sys_get_seconds_monotonic(void) {
+    LARGE_INTEGER freq, counter = (LARGE_INTEGER){0};
+	QueryPerformanceFrequency(&freq);
+	QueryPerformanceCounter(&counter);
+	float64 t = (float64)counter.QuadPart / (float64)freq.QuadPart;
+
+	local_persist float64 start_time = 0.0;
+	if (start_time == 0.0) {
+	   start_time = t;
+	}
+
+	return t - start_time;
+}
+
+void sys_set_thread_affinity_mask(Thread_Handle thread, u64 bits) {
+    SetThreadAffinityMask((HANDLE)thread, (DWORD_PTR)bits);
+}
+
+void sys_set_local_process_priority_level(Priority_Level level) {
+    switch(level) {
+        case SYS_PRIORITY_LOW:
+            SetPriorityClass(GetCurrentProcess(), 0x00000040 /*IDLE_PRIORITY_CLASS*/);
+            break;
+        case SYS_PRIORITY_MEDIUM:
+            SetPriorityClass(GetCurrentProcess(), 0x00000020 /*NORMAL_PRIORITY_CLASS*/);
+            break;
+        case SYS_PRIORITY_HIGH:
+            SetPriorityClass(GetCurrentProcess(), 0x00000080 /*HIGH_PRIORITY_CLASS*/);
+            break;
+
+        default: break;
+    }
+}
+void sys_set_thread_priority_level(Thread_Handle thread, Priority_Level level) {
+    switch(level) {
+        case SYS_PRIORITY_LOW:
+            SetThreadPriority(thread, -2 /*THREAD_PRIORITY_LOWEST*/);
+            break;
+        case SYS_PRIORITY_MEDIUM:
+            SetThreadPriority(thread, 0 /*THREAD_PRIORITY_NORMAL*/);
+            break;
+        case SYS_PRIORITY_HIGH:
+            SetThreadPriority(thread, 15 /*THREAD_PRIORITY_TIME_CRITICAL*/);
+            break;
+
+        default: break;
+    }
+}
+
+void *sys_load_library(string s) {
+    char cs[1024];
+    memcpy(cs, s.data, s.count);
+    cs[s.count] = 0;
+    return LoadLibraryA(cs);
+}
+void sys_close_library(void *lib) {
+    (void)lib;
+}
+void* sys_get_library_symbol(void *lib, string symbol) {
+    char cs[1024];
+    memcpy(cs, symbol.data, symbol.count);
+    cs[symbol.count] = 0;
+
+    return GetProcAddress(lib, cs);
+}
+
+Thread_Handle sys_get_current_thread(void) {
+    return (Thread_Handle)GetCurrentThread();
+}
+
+void sys_print_stack_trace(File_Handle handle) {
+
+    void* process = GetCurrentProcess();
+    void* thread = GetCurrentThread();
+
+    SymInitialize(process, 0, 1);
+
+    CONTEXT context;
+    STACKFRAME64 stack = (STACKFRAME64) {0};
+
+    context.ContextFlags = CONTEXT_FULL;
+    RtlCaptureContext(&context);
+
+    // #Portability cpu arch
+    int machineType = IMAGE_FILE_MACHINE_AMD64;
+    stack.AddrPC.Offset = context.Rip;
+    stack.AddrPC.Mode = AddrModeFlat;
+    stack.AddrFrame.Offset = context.Rsp;
+    stack.AddrFrame.Mode = AddrModeFlat;
+    stack.AddrStack.Offset = context.Rsp;
+    stack.AddrStack.Mode = AddrModeFlat;
+
+    #define WIN32_MAX_STACK_FRAMES 64
+    #define WIN32_MAX_SYMBOL_NAME_LENGTH 512
+
+    for (int i = 0; i < WIN32_MAX_STACK_FRAMES; i++) {
+        if (!StackWalk64((DWORD)machineType, process, thread, &stack, &context, 0, SymFunctionTableAccess64, SymGetModuleBase64, 0)) {
+            break;
+        }
+
+        DWORD64 displacement = 0;
+        char buffer[sizeof(SYMBOL_INFO) + WIN32_MAX_SYMBOL_NAME_LENGTH];
+        PSYMBOL_INFO symbol = (PSYMBOL_INFO)buffer;
+        symbol->SizeOfStruct = sizeof(SYMBOL_INFO);
+        symbol->MaxNameLen = WIN32_MAX_SYMBOL_NAME_LENGTH;
+
+        if (SymFromAddr(process, stack.AddrPC.Offset, &displacement, symbol)) {
+            IMAGEHLP_LINE64 line;
+            u32 displacement_line;
+            line.SizeOfStruct = sizeof(IMAGEHLP_LINE64);
+
+
+            if (SymGetLineFromAddr64(process, stack.AddrPC.Offset, (PDWORD)&displacement_line, &line)) {
+                sys_write_string(handle, STR(line.FileName));
+                sys_write_string(handle, STR(" Line "));
+                u8 sym_buffer[32];
+                string line_str = (string){0, sym_buffer};
+                line_str.count = format_signed_int(line.LineNumber, 10, sym_buffer, 32);
+                sys_write_string(handle, line_str);
+                sys_write_string(handle, STR(" "));
+                sys_write_string(handle, STR(symbol->Name));
+                sys_write_string(handle, STR("\n"));
+
+            } else {
+                u8 sym_buffer[1024];
+                string result = (string) {0, sym_buffer};
+                result.count = (u64)(symbol->NameLen + 1);
+                memcpy(result.data, symbol->Name, symbol->NameLen + 1);
+                sys_write_string(handle, result);
+            }
+
+        } else {
+            sys_write_string(handle, STR("<unavailable>\n"));
+        }
+    }
+}
+#elif (OS_FLAGS & OS_FLAG_ANDROID)
+
+/////////////////////////////////////////////////////
+//////
+// :Android
+//////
+/////////////////////////////////////////////////////
+
+#include <android/log.h>
+#include <android/configuration.h>
+#include <android/native_window.h>
+#include <android/native_window_jni.h>
+#include <android/native_activity.h>
+#include <android/choreographer.h>
+#undef bool
+
+pthread_t _android_stdout_thread;
+pthread_t _android_stderr_thread;
+int _android_stdout_pipe[2];
+int _android_user_stdout_handle = -1;
+int _android_stderr_pipe[2];
+int _android_user_stderr_handle = -1;
+
+ANativeActivity *_android_activity = 0;
+ANativeWindow *_android_window = 0;
+jobject _android_context;
+bool _android_running = true;
+pthread_t _android_main_thread;
+s64 _android_previous_vsync_time = 0;
+f64 _android_refresh_rate = 0.0f;
+
+pthread_cond_t _android_vsync_cond;
+pthread_mutex_t _android_vsync_mut;
+
+unit_local void *_android_mapped_pixels = 0;
+
+static void _android_onDestroy(ANativeActivity* activity) {
+
+}
+
+static void _android_onStart(ANativeActivity* activity) {
+
+}
+
+static void _android_onResume(ANativeActivity* activity) {
+
+}
+
+static void* _android_onSaveInstanceState(ANativeActivity* activity, size_t* outLen) {
+    return 0;
+}
+
+static void _android_onPause(ANativeActivity* activity) {
+
+}
+
+static void _android_onStop(ANativeActivity* activity) {
+
+}
+
+static void _android_onConfigurationChanged(ANativeActivity* activity) {
+
+}
+
+static void _android_onLowMemory(ANativeActivity* activity) {
+
+}
+
+static void _android_onWindowFocusChanged(ANativeActivity* activity, int focused) {
+
+}
+
+static void _android_onNativeWindowCreated(ANativeActivity* activity, ANativeWindow* window) {
+    _android_window = window;
+    __android_log_print(ANDROID_LOG_INFO, "android", "Set _android_window to %p", window);
+}
+
+static void _android_onNativeWindowDestroyed(ANativeActivity* activity, ANativeWindow* window) {
+
+}
+
+static void _android_onInputQueueCreated(ANativeActivity* activity, AInputQueue* queue) {
+
+}
+
+static void _android_onInputQueueDestroyed(ANativeActivity* activity, AInputQueue* queue) {
+
+}
+
+void _android_vsync_callback(s64 frame_time_nanos, void* data) {
+    if (_android_previous_vsync_time != 0) {
+        s64 delta_time_nanos = frame_time_nanos - _android_previous_vsync_time;
+
+        if (delta_time_nanos > 0) {
+            _android_refresh_rate = 1.0 / ((f64)delta_time_nanos / 1000000000.0);
+        }
+    }
+
+    _android_previous_vsync_time = frame_time_nanos;
+
+    pthread_cond_broadcast(&_android_vsync_cond);
+    AChoreographer* choreographer = AChoreographer_getInstance();
+    assert(choreographer);
+    AChoreographer_postFrameCallback(choreographer, _android_vsync_callback, 0);
+}
+
+void* _android_main_thread_proc(void* arg) {
+
+    // todo(charlie) timeout
+    // wait for window to be created
+    while (!_android_window) {}
+
+    extern int _android_main(void);
+    int code = _android_main();
+
+    __android_log_print(ANDROID_LOG_INFO, "android thread", "Exit android thread");
+    ANativeActivity_finish(_android_activity);
+
+    return (void*)(u64)code;
+}
+
+JNIEXPORT __attribute__((visibility("default")))
+void ANativeActivity_onCreate(ANativeActivity* activity, void* savedState,
+    size_t savedStateSize) {
+    activity->callbacks->onDestroy = _android_onDestroy;
+    activity->callbacks->onStart = _android_onStart;
+    activity->callbacks->onResume = _android_onResume;
+    activity->callbacks->onSaveInstanceState = _android_onSaveInstanceState;
+    activity->callbacks->onPause = _android_onPause;
+    activity->callbacks->onStop = _android_onStop;
+    activity->callbacks->onConfigurationChanged = _android_onConfigurationChanged;
+    activity->callbacks->onLowMemory = _android_onLowMemory;
+    activity->callbacks->onWindowFocusChanged = _android_onWindowFocusChanged;
+    activity->callbacks->onNativeWindowCreated = _android_onNativeWindowCreated;
+    activity->callbacks->onNativeWindowDestroyed = _android_onNativeWindowDestroyed;
+    activity->callbacks->onInputQueueCreated = _android_onInputQueueCreated;
+    activity->callbacks->onInputQueueDestroyed = _android_onInputQueueDestroyed;
+
+    activity->instance = 0;
+
+    _android_activity = activity;
+
+    AChoreographer* choreographer = AChoreographer_getInstance();
+    assert(choreographer);
+    AChoreographer_postFrameCallback(choreographer, _android_vsync_callback, 0);
+
+    pthread_create(&_android_main_thread, 0, _android_main_thread_proc, 0);
+    pthread_cond_init(&_android_vsync_cond, 0);
+    pthread_mutex_init(&_android_vsync_mut, 0);
+}
+
+
+pthread_mutex_t _android_stdout_pending_mutex;
+pthread_mutex_t _android_stderr_pending_mutex;
+
+void* _android_stdout_thread_proc(void* arg) {
+    char buffer[1024];
+    ssize_t bytesRead;
+
+    while ((bytesRead = read(_android_stdout_pipe[0], buffer, sizeof(buffer) - 1)) > 0) {
+        pthread_mutex_lock(&_android_stdout_pending_mutex);
+        usleep(50000);
+        buffer[bytesRead] = '\0';
+        __android_log_print(ANDROID_LOG_INFO, "stdout", "%s", buffer);
+        pthread_mutex_unlock(&_android_stdout_pending_mutex);
+    }
+
+    __android_log_print(ANDROID_LOG_INFO, "stdout", "Stdout closed");
+
+    return 0;
+}
+
+void* _android_stderr_thread_proc(void* arg) {
+    char buffer[1024];
+    ssize_t bytesRead;
+
+    while ((bytesRead = read(_android_stderr_pipe[0], buffer, sizeof(buffer) - 1)) > 0) {
+        pthread_mutex_lock(&_android_stderr_pending_mutex);
+        usleep(50000);
+        buffer[bytesRead] = '\0';
+        __android_log_print(ANDROID_LOG_INFO, "stderr", "%s", buffer);
+        pthread_mutex_unlock(&_android_stderr_pending_mutex);
+    }
+
+    __android_log_print(ANDROID_LOG_INFO, "stderr", "Stderr closed");
+
+    return 0;
+}
+
+int _android_main(void) {
+    pipe(_android_stdout_pipe);
+    pipe(_android_stderr_pipe);
+
+    pthread_attr_t attr;
+    struct sched_param param;
+
+    pthread_attr_init(&attr);
+    pthread_attr_setschedpolicy(&attr, SCHED_OTHER);
+
+    param.sched_priority = 0;
+    pthread_attr_setschedparam(&attr, &param);
+#if CSTD11
+    pthread_attr_setinheritsched(&attr, PTHREAD_EXPLICIT_SCHED);
+#endif
+
+    pthread_mutex_init(&_android_stdout_pending_mutex, 0);
+    pthread_create(&_android_stdout_thread, &attr, _android_stdout_thread_proc, 0);
+
+    pthread_mutex_init(&_android_stderr_pending_mutex, 0);
+    pthread_create(&_android_stderr_thread, &attr, _android_stderr_thread_proc, 0);
+
+    extern int main(void);
+    int code = main();
+
+    _android_running = false;
+
+    pthread_mutex_lock(&_android_stdout_pending_mutex);
+    close(_android_stdout_pipe[0]);
+    close(_android_stdout_pipe[1]);
+    pthread_mutex_unlock(&_android_stdout_pending_mutex);
+
+    pthread_mutex_lock(&_android_stderr_pending_mutex);
+    close(_android_stderr_pipe[0]);
+    close(_android_stderr_pipe[1]);
+    pthread_mutex_unlock(&_android_stderr_pending_mutex);
+
+    return code;
+}
+
+u64 sys_query_monitors(Physical_Monitor *buffer, u64 max_count) {
+
+    if (!buffer) return 1;
+    if (max_count == 0) return 0;
+
+
+
+    // Retrieve display resolution using ANativeWindow
+    ANativeWindow* window = _android_window;
+    assert(window);
+
+    int width = ANativeWindow_getWidth(window);
+    int height = ANativeWindow_getHeight(window);
+
+    // Retrieve display density using AConfiguration
+    AConfiguration* config = AConfiguration_new();
+    assert(config);
+
+    AConfiguration_fromAssetManager(config, _android_activity->assetManager);
+
+    int density_dpi = AConfiguration_getDensity(config);
+    float64 scale = density_dpi <= 0 ? 1.0 : (float64)density_dpi / 160.0;
+
+    AConfiguration_delete(config);
+
+    memcpy(buffer[0].name, "Android display", sizeof("Android display")-1);
+    buffer[0].name_count = sizeof("Android display")-1;
+
+    buffer[0].refresh_rate = (s64)_android_refresh_rate;
+    buffer[0].resolution_x = width;
+    buffer[0].resolution_y = height;
+    buffer[0].pos_x = 0;
+    buffer[0].pos_y = 0;
+    buffer[0].scale = scale;
+    buffer[0].handle = 0;
+
+    return 1;
+}
+
+bool sys_wait_vertical_blank(Physical_Monitor monitor) {
+    return pthread_cond_wait(&_android_vsync_cond, &_android_vsync_mut) == 0;
+}
+
+File_Handle sys_get_stdout(void) {
+    if (_android_user_stdout_handle == -1) return (File_Handle)(u64)_android_stdout_pipe[1];
+    else return (File_Handle)(u64)_android_user_stdout_handle;
+}
+File_Handle sys_get_stderr(void) {
+    if (_android_user_stderr_handle == -1) return (File_Handle)(u64)_android_stderr_pipe[1];
+    else return (File_Handle)(u64)_android_user_stderr_handle;
+}
+
+void sys_set_stdout(File_Handle h) {
+    _android_user_stdout_handle = (int)(u64)h;
+}
+void sys_set_stderr(File_Handle h) {
+    _android_user_stderr_handle = (int)(u64)h;
+}
+
+#ifndef OSTD_HEADLESS
+
+Surface_Handle sys_get_surface(void) {
+    return (Surface_Handle)_android_window;
+}
+
+void surface_poll_events(Surface_Handle surface) {
+    (void)surface;
+}
+bool surface_should_close(Surface_Handle s) {
+    return false;
+}
+
+bool surface_set_flags(Surface_Handle h, Surface_Flags flags) {
+    return false;
+}
+bool surface_unset_flags(Surface_Handle h, Surface_Flags flags) {
+    return false;
+}
+
+bool surface_get_framebuffer_size(Surface_Handle h, s64 *width, s64 *height) {
+    *width = (s64)ANativeWindow_getWidth((ANativeWindow*)h);
+    *height = (s64)ANativeWindow_getHeight((ANativeWindow*)h);
+
+    return true;
+}
+
+void* surface_map_pixels(Surface_Handle h) {
+    if (!_android_mapped_pixels) {
+        s64 width, height;
+        surface_get_framebuffer_size(h, &width, &height);
+
+        _android_mapped_pixels = sys_map_pages(SYS_MEMORY_RESERVE | SYS_MEMORY_ALLOCATE, 0, (width * height * 4) / 4096, false);
+    }
+    return _android_mapped_pixels;
+}
+void surface_blit_pixels(Surface_Handle h) {
+    assertmsg(_android_mapped_pixels, "You must call surface_map_pixels() before blitting them. Otherwise there might not be any pixels to blit.");
+    s64 width, height;
+    surface_get_framebuffer_size(h, &width, &height);
+
+    if (ANativeWindow_setBuffersGeometry((ANativeWindow*)h, width, height, WINDOW_FORMAT_RGBA_8888) != 0) {
+        return;
+    }
+
+    ANativeWindow_Buffer buffer;
+    if (ANativeWindow_lock((ANativeWindow*)h, &buffer, 0) != 0) {
+        return;
+    }
+
+    assert(width == buffer.width);
+    assert(height == buffer.height);
+
+    memcpy(buffer.bits, _android_mapped_pixels, width*height*4);
+
+    ANativeWindow_unlockAndPost((ANativeWindow*)h);
+}
+
+bool surface_get_monitor(Surface_Handle h, Physical_Monitor *monitor) {
+    sys_query_monitors(monitor, 1);
+    return true;
+}
+
+#endif // !OSTD_HEADLESS
+
+void sys_print_stack_trace(File_Handle handle) {
+    sys_write_string(handle, STR("<Stack trace unimplemented>"));
+}
+
+#elif (OS_FLAGS & OS_FLAG_LINUX)
+
+/////////////////////////////////////////////////////
+//////
+// :Linux
+//////
+/////////////////////////////////////////////////////
+
+#ifndef OSTD_HEADLESS
+
+Display *xdisplay = 0;
+
+u64 sys_query_monitors(Physical_Monitor *buffer, u64 max_count)
+{
+    Display *dpy = XOpenDisplay(0);
+    if (!dpy) {
+        // Could not open X display
+        return 0;
+    }
+
+    Window root = RootWindow(dpy, DefaultScreen(dpy));
+
+    XRRScreenResources *res = XRRGetScreenResources(dpy, root);
+    if (!res) {
+        XCloseDisplay(dpy);
+        return 0;
+    }
+
+    u64 total_found = 0;
+
+    for (int i = 0; i < res->noutput; i++) {
+        XRROutputInfo *output_info = XRRGetOutputInfo(dpy, res, res->outputs[i]);
+        if (!output_info) {
+            continue;
+        }
+
+        // Only count if it's connected and has an active CRTC
+        if (output_info->connection == RR_Connected && output_info->crtc) {
+            XRRCrtcInfo *crtc_info = XRRGetCrtcInfo(dpy, res, output_info->crtc);
+            if (crtc_info) {
+                if (buffer && total_found < max_count) {
+                    Physical_Monitor *pm = &buffer[total_found];
+                    memset(pm, 0, sizeof(*pm));
+
+                    memcpy(pm->name, output_info->name, sizeof(pm->name) - 1);
+                    pm->name[sizeof(pm->name) - 1] = '\0';
+                    pm->name_count = (u64)(c_style_strlen((char*)pm->name) + 1);
+
+                    pm->pos_x       = crtc_info->x;
+                    pm->pos_y       = crtc_info->y;
+                    pm->resolution_x = crtc_info->width;
+                    pm->resolution_y = crtc_info->height;
+
+                    // todo(charlie) this is a hacky approximation that might not work very well so
+                    // I will need to revisit it.
+                    double refresh = 0.0;
+                    for (int m = 0; m < res->nmode; m++) {
+                        if (res->modes[m].id == crtc_info->mode) {
+                            XRRModeInfo *mode_info = &res->modes[m];
+                            if (mode_info->hTotal && mode_info->vTotal) {
+                                refresh = (double)mode_info->dotClock /
+                                          (double)(mode_info->hTotal * mode_info->vTotal);
+                            }
+                            break;
+                        }
+                    }
+                    pm->refresh_rate = (u64)(refresh + 0.5);
+
+                    pm->scale = 1.0;
+
+                    pm->handle = dpy;
+                }
+                total_found++;
+                XRRFreeCrtcInfo(crtc_info);
+            }
+        }
+        XRRFreeOutputInfo(output_info);
+    }
+
+    XRRFreeScreenResources(res);
+    XCloseDisplay(dpy);
+
+    return total_found;
+}
+
+bool sys_wait_vertical_blank(Physical_Monitor monitor) {
+    // Linux sucks for this. All I can really do is open an invisible window, make
+    // a dummy glx context, and swap buffers.
+    (void)monitor;
+    local_persist GLXContext glx = 0;
+    local_persist Window wnd = 0;
+    local_persist Display *dsp = 0;
+
+    if (!glx) {
+        dsp = XOpenDisplay(0);
+        assert(dsp);
+        if (!dsp) {
+            return false;
+        }
+
+        int screen = DefaultScreen(dsp);
+
+        // Define the visual attributes
+        int attribs[] = {
+            GLX_RGBA,
+            GLX_DEPTH_SIZE, 24,
+            GLX_DOUBLEBUFFER,
+            None
+        };
+
+        XVisualInfo *visual_info = glXChooseVisual(dsp, screen, attribs);
+        if (!visual_info) {
+            XCloseDisplay(dsp);
+            dsp = 0;
+            return false;
+        }
+
+        // Create a simple window
+        wnd = XCreateSimpleWindow(
+            dsp,
+            DefaultRootWindow(dsp),
+            -10000, -10000,  /* x, y: move window off-screen */
+            1, 1,           /* width, height: 1x1 so it's tiny */
+            0,
+            BlackPixel(dsp, screen),
+            BlackPixel(dsp, screen)
+        );
+
+        assert(wnd);
+
+        // Make the window invisible
+        XSetWindowAttributes attrs;
+        attrs.override_redirect = True;
+        XChangeWindowAttributes(dsp, wnd, CWOverrideRedirect, &attrs);
+
+        // Map the window to make it a valid drawable
+        XMapWindow(dsp, wnd);
+
+        // Wait window mapped.
+        XEvent event;
+        for (;;) {
+            if (XCheckTypedWindowEvent(dsp, wnd, MapNotify, &event)) {
+                break;
+            }
+        }
+
+        // Create a GLX context
+        glx = glXCreateContext(dsp, visual_info, 0, GL_TRUE);
+        XFree(visual_info);
+
+        assert(glx);
+
+        assert(glXMakeCurrent(dsp, wnd, glx));
+
+        // Enable v-sync
+        typedef int (*glXSwapIntervalProc)(int);
+        glXSwapIntervalProc glXSwapIntervalSGI = (glXSwapIntervalProc)glXGetProcAddressARB((const GLubyte *)"glXSwapIntervalSGI");
+        if (glXSwapIntervalSGI) {
+            glXSwapIntervalSGI(1);
+        }
+    }
+
+    if (dsp && glx && wnd) {
+        glXMakeCurrent(dsp, wnd, glx);
+        glXSwapBuffers(dsp, wnd);
+        return true;
+    }
+
+    return false;
+}
+
+bool surface_get_monitor(Surface_Handle h, Physical_Monitor *monitor) {
+    _Surface_State *state = _get_surface_state(h);
+
+    Physical_Monitor monitors[128];
+    u64 monitor_count = sys_query_monitors(monitors, 128);
+
+    if (monitor_count == 0) {
+        return false;
+    }
+
+    if (!xdisplay) xdisplay = XOpenDisplay(0);
+
+    XWindowAttributes win_attr;
+    if (!XGetWindowAttributes(xdisplay, (Window)state->handle, &win_attr)) {
+        return false;
+    }
+
+    int win_x = win_attr.x;
+    int win_y = win_attr.y;
+    int win_width = win_attr.width;
+    int win_height = win_attr.height;
+
+    int max_intersection_area = 0;
+
+    Physical_Monitor *max_monitor = 0;
+
+    for (u64 i = 0; i < monitor_count; i++) {
+        Physical_Monitor *m = &monitors[i];
+
+        int mon_x = m->pos_x;
+        int mon_y = m->pos_y;
+        int mon_width = m->resolution_x;
+        int mon_height = m->resolution_y;
+
+        int inter_x = max(win_x, mon_x);
+        int inter_y = max(win_y, mon_y);
+        int inter_width = min(win_x + win_width, mon_x + mon_width) - inter_x;
+        int inter_height = min(win_y + win_height, mon_y + mon_height) - inter_y;
+
+        if (inter_width > 0 && inter_height > 0) {
+            int intersection_area = inter_width * inter_height;
+            if (intersection_area > max_intersection_area) {
+                max_intersection_area = intersection_area;
+                max_monitor = m;
+            }
+        }
+    }
+
+    if (max_monitor) {
+        *monitor = *max_monitor;
+        return true;
+    }
+    return false;
+}
+
+#endif // OSTD_HEADLESS
+
+File_Handle sys_get_stdout(void) {
+    return (File_Handle)(u64)STDOUT_FILENO;
+}
+
+File_Handle sys_get_stderr(void) {
+    return (File_Handle)(u64)STDERR_FILENO;
+}
+
+void sys_set_stdout(File_Handle h) {
+    dup2((int)(u64)h, STDOUT_FILENO);
+}
+
+void sys_set_stderr(File_Handle h) {
+    dup2((int)(u64)h, STDERR_FILENO);
+}
+
+unit_local bool _x11_initted = false;
+
+#ifndef OSTD_HEADLESS
+
+Surface_Handle sys_make_surface(Surface_Desc desc) {
+        if (!_x11_initted) {
+            XInitThreads();
+            _x11_initted = true;
+        }
+
+        if (!xdisplay) xdisplay = XOpenDisplay(0);
+        if (!xdisplay) {
+            sys_write_string(sys_get_stdout(), STR("Failed to open X xdisplay\n"));
+            return 0;
+        }
+
+        int screen = DefaultScreen(xdisplay);
+        unsigned long white = WhitePixel(xdisplay, screen);
+
+        Window window = XCreateSimpleWindow(
+            xdisplay,
+            DefaultRootWindow(xdisplay),
+            0, 0,
+            desc.width, desc.height,
+            0,
+            0,
+            white
+        );
+
+
+        char ctitle[256];
+        memcpy(ctitle, desc.title.data, min(desc.title.count, 255));
+        ctitle[min(desc.title.count, 255)] = 0;
+        XStoreName(xdisplay, window, ctitle);
+
+        XSelectInput(xdisplay, window, ExposureMask | KeyPressMask | StructureNotifyMask);
+
+        if (!(desc.flags & SURFACE_FLAG_HIDDEN)) {
+            XMapWindow(xdisplay, window);
+        }
+
+        _Surface_State *surface = (_Surface_State *)_alloc_surface_state();
+        surface->handle = (Surface_Handle)window;
+        surface->should_close = false;
+        return (Surface_Handle)window;
+}
+
+void surface_close(Surface_Handle s) {
+    if (!s) return;
+    _Surface_State *state = _get_surface_state(s);
+
+    XDestroyWindow(xdisplay, (Window)state->handle);
+    XCloseDisplay(xdisplay);
+
+    state->allocated = false;
+}
+
+void surface_poll_events(Surface_Handle surface) {
+    if (!surface) return;
+    _Surface_State *state = _get_surface_state(surface);
+
+    while (XPending(xdisplay)) {
+        XEvent evt;
+        XNextEvent(xdisplay, &evt);
+        switch (evt.type) {
+            case ClientMessage:
+            case DestroyNotify:
+                state->should_close = true;
+                break;
+            default:
+                break;
+        }
+    }
+}
+
+bool surface_should_close(Surface_Handle s) {
+    if (!s) return true;
+    _Surface_State *state = _get_surface_state(s);
+    return state->should_close;
+}
+
+bool surface_set_flags(Surface_Handle h, Surface_Flags flags) {
+    if (!h) return false;
+    _Surface_State *state = _get_surface_state(h);
+
+    if (flags & SURFACE_FLAG_HIDDEN) {
+        XUnmapWindow(xdisplay, (Window)state->handle);
+    }
+    if (flags & SURFACE_FLAG_TOPMOST) {
+
+    }
+    return true;
+}
+
+bool surface_unset_flags(Surface_Handle h, Surface_Flags flags) {
+    if (!h) return false;
+    _Surface_State *state = _get_surface_state(h);
+
+    if (flags & SURFACE_FLAG_HIDDEN) {
+        XMapWindow(xdisplay, (Window)state->handle);
+    }
+
+    if (flags & SURFACE_FLAG_TOPMOST) {
+    }
+    return true;
+}
+
+bool surface_get_framebuffer_size(Surface_Handle h, s64 *width, s64 *height) {
+    _Surface_State *state = _get_surface_state(h);
+    if (!state) return false;
+
+    XWindowAttributes attrs;
+    if (!XGetWindowAttributes(xdisplay, (Window)h, &attrs)) {
+        return false;
+    }
+    *width  = (s64)attrs.width;
+    *height = (s64)attrs.height;
+    return true;
+}
+
+void* surface_map_pixels(Surface_Handle h) {
+    _Surface_State *state = _get_surface_state(h);
+    if (!state) return 0;
+
+    if (state->pixels) {
+        return state->pixels;
+    }
+
+    s64 width, height;
+    if (!surface_get_framebuffer_size(h, &width, &height)) return 0;
+
+    s64 bytes_needed = width * height * 4;
+    s64 pages        = (bytes_needed + 4095) / 4096;
+
+    state->pixels = sys_map_pages(SYS_MEMORY_RESERVE | SYS_MEMORY_ALLOCATE, 0, pages, false);
+    if (!state->pixels) {
+        return 0;
+    }
+
+    int screen = DefaultScreen(xdisplay);
+    int depth  = DefaultDepth(xdisplay, screen);
+
+    state->ximage = XCreateImage(
+        xdisplay,
+        DefaultVisual(xdisplay, screen),
+        (unsigned int)depth,
+        ZPixmap,
+        0,
+        (char*)state->pixels,
+        (unsigned int)width,
+        (unsigned int)height,
+        32,
+        (int)(width * 4)
+    );
+
+    state->gc = XCreateGC(xdisplay, (Drawable)h, 0, 0);
+
+    return state->pixels;
+}
+
+void surface_blit_pixels(Surface_Handle h) {
+    _Surface_State *state = _get_surface_state(h);
+    if (!state) return;
+
+    if (!state->pixels || !state->ximage) {
+        return;
+    }
+
+    s64 width, height;
+    if (!surface_get_framebuffer_size(h, &width, &height)) {
+        return;
+    }
+
+    Window window = (Window)state->handle;
+    glXMakeCurrent(0, 0, 0);
+    XPutImage(
+        xdisplay,
+        (Drawable)window,
+        state->gc,
+        state->ximage,
+        0, 0,
+        0, 0,
+        (unsigned int)width,
+        (unsigned int)height
+    );
+
+    XFlush(xdisplay);
+}
+
+#endif // !OSTD_HEADLESS
+
+void sys_print_stack_trace(File_Handle handle) {
+    void *stack[64];
+    int frames = backtrace(stack, 64);
+    char **symbols = backtrace_symbols(stack, frames);
+
+    if (symbols) {
+        for (int i = 0; i < frames; i++) {
+            sys_write_string(handle, STR(symbols[i]));
+            sys_write_string(handle, STR("\n"));
+        }
+        //free(symbols);
+        // #Leak
+    } else {
+        sys_write_string(handle, STR("<Stack trace unavailable>\n"));
+    }
+}
+
+#elif (OS_FLAGS & OS_FLAG_EMSCRIPTEN)
+
+/////////////////////////////////////////////////////
+//////
+// :Emscripten
+//////
+/////////////////////////////////////////////////////
+
+#undef abs
+#include <emscripten.h>
+#include <emscripten/html5.h>
+#include <emscripten/threading_legacy.h>
+#define abs(x) ((x) < 0 ? -(x) : (x))
+#undef bool
+
+unit_local u64 __rdtsc(void) {
+    return (u64)(emscripten_get_now()*1000.0);
+}
+
+#ifndef OSTD_HEADLESS
+
+u64 sys_query_monitors(Physical_Monitor *buffer, u64 max_count)
+{
+    if (!buffer) {
+        return 1;
+    }
+    if (max_count == 0) {
+        return 0;
+    }
+    double scale = emscripten_get_device_pixel_ratio();
+
+    int width = 0;
+    int height = 0;
+    emscripten_get_canvas_element_size("#canvas", &width, &height);
+
+    {
+        memcpy(buffer[0].name, "Web Display", sizeof("Web Display")-1);
+        buffer[0].name_count = sizeof("Web Display")-1;
+
+        buffer[0].refresh_rate = 60;
+
+        buffer[0].resolution_x = width;
+        buffer[0].resolution_y = height;
+
+        buffer[0].pos_x = 0;
+        buffer[0].pos_y = 0;
+
+        buffer[0].scale = scale;
+
+        buffer[0].handle = 0;
+    }
+
+    return 1;
+}
+bool surface_get_monitor(Surface_Handle h, Physical_Monitor *monitor) {
+    (void)h;
+    sys_query_monitors(monitor, 1);
+    return true;
+}
+
+#endif // !OSTD_HEADLESS
+
+File_Handle sys_get_stdout(void) {
+    return (File_Handle)1;
+}
+
+File_Handle sys_get_stderr(void) {
+    return (File_Handle)2;
+}
+
+void sys_set_stdout(File_Handle h) {
+    (void)h;
+}
+void sys_set_stderr(File_Handle h) {
+    (void)h;
+}
+
+#ifndef OSTD_HEADLESS
+Surface_Handle sys_get_surface(void) {
+    return (Surface_Handle)69; // todo(charlie) revisit
+}
+
+void surface_poll_events(Surface_Handle surface) {
+    (void)surface;
+}
+bool surface_should_close(Surface_Handle s) {
+    (void)s;
+    return false;
+}
+
+typedef struct _Em_Canvas_Size_Result {
+    int success;
+    int w;
+    int h;
+} _Em_Canvas_Size_Result;
+
+unit_local void _em_get_canvas_size_main_thread(void *arg) {
+    _Em_Canvas_Size_Result *result = (_Em_Canvas_Size_Result *)arg;
+    int w, h_int;
+    if (emscripten_get_canvas_element_size("#canvas", &w, &h_int) == EMSCRIPTEN_RESULT_SUCCESS) {
+        result->w = w;
+        result->h = h_int;
+        result->success = 1;
+    } else {
+        result->success = 0;
+    }
+}
+
+bool surface_get_framebuffer_size(Surface_Handle h, s64 *width, s64 *height) {
+    (void)h;
+    _Em_Canvas_Size_Result result = {0};
+
+    emscripten_sync_run_in_main_runtime_thread(EM_FUNC_SIG_VI, _em_get_canvas_size_main_thread, &result);
+    if (!result.success)
+        return false;
+
+    *width = result.w;
+    *height = result.h;
+    return true;
+}
+
+static uint32_t *_em_pixel_buffer = 0;
+static size_t _em_pixel_buffer_size = 0;
+// Allocate (or reallocate) a static pixel buffer to match the canvas size.
+void* surface_map_pixels(Surface_Handle h) {
+    (void)h;
+    s64 width, height;
+    if (!surface_get_framebuffer_size(h, &width, &height))
+        return 0;
+    size_t required = (size_t)width * (size_t)height;
+    if (required > _em_pixel_buffer_size) {
+        if (_em_pixel_buffer) {
+            sys_unmap_pages(_em_pixel_buffer);
+        }
+
+        u64 size = required * 4;
+        u64 pages = (size+4096)/4096;
+        _em_pixel_buffer = sys_map_pages(SYS_MEMORY_RESERVE | SYS_MEMORY_ALLOCATE, 0, pages, false);
+        _em_pixel_buffer_size = required;
+    }
+    return _em_pixel_buffer;
+}
+
+unit_local char _em_surface_blit_pixels_script[8196] = {0};
+    #pragma clang diagnostic ignored "-Wmissing-noreturn"
+unit_local void main_thread_surface_blit_pixels(void) {
+    char *script = _em_surface_blit_pixels_script;
+    emscripten_run_script(script);
+}
+
+void surface_blit_pixels(Surface_Handle h) {
+    (void)h;
+    s64 width, height;
+    if (!surface_get_framebuffer_size(h, &width, &height))
+        return;
+
+    const char *format =
+        "var canvas = document.getElementById('canvas');"
+        "if (canvas) {"
+            "var ctx = canvas.getContext('2d');"
+            "var imageData = ctx.createImageData(%i, %i);"
+            "var numBytes = %i * %i * 4;"
+            "var ptr = %i;"
+            "var pixels = HEAPU8.subarray(ptr, ptr + numBytes);"
+            "imageData.data.set(pixels);"
+            "ctx.putImageData(imageData, 0, 0);"
+        "}";
+
+    int w = (int)width;
+    int h_int = (int)height;
+
+    #pragma clang diagnostic ignored "-Wformat-nonliteral"
+    extern int snprintf(char*restrict, unsigned long, const char*restrict, ...);
+    int script_len = snprintf(0, 0, format, w, h_int, w, h_int, (int)_em_pixel_buffer) + 1;
+    assert(script_len < (int)sizeof(_em_surface_blit_pixels_script));
+    snprintf(_em_surface_blit_pixels_script, (unsigned long)script_len, format, w, h_int, w, h_int, (int)_em_pixel_buffer);
+
+    emscripten_sync_run_in_main_runtime_thread(EM_FUNC_SIG_V, main_thread_surface_blit_pixels, _em_surface_blit_pixels_script);
+}
+
+unit_local volatile s32 _em_frame_ready = 0;
+unit_local EM_BOOL animation_frame_callback(double time, void *userData) {
+    (void)time;
+    (void)userData;
+    _em_frame_ready = 1;
+    return EM_TRUE;
+}
+unit_local void _em_main_thread_wait_animation_frame(void) {
+    _em_frame_ready = 0;
+    emscripten_request_animation_frame(animation_frame_callback, 0);
+
+    while (!_em_frame_ready) {
+        // whatevs web is dumb
+         _em_frame_ready = true;
+    }
+}
+bool sys_wait_vertical_blank(Physical_Monitor monitor) {
+    (void)monitor;
+    emscripten_sync_run_in_main_runtime_thread(EM_FUNC_SIG_V, _em_main_thread_wait_animation_frame);
+    return true;
+}
+
+#endif // !OSTD_HEADLESS
+
+
+void sys_print_stack_trace(File_Handle handle) {
+    char buffer[16384];
+    int len = emscripten_get_callstack(EM_LOG_C_STACK, buffer, 16384);
+    sys_write(handle, buffer, (u64)len);
+}
+
+#endif // OS_FLAGS & XXXXX
+
+#endif // OSTD_IMPL
+
+
+
+
+
+
+#endif // _SYSTEM_1_H
+
+/* End include: system1.h */
+#endif //_SYSTEM_1_H
+
+/////
+// Allocator
+/////
+
+typedef enum Allocator_Message {
+    ALLOCATOR_ALLOCATE,
+    ALLOCATOR_REALLOCATE,
+    ALLOCATOR_FREE
+} Allocator_Message;
+typedef void*(*Allocator_Proc)(Allocator_Message msg, void *data, void *old, u64 old_n, u64 n, u64 alignment, u64 flags);
+
+typedef struct Allocator {
+    void *data;
+    Allocator_Proc proc;
+} Allocator;
+
+inline void *allocate(Allocator a, u64 n);
+inline void *reallocate(Allocator a, void *p, u64 old_n, u64 n);
+inline void deallocate(Allocator a, void *p);
+
+inline void *allocatef(Allocator a, u64 n, u64 flags);
+inline void *reallocatef(Allocator a, void *p, u64 old_n, u64 n, u64 flags);
+inline void deallocatef(Allocator a, void *p, u64 flags);
+
+#define New(a, T) ((T*)allocate(a, sizeof(T)))
+#define NewBuffer(a, T, n) ((T*)allocate(a, sizeof(T)*n))
+
+#define PushTemp(T) New(get_temp(), T)
+#define PushTempBuffer(T, n) NewBuffer(get_temp(), T, n)
+
+inline string string_allocate(Allocator a, u64 n);
+inline void string_deallocate(Allocator a, string s);
+inline string string_copy(Allocator a, string s);
+
+/////
+// Arena
+/////
+
+typedef struct Arena {
+    void *start;
+    void *position;
+    u64 reserved_size;
+    u64 allocated_size;
+} Arena;
+
+OSTD_LIB Arena make_arena(u64 reserved_size, u64 initial_allocated_size);
+OSTD_LIB void *arena_push(Arena *arena, u64 size);
+OSTD_LIB void *arena_push_copy(Arena *arena, void *src, u64 size);
+OSTD_LIB void arena_pop(Arena *arena, u64 size);
+OSTD_LIB void arena_reset(Arena *arena);
+OSTD_LIB void free_arena(Arena arena);
+
+unit_local void* arena_allocator_proc(Allocator_Message msg, void *data, void *old, u64 old_n, u64 n, u64 alignment, u64 flags);
+unit_local inline Allocator arena_allocator(Arena *a) { return (Allocator) { a, arena_allocator_proc }; }
+
+/////
+// Temporary storage
+/////
+
+// todo(charlie) temporary storage might get bloated with large temporary allocations,
+// so we should provide a way to shrink temporary storage.
+
+OSTD_LIB Allocator get_temp(void);
+OSTD_LIB void reset_temporary_storage(void);
+OSTD_LIB void *tallocate(size_t n);
+
+
+/////
+// Allocation interface
+/////
+
+OSTD_LIB void *allocate(Allocator a, u64 n);
+OSTD_LIB void *reallocate(Allocator a, void *p, u64 old_n, u64 n);
+OSTD_LIB void deallocate(Allocator a, void *p);
+
+OSTD_LIB void *allocatef(Allocator a, u64 n, u64 flags);
+OSTD_LIB void *reallocatef(Allocator a, void *p, u64 old_n, u64 n, u64 flags);
+OSTD_LIB void deallocatef(Allocator a, void *p, u64 flags);
+
+OSTD_LIB string string_allocate(Allocator a, u64 n);
+OSTD_LIB void string_deallocate(Allocator a, string s);
+
+OSTD_LIB string string_copy(Allocator a, string s);
+
+
+/////
+// Arena-backed Persistent Growing Array
+/////
+
+/*
+    Usage:
+    
+        Data *my_array;
+        persistent_array_init(allocator, (void**)&my_array, sizeof(Data));
+        
+        persistent_array_reserve(my_array, 7); // Optional, reserve memory for fewer grows
+        
+        Data elem = ...;
+        persistent_array_push_copy(my_array, &elem);
+        
+        Data *elem = persistent_array_push_empty(my_array);
+        
+        persistent_array_uninit(my_array);
+*/
+
+OSTD_LIB void persistent_array_init(void **pparray, u64 element_size);
+OSTD_LIB void persistent_array_uninit(void *parray);
+OSTD_LIB void *persistent_array_push_copy(void *parray, void *item);
+OSTD_LIB void *persistent_array_push_empty(void *parray);
+OSTD_LIB void persistent_array_reserve(void *parray, u64 reserve_count);
+OSTD_LIB void persistent_array_shift_left(void *parray, u64 start_index, u64 shift_amount);
+OSTD_LIB void *persistent_array_shift_right(void *parray, u64 start_index, u64 shift_amount);
+OSTD_LIB void persistent_array_pop(void *parray);
+OSTD_LIB void persistent_array_swap_and_pop(void *parray, u64 index);
+OSTD_LIB s64 persistent_array_find_from_left(void *parray, void *pcompare_mem);
+OSTD_LIB s64 persistent_array_find_from_right(void *parray, void *pcompare_mem);
+OSTD_LIB void persistent_array_set_count(void *parray, u64 count);
+OSTD_LIB u64 persistent_array_count(void *parray);
+
+typedef struct Arena_Backed_Array_Header {
+    Arena arena;
+    u64 capacity;
+    u64 count;
+    u64 elem_size;
+    u64 signature;
+} Arena_Backed_Array_Header;
+
+#ifdef OSTD_IMPL
+
+typedef struct _Per_Thread_Temporary_Storage {
+    Arena arena;
+    Allocator a;
+    bool initted;
+} _Per_Thread_Temporary_Storage;
+
+unit_local inline _Per_Thread_Temporary_Storage* _lazy_init_temporary_storage(void) {
+    _Ostd_Thread_Storage *s = _ostd_get_thread_storage();
+    assert(s->temp);
+    assertmsg(sizeof(_Per_Thread_Temporary_Storage) < sizeof(s->temporary_storage_struct_backing), "refactor time");
+    if (s->temp->initted) {
+        return s->temp;
+    }
+
+#if OS_FLAGS & OS_FLAG_EMSCRIPTEN
+    s->temp->arena = make_arena(1024*1024, 1024*1024);
+#else
+    s->temp->arena = make_arena(sys_get_info().page_size*6900, 1024);
+#endif
+    s->temp->a = (Allocator) { &s->temp->arena, arena_allocator_proc };
+    
+    s->temp->initted = true;
+    
+    return s->temp;
+}
+Allocator get_temp(void) {
+    return _lazy_init_temporary_storage()->a;
+}
+void reset_temporary_storage(void) {
+    arena_reset(&_lazy_init_temporary_storage()->arena);
+}
+void *tallocate(size_t n) {
+    return allocate(_lazy_init_temporary_storage()->a, n);
+}
+
+Arena make_arena(u64 reserved_size, u64 initial_allocated_size) {
+    assert(reserved_size >= initial_allocated_size);
+
+#if OS_FLAGS & OS_FLAG_EMSCRIPTEN
+    assertmsg(reserved_size == initial_allocated_size, "Emscripten does not support reserved-only memory allocations. Arena initial allocation size must match reserved_size");
+#endif // OS_FLAGS & OS_FLAG_EMSCRIPTEN
+
+    System_Info info = sys_get_info();
+
+    // Align to page size
+    reserved_size = (reserved_size + info.page_size - 1) & ~(info.page_size - 1);
+    initial_allocated_size = (initial_allocated_size + info.page_size - 1) & ~(info.page_size - 1);
+
+    assert(initial_allocated_size <= reserved_size);
+
+    Arena arena;
+
+    if (reserved_size > initial_allocated_size) {
+        arena.start = sys_map_pages(SYS_MEMORY_RESERVE, 0, reserved_size/info.page_size, false);
+        assert(arena.start);
+        if (initial_allocated_size) {
+            void *allocate_result = sys_map_pages(SYS_MEMORY_ALLOCATE, arena.start, initial_allocated_size/info.page_size, true);
+            assert(allocate_result == arena.start);
+        }
+    } else {
+        arena.start = sys_map_pages(SYS_MEMORY_RESERVE | SYS_MEMORY_ALLOCATE, 0, reserved_size/info.page_size, false);
+    }
+
+    arena.position = arena.start;
+
+
+    arena.reserved_size = reserved_size;
+    arena.allocated_size = initial_allocated_size;
+
+    return arena;
+}
+void arena_reset(Arena *arena) {
+    arena->position = arena->start;
+}
+void free_arena(Arena arena) {
+    void *start = arena.start;
+    void *end = (u8*)arena.start + arena.reserved_size;
+
+    u64 pointer_count = sys_query_mapped_regions(start, end, 0, 0);
+
+    Mapped_Memory_Info *pointers = (Mapped_Memory_Info *)arena.start;
+    sys_query_mapped_regions(start, end, pointers, pointer_count);
+
+    u32 i;
+    for (i = 0; i < pointer_count; i += 1) {
+        sys_unmap_pages(pointers[i].base);
+    }
+}
+
+void *arena_push(Arena *arena, u64 size) {
+
+    System_Info info = sys_get_info();
+
+    void *allocated_tail = (u8*)arena->start + arena->allocated_size;
+    void *reserved_tail = (u8*)arena->start + arena->reserved_size;
+
+    if ((u64)arena->position + size > (u64)reserved_tail) {
+        return 0;
+    }
+
+    if ((u64)arena->position + size > (u64)allocated_tail) {
+
+        u64 amount_to_allocate = ((u64)arena->position + size) - (u64)allocated_tail;
+
+        amount_to_allocate = (amount_to_allocate + info.page_size-1) & ~(info.page_size-1);
+
+        u64 pages_to_allocate = amount_to_allocate / info.page_size;
+
+        void *allocate_result = sys_map_pages(SYS_MEMORY_ALLOCATE, allocated_tail, pages_to_allocate, true);
+        assertmsg(allocate_result == allocated_tail, "Failed allocating pages in arena");
+
+        arena->allocated_size += amount_to_allocate;
+    }
+
+    void *p = arena->position;
+    arena->position = (u8*)arena->position + size;
+
+    return p;
+}
+
+void *arena_push_copy(Arena *arena, void *src, u64 size) {
+    void *dst = arena_push(arena, size);
+    memcpy(dst, src, (sys_uint)size);
+    return dst;
+}
+
+void arena_pop(Arena *arena, u64 size) {
+    arena->position = (u8*)arena->position - size;
+    if ((u64)arena->position < (u64)arena->start)  arena->position = arena->start;
+}
+
+void* arena_allocator_proc(Allocator_Message msg, void *data, void *old, u64 old_n, u64 n, u64 alignment, u64 flags) {
+    (void)flags;
+    Arena *a = (Arena*)data;
+    switch (msg) {
+        case ALLOCATOR_ALLOCATE:
+        {
+            return arena_push(a, n);
+        }
+        case ALLOCATOR_REALLOCATE:
+        {
+            u64 pad = (u64)a->start - ((u64)a->start+alignment-1) & ~(alignment-1);
+            void* p = (u8*)arena_push(a, n+pad) + pad;
+            assert((u64)p % alignment == 0);
+            if (old && old_n) {
+                memcpy(p, old, (sys_uint)min(old_n, n));
+            }
+            return p;
+
+        }
+        case ALLOCATOR_FREE:
+        {
+            break;
+        }
+
+        default:
+        {
+            break;
+        }
+    }
+
+    return 0;
+}
+
+void *allocate(Allocator a, u64 n) {
+    return a.proc(ALLOCATOR_ALLOCATE, a.data, 0, 0, n, 0, 0);
+}
+void *reallocate(Allocator a, void *p, u64 old_n, u64 n) {
+    return a.proc(ALLOCATOR_REALLOCATE, a.data, p, old_n, n, 0, 0);
+}
+void deallocate(Allocator a, void *p) {
+    a.proc(ALLOCATOR_FREE, a.data, p, 0, 0, 0, 0);
+}
+
+void *allocatef(Allocator a, u64 n, u64 flags) {
+    return a.proc(ALLOCATOR_ALLOCATE, a.data, 0, 0, n, flags, 0);
+}
+void *reallocatef(Allocator a, void *p, u64 old_n, u64 n, u64 flags) {
+    return a.proc(ALLOCATOR_REALLOCATE, a.data, p, old_n, n, flags, 0);
+}
+void deallocatef(Allocator a, void *p, u64 flags) {
+    a.proc(ALLOCATOR_FREE, a.data, p, 0, 0, flags, 0);
+}
+
+string string_allocate(Allocator a, u64 n) {
+    return (string) {n, (u8*)allocate(a, n)};
+}
+void string_deallocate(Allocator a, string s) {
+    deallocate(a, s.data);
+}
+
+string string_copy(Allocator a, string s) {
+    string new_s = string_allocate(a, s.count);
+    memcpy(new_s.data, s.data, (sys_uint)s.count);
+    return new_s;
+}
+
+unit_local Arena_Backed_Array_Header *_persistent_header(void *parray) {
+    Arena_Backed_Array_Header *h = (Arena_Backed_Array_Header*)parray - 1;
+    assertmsg(h->signature == 0xfeedfacedeadbeef, "Pointer used as persistent array but it was not initialized with persistent_array_init()");
+    return h;
+}
+
+void persistent_array_init(void **pparray, u64 element_size) {
+    // todo(charlie) configurable
+    Arena arena = make_arena(1024ULL*1024ULL*1024ULL*4ULL, 0);
+    
+    Arena_Backed_Array_Header *header = (Arena_Backed_Array_Header*)arena_push(&arena, sizeof(Arena_Backed_Array_Header));
+    *header = (Arena_Backed_Array_Header){0};
+    header->arena = arena;
+    header->signature = 0xfeedfacedeadbeef;
+    header->elem_size = element_size;
+    
+    *pparray = header->arena.position;
+}
+void persistent_array_uninit(void *parray) {
+    Arena_Backed_Array_Header *h = _persistent_header(parray);
+    free_arena(h->arena);
+}
+void *persistent_array_push_copy(void *parray, void *src) {
+    Arena_Backed_Array_Header *h = _persistent_header(parray);
+    void *p = persistent_array_push_empty(parray);
+    memcpy(p, src, h->elem_size);
+    return p;
+}
+void *persistent_array_push_empty(void *parray) {
+    Arena_Backed_Array_Header *h = _persistent_header(parray);
+    
+    void *p;
+    if (h->count == h->capacity) {
+        p = arena_push(&h->arena, h->elem_size);
+        h->capacity += 1;
+    } else {
+        assert(h->count < h->capacity);
+        p = (u8*)parray + h->count*h->elem_size;
+    }
+    
+    h->count += 1;
+    
+    return p;
+}
+void persistent_array_reserve(void *parray, u64 reserve_count) {
+    Arena_Backed_Array_Header *h = _persistent_header(parray);
+    if (reserve_count <= h->capacity) return;
+    
+    u64 diff = reserve_count - h->capacity;
+    
+    arena_push(&h->arena, diff*h->elem_size);
+    h->capacity += diff;
+}
+void persistent_array_shift_left(void *parray, u64 start_index, u64 shift_amount) {
+    Arena_Backed_Array_Header *h = _persistent_header(parray);
+    assertmsg(start_index < h->count, "Index out of range");
+    u64 left_count = h->count-start_index-1;
+    assert(shift_amount <= left_count);
+    
+    memcpy(
+        (u8*)parray+(start_index-shift_amount)*h->elem_size, 
+        (u8*)parray+(h->count-start_index)*h->elem_size, 
+        shift_amount*h->elem_size
+    );
+}
+void *persistent_array_shift_right(void *parray, u64 start_index, u64 shift_amount) {
+    Arena_Backed_Array_Header *h = _persistent_header(parray);
+    assertmsg(start_index < h->count, "Index out of range");
+    
+    persistent_array_reserve(parray, h->count+shift_amount);
+    
+    memcpy(
+        (u8*)parray+(start_index+shift_amount)*h->elem_size, 
+        (u8*)parray+start_index*h->elem_size, 
+        shift_amount*h->elem_size
+    );
+    
+    return (u8*)parray+start_index*h->elem_size;
+}
+void persistent_array_pop(void *parray) {
+    Arena_Backed_Array_Header *h = _persistent_header(parray);
+    assert(h->count > 0);
+    h->count -= 1;
+}
+void persistent_array_swap_and_pop(void *parray, u64 index) {
+    Arena_Backed_Array_Header *h = _persistent_header(parray);
+    persistent_array_pop(parray);
+    memcpy((u8*)parray+index*h->elem_size, (u8*)parray+h->count*h->elem_size, h->elem_size);
+}
+s64 persistent_array_find_from_left(void *parray, void *pcompare_mem) {
+    Arena_Backed_Array_Header *h = _persistent_header(parray);
+    for (u64 i = 0; i < h->count; i += 1) {
+        if (memcmp(pcompare_mem, (u8*)parray + i*h->elem_size, h->elem_size) == 0)
+            return (s64)i;
+    }
+    return -1;
+}
+s64 persistent_array_find_from_right(void *parray, void *pcompare_mem) {
+    Arena_Backed_Array_Header *h = _persistent_header(parray);
+    for (s64 i = (s64)h->count-1; i >= 0; i -= 1) {
+        if (memcmp(pcompare_mem, (u8*)parray + (u64)i*h->elem_size, h->elem_size) == 0)
+            return i;
+    }
+    return -1;
+}
+
+void persistent_array_set_count(void *parray, u64 count) {
+    Arena_Backed_Array_Header *h = _persistent_header(parray);
+    persistent_array_reserve(parray, count);
+    h->count = count;
+}
+
+u64 persistent_array_count(void *parray) {
+    return _persistent_header(parray)->count;
+}
+
+#endif // OSTD_IMPL
+
+#endif // _MEMORY_H
+
+/* End include: memory.h */
+#endif // _MEMORY_H
+#ifndef _VAR_ARGS_H
+
+/* Begin include: var_args.h */
+#ifndef _VAR_ARGS_H
+#define _VAR_ARGS_H
+
+#ifndef _BASE_H
+#endif // _BASE_H
+#ifndef _STRING_H
+#endif // _STRING_H
+
+// This is C90 so we need to do some macro nonsense to be able to do any form of variadic stuff.
+// It's to get slightly better var args than the standard C va_list.
+/*
+    To make a variadic arguments procedure:
+    note the comma-swallowing "##"
+    // note(charlie) comma-swallowing is a hit on #Portability
+
+    #define do_thing(arg1, ...)\
+        MAKE_WRAPPED_CALL(do_thing_impl, arg1, ##__VA_ARGS__)
+
+    void do_thing_impl(int arg1, u64 arg_count, ...) {
+        Var_Arg args[MAX_VAR_ARGS];
+        get_var_args(arg_count, args);
+
+
+    }
+*/
+
+#define _VA_LIST_DEFINED
+#ifndef va_start
+    #if (COMPILER_FLAGS & COMPILER_FLAG_MSC)
+        #define va_list  char*
+
+        #define _SLOTSIZEOF(t)  (sizeof(t))
+        #define _APALIGN(t,ap)  (__alignof(t))
+
+        #define __crt_va_start(ap, x)  ((void)(__va_start(&ap, x)))
+        #define __crt_va_arg(ap, t)                                               \
+        ((sizeof(t) > sizeof(uintptr) || (sizeof(t) & (sizeof(t) - 1)) != 0) \
+            ? **(t**)(uintptr)((ap += sizeof(uintptr)) - sizeof(uintptr))             \
+            :  *(t* )(uintptr)((ap += sizeof(uintptr)) - sizeof(uintptr)))
+        #define __crt_va_end(ap)        ((void)(ap = (va_list)0))
+
+        #define va_start __crt_va_start
+        #define va_arg   __crt_va_arg
+        #define va_end   __crt_va_end
+        #define va_copy(destination, source) ((destination) = (source))
+    #elif COMPILER_FLAGS & COMPILER_FLAG_GNU
+        #define va_start __builtin_va_start
+        #define va_list  __builtin_va_list
+        #define va_arg   __builtin_va_arg
+        #define va_end   __builtin_va_end
+        #define va_copy(destination, source) __builtin_va_copy((destination), (source))
+    #else
+        #include <stdarg.h>
+    #endif
+#endif // va_start
+
+#define get_var_args(count, pargs) do {\
+    va_list va_args;\
+    va_start(va_args, count);\
+    \
+    for (u64 i = 0; i < count; i += 1)\
+        pargs[i] = *(va_arg(va_args, Var_Arg*));\
+    \
+    va_end(va_args);\
+} while(0)
+
+typedef struct Var_Arg {
+    u64 int_val;
+    float64 flt_val;
+    string str_val;
+
+    u64 size;
+} Var_Arg;
+
+#define _WRAP_VAR(x) &(Var_Arg) {sizeof((x)) >= 8 ? *(u64*)(uintptr)&(x) : sizeof((x)) >= 4 ? *(u32*)(uintptr)&(x) : sizeof((x)) >= 2 ? *(u16*)(uintptr)&(x) : *(u8*)(uintptr)&(x), sizeof((x)) >= 8 ? *(float64*)(uintptr)&(x) : sizeof((x)) >= 4 ? (float64)*(float32*)(uintptr)&(x) : 0, sizeof((x)) >= sizeof(string) ? *(string*)(uintptr)&(x) : (string){0}, sizeof((x))}
+
+
+/* Begin include: var_args_macros.h */
+#ifndef _VAR_ARGS_MACROS_H
+#define _VAR_ARGS_MACROS_H
+
+#define MAX_VAR_ARGS 70
+
+#define PP_NARG(...) PP_ARG_N(__VA_ARGS__, PP_RSEQ_N())
+
+#define PP_ARG_N(...) PP_ARG_N_(__VA_ARGS__)
+
+#define PP_RSEQ_N() 140,139,138,137,136,135,134,133,132,131,130,129,128,127,126,125,124,123,122,121,120,119,118,117,116,115,114,113,112,111,110,109,108,107,106,105,104,103,102,101,100,99,98,97,96,95,94,93,92,91,90,89,88,87,86,85,84,83,82,81,80,79,78,77,76,75,74,73,72,71,70,69,68,67,66,65,64,63,62,61,60,59,58,57,56,55,54,53,52,51,50,49,48,47,46,45,44,43,42,41,40,39,38,37,36,35,34,33,32,31,30,29,28,27,26,25,24,23,22,21,20,19,18,17,16,15,14,13,12,11,10,9,8,7,6,5,4,3,2,1,0
+
+#define PP_ARG_N_(_0, _1, _2, _3, _4, _5, _6, _7, _8, _9, _10, _11, _12, _13, _14, _15, _16, _17, _18, _19, _20, _21, _22, _23, _24, _25, _26, _27, _28, _29, _30, _31, _32, _33, _34, _35, _36, _37, _38, _39, _40, _41, _42, _43, _44, _45, _46, _47, _48, _49, _50, _51, _52, _53, _54, _55, _56, _57, _58, _59, _60, _61, _62, _63, _64, _65, _66, _67, _68, _69, _70, _71, _72, _73, _74, _75, _76, _77, _78, _79, _80, _81, _82, _83, _84, _85, _86, _87, _88, _89, _90, _91, _92, _93, _94, _95, _96, _97, _98, _99, _100, _101, _102, _103, _104, _105, _106, _107, _108, _109, _110, _111, _112, _113, _114, _115, _116, _117, _118, _119, _120, _121, _122, _123, _124, _125, _126, _127, _128, _129, _130, _131, _132, _133, _134, _135, _136, _137, _138, _139, _140, N, ...) N
+
+#define PP_CONCATENATE(a, b) PP_CONCATENATE_(a, b)
+#define PP_CONCATENATE_(a, b) a##b
+
+#define _WRAP_ARGS_0(TARGET, FIRST) \
+    TARGET(FIRST, 0)
+
+#define _WRAP_ARGS_1(TARGET, FIRST, _0) \
+	TARGET(FIRST, 1, _WRAP_VAR(_0))
+
+#define _WRAP_ARGS_2(TARGET, FIRST, _0, _1) \
+	TARGET(FIRST, 2, _WRAP_VAR(_0), _WRAP_VAR(_1))
+
+#define _WRAP_ARGS_3(TARGET, FIRST, _0, _1, _2) \
+	TARGET(FIRST, 3, _WRAP_VAR(_0), _WRAP_VAR(_1), _WRAP_VAR(_2))
+
+#define _WRAP_ARGS_4(TARGET, FIRST, _0, _1, _2, _3) \
+	TARGET(FIRST, 4, _WRAP_VAR(_0), _WRAP_VAR(_1), _WRAP_VAR(_2), _WRAP_VAR(_3))
+
+#define _WRAP_ARGS_5(TARGET, FIRST, _0, _1, _2, _3, _4) \
+	TARGET(FIRST, 5, _WRAP_VAR(_0), _WRAP_VAR(_1), _WRAP_VAR(_2), _WRAP_VAR(_3), _WRAP_VAR(_4))
+
+#define _WRAP_ARGS_6(TARGET, FIRST, _0, _1, _2, _3, _4, _5) \
+	TARGET(FIRST, 6, _WRAP_VAR(_0), _WRAP_VAR(_1), _WRAP_VAR(_2), _WRAP_VAR(_3), _WRAP_VAR(_4), _WRAP_VAR(_5))
+
+#define _WRAP_ARGS_7(TARGET, FIRST, _0, _1, _2, _3, _4, _5, _6) \
+	TARGET(FIRST, 7, _WRAP_VAR(_0), _WRAP_VAR(_1), _WRAP_VAR(_2), _WRAP_VAR(_3), _WRAP_VAR(_4), _WRAP_VAR(_5), _WRAP_VAR(_6))
+
+#define _WRAP_ARGS_8(TARGET, FIRST, _0, _1, _2, _3, _4, _5, _6, _7) \
+	TARGET(FIRST, 8, _WRAP_VAR(_0), _WRAP_VAR(_1), _WRAP_VAR(_2), _WRAP_VAR(_3), _WRAP_VAR(_4), _WRAP_VAR(_5), _WRAP_VAR(_6), _WRAP_VAR(_7))
+
+#define _WRAP_ARGS_9(TARGET, FIRST, _0, _1, _2, _3, _4, _5, _6, _7, _8) \
+	TARGET(FIRST, 9, _WRAP_VAR(_0), _WRAP_VAR(_1), _WRAP_VAR(_2), _WRAP_VAR(_3), _WRAP_VAR(_4), _WRAP_VAR(_5), _WRAP_VAR(_6), _WRAP_VAR(_7), _WRAP_VAR(_8))
+
+#define _WRAP_ARGS_10(TARGET, FIRST, _0, _1, _2, _3, _4, _5, _6, _7, _8, _9) \
+	TARGET(FIRST, 10, _WRAP_VAR(_0), _WRAP_VAR(_1), _WRAP_VAR(_2), _WRAP_VAR(_3), _WRAP_VAR(_4), _WRAP_VAR(_5), _WRAP_VAR(_6), _WRAP_VAR(_7), _WRAP_VAR(_8), _WRAP_VAR(_9))
+
+#define _WRAP_ARGS_11(TARGET, FIRST, _0, _1, _2, _3, _4, _5, _6, _7, _8, _9, _10) \
+	TARGET(FIRST, 11, _WRAP_VAR(_0), _WRAP_VAR(_1), _WRAP_VAR(_2), _WRAP_VAR(_3), _WRAP_VAR(_4), _WRAP_VAR(_5), _WRAP_VAR(_6), _WRAP_VAR(_7), _WRAP_VAR(_8), _WRAP_VAR(_9), _WRAP_VAR(_10))
+
+#define _WRAP_ARGS_12(TARGET, FIRST, _0, _1, _2, _3, _4, _5, _6, _7, _8, _9, _10, _11) \
+	TARGET(FIRST, 12, _WRAP_VAR(_0), _WRAP_VAR(_1), _WRAP_VAR(_2), _WRAP_VAR(_3), _WRAP_VAR(_4), _WRAP_VAR(_5), _WRAP_VAR(_6), _WRAP_VAR(_7), _WRAP_VAR(_8), _WRAP_VAR(_9), _WRAP_VAR(_10), _WRAP_VAR(_11))
+
+#define _WRAP_ARGS_13(TARGET, FIRST, _0, _1, _2, _3, _4, _5, _6, _7, _8, _9, _10, _11, _12) \
+	TARGET(FIRST, 13, _WRAP_VAR(_0), _WRAP_VAR(_1), _WRAP_VAR(_2), _WRAP_VAR(_3), _WRAP_VAR(_4), _WRAP_VAR(_5), _WRAP_VAR(_6), _WRAP_VAR(_7), _WRAP_VAR(_8), _WRAP_VAR(_9), _WRAP_VAR(_10), _WRAP_VAR(_11), _WRAP_VAR(_12))
+
+#define _WRAP_ARGS_14(TARGET, FIRST, _0, _1, _2, _3, _4, _5, _6, _7, _8, _9, _10, _11, _12, _13) \
+	TARGET(FIRST, 14, _WRAP_VAR(_0), _WRAP_VAR(_1), _WRAP_VAR(_2), _WRAP_VAR(_3), _WRAP_VAR(_4), _WRAP_VAR(_5), _WRAP_VAR(_6), _WRAP_VAR(_7), _WRAP_VAR(_8), _WRAP_VAR(_9), _WRAP_VAR(_10), _WRAP_VAR(_11), _WRAP_VAR(_12), _WRAP_VAR(_13))
+
+#define _WRAP_ARGS_15(TARGET, FIRST, _0, _1, _2, _3, _4, _5, _6, _7, _8, _9, _10, _11, _12, _13, _14) \
+	TARGET(FIRST, 15, _WRAP_VAR(_0), _WRAP_VAR(_1), _WRAP_VAR(_2), _WRAP_VAR(_3), _WRAP_VAR(_4), _WRAP_VAR(_5), _WRAP_VAR(_6), _WRAP_VAR(_7), _WRAP_VAR(_8), _WRAP_VAR(_9), _WRAP_VAR(_10), _WRAP_VAR(_11), _WRAP_VAR(_12), _WRAP_VAR(_13), _WRAP_VAR(_14))
+
+#define _WRAP_ARGS_16(TARGET, FIRST, _0, _1, _2, _3, _4, _5, _6, _7, _8, _9, _10, _11, _12, _13, _14, _15) \
+	TARGET(FIRST, 16, _WRAP_VAR(_0), _WRAP_VAR(_1), _WRAP_VAR(_2), _WRAP_VAR(_3), _WRAP_VAR(_4), _WRAP_VAR(_5), _WRAP_VAR(_6), _WRAP_VAR(_7), _WRAP_VAR(_8), _WRAP_VAR(_9), _WRAP_VAR(_10), _WRAP_VAR(_11), _WRAP_VAR(_12), _WRAP_VAR(_13), _WRAP_VAR(_14), _WRAP_VAR(_15))
+
+#define _WRAP_ARGS_17(TARGET, FIRST, _0, _1, _2, _3, _4, _5, _6, _7, _8, _9, _10, _11, _12, _13, _14, _15, _16) \
+	TARGET(FIRST, 17, _WRAP_VAR(_0), _WRAP_VAR(_1), _WRAP_VAR(_2), _WRAP_VAR(_3), _WRAP_VAR(_4), _WRAP_VAR(_5), _WRAP_VAR(_6), _WRAP_VAR(_7), _WRAP_VAR(_8), _WRAP_VAR(_9), _WRAP_VAR(_10), _WRAP_VAR(_11), _WRAP_VAR(_12), _WRAP_VAR(_13), _WRAP_VAR(_14), _WRAP_VAR(_15), _WRAP_VAR(_16))
+
+#define _WRAP_ARGS_18(TARGET, FIRST, _0, _1, _2, _3, _4, _5, _6, _7, _8, _9, _10, _11, _12, _13, _14, _15, _16, _17) \
+	TARGET(FIRST, 18, _WRAP_VAR(_0), _WRAP_VAR(_1), _WRAP_VAR(_2), _WRAP_VAR(_3), _WRAP_VAR(_4), _WRAP_VAR(_5), _WRAP_VAR(_6), _WRAP_VAR(_7), _WRAP_VAR(_8), _WRAP_VAR(_9), _WRAP_VAR(_10), _WRAP_VAR(_11), _WRAP_VAR(_12), _WRAP_VAR(_13), _WRAP_VAR(_14), _WRAP_VAR(_15), _WRAP_VAR(_16), _WRAP_VAR(_17))
+
+#define _WRAP_ARGS_19(TARGET, FIRST, _0, _1, _2, _3, _4, _5, _6, _7, _8, _9, _10, _11, _12, _13, _14, _15, _16, _17, _18) \
+	TARGET(FIRST, 19, _WRAP_VAR(_0), _WRAP_VAR(_1), _WRAP_VAR(_2), _WRAP_VAR(_3), _WRAP_VAR(_4), _WRAP_VAR(_5), _WRAP_VAR(_6), _WRAP_VAR(_7), _WRAP_VAR(_8), _WRAP_VAR(_9), _WRAP_VAR(_10), _WRAP_VAR(_11), _WRAP_VAR(_12), _WRAP_VAR(_13), _WRAP_VAR(_14), _WRAP_VAR(_15), _WRAP_VAR(_16), _WRAP_VAR(_17), _WRAP_VAR(_18))
+
+#define _WRAP_ARGS_20(TARGET, FIRST, _0, _1, _2, _3, _4, _5, _6, _7, _8, _9, _10, _11, _12, _13, _14, _15, _16, _17, _18, _19) \
+	TARGET(FIRST, 20, _WRAP_VAR(_0), _WRAP_VAR(_1), _WRAP_VAR(_2), _WRAP_VAR(_3), _WRAP_VAR(_4), _WRAP_VAR(_5), _WRAP_VAR(_6), _WRAP_VAR(_7), _WRAP_VAR(_8), _WRAP_VAR(_9), _WRAP_VAR(_10), _WRAP_VAR(_11), _WRAP_VAR(_12), _WRAP_VAR(_13), _WRAP_VAR(_14), _WRAP_VAR(_15), _WRAP_VAR(_16), _WRAP_VAR(_17), _WRAP_VAR(_18), _WRAP_VAR(_19))
+
+#define _WRAP_ARGS_21(TARGET, FIRST, _0, _1, _2, _3, _4, _5, _6, _7, _8, _9, _10, _11, _12, _13, _14, _15, _16, _17, _18, _19, _20) \
+	TARGET(FIRST, 21, _WRAP_VAR(_0), _WRAP_VAR(_1), _WRAP_VAR(_2), _WRAP_VAR(_3), _WRAP_VAR(_4), _WRAP_VAR(_5), _WRAP_VAR(_6), _WRAP_VAR(_7), _WRAP_VAR(_8), _WRAP_VAR(_9), _WRAP_VAR(_10), _WRAP_VAR(_11), _WRAP_VAR(_12), _WRAP_VAR(_13), _WRAP_VAR(_14), _WRAP_VAR(_15), _WRAP_VAR(_16), _WRAP_VAR(_17), _WRAP_VAR(_18), _WRAP_VAR(_19), _WRAP_VAR(_20))
+
+#define _WRAP_ARGS_22(TARGET, FIRST, _0, _1, _2, _3, _4, _5, _6, _7, _8, _9, _10, _11, _12, _13, _14, _15, _16, _17, _18, _19, _20, _21) \
+	TARGET(FIRST, 22, _WRAP_VAR(_0), _WRAP_VAR(_1), _WRAP_VAR(_2), _WRAP_VAR(_3), _WRAP_VAR(_4), _WRAP_VAR(_5), _WRAP_VAR(_6), _WRAP_VAR(_7), _WRAP_VAR(_8), _WRAP_VAR(_9), _WRAP_VAR(_10), _WRAP_VAR(_11), _WRAP_VAR(_12), _WRAP_VAR(_13), _WRAP_VAR(_14), _WRAP_VAR(_15), _WRAP_VAR(_16), _WRAP_VAR(_17), _WRAP_VAR(_18), _WRAP_VAR(_19), _WRAP_VAR(_20), _WRAP_VAR(_21))
+
+#define _WRAP_ARGS_23(TARGET, FIRST, _0, _1, _2, _3, _4, _5, _6, _7, _8, _9, _10, _11, _12, _13, _14, _15, _16, _17, _18, _19, _20, _21, _22) \
+	TARGET(FIRST, 23, _WRAP_VAR(_0), _WRAP_VAR(_1), _WRAP_VAR(_2), _WRAP_VAR(_3), _WRAP_VAR(_4), _WRAP_VAR(_5), _WRAP_VAR(_6), _WRAP_VAR(_7), _WRAP_VAR(_8), _WRAP_VAR(_9), _WRAP_VAR(_10), _WRAP_VAR(_11), _WRAP_VAR(_12), _WRAP_VAR(_13), _WRAP_VAR(_14), _WRAP_VAR(_15), _WRAP_VAR(_16), _WRAP_VAR(_17), _WRAP_VAR(_18), _WRAP_VAR(_19), _WRAP_VAR(_20), _WRAP_VAR(_21), _WRAP_VAR(_22))
+
+#define _WRAP_ARGS_24(TARGET, FIRST, _0, _1, _2, _3, _4, _5, _6, _7, _8, _9, _10, _11, _12, _13, _14, _15, _16, _17, _18, _19, _20, _21, _22, _23) \
+	TARGET(FIRST, 24, _WRAP_VAR(_0), _WRAP_VAR(_1), _WRAP_VAR(_2), _WRAP_VAR(_3), _WRAP_VAR(_4), _WRAP_VAR(_5), _WRAP_VAR(_6), _WRAP_VAR(_7), _WRAP_VAR(_8), _WRAP_VAR(_9), _WRAP_VAR(_10), _WRAP_VAR(_11), _WRAP_VAR(_12), _WRAP_VAR(_13), _WRAP_VAR(_14), _WRAP_VAR(_15), _WRAP_VAR(_16), _WRAP_VAR(_17), _WRAP_VAR(_18), _WRAP_VAR(_19), _WRAP_VAR(_20), _WRAP_VAR(_21), _WRAP_VAR(_22), _WRAP_VAR(_23))
+
+#define _WRAP_ARGS_25(TARGET, FIRST, _0, _1, _2, _3, _4, _5, _6, _7, _8, _9, _10, _11, _12, _13, _14, _15, _16, _17, _18, _19, _20, _21, _22, _23, _24) \
+	TARGET(FIRST, 25, _WRAP_VAR(_0), _WRAP_VAR(_1), _WRAP_VAR(_2), _WRAP_VAR(_3), _WRAP_VAR(_4), _WRAP_VAR(_5), _WRAP_VAR(_6), _WRAP_VAR(_7), _WRAP_VAR(_8), _WRAP_VAR(_9), _WRAP_VAR(_10), _WRAP_VAR(_11), _WRAP_VAR(_12), _WRAP_VAR(_13), _WRAP_VAR(_14), _WRAP_VAR(_15), _WRAP_VAR(_16), _WRAP_VAR(_17), _WRAP_VAR(_18), _WRAP_VAR(_19), _WRAP_VAR(_20), _WRAP_VAR(_21), _WRAP_VAR(_22), _WRAP_VAR(_23), _WRAP_VAR(_24))
+
+#define _WRAP_ARGS_26(TARGET, FIRST, _0, _1, _2, _3, _4, _5, _6, _7, _8, _9, _10, _11, _12, _13, _14, _15, _16, _17, _18, _19, _20, _21, _22, _23, _24, _25) \
+	TARGET(FIRST, 26, _WRAP_VAR(_0), _WRAP_VAR(_1), _WRAP_VAR(_2), _WRAP_VAR(_3), _WRAP_VAR(_4), _WRAP_VAR(_5), _WRAP_VAR(_6), _WRAP_VAR(_7), _WRAP_VAR(_8), _WRAP_VAR(_9), _WRAP_VAR(_10), _WRAP_VAR(_11), _WRAP_VAR(_12), _WRAP_VAR(_13), _WRAP_VAR(_14), _WRAP_VAR(_15), _WRAP_VAR(_16), _WRAP_VAR(_17), _WRAP_VAR(_18), _WRAP_VAR(_19), _WRAP_VAR(_20), _WRAP_VAR(_21), _WRAP_VAR(_22), _WRAP_VAR(_23), _WRAP_VAR(_24), _WRAP_VAR(_25))
+
+#define _WRAP_ARGS_27(TARGET, FIRST, _0, _1, _2, _3, _4, _5, _6, _7, _8, _9, _10, _11, _12, _13, _14, _15, _16, _17, _18, _19, _20, _21, _22, _23, _24, _25, _26) \
+	TARGET(FIRST, 27, _WRAP_VAR(_0), _WRAP_VAR(_1), _WRAP_VAR(_2), _WRAP_VAR(_3), _WRAP_VAR(_4), _WRAP_VAR(_5), _WRAP_VAR(_6), _WRAP_VAR(_7), _WRAP_VAR(_8), _WRAP_VAR(_9), _WRAP_VAR(_10), _WRAP_VAR(_11), _WRAP_VAR(_12), _WRAP_VAR(_13), _WRAP_VAR(_14), _WRAP_VAR(_15), _WRAP_VAR(_16), _WRAP_VAR(_17), _WRAP_VAR(_18), _WRAP_VAR(_19), _WRAP_VAR(_20), _WRAP_VAR(_21), _WRAP_VAR(_22), _WRAP_VAR(_23), _WRAP_VAR(_24), _WRAP_VAR(_25), _WRAP_VAR(_26))
+
+#define _WRAP_ARGS_28(TARGET, FIRST, _0, _1, _2, _3, _4, _5, _6, _7, _8, _9, _10, _11, _12, _13, _14, _15, _16, _17, _18, _19, _20, _21, _22, _23, _24, _25, _26, _27) \
+	TARGET(FIRST, 28, _WRAP_VAR(_0), _WRAP_VAR(_1), _WRAP_VAR(_2), _WRAP_VAR(_3), _WRAP_VAR(_4), _WRAP_VAR(_5), _WRAP_VAR(_6), _WRAP_VAR(_7), _WRAP_VAR(_8), _WRAP_VAR(_9), _WRAP_VAR(_10), _WRAP_VAR(_11), _WRAP_VAR(_12), _WRAP_VAR(_13), _WRAP_VAR(_14), _WRAP_VAR(_15), _WRAP_VAR(_16), _WRAP_VAR(_17), _WRAP_VAR(_18), _WRAP_VAR(_19), _WRAP_VAR(_20), _WRAP_VAR(_21), _WRAP_VAR(_22), _WRAP_VAR(_23), _WRAP_VAR(_24), _WRAP_VAR(_25), _WRAP_VAR(_26), _WRAP_VAR(_27))
+
+#define _WRAP_ARGS_29(TARGET, FIRST, _0, _1, _2, _3, _4, _5, _6, _7, _8, _9, _10, _11, _12, _13, _14, _15, _16, _17, _18, _19, _20, _21, _22, _23, _24, _25, _26, _27, _28) \
+	TARGET(FIRST, 29, _WRAP_VAR(_0), _WRAP_VAR(_1), _WRAP_VAR(_2), _WRAP_VAR(_3), _WRAP_VAR(_4), _WRAP_VAR(_5), _WRAP_VAR(_6), _WRAP_VAR(_7), _WRAP_VAR(_8), _WRAP_VAR(_9), _WRAP_VAR(_10), _WRAP_VAR(_11), _WRAP_VAR(_12), _WRAP_VAR(_13), _WRAP_VAR(_14), _WRAP_VAR(_15), _WRAP_VAR(_16), _WRAP_VAR(_17), _WRAP_VAR(_18), _WRAP_VAR(_19), _WRAP_VAR(_20), _WRAP_VAR(_21), _WRAP_VAR(_22), _WRAP_VAR(_23), _WRAP_VAR(_24), _WRAP_VAR(_25), _WRAP_VAR(_26), _WRAP_VAR(_27), _WRAP_VAR(_28))
+
+#define _WRAP_ARGS_30(TARGET, FIRST, _0, _1, _2, _3, _4, _5, _6, _7, _8, _9, _10, _11, _12, _13, _14, _15, _16, _17, _18, _19, _20, _21, _22, _23, _24, _25, _26, _27, _28, _29) \
+	TARGET(FIRST, 30, _WRAP_VAR(_0), _WRAP_VAR(_1), _WRAP_VAR(_2), _WRAP_VAR(_3), _WRAP_VAR(_4), _WRAP_VAR(_5), _WRAP_VAR(_6), _WRAP_VAR(_7), _WRAP_VAR(_8), _WRAP_VAR(_9), _WRAP_VAR(_10), _WRAP_VAR(_11), _WRAP_VAR(_12), _WRAP_VAR(_13), _WRAP_VAR(_14), _WRAP_VAR(_15), _WRAP_VAR(_16), _WRAP_VAR(_17), _WRAP_VAR(_18), _WRAP_VAR(_19), _WRAP_VAR(_20), _WRAP_VAR(_21), _WRAP_VAR(_22), _WRAP_VAR(_23), _WRAP_VAR(_24), _WRAP_VAR(_25), _WRAP_VAR(_26), _WRAP_VAR(_27), _WRAP_VAR(_28), _WRAP_VAR(_29))
+
+#define _WRAP_ARGS_31(TARGET, FIRST, _0, _1, _2, _3, _4, _5, _6, _7, _8, _9, _10, _11, _12, _13, _14, _15, _16, _17, _18, _19, _20, _21, _22, _23, _24, _25, _26, _27, _28, _29, _30) \
+	TARGET(FIRST, 31, _WRAP_VAR(_0), _WRAP_VAR(_1), _WRAP_VAR(_2), _WRAP_VAR(_3), _WRAP_VAR(_4), _WRAP_VAR(_5), _WRAP_VAR(_6), _WRAP_VAR(_7), _WRAP_VAR(_8), _WRAP_VAR(_9), _WRAP_VAR(_10), _WRAP_VAR(_11), _WRAP_VAR(_12), _WRAP_VAR(_13), _WRAP_VAR(_14), _WRAP_VAR(_15), _WRAP_VAR(_16), _WRAP_VAR(_17), _WRAP_VAR(_18), _WRAP_VAR(_19), _WRAP_VAR(_20), _WRAP_VAR(_21), _WRAP_VAR(_22), _WRAP_VAR(_23), _WRAP_VAR(_24), _WRAP_VAR(_25), _WRAP_VAR(_26), _WRAP_VAR(_27), _WRAP_VAR(_28), _WRAP_VAR(_29), _WRAP_VAR(_30))
+
+#define _WRAP_ARGS_32(TARGET, FIRST, _0, _1, _2, _3, _4, _5, _6, _7, _8, _9, _10, _11, _12, _13, _14, _15, _16, _17, _18, _19, _20, _21, _22, _23, _24, _25, _26, _27, _28, _29, _30, _31) \
+	TARGET(FIRST, 32, _WRAP_VAR(_0), _WRAP_VAR(_1), _WRAP_VAR(_2), _WRAP_VAR(_3), _WRAP_VAR(_4), _WRAP_VAR(_5), _WRAP_VAR(_6), _WRAP_VAR(_7), _WRAP_VAR(_8), _WRAP_VAR(_9), _WRAP_VAR(_10), _WRAP_VAR(_11), _WRAP_VAR(_12), _WRAP_VAR(_13), _WRAP_VAR(_14), _WRAP_VAR(_15), _WRAP_VAR(_16), _WRAP_VAR(_17), _WRAP_VAR(_18), _WRAP_VAR(_19), _WRAP_VAR(_20), _WRAP_VAR(_21), _WRAP_VAR(_22), _WRAP_VAR(_23), _WRAP_VAR(_24), _WRAP_VAR(_25), _WRAP_VAR(_26), _WRAP_VAR(_27), _WRAP_VAR(_28), _WRAP_VAR(_29), _WRAP_VAR(_30), _WRAP_VAR(_31))
+
+#define _WRAP_ARGS_33(TARGET, FIRST, _0, _1, _2, _3, _4, _5, _6, _7, _8, _9, _10, _11, _12, _13, _14, _15, _16, _17, _18, _19, _20, _21, _22, _23, _24, _25, _26, _27, _28, _29, _30, _31, _32) \
+	TARGET(FIRST, 33, _WRAP_VAR(_0), _WRAP_VAR(_1), _WRAP_VAR(_2), _WRAP_VAR(_3), _WRAP_VAR(_4), _WRAP_VAR(_5), _WRAP_VAR(_6), _WRAP_VAR(_7), _WRAP_VAR(_8), _WRAP_VAR(_9), _WRAP_VAR(_10), _WRAP_VAR(_11), _WRAP_VAR(_12), _WRAP_VAR(_13), _WRAP_VAR(_14), _WRAP_VAR(_15), _WRAP_VAR(_16), _WRAP_VAR(_17), _WRAP_VAR(_18), _WRAP_VAR(_19), _WRAP_VAR(_20), _WRAP_VAR(_21), _WRAP_VAR(_22), _WRAP_VAR(_23), _WRAP_VAR(_24), _WRAP_VAR(_25), _WRAP_VAR(_26), _WRAP_VAR(_27), _WRAP_VAR(_28), _WRAP_VAR(_29), _WRAP_VAR(_30), _WRAP_VAR(_31), _WRAP_VAR(_32))
+
+#define _WRAP_ARGS_34(TARGET, FIRST, _0, _1, _2, _3, _4, _5, _6, _7, _8, _9, _10, _11, _12, _13, _14, _15, _16, _17, _18, _19, _20, _21, _22, _23, _24, _25, _26, _27, _28, _29, _30, _31, _32, _33) \
+	TARGET(FIRST, 34, _WRAP_VAR(_0), _WRAP_VAR(_1), _WRAP_VAR(_2), _WRAP_VAR(_3), _WRAP_VAR(_4), _WRAP_VAR(_5), _WRAP_VAR(_6), _WRAP_VAR(_7), _WRAP_VAR(_8), _WRAP_VAR(_9), _WRAP_VAR(_10), _WRAP_VAR(_11), _WRAP_VAR(_12), _WRAP_VAR(_13), _WRAP_VAR(_14), _WRAP_VAR(_15), _WRAP_VAR(_16), _WRAP_VAR(_17), _WRAP_VAR(_18), _WRAP_VAR(_19), _WRAP_VAR(_20), _WRAP_VAR(_21), _WRAP_VAR(_22), _WRAP_VAR(_23), _WRAP_VAR(_24), _WRAP_VAR(_25), _WRAP_VAR(_26), _WRAP_VAR(_27), _WRAP_VAR(_28), _WRAP_VAR(_29), _WRAP_VAR(_30), _WRAP_VAR(_31), _WRAP_VAR(_32), _WRAP_VAR(_33))
+
+#define _WRAP_ARGS_35(TARGET, FIRST, _0, _1, _2, _3, _4, _5, _6, _7, _8, _9, _10, _11, _12, _13, _14, _15, _16, _17, _18, _19, _20, _21, _22, _23, _24, _25, _26, _27, _28, _29, _30, _31, _32, _33, _34) \
+	TARGET(FIRST, 35, _WRAP_VAR(_0), _WRAP_VAR(_1), _WRAP_VAR(_2), _WRAP_VAR(_3), _WRAP_VAR(_4), _WRAP_VAR(_5), _WRAP_VAR(_6), _WRAP_VAR(_7), _WRAP_VAR(_8), _WRAP_VAR(_9), _WRAP_VAR(_10), _WRAP_VAR(_11), _WRAP_VAR(_12), _WRAP_VAR(_13), _WRAP_VAR(_14), _WRAP_VAR(_15), _WRAP_VAR(_16), _WRAP_VAR(_17), _WRAP_VAR(_18), _WRAP_VAR(_19), _WRAP_VAR(_20), _WRAP_VAR(_21), _WRAP_VAR(_22), _WRAP_VAR(_23), _WRAP_VAR(_24), _WRAP_VAR(_25), _WRAP_VAR(_26), _WRAP_VAR(_27), _WRAP_VAR(_28), _WRAP_VAR(_29), _WRAP_VAR(_30), _WRAP_VAR(_31), _WRAP_VAR(_32), _WRAP_VAR(_33), _WRAP_VAR(_34))
+
+#define _WRAP_ARGS_36(TARGET, FIRST, _0, _1, _2, _3, _4, _5, _6, _7, _8, _9, _10, _11, _12, _13, _14, _15, _16, _17, _18, _19, _20, _21, _22, _23, _24, _25, _26, _27, _28, _29, _30, _31, _32, _33, _34, _35) \
+	TARGET(FIRST, 36, _WRAP_VAR(_0), _WRAP_VAR(_1), _WRAP_VAR(_2), _WRAP_VAR(_3), _WRAP_VAR(_4), _WRAP_VAR(_5), _WRAP_VAR(_6), _WRAP_VAR(_7), _WRAP_VAR(_8), _WRAP_VAR(_9), _WRAP_VAR(_10), _WRAP_VAR(_11), _WRAP_VAR(_12), _WRAP_VAR(_13), _WRAP_VAR(_14), _WRAP_VAR(_15), _WRAP_VAR(_16), _WRAP_VAR(_17), _WRAP_VAR(_18), _WRAP_VAR(_19), _WRAP_VAR(_20), _WRAP_VAR(_21), _WRAP_VAR(_22), _WRAP_VAR(_23), _WRAP_VAR(_24), _WRAP_VAR(_25), _WRAP_VAR(_26), _WRAP_VAR(_27), _WRAP_VAR(_28), _WRAP_VAR(_29), _WRAP_VAR(_30), _WRAP_VAR(_31), _WRAP_VAR(_32), _WRAP_VAR(_33), _WRAP_VAR(_34), _WRAP_VAR(_35))
+
+#define _WRAP_ARGS_37(TARGET, FIRST, _0, _1, _2, _3, _4, _5, _6, _7, _8, _9, _10, _11, _12, _13, _14, _15, _16, _17, _18, _19, _20, _21, _22, _23, _24, _25, _26, _27, _28, _29, _30, _31, _32, _33, _34, _35, _36) \
+	TARGET(FIRST, 37, _WRAP_VAR(_0), _WRAP_VAR(_1), _WRAP_VAR(_2), _WRAP_VAR(_3), _WRAP_VAR(_4), _WRAP_VAR(_5), _WRAP_VAR(_6), _WRAP_VAR(_7), _WRAP_VAR(_8), _WRAP_VAR(_9), _WRAP_VAR(_10), _WRAP_VAR(_11), _WRAP_VAR(_12), _WRAP_VAR(_13), _WRAP_VAR(_14), _WRAP_VAR(_15), _WRAP_VAR(_16), _WRAP_VAR(_17), _WRAP_VAR(_18), _WRAP_VAR(_19), _WRAP_VAR(_20), _WRAP_VAR(_21), _WRAP_VAR(_22), _WRAP_VAR(_23), _WRAP_VAR(_24), _WRAP_VAR(_25), _WRAP_VAR(_26), _WRAP_VAR(_27), _WRAP_VAR(_28), _WRAP_VAR(_29), _WRAP_VAR(_30), _WRAP_VAR(_31), _WRAP_VAR(_32), _WRAP_VAR(_33), _WRAP_VAR(_34), _WRAP_VAR(_35), _WRAP_VAR(_36))
+
+#define _WRAP_ARGS_38(TARGET, FIRST, _0, _1, _2, _3, _4, _5, _6, _7, _8, _9, _10, _11, _12, _13, _14, _15, _16, _17, _18, _19, _20, _21, _22, _23, _24, _25, _26, _27, _28, _29, _30, _31, _32, _33, _34, _35, _36, _37) \
+	TARGET(FIRST, 38, _WRAP_VAR(_0), _WRAP_VAR(_1), _WRAP_VAR(_2), _WRAP_VAR(_3), _WRAP_VAR(_4), _WRAP_VAR(_5), _WRAP_VAR(_6), _WRAP_VAR(_7), _WRAP_VAR(_8), _WRAP_VAR(_9), _WRAP_VAR(_10), _WRAP_VAR(_11), _WRAP_VAR(_12), _WRAP_VAR(_13), _WRAP_VAR(_14), _WRAP_VAR(_15), _WRAP_VAR(_16), _WRAP_VAR(_17), _WRAP_VAR(_18), _WRAP_VAR(_19), _WRAP_VAR(_20), _WRAP_VAR(_21), _WRAP_VAR(_22), _WRAP_VAR(_23), _WRAP_VAR(_24), _WRAP_VAR(_25), _WRAP_VAR(_26), _WRAP_VAR(_27), _WRAP_VAR(_28), _WRAP_VAR(_29), _WRAP_VAR(_30), _WRAP_VAR(_31), _WRAP_VAR(_32), _WRAP_VAR(_33), _WRAP_VAR(_34), _WRAP_VAR(_35), _WRAP_VAR(_36), _WRAP_VAR(_37))
+
+#define _WRAP_ARGS_39(TARGET, FIRST, _0, _1, _2, _3, _4, _5, _6, _7, _8, _9, _10, _11, _12, _13, _14, _15, _16, _17, _18, _19, _20, _21, _22, _23, _24, _25, _26, _27, _28, _29, _30, _31, _32, _33, _34, _35, _36, _37, _38) \
+	TARGET(FIRST, 39, _WRAP_VAR(_0), _WRAP_VAR(_1), _WRAP_VAR(_2), _WRAP_VAR(_3), _WRAP_VAR(_4), _WRAP_VAR(_5), _WRAP_VAR(_6), _WRAP_VAR(_7), _WRAP_VAR(_8), _WRAP_VAR(_9), _WRAP_VAR(_10), _WRAP_VAR(_11), _WRAP_VAR(_12), _WRAP_VAR(_13), _WRAP_VAR(_14), _WRAP_VAR(_15), _WRAP_VAR(_16), _WRAP_VAR(_17), _WRAP_VAR(_18), _WRAP_VAR(_19), _WRAP_VAR(_20), _WRAP_VAR(_21), _WRAP_VAR(_22), _WRAP_VAR(_23), _WRAP_VAR(_24), _WRAP_VAR(_25), _WRAP_VAR(_26), _WRAP_VAR(_27), _WRAP_VAR(_28), _WRAP_VAR(_29), _WRAP_VAR(_30), _WRAP_VAR(_31), _WRAP_VAR(_32), _WRAP_VAR(_33), _WRAP_VAR(_34), _WRAP_VAR(_35), _WRAP_VAR(_36), _WRAP_VAR(_37), _WRAP_VAR(_38))
+
+#define _WRAP_ARGS_40(TARGET, FIRST, _0, _1, _2, _3, _4, _5, _6, _7, _8, _9, _10, _11, _12, _13, _14, _15, _16, _17, _18, _19, _20, _21, _22, _23, _24, _25, _26, _27, _28, _29, _30, _31, _32, _33, _34, _35, _36, _37, _38, _39) \
+	TARGET(FIRST, 40, _WRAP_VAR(_0), _WRAP_VAR(_1), _WRAP_VAR(_2), _WRAP_VAR(_3), _WRAP_VAR(_4), _WRAP_VAR(_5), _WRAP_VAR(_6), _WRAP_VAR(_7), _WRAP_VAR(_8), _WRAP_VAR(_9), _WRAP_VAR(_10), _WRAP_VAR(_11), _WRAP_VAR(_12), _WRAP_VAR(_13), _WRAP_VAR(_14), _WRAP_VAR(_15), _WRAP_VAR(_16), _WRAP_VAR(_17), _WRAP_VAR(_18), _WRAP_VAR(_19), _WRAP_VAR(_20), _WRAP_VAR(_21), _WRAP_VAR(_22), _WRAP_VAR(_23), _WRAP_VAR(_24), _WRAP_VAR(_25), _WRAP_VAR(_26), _WRAP_VAR(_27), _WRAP_VAR(_28), _WRAP_VAR(_29), _WRAP_VAR(_30), _WRAP_VAR(_31), _WRAP_VAR(_32), _WRAP_VAR(_33), _WRAP_VAR(_34), _WRAP_VAR(_35), _WRAP_VAR(_36), _WRAP_VAR(_37), _WRAP_VAR(_38), _WRAP_VAR(_39))
+
+#define _WRAP_ARGS_41(TARGET, FIRST, _0, _1, _2, _3, _4, _5, _6, _7, _8, _9, _10, _11, _12, _13, _14, _15, _16, _17, _18, _19, _20, _21, _22, _23, _24, _25, _26, _27, _28, _29, _30, _31, _32, _33, _34, _35, _36, _37, _38, _39, _40) \
+	TARGET(FIRST, 41, _WRAP_VAR(_0), _WRAP_VAR(_1), _WRAP_VAR(_2), _WRAP_VAR(_3), _WRAP_VAR(_4), _WRAP_VAR(_5), _WRAP_VAR(_6), _WRAP_VAR(_7), _WRAP_VAR(_8), _WRAP_VAR(_9), _WRAP_VAR(_10), _WRAP_VAR(_11), _WRAP_VAR(_12), _WRAP_VAR(_13), _WRAP_VAR(_14), _WRAP_VAR(_15), _WRAP_VAR(_16), _WRAP_VAR(_17), _WRAP_VAR(_18), _WRAP_VAR(_19), _WRAP_VAR(_20), _WRAP_VAR(_21), _WRAP_VAR(_22), _WRAP_VAR(_23), _WRAP_VAR(_24), _WRAP_VAR(_25), _WRAP_VAR(_26), _WRAP_VAR(_27), _WRAP_VAR(_28), _WRAP_VAR(_29), _WRAP_VAR(_30), _WRAP_VAR(_31), _WRAP_VAR(_32), _WRAP_VAR(_33), _WRAP_VAR(_34), _WRAP_VAR(_35), _WRAP_VAR(_36), _WRAP_VAR(_37), _WRAP_VAR(_38), _WRAP_VAR(_39), _WRAP_VAR(_40))
+
+#define _WRAP_ARGS_42(TARGET, FIRST, _0, _1, _2, _3, _4, _5, _6, _7, _8, _9, _10, _11, _12, _13, _14, _15, _16, _17, _18, _19, _20, _21, _22, _23, _24, _25, _26, _27, _28, _29, _30, _31, _32, _33, _34, _35, _36, _37, _38, _39, _40, _41) \
+	TARGET(FIRST, 42, _WRAP_VAR(_0), _WRAP_VAR(_1), _WRAP_VAR(_2), _WRAP_VAR(_3), _WRAP_VAR(_4), _WRAP_VAR(_5), _WRAP_VAR(_6), _WRAP_VAR(_7), _WRAP_VAR(_8), _WRAP_VAR(_9), _WRAP_VAR(_10), _WRAP_VAR(_11), _WRAP_VAR(_12), _WRAP_VAR(_13), _WRAP_VAR(_14), _WRAP_VAR(_15), _WRAP_VAR(_16), _WRAP_VAR(_17), _WRAP_VAR(_18), _WRAP_VAR(_19), _WRAP_VAR(_20), _WRAP_VAR(_21), _WRAP_VAR(_22), _WRAP_VAR(_23), _WRAP_VAR(_24), _WRAP_VAR(_25), _WRAP_VAR(_26), _WRAP_VAR(_27), _WRAP_VAR(_28), _WRAP_VAR(_29), _WRAP_VAR(_30), _WRAP_VAR(_31), _WRAP_VAR(_32), _WRAP_VAR(_33), _WRAP_VAR(_34), _WRAP_VAR(_35), _WRAP_VAR(_36), _WRAP_VAR(_37), _WRAP_VAR(_38), _WRAP_VAR(_39), _WRAP_VAR(_40), _WRAP_VAR(_41))
+
+#define _WRAP_ARGS_43(TARGET, FIRST, _0, _1, _2, _3, _4, _5, _6, _7, _8, _9, _10, _11, _12, _13, _14, _15, _16, _17, _18, _19, _20, _21, _22, _23, _24, _25, _26, _27, _28, _29, _30, _31, _32, _33, _34, _35, _36, _37, _38, _39, _40, _41, _42) \
+	TARGET(FIRST, 43, _WRAP_VAR(_0), _WRAP_VAR(_1), _WRAP_VAR(_2), _WRAP_VAR(_3), _WRAP_VAR(_4), _WRAP_VAR(_5), _WRAP_VAR(_6), _WRAP_VAR(_7), _WRAP_VAR(_8), _WRAP_VAR(_9), _WRAP_VAR(_10), _WRAP_VAR(_11), _WRAP_VAR(_12), _WRAP_VAR(_13), _WRAP_VAR(_14), _WRAP_VAR(_15), _WRAP_VAR(_16), _WRAP_VAR(_17), _WRAP_VAR(_18), _WRAP_VAR(_19), _WRAP_VAR(_20), _WRAP_VAR(_21), _WRAP_VAR(_22), _WRAP_VAR(_23), _WRAP_VAR(_24), _WRAP_VAR(_25), _WRAP_VAR(_26), _WRAP_VAR(_27), _WRAP_VAR(_28), _WRAP_VAR(_29), _WRAP_VAR(_30), _WRAP_VAR(_31), _WRAP_VAR(_32), _WRAP_VAR(_33), _WRAP_VAR(_34), _WRAP_VAR(_35), _WRAP_VAR(_36), _WRAP_VAR(_37), _WRAP_VAR(_38), _WRAP_VAR(_39), _WRAP_VAR(_40), _WRAP_VAR(_41), _WRAP_VAR(_42))
+
+#define _WRAP_ARGS_44(TARGET, FIRST, _0, _1, _2, _3, _4, _5, _6, _7, _8, _9, _10, _11, _12, _13, _14, _15, _16, _17, _18, _19, _20, _21, _22, _23, _24, _25, _26, _27, _28, _29, _30, _31, _32, _33, _34, _35, _36, _37, _38, _39, _40, _41, _42, _43) \
+	TARGET(FIRST, 44, _WRAP_VAR(_0), _WRAP_VAR(_1), _WRAP_VAR(_2), _WRAP_VAR(_3), _WRAP_VAR(_4), _WRAP_VAR(_5), _WRAP_VAR(_6), _WRAP_VAR(_7), _WRAP_VAR(_8), _WRAP_VAR(_9), _WRAP_VAR(_10), _WRAP_VAR(_11), _WRAP_VAR(_12), _WRAP_VAR(_13), _WRAP_VAR(_14), _WRAP_VAR(_15), _WRAP_VAR(_16), _WRAP_VAR(_17), _WRAP_VAR(_18), _WRAP_VAR(_19), _WRAP_VAR(_20), _WRAP_VAR(_21), _WRAP_VAR(_22), _WRAP_VAR(_23), _WRAP_VAR(_24), _WRAP_VAR(_25), _WRAP_VAR(_26), _WRAP_VAR(_27), _WRAP_VAR(_28), _WRAP_VAR(_29), _WRAP_VAR(_30), _WRAP_VAR(_31), _WRAP_VAR(_32), _WRAP_VAR(_33), _WRAP_VAR(_34), _WRAP_VAR(_35), _WRAP_VAR(_36), _WRAP_VAR(_37), _WRAP_VAR(_38), _WRAP_VAR(_39), _WRAP_VAR(_40), _WRAP_VAR(_41), _WRAP_VAR(_42), _WRAP_VAR(_43))
+
+#define _WRAP_ARGS_45(TARGET, FIRST, _0, _1, _2, _3, _4, _5, _6, _7, _8, _9, _10, _11, _12, _13, _14, _15, _16, _17, _18, _19, _20, _21, _22, _23, _24, _25, _26, _27, _28, _29, _30, _31, _32, _33, _34, _35, _36, _37, _38, _39, _40, _41, _42, _43, _44) \
+	TARGET(FIRST, 45, _WRAP_VAR(_0), _WRAP_VAR(_1), _WRAP_VAR(_2), _WRAP_VAR(_3), _WRAP_VAR(_4), _WRAP_VAR(_5), _WRAP_VAR(_6), _WRAP_VAR(_7), _WRAP_VAR(_8), _WRAP_VAR(_9), _WRAP_VAR(_10), _WRAP_VAR(_11), _WRAP_VAR(_12), _WRAP_VAR(_13), _WRAP_VAR(_14), _WRAP_VAR(_15), _WRAP_VAR(_16), _WRAP_VAR(_17), _WRAP_VAR(_18), _WRAP_VAR(_19), _WRAP_VAR(_20), _WRAP_VAR(_21), _WRAP_VAR(_22), _WRAP_VAR(_23), _WRAP_VAR(_24), _WRAP_VAR(_25), _WRAP_VAR(_26), _WRAP_VAR(_27), _WRAP_VAR(_28), _WRAP_VAR(_29), _WRAP_VAR(_30), _WRAP_VAR(_31), _WRAP_VAR(_32), _WRAP_VAR(_33), _WRAP_VAR(_34), _WRAP_VAR(_35), _WRAP_VAR(_36), _WRAP_VAR(_37), _WRAP_VAR(_38), _WRAP_VAR(_39), _WRAP_VAR(_40), _WRAP_VAR(_41), _WRAP_VAR(_42), _WRAP_VAR(_43), _WRAP_VAR(_44))
+
+#define _WRAP_ARGS_46(TARGET, FIRST, _0, _1, _2, _3, _4, _5, _6, _7, _8, _9, _10, _11, _12, _13, _14, _15, _16, _17, _18, _19, _20, _21, _22, _23, _24, _25, _26, _27, _28, _29, _30, _31, _32, _33, _34, _35, _36, _37, _38, _39, _40, _41, _42, _43, _44, _45) \
+	TARGET(FIRST, 46, _WRAP_VAR(_0), _WRAP_VAR(_1), _WRAP_VAR(_2), _WRAP_VAR(_3), _WRAP_VAR(_4), _WRAP_VAR(_5), _WRAP_VAR(_6), _WRAP_VAR(_7), _WRAP_VAR(_8), _WRAP_VAR(_9), _WRAP_VAR(_10), _WRAP_VAR(_11), _WRAP_VAR(_12), _WRAP_VAR(_13), _WRAP_VAR(_14), _WRAP_VAR(_15), _WRAP_VAR(_16), _WRAP_VAR(_17), _WRAP_VAR(_18), _WRAP_VAR(_19), _WRAP_VAR(_20), _WRAP_VAR(_21), _WRAP_VAR(_22), _WRAP_VAR(_23), _WRAP_VAR(_24), _WRAP_VAR(_25), _WRAP_VAR(_26), _WRAP_VAR(_27), _WRAP_VAR(_28), _WRAP_VAR(_29), _WRAP_VAR(_30), _WRAP_VAR(_31), _WRAP_VAR(_32), _WRAP_VAR(_33), _WRAP_VAR(_34), _WRAP_VAR(_35), _WRAP_VAR(_36), _WRAP_VAR(_37), _WRAP_VAR(_38), _WRAP_VAR(_39), _WRAP_VAR(_40), _WRAP_VAR(_41), _WRAP_VAR(_42), _WRAP_VAR(_43), _WRAP_VAR(_44), _WRAP_VAR(_45))
+
+#define _WRAP_ARGS_47(TARGET, FIRST, _0, _1, _2, _3, _4, _5, _6, _7, _8, _9, _10, _11, _12, _13, _14, _15, _16, _17, _18, _19, _20, _21, _22, _23, _24, _25, _26, _27, _28, _29, _30, _31, _32, _33, _34, _35, _36, _37, _38, _39, _40, _41, _42, _43, _44, _45, _46) \
+	TARGET(FIRST, 47, _WRAP_VAR(_0), _WRAP_VAR(_1), _WRAP_VAR(_2), _WRAP_VAR(_3), _WRAP_VAR(_4), _WRAP_VAR(_5), _WRAP_VAR(_6), _WRAP_VAR(_7), _WRAP_VAR(_8), _WRAP_VAR(_9), _WRAP_VAR(_10), _WRAP_VAR(_11), _WRAP_VAR(_12), _WRAP_VAR(_13), _WRAP_VAR(_14), _WRAP_VAR(_15), _WRAP_VAR(_16), _WRAP_VAR(_17), _WRAP_VAR(_18), _WRAP_VAR(_19), _WRAP_VAR(_20), _WRAP_VAR(_21), _WRAP_VAR(_22), _WRAP_VAR(_23), _WRAP_VAR(_24), _WRAP_VAR(_25), _WRAP_VAR(_26), _WRAP_VAR(_27), _WRAP_VAR(_28), _WRAP_VAR(_29), _WRAP_VAR(_30), _WRAP_VAR(_31), _WRAP_VAR(_32), _WRAP_VAR(_33), _WRAP_VAR(_34), _WRAP_VAR(_35), _WRAP_VAR(_36), _WRAP_VAR(_37), _WRAP_VAR(_38), _WRAP_VAR(_39), _WRAP_VAR(_40), _WRAP_VAR(_41), _WRAP_VAR(_42), _WRAP_VAR(_43), _WRAP_VAR(_44), _WRAP_VAR(_45), _WRAP_VAR(_46))
+
+#define _WRAP_ARGS_48(TARGET, FIRST, _0, _1, _2, _3, _4, _5, _6, _7, _8, _9, _10, _11, _12, _13, _14, _15, _16, _17, _18, _19, _20, _21, _22, _23, _24, _25, _26, _27, _28, _29, _30, _31, _32, _33, _34, _35, _36, _37, _38, _39, _40, _41, _42, _43, _44, _45, _46, _47) \
+	TARGET(FIRST, 48, _WRAP_VAR(_0), _WRAP_VAR(_1), _WRAP_VAR(_2), _WRAP_VAR(_3), _WRAP_VAR(_4), _WRAP_VAR(_5), _WRAP_VAR(_6), _WRAP_VAR(_7), _WRAP_VAR(_8), _WRAP_VAR(_9), _WRAP_VAR(_10), _WRAP_VAR(_11), _WRAP_VAR(_12), _WRAP_VAR(_13), _WRAP_VAR(_14), _WRAP_VAR(_15), _WRAP_VAR(_16), _WRAP_VAR(_17), _WRAP_VAR(_18), _WRAP_VAR(_19), _WRAP_VAR(_20), _WRAP_VAR(_21), _WRAP_VAR(_22), _WRAP_VAR(_23), _WRAP_VAR(_24), _WRAP_VAR(_25), _WRAP_VAR(_26), _WRAP_VAR(_27), _WRAP_VAR(_28), _WRAP_VAR(_29), _WRAP_VAR(_30), _WRAP_VAR(_31), _WRAP_VAR(_32), _WRAP_VAR(_33), _WRAP_VAR(_34), _WRAP_VAR(_35), _WRAP_VAR(_36), _WRAP_VAR(_37), _WRAP_VAR(_38), _WRAP_VAR(_39), _WRAP_VAR(_40), _WRAP_VAR(_41), _WRAP_VAR(_42), _WRAP_VAR(_43), _WRAP_VAR(_44), _WRAP_VAR(_45), _WRAP_VAR(_46), _WRAP_VAR(_47))
+
+#define _WRAP_ARGS_49(TARGET, FIRST, _0, _1, _2, _3, _4, _5, _6, _7, _8, _9, _10, _11, _12, _13, _14, _15, _16, _17, _18, _19, _20, _21, _22, _23, _24, _25, _26, _27, _28, _29, _30, _31, _32, _33, _34, _35, _36, _37, _38, _39, _40, _41, _42, _43, _44, _45, _46, _47, _48) \
+	TARGET(FIRST, 49, _WRAP_VAR(_0), _WRAP_VAR(_1), _WRAP_VAR(_2), _WRAP_VAR(_3), _WRAP_VAR(_4), _WRAP_VAR(_5), _WRAP_VAR(_6), _WRAP_VAR(_7), _WRAP_VAR(_8), _WRAP_VAR(_9), _WRAP_VAR(_10), _WRAP_VAR(_11), _WRAP_VAR(_12), _WRAP_VAR(_13), _WRAP_VAR(_14), _WRAP_VAR(_15), _WRAP_VAR(_16), _WRAP_VAR(_17), _WRAP_VAR(_18), _WRAP_VAR(_19), _WRAP_VAR(_20), _WRAP_VAR(_21), _WRAP_VAR(_22), _WRAP_VAR(_23), _WRAP_VAR(_24), _WRAP_VAR(_25), _WRAP_VAR(_26), _WRAP_VAR(_27), _WRAP_VAR(_28), _WRAP_VAR(_29), _WRAP_VAR(_30), _WRAP_VAR(_31), _WRAP_VAR(_32), _WRAP_VAR(_33), _WRAP_VAR(_34), _WRAP_VAR(_35), _WRAP_VAR(_36), _WRAP_VAR(_37), _WRAP_VAR(_38), _WRAP_VAR(_39), _WRAP_VAR(_40), _WRAP_VAR(_41), _WRAP_VAR(_42), _WRAP_VAR(_43), _WRAP_VAR(_44), _WRAP_VAR(_45), _WRAP_VAR(_46), _WRAP_VAR(_47), _WRAP_VAR(_48))
+
+#define _WRAP_ARGS_50(TARGET, FIRST, _0, _1, _2, _3, _4, _5, _6, _7, _8, _9, _10, _11, _12, _13, _14, _15, _16, _17, _18, _19, _20, _21, _22, _23, _24, _25, _26, _27, _28, _29, _30, _31, _32, _33, _34, _35, _36, _37, _38, _39, _40, _41, _42, _43, _44, _45, _46, _47, _48, _49) \
+	TARGET(FIRST, 50, _WRAP_VAR(_0), _WRAP_VAR(_1), _WRAP_VAR(_2), _WRAP_VAR(_3), _WRAP_VAR(_4), _WRAP_VAR(_5), _WRAP_VAR(_6), _WRAP_VAR(_7), _WRAP_VAR(_8), _WRAP_VAR(_9), _WRAP_VAR(_10), _WRAP_VAR(_11), _WRAP_VAR(_12), _WRAP_VAR(_13), _WRAP_VAR(_14), _WRAP_VAR(_15), _WRAP_VAR(_16), _WRAP_VAR(_17), _WRAP_VAR(_18), _WRAP_VAR(_19), _WRAP_VAR(_20), _WRAP_VAR(_21), _WRAP_VAR(_22), _WRAP_VAR(_23), _WRAP_VAR(_24), _WRAP_VAR(_25), _WRAP_VAR(_26), _WRAP_VAR(_27), _WRAP_VAR(_28), _WRAP_VAR(_29), _WRAP_VAR(_30), _WRAP_VAR(_31), _WRAP_VAR(_32), _WRAP_VAR(_33), _WRAP_VAR(_34), _WRAP_VAR(_35), _WRAP_VAR(_36), _WRAP_VAR(_37), _WRAP_VAR(_38), _WRAP_VAR(_39), _WRAP_VAR(_40), _WRAP_VAR(_41), _WRAP_VAR(_42), _WRAP_VAR(_43), _WRAP_VAR(_44), _WRAP_VAR(_45), _WRAP_VAR(_46), _WRAP_VAR(_47), _WRAP_VAR(_48), _WRAP_VAR(_49))
+
+#define _WRAP_ARGS_51(TARGET, FIRST, _0, _1, _2, _3, _4, _5, _6, _7, _8, _9, _10, _11, _12, _13, _14, _15, _16, _17, _18, _19, _20, _21, _22, _23, _24, _25, _26, _27, _28, _29, _30, _31, _32, _33, _34, _35, _36, _37, _38, _39, _40, _41, _42, _43, _44, _45, _46, _47, _48, _49, _50) \
+	TARGET(FIRST, 51, _WRAP_VAR(_0), _WRAP_VAR(_1), _WRAP_VAR(_2), _WRAP_VAR(_3), _WRAP_VAR(_4), _WRAP_VAR(_5), _WRAP_VAR(_6), _WRAP_VAR(_7), _WRAP_VAR(_8), _WRAP_VAR(_9), _WRAP_VAR(_10), _WRAP_VAR(_11), _WRAP_VAR(_12), _WRAP_VAR(_13), _WRAP_VAR(_14), _WRAP_VAR(_15), _WRAP_VAR(_16), _WRAP_VAR(_17), _WRAP_VAR(_18), _WRAP_VAR(_19), _WRAP_VAR(_20), _WRAP_VAR(_21), _WRAP_VAR(_22), _WRAP_VAR(_23), _WRAP_VAR(_24), _WRAP_VAR(_25), _WRAP_VAR(_26), _WRAP_VAR(_27), _WRAP_VAR(_28), _WRAP_VAR(_29), _WRAP_VAR(_30), _WRAP_VAR(_31), _WRAP_VAR(_32), _WRAP_VAR(_33), _WRAP_VAR(_34), _WRAP_VAR(_35), _WRAP_VAR(_36), _WRAP_VAR(_37), _WRAP_VAR(_38), _WRAP_VAR(_39), _WRAP_VAR(_40), _WRAP_VAR(_41), _WRAP_VAR(_42), _WRAP_VAR(_43), _WRAP_VAR(_44), _WRAP_VAR(_45), _WRAP_VAR(_46), _WRAP_VAR(_47), _WRAP_VAR(_48), _WRAP_VAR(_49), _WRAP_VAR(_50))
+
+#define _WRAP_ARGS_52(TARGET, FIRST, _0, _1, _2, _3, _4, _5, _6, _7, _8, _9, _10, _11, _12, _13, _14, _15, _16, _17, _18, _19, _20, _21, _22, _23, _24, _25, _26, _27, _28, _29, _30, _31, _32, _33, _34, _35, _36, _37, _38, _39, _40, _41, _42, _43, _44, _45, _46, _47, _48, _49, _50, _51) \
+	TARGET(FIRST, 52, _WRAP_VAR(_0), _WRAP_VAR(_1), _WRAP_VAR(_2), _WRAP_VAR(_3), _WRAP_VAR(_4), _WRAP_VAR(_5), _WRAP_VAR(_6), _WRAP_VAR(_7), _WRAP_VAR(_8), _WRAP_VAR(_9), _WRAP_VAR(_10), _WRAP_VAR(_11), _WRAP_VAR(_12), _WRAP_VAR(_13), _WRAP_VAR(_14), _WRAP_VAR(_15), _WRAP_VAR(_16), _WRAP_VAR(_17), _WRAP_VAR(_18), _WRAP_VAR(_19), _WRAP_VAR(_20), _WRAP_VAR(_21), _WRAP_VAR(_22), _WRAP_VAR(_23), _WRAP_VAR(_24), _WRAP_VAR(_25), _WRAP_VAR(_26), _WRAP_VAR(_27), _WRAP_VAR(_28), _WRAP_VAR(_29), _WRAP_VAR(_30), _WRAP_VAR(_31), _WRAP_VAR(_32), _WRAP_VAR(_33), _WRAP_VAR(_34), _WRAP_VAR(_35), _WRAP_VAR(_36), _WRAP_VAR(_37), _WRAP_VAR(_38), _WRAP_VAR(_39), _WRAP_VAR(_40), _WRAP_VAR(_41), _WRAP_VAR(_42), _WRAP_VAR(_43), _WRAP_VAR(_44), _WRAP_VAR(_45), _WRAP_VAR(_46), _WRAP_VAR(_47), _WRAP_VAR(_48), _WRAP_VAR(_49), _WRAP_VAR(_50), _WRAP_VAR(_51))
+
+#define _WRAP_ARGS_53(TARGET, FIRST, _0, _1, _2, _3, _4, _5, _6, _7, _8, _9, _10, _11, _12, _13, _14, _15, _16, _17, _18, _19, _20, _21, _22, _23, _24, _25, _26, _27, _28, _29, _30, _31, _32, _33, _34, _35, _36, _37, _38, _39, _40, _41, _42, _43, _44, _45, _46, _47, _48, _49, _50, _51, _52) \
+	TARGET(FIRST, 53, _WRAP_VAR(_0), _WRAP_VAR(_1), _WRAP_VAR(_2), _WRAP_VAR(_3), _WRAP_VAR(_4), _WRAP_VAR(_5), _WRAP_VAR(_6), _WRAP_VAR(_7), _WRAP_VAR(_8), _WRAP_VAR(_9), _WRAP_VAR(_10), _WRAP_VAR(_11), _WRAP_VAR(_12), _WRAP_VAR(_13), _WRAP_VAR(_14), _WRAP_VAR(_15), _WRAP_VAR(_16), _WRAP_VAR(_17), _WRAP_VAR(_18), _WRAP_VAR(_19), _WRAP_VAR(_20), _WRAP_VAR(_21), _WRAP_VAR(_22), _WRAP_VAR(_23), _WRAP_VAR(_24), _WRAP_VAR(_25), _WRAP_VAR(_26), _WRAP_VAR(_27), _WRAP_VAR(_28), _WRAP_VAR(_29), _WRAP_VAR(_30), _WRAP_VAR(_31), _WRAP_VAR(_32), _WRAP_VAR(_33), _WRAP_VAR(_34), _WRAP_VAR(_35), _WRAP_VAR(_36), _WRAP_VAR(_37), _WRAP_VAR(_38), _WRAP_VAR(_39), _WRAP_VAR(_40), _WRAP_VAR(_41), _WRAP_VAR(_42), _WRAP_VAR(_43), _WRAP_VAR(_44), _WRAP_VAR(_45), _WRAP_VAR(_46), _WRAP_VAR(_47), _WRAP_VAR(_48), _WRAP_VAR(_49), _WRAP_VAR(_50), _WRAP_VAR(_51), _WRAP_VAR(_52))
+
+#define _WRAP_ARGS_54(TARGET, FIRST, _0, _1, _2, _3, _4, _5, _6, _7, _8, _9, _10, _11, _12, _13, _14, _15, _16, _17, _18, _19, _20, _21, _22, _23, _24, _25, _26, _27, _28, _29, _30, _31, _32, _33, _34, _35, _36, _37, _38, _39, _40, _41, _42, _43, _44, _45, _46, _47, _48, _49, _50, _51, _52, _53) \
+	TARGET(FIRST, 54, _WRAP_VAR(_0), _WRAP_VAR(_1), _WRAP_VAR(_2), _WRAP_VAR(_3), _WRAP_VAR(_4), _WRAP_VAR(_5), _WRAP_VAR(_6), _WRAP_VAR(_7), _WRAP_VAR(_8), _WRAP_VAR(_9), _WRAP_VAR(_10), _WRAP_VAR(_11), _WRAP_VAR(_12), _WRAP_VAR(_13), _WRAP_VAR(_14), _WRAP_VAR(_15), _WRAP_VAR(_16), _WRAP_VAR(_17), _WRAP_VAR(_18), _WRAP_VAR(_19), _WRAP_VAR(_20), _WRAP_VAR(_21), _WRAP_VAR(_22), _WRAP_VAR(_23), _WRAP_VAR(_24), _WRAP_VAR(_25), _WRAP_VAR(_26), _WRAP_VAR(_27), _WRAP_VAR(_28), _WRAP_VAR(_29), _WRAP_VAR(_30), _WRAP_VAR(_31), _WRAP_VAR(_32), _WRAP_VAR(_33), _WRAP_VAR(_34), _WRAP_VAR(_35), _WRAP_VAR(_36), _WRAP_VAR(_37), _WRAP_VAR(_38), _WRAP_VAR(_39), _WRAP_VAR(_40), _WRAP_VAR(_41), _WRAP_VAR(_42), _WRAP_VAR(_43), _WRAP_VAR(_44), _WRAP_VAR(_45), _WRAP_VAR(_46), _WRAP_VAR(_47), _WRAP_VAR(_48), _WRAP_VAR(_49), _WRAP_VAR(_50), _WRAP_VAR(_51), _WRAP_VAR(_52), _WRAP_VAR(_53))
+
+#define _WRAP_ARGS_55(TARGET, FIRST, _0, _1, _2, _3, _4, _5, _6, _7, _8, _9, _10, _11, _12, _13, _14, _15, _16, _17, _18, _19, _20, _21, _22, _23, _24, _25, _26, _27, _28, _29, _30, _31, _32, _33, _34, _35, _36, _37, _38, _39, _40, _41, _42, _43, _44, _45, _46, _47, _48, _49, _50, _51, _52, _53, _54) \
+	TARGET(FIRST, 55, _WRAP_VAR(_0), _WRAP_VAR(_1), _WRAP_VAR(_2), _WRAP_VAR(_3), _WRAP_VAR(_4), _WRAP_VAR(_5), _WRAP_VAR(_6), _WRAP_VAR(_7), _WRAP_VAR(_8), _WRAP_VAR(_9), _WRAP_VAR(_10), _WRAP_VAR(_11), _WRAP_VAR(_12), _WRAP_VAR(_13), _WRAP_VAR(_14), _WRAP_VAR(_15), _WRAP_VAR(_16), _WRAP_VAR(_17), _WRAP_VAR(_18), _WRAP_VAR(_19), _WRAP_VAR(_20), _WRAP_VAR(_21), _WRAP_VAR(_22), _WRAP_VAR(_23), _WRAP_VAR(_24), _WRAP_VAR(_25), _WRAP_VAR(_26), _WRAP_VAR(_27), _WRAP_VAR(_28), _WRAP_VAR(_29), _WRAP_VAR(_30), _WRAP_VAR(_31), _WRAP_VAR(_32), _WRAP_VAR(_33), _WRAP_VAR(_34), _WRAP_VAR(_35), _WRAP_VAR(_36), _WRAP_VAR(_37), _WRAP_VAR(_38), _WRAP_VAR(_39), _WRAP_VAR(_40), _WRAP_VAR(_41), _WRAP_VAR(_42), _WRAP_VAR(_43), _WRAP_VAR(_44), _WRAP_VAR(_45), _WRAP_VAR(_46), _WRAP_VAR(_47), _WRAP_VAR(_48), _WRAP_VAR(_49), _WRAP_VAR(_50), _WRAP_VAR(_51), _WRAP_VAR(_52), _WRAP_VAR(_53), _WRAP_VAR(_54))
+
+#define _WRAP_ARGS_56(TARGET, FIRST, _0, _1, _2, _3, _4, _5, _6, _7, _8, _9, _10, _11, _12, _13, _14, _15, _16, _17, _18, _19, _20, _21, _22, _23, _24, _25, _26, _27, _28, _29, _30, _31, _32, _33, _34, _35, _36, _37, _38, _39, _40, _41, _42, _43, _44, _45, _46, _47, _48, _49, _50, _51, _52, _53, _54, _55) \
+	TARGET(FIRST, 56, _WRAP_VAR(_0), _WRAP_VAR(_1), _WRAP_VAR(_2), _WRAP_VAR(_3), _WRAP_VAR(_4), _WRAP_VAR(_5), _WRAP_VAR(_6), _WRAP_VAR(_7), _WRAP_VAR(_8), _WRAP_VAR(_9), _WRAP_VAR(_10), _WRAP_VAR(_11), _WRAP_VAR(_12), _WRAP_VAR(_13), _WRAP_VAR(_14), _WRAP_VAR(_15), _WRAP_VAR(_16), _WRAP_VAR(_17), _WRAP_VAR(_18), _WRAP_VAR(_19), _WRAP_VAR(_20), _WRAP_VAR(_21), _WRAP_VAR(_22), _WRAP_VAR(_23), _WRAP_VAR(_24), _WRAP_VAR(_25), _WRAP_VAR(_26), _WRAP_VAR(_27), _WRAP_VAR(_28), _WRAP_VAR(_29), _WRAP_VAR(_30), _WRAP_VAR(_31), _WRAP_VAR(_32), _WRAP_VAR(_33), _WRAP_VAR(_34), _WRAP_VAR(_35), _WRAP_VAR(_36), _WRAP_VAR(_37), _WRAP_VAR(_38), _WRAP_VAR(_39), _WRAP_VAR(_40), _WRAP_VAR(_41), _WRAP_VAR(_42), _WRAP_VAR(_43), _WRAP_VAR(_44), _WRAP_VAR(_45), _WRAP_VAR(_46), _WRAP_VAR(_47), _WRAP_VAR(_48), _WRAP_VAR(_49), _WRAP_VAR(_50), _WRAP_VAR(_51), _WRAP_VAR(_52), _WRAP_VAR(_53), _WRAP_VAR(_54), _WRAP_VAR(_55))
+
+#define _WRAP_ARGS_57(TARGET, FIRST, _0, _1, _2, _3, _4, _5, _6, _7, _8, _9, _10, _11, _12, _13, _14, _15, _16, _17, _18, _19, _20, _21, _22, _23, _24, _25, _26, _27, _28, _29, _30, _31, _32, _33, _34, _35, _36, _37, _38, _39, _40, _41, _42, _43, _44, _45, _46, _47, _48, _49, _50, _51, _52, _53, _54, _55, _56) \
+	TARGET(FIRST, 57, _WRAP_VAR(_0), _WRAP_VAR(_1), _WRAP_VAR(_2), _WRAP_VAR(_3), _WRAP_VAR(_4), _WRAP_VAR(_5), _WRAP_VAR(_6), _WRAP_VAR(_7), _WRAP_VAR(_8), _WRAP_VAR(_9), _WRAP_VAR(_10), _WRAP_VAR(_11), _WRAP_VAR(_12), _WRAP_VAR(_13), _WRAP_VAR(_14), _WRAP_VAR(_15), _WRAP_VAR(_16), _WRAP_VAR(_17), _WRAP_VAR(_18), _WRAP_VAR(_19), _WRAP_VAR(_20), _WRAP_VAR(_21), _WRAP_VAR(_22), _WRAP_VAR(_23), _WRAP_VAR(_24), _WRAP_VAR(_25), _WRAP_VAR(_26), _WRAP_VAR(_27), _WRAP_VAR(_28), _WRAP_VAR(_29), _WRAP_VAR(_30), _WRAP_VAR(_31), _WRAP_VAR(_32), _WRAP_VAR(_33), _WRAP_VAR(_34), _WRAP_VAR(_35), _WRAP_VAR(_36), _WRAP_VAR(_37), _WRAP_VAR(_38), _WRAP_VAR(_39), _WRAP_VAR(_40), _WRAP_VAR(_41), _WRAP_VAR(_42), _WRAP_VAR(_43), _WRAP_VAR(_44), _WRAP_VAR(_45), _WRAP_VAR(_46), _WRAP_VAR(_47), _WRAP_VAR(_48), _WRAP_VAR(_49), _WRAP_VAR(_50), _WRAP_VAR(_51), _WRAP_VAR(_52), _WRAP_VAR(_53), _WRAP_VAR(_54), _WRAP_VAR(_55), _WRAP_VAR(_56))
+
+#define _WRAP_ARGS_58(TARGET, FIRST, _0, _1, _2, _3, _4, _5, _6, _7, _8, _9, _10, _11, _12, _13, _14, _15, _16, _17, _18, _19, _20, _21, _22, _23, _24, _25, _26, _27, _28, _29, _30, _31, _32, _33, _34, _35, _36, _37, _38, _39, _40, _41, _42, _43, _44, _45, _46, _47, _48, _49, _50, _51, _52, _53, _54, _55, _56, _57) \
+	TARGET(FIRST, 58, _WRAP_VAR(_0), _WRAP_VAR(_1), _WRAP_VAR(_2), _WRAP_VAR(_3), _WRAP_VAR(_4), _WRAP_VAR(_5), _WRAP_VAR(_6), _WRAP_VAR(_7), _WRAP_VAR(_8), _WRAP_VAR(_9), _WRAP_VAR(_10), _WRAP_VAR(_11), _WRAP_VAR(_12), _WRAP_VAR(_13), _WRAP_VAR(_14), _WRAP_VAR(_15), _WRAP_VAR(_16), _WRAP_VAR(_17), _WRAP_VAR(_18), _WRAP_VAR(_19), _WRAP_VAR(_20), _WRAP_VAR(_21), _WRAP_VAR(_22), _WRAP_VAR(_23), _WRAP_VAR(_24), _WRAP_VAR(_25), _WRAP_VAR(_26), _WRAP_VAR(_27), _WRAP_VAR(_28), _WRAP_VAR(_29), _WRAP_VAR(_30), _WRAP_VAR(_31), _WRAP_VAR(_32), _WRAP_VAR(_33), _WRAP_VAR(_34), _WRAP_VAR(_35), _WRAP_VAR(_36), _WRAP_VAR(_37), _WRAP_VAR(_38), _WRAP_VAR(_39), _WRAP_VAR(_40), _WRAP_VAR(_41), _WRAP_VAR(_42), _WRAP_VAR(_43), _WRAP_VAR(_44), _WRAP_VAR(_45), _WRAP_VAR(_46), _WRAP_VAR(_47), _WRAP_VAR(_48), _WRAP_VAR(_49), _WRAP_VAR(_50), _WRAP_VAR(_51), _WRAP_VAR(_52), _WRAP_VAR(_53), _WRAP_VAR(_54), _WRAP_VAR(_55), _WRAP_VAR(_56), _WRAP_VAR(_57))
+
+#define _WRAP_ARGS_59(TARGET, FIRST, _0, _1, _2, _3, _4, _5, _6, _7, _8, _9, _10, _11, _12, _13, _14, _15, _16, _17, _18, _19, _20, _21, _22, _23, _24, _25, _26, _27, _28, _29, _30, _31, _32, _33, _34, _35, _36, _37, _38, _39, _40, _41, _42, _43, _44, _45, _46, _47, _48, _49, _50, _51, _52, _53, _54, _55, _56, _57, _58) \
+	TARGET(FIRST, 59, _WRAP_VAR(_0), _WRAP_VAR(_1), _WRAP_VAR(_2), _WRAP_VAR(_3), _WRAP_VAR(_4), _WRAP_VAR(_5), _WRAP_VAR(_6), _WRAP_VAR(_7), _WRAP_VAR(_8), _WRAP_VAR(_9), _WRAP_VAR(_10), _WRAP_VAR(_11), _WRAP_VAR(_12), _WRAP_VAR(_13), _WRAP_VAR(_14), _WRAP_VAR(_15), _WRAP_VAR(_16), _WRAP_VAR(_17), _WRAP_VAR(_18), _WRAP_VAR(_19), _WRAP_VAR(_20), _WRAP_VAR(_21), _WRAP_VAR(_22), _WRAP_VAR(_23), _WRAP_VAR(_24), _WRAP_VAR(_25), _WRAP_VAR(_26), _WRAP_VAR(_27), _WRAP_VAR(_28), _WRAP_VAR(_29), _WRAP_VAR(_30), _WRAP_VAR(_31), _WRAP_VAR(_32), _WRAP_VAR(_33), _WRAP_VAR(_34), _WRAP_VAR(_35), _WRAP_VAR(_36), _WRAP_VAR(_37), _WRAP_VAR(_38), _WRAP_VAR(_39), _WRAP_VAR(_40), _WRAP_VAR(_41), _WRAP_VAR(_42), _WRAP_VAR(_43), _WRAP_VAR(_44), _WRAP_VAR(_45), _WRAP_VAR(_46), _WRAP_VAR(_47), _WRAP_VAR(_48), _WRAP_VAR(_49), _WRAP_VAR(_50), _WRAP_VAR(_51), _WRAP_VAR(_52), _WRAP_VAR(_53), _WRAP_VAR(_54), _WRAP_VAR(_55), _WRAP_VAR(_56), _WRAP_VAR(_57), _WRAP_VAR(_58))
+
+#define _WRAP_ARGS_60(TARGET, FIRST, _0, _1, _2, _3, _4, _5, _6, _7, _8, _9, _10, _11, _12, _13, _14, _15, _16, _17, _18, _19, _20, _21, _22, _23, _24, _25, _26, _27, _28, _29, _30, _31, _32, _33, _34, _35, _36, _37, _38, _39, _40, _41, _42, _43, _44, _45, _46, _47, _48, _49, _50, _51, _52, _53, _54, _55, _56, _57, _58, _59) \
+	TARGET(FIRST, 60, _WRAP_VAR(_0), _WRAP_VAR(_1), _WRAP_VAR(_2), _WRAP_VAR(_3), _WRAP_VAR(_4), _WRAP_VAR(_5), _WRAP_VAR(_6), _WRAP_VAR(_7), _WRAP_VAR(_8), _WRAP_VAR(_9), _WRAP_VAR(_10), _WRAP_VAR(_11), _WRAP_VAR(_12), _WRAP_VAR(_13), _WRAP_VAR(_14), _WRAP_VAR(_15), _WRAP_VAR(_16), _WRAP_VAR(_17), _WRAP_VAR(_18), _WRAP_VAR(_19), _WRAP_VAR(_20), _WRAP_VAR(_21), _WRAP_VAR(_22), _WRAP_VAR(_23), _WRAP_VAR(_24), _WRAP_VAR(_25), _WRAP_VAR(_26), _WRAP_VAR(_27), _WRAP_VAR(_28), _WRAP_VAR(_29), _WRAP_VAR(_30), _WRAP_VAR(_31), _WRAP_VAR(_32), _WRAP_VAR(_33), _WRAP_VAR(_34), _WRAP_VAR(_35), _WRAP_VAR(_36), _WRAP_VAR(_37), _WRAP_VAR(_38), _WRAP_VAR(_39), _WRAP_VAR(_40), _WRAP_VAR(_41), _WRAP_VAR(_42), _WRAP_VAR(_43), _WRAP_VAR(_44), _WRAP_VAR(_45), _WRAP_VAR(_46), _WRAP_VAR(_47), _WRAP_VAR(_48), _WRAP_VAR(_49), _WRAP_VAR(_50), _WRAP_VAR(_51), _WRAP_VAR(_52), _WRAP_VAR(_53), _WRAP_VAR(_54), _WRAP_VAR(_55), _WRAP_VAR(_56), _WRAP_VAR(_57), _WRAP_VAR(_58), _WRAP_VAR(_59))
+
+#define _WRAP_ARGS_61(TARGET, FIRST, _0, _1, _2, _3, _4, _5, _6, _7, _8, _9, _10, _11, _12, _13, _14, _15, _16, _17, _18, _19, _20, _21, _22, _23, _24, _25, _26, _27, _28, _29, _30, _31, _32, _33, _34, _35, _36, _37, _38, _39, _40, _41, _42, _43, _44, _45, _46, _47, _48, _49, _50, _51, _52, _53, _54, _55, _56, _57, _58, _59, _60) \
+	TARGET(FIRST, 61, _WRAP_VAR(_0), _WRAP_VAR(_1), _WRAP_VAR(_2), _WRAP_VAR(_3), _WRAP_VAR(_4), _WRAP_VAR(_5), _WRAP_VAR(_6), _WRAP_VAR(_7), _WRAP_VAR(_8), _WRAP_VAR(_9), _WRAP_VAR(_10), _WRAP_VAR(_11), _WRAP_VAR(_12), _WRAP_VAR(_13), _WRAP_VAR(_14), _WRAP_VAR(_15), _WRAP_VAR(_16), _WRAP_VAR(_17), _WRAP_VAR(_18), _WRAP_VAR(_19), _WRAP_VAR(_20), _WRAP_VAR(_21), _WRAP_VAR(_22), _WRAP_VAR(_23), _WRAP_VAR(_24), _WRAP_VAR(_25), _WRAP_VAR(_26), _WRAP_VAR(_27), _WRAP_VAR(_28), _WRAP_VAR(_29), _WRAP_VAR(_30), _WRAP_VAR(_31), _WRAP_VAR(_32), _WRAP_VAR(_33), _WRAP_VAR(_34), _WRAP_VAR(_35), _WRAP_VAR(_36), _WRAP_VAR(_37), _WRAP_VAR(_38), _WRAP_VAR(_39), _WRAP_VAR(_40), _WRAP_VAR(_41), _WRAP_VAR(_42), _WRAP_VAR(_43), _WRAP_VAR(_44), _WRAP_VAR(_45), _WRAP_VAR(_46), _WRAP_VAR(_47), _WRAP_VAR(_48), _WRAP_VAR(_49), _WRAP_VAR(_50), _WRAP_VAR(_51), _WRAP_VAR(_52), _WRAP_VAR(_53), _WRAP_VAR(_54), _WRAP_VAR(_55), _WRAP_VAR(_56), _WRAP_VAR(_57), _WRAP_VAR(_58), _WRAP_VAR(_59), _WRAP_VAR(_60))
+
+#define _WRAP_ARGS_62(TARGET, FIRST, _0, _1, _2, _3, _4, _5, _6, _7, _8, _9, _10, _11, _12, _13, _14, _15, _16, _17, _18, _19, _20, _21, _22, _23, _24, _25, _26, _27, _28, _29, _30, _31, _32, _33, _34, _35, _36, _37, _38, _39, _40, _41, _42, _43, _44, _45, _46, _47, _48, _49, _50, _51, _52, _53, _54, _55, _56, _57, _58, _59, _60, _61) \
+	TARGET(FIRST, 62, _WRAP_VAR(_0), _WRAP_VAR(_1), _WRAP_VAR(_2), _WRAP_VAR(_3), _WRAP_VAR(_4), _WRAP_VAR(_5), _WRAP_VAR(_6), _WRAP_VAR(_7), _WRAP_VAR(_8), _WRAP_VAR(_9), _WRAP_VAR(_10), _WRAP_VAR(_11), _WRAP_VAR(_12), _WRAP_VAR(_13), _WRAP_VAR(_14), _WRAP_VAR(_15), _WRAP_VAR(_16), _WRAP_VAR(_17), _WRAP_VAR(_18), _WRAP_VAR(_19), _WRAP_VAR(_20), _WRAP_VAR(_21), _WRAP_VAR(_22), _WRAP_VAR(_23), _WRAP_VAR(_24), _WRAP_VAR(_25), _WRAP_VAR(_26), _WRAP_VAR(_27), _WRAP_VAR(_28), _WRAP_VAR(_29), _WRAP_VAR(_30), _WRAP_VAR(_31), _WRAP_VAR(_32), _WRAP_VAR(_33), _WRAP_VAR(_34), _WRAP_VAR(_35), _WRAP_VAR(_36), _WRAP_VAR(_37), _WRAP_VAR(_38), _WRAP_VAR(_39), _WRAP_VAR(_40), _WRAP_VAR(_41), _WRAP_VAR(_42), _WRAP_VAR(_43), _WRAP_VAR(_44), _WRAP_VAR(_45), _WRAP_VAR(_46), _WRAP_VAR(_47), _WRAP_VAR(_48), _WRAP_VAR(_49), _WRAP_VAR(_50), _WRAP_VAR(_51), _WRAP_VAR(_52), _WRAP_VAR(_53), _WRAP_VAR(_54), _WRAP_VAR(_55), _WRAP_VAR(_56), _WRAP_VAR(_57), _WRAP_VAR(_58), _WRAP_VAR(_59), _WRAP_VAR(_60), _WRAP_VAR(_61))
+
+#define _WRAP_ARGS_63(TARGET, FIRST, _0, _1, _2, _3, _4, _5, _6, _7, _8, _9, _10, _11, _12, _13, _14, _15, _16, _17, _18, _19, _20, _21, _22, _23, _24, _25, _26, _27, _28, _29, _30, _31, _32, _33, _34, _35, _36, _37, _38, _39, _40, _41, _42, _43, _44, _45, _46, _47, _48, _49, _50, _51, _52, _53, _54, _55, _56, _57, _58, _59, _60, _61, _62) \
+	TARGET(FIRST, 63, _WRAP_VAR(_0), _WRAP_VAR(_1), _WRAP_VAR(_2), _WRAP_VAR(_3), _WRAP_VAR(_4), _WRAP_VAR(_5), _WRAP_VAR(_6), _WRAP_VAR(_7), _WRAP_VAR(_8), _WRAP_VAR(_9), _WRAP_VAR(_10), _WRAP_VAR(_11), _WRAP_VAR(_12), _WRAP_VAR(_13), _WRAP_VAR(_14), _WRAP_VAR(_15), _WRAP_VAR(_16), _WRAP_VAR(_17), _WRAP_VAR(_18), _WRAP_VAR(_19), _WRAP_VAR(_20), _WRAP_VAR(_21), _WRAP_VAR(_22), _WRAP_VAR(_23), _WRAP_VAR(_24), _WRAP_VAR(_25), _WRAP_VAR(_26), _WRAP_VAR(_27), _WRAP_VAR(_28), _WRAP_VAR(_29), _WRAP_VAR(_30), _WRAP_VAR(_31), _WRAP_VAR(_32), _WRAP_VAR(_33), _WRAP_VAR(_34), _WRAP_VAR(_35), _WRAP_VAR(_36), _WRAP_VAR(_37), _WRAP_VAR(_38), _WRAP_VAR(_39), _WRAP_VAR(_40), _WRAP_VAR(_41), _WRAP_VAR(_42), _WRAP_VAR(_43), _WRAP_VAR(_44), _WRAP_VAR(_45), _WRAP_VAR(_46), _WRAP_VAR(_47), _WRAP_VAR(_48), _WRAP_VAR(_49), _WRAP_VAR(_50), _WRAP_VAR(_51), _WRAP_VAR(_52), _WRAP_VAR(_53), _WRAP_VAR(_54), _WRAP_VAR(_55), _WRAP_VAR(_56), _WRAP_VAR(_57), _WRAP_VAR(_58), _WRAP_VAR(_59), _WRAP_VAR(_60), _WRAP_VAR(_61), _WRAP_VAR(_62))
+
+#define _WRAP_ARGS_64(TARGET, FIRST, _0, _1, _2, _3, _4, _5, _6, _7, _8, _9, _10, _11, _12, _13, _14, _15, _16, _17, _18, _19, _20, _21, _22, _23, _24, _25, _26, _27, _28, _29, _30, _31, _32, _33, _34, _35, _36, _37, _38, _39, _40, _41, _42, _43, _44, _45, _46, _47, _48, _49, _50, _51, _52, _53, _54, _55, _56, _57, _58, _59, _60, _61, _62, _63) \
+	TARGET(FIRST, 64, _WRAP_VAR(_0), _WRAP_VAR(_1), _WRAP_VAR(_2), _WRAP_VAR(_3), _WRAP_VAR(_4), _WRAP_VAR(_5), _WRAP_VAR(_6), _WRAP_VAR(_7), _WRAP_VAR(_8), _WRAP_VAR(_9), _WRAP_VAR(_10), _WRAP_VAR(_11), _WRAP_VAR(_12), _WRAP_VAR(_13), _WRAP_VAR(_14), _WRAP_VAR(_15), _WRAP_VAR(_16), _WRAP_VAR(_17), _WRAP_VAR(_18), _WRAP_VAR(_19), _WRAP_VAR(_20), _WRAP_VAR(_21), _WRAP_VAR(_22), _WRAP_VAR(_23), _WRAP_VAR(_24), _WRAP_VAR(_25), _WRAP_VAR(_26), _WRAP_VAR(_27), _WRAP_VAR(_28), _WRAP_VAR(_29), _WRAP_VAR(_30), _WRAP_VAR(_31), _WRAP_VAR(_32), _WRAP_VAR(_33), _WRAP_VAR(_34), _WRAP_VAR(_35), _WRAP_VAR(_36), _WRAP_VAR(_37), _WRAP_VAR(_38), _WRAP_VAR(_39), _WRAP_VAR(_40), _WRAP_VAR(_41), _WRAP_VAR(_42), _WRAP_VAR(_43), _WRAP_VAR(_44), _WRAP_VAR(_45), _WRAP_VAR(_46), _WRAP_VAR(_47), _WRAP_VAR(_48), _WRAP_VAR(_49), _WRAP_VAR(_50), _WRAP_VAR(_51), _WRAP_VAR(_52), _WRAP_VAR(_53), _WRAP_VAR(_54), _WRAP_VAR(_55), _WRAP_VAR(_56), _WRAP_VAR(_57), _WRAP_VAR(_58), _WRAP_VAR(_59), _WRAP_VAR(_60), _WRAP_VAR(_61), _WRAP_VAR(_62), _WRAP_VAR(_63))
+
+#define _WRAP_ARGS_65(TARGET, FIRST, _0, _1, _2, _3, _4, _5, _6, _7, _8, _9, _10, _11, _12, _13, _14, _15, _16, _17, _18, _19, _20, _21, _22, _23, _24, _25, _26, _27, _28, _29, _30, _31, _32, _33, _34, _35, _36, _37, _38, _39, _40, _41, _42, _43, _44, _45, _46, _47, _48, _49, _50, _51, _52, _53, _54, _55, _56, _57, _58, _59, _60, _61, _62, _63, _64) \
+	TARGET(FIRST, 65, _WRAP_VAR(_0), _WRAP_VAR(_1), _WRAP_VAR(_2), _WRAP_VAR(_3), _WRAP_VAR(_4), _WRAP_VAR(_5), _WRAP_VAR(_6), _WRAP_VAR(_7), _WRAP_VAR(_8), _WRAP_VAR(_9), _WRAP_VAR(_10), _WRAP_VAR(_11), _WRAP_VAR(_12), _WRAP_VAR(_13), _WRAP_VAR(_14), _WRAP_VAR(_15), _WRAP_VAR(_16), _WRAP_VAR(_17), _WRAP_VAR(_18), _WRAP_VAR(_19), _WRAP_VAR(_20), _WRAP_VAR(_21), _WRAP_VAR(_22), _WRAP_VAR(_23), _WRAP_VAR(_24), _WRAP_VAR(_25), _WRAP_VAR(_26), _WRAP_VAR(_27), _WRAP_VAR(_28), _WRAP_VAR(_29), _WRAP_VAR(_30), _WRAP_VAR(_31), _WRAP_VAR(_32), _WRAP_VAR(_33), _WRAP_VAR(_34), _WRAP_VAR(_35), _WRAP_VAR(_36), _WRAP_VAR(_37), _WRAP_VAR(_38), _WRAP_VAR(_39), _WRAP_VAR(_40), _WRAP_VAR(_41), _WRAP_VAR(_42), _WRAP_VAR(_43), _WRAP_VAR(_44), _WRAP_VAR(_45), _WRAP_VAR(_46), _WRAP_VAR(_47), _WRAP_VAR(_48), _WRAP_VAR(_49), _WRAP_VAR(_50), _WRAP_VAR(_51), _WRAP_VAR(_52), _WRAP_VAR(_53), _WRAP_VAR(_54), _WRAP_VAR(_55), _WRAP_VAR(_56), _WRAP_VAR(_57), _WRAP_VAR(_58), _WRAP_VAR(_59), _WRAP_VAR(_60), _WRAP_VAR(_61), _WRAP_VAR(_62), _WRAP_VAR(_63), _WRAP_VAR(_64))
+
+#define _WRAP_ARGS_66(TARGET, FIRST, _0, _1, _2, _3, _4, _5, _6, _7, _8, _9, _10, _11, _12, _13, _14, _15, _16, _17, _18, _19, _20, _21, _22, _23, _24, _25, _26, _27, _28, _29, _30, _31, _32, _33, _34, _35, _36, _37, _38, _39, _40, _41, _42, _43, _44, _45, _46, _47, _48, _49, _50, _51, _52, _53, _54, _55, _56, _57, _58, _59, _60, _61, _62, _63, _64, _65) \
+	TARGET(FIRST, 66, _WRAP_VAR(_0), _WRAP_VAR(_1), _WRAP_VAR(_2), _WRAP_VAR(_3), _WRAP_VAR(_4), _WRAP_VAR(_5), _WRAP_VAR(_6), _WRAP_VAR(_7), _WRAP_VAR(_8), _WRAP_VAR(_9), _WRAP_VAR(_10), _WRAP_VAR(_11), _WRAP_VAR(_12), _WRAP_VAR(_13), _WRAP_VAR(_14), _WRAP_VAR(_15), _WRAP_VAR(_16), _WRAP_VAR(_17), _WRAP_VAR(_18), _WRAP_VAR(_19), _WRAP_VAR(_20), _WRAP_VAR(_21), _WRAP_VAR(_22), _WRAP_VAR(_23), _WRAP_VAR(_24), _WRAP_VAR(_25), _WRAP_VAR(_26), _WRAP_VAR(_27), _WRAP_VAR(_28), _WRAP_VAR(_29), _WRAP_VAR(_30), _WRAP_VAR(_31), _WRAP_VAR(_32), _WRAP_VAR(_33), _WRAP_VAR(_34), _WRAP_VAR(_35), _WRAP_VAR(_36), _WRAP_VAR(_37), _WRAP_VAR(_38), _WRAP_VAR(_39), _WRAP_VAR(_40), _WRAP_VAR(_41), _WRAP_VAR(_42), _WRAP_VAR(_43), _WRAP_VAR(_44), _WRAP_VAR(_45), _WRAP_VAR(_46), _WRAP_VAR(_47), _WRAP_VAR(_48), _WRAP_VAR(_49), _WRAP_VAR(_50), _WRAP_VAR(_51), _WRAP_VAR(_52), _WRAP_VAR(_53), _WRAP_VAR(_54), _WRAP_VAR(_55), _WRAP_VAR(_56), _WRAP_VAR(_57), _WRAP_VAR(_58), _WRAP_VAR(_59), _WRAP_VAR(_60), _WRAP_VAR(_61), _WRAP_VAR(_62), _WRAP_VAR(_63), _WRAP_VAR(_64), _WRAP_VAR(_65))
+
+#define _WRAP_ARGS_67(TARGET, FIRST, _0, _1, _2, _3, _4, _5, _6, _7, _8, _9, _10, _11, _12, _13, _14, _15, _16, _17, _18, _19, _20, _21, _22, _23, _24, _25, _26, _27, _28, _29, _30, _31, _32, _33, _34, _35, _36, _37, _38, _39, _40, _41, _42, _43, _44, _45, _46, _47, _48, _49, _50, _51, _52, _53, _54, _55, _56, _57, _58, _59, _60, _61, _62, _63, _64, _65, _66) \
+	TARGET(FIRST, 67, _WRAP_VAR(_0), _WRAP_VAR(_1), _WRAP_VAR(_2), _WRAP_VAR(_3), _WRAP_VAR(_4), _WRAP_VAR(_5), _WRAP_VAR(_6), _WRAP_VAR(_7), _WRAP_VAR(_8), _WRAP_VAR(_9), _WRAP_VAR(_10), _WRAP_VAR(_11), _WRAP_VAR(_12), _WRAP_VAR(_13), _WRAP_VAR(_14), _WRAP_VAR(_15), _WRAP_VAR(_16), _WRAP_VAR(_17), _WRAP_VAR(_18), _WRAP_VAR(_19), _WRAP_VAR(_20), _WRAP_VAR(_21), _WRAP_VAR(_22), _WRAP_VAR(_23), _WRAP_VAR(_24), _WRAP_VAR(_25), _WRAP_VAR(_26), _WRAP_VAR(_27), _WRAP_VAR(_28), _WRAP_VAR(_29), _WRAP_VAR(_30), _WRAP_VAR(_31), _WRAP_VAR(_32), _WRAP_VAR(_33), _WRAP_VAR(_34), _WRAP_VAR(_35), _WRAP_VAR(_36), _WRAP_VAR(_37), _WRAP_VAR(_38), _WRAP_VAR(_39), _WRAP_VAR(_40), _WRAP_VAR(_41), _WRAP_VAR(_42), _WRAP_VAR(_43), _WRAP_VAR(_44), _WRAP_VAR(_45), _WRAP_VAR(_46), _WRAP_VAR(_47), _WRAP_VAR(_48), _WRAP_VAR(_49), _WRAP_VAR(_50), _WRAP_VAR(_51), _WRAP_VAR(_52), _WRAP_VAR(_53), _WRAP_VAR(_54), _WRAP_VAR(_55), _WRAP_VAR(_56), _WRAP_VAR(_57), _WRAP_VAR(_58), _WRAP_VAR(_59), _WRAP_VAR(_60), _WRAP_VAR(_61), _WRAP_VAR(_62), _WRAP_VAR(_63), _WRAP_VAR(_64), _WRAP_VAR(_65), _WRAP_VAR(_66))
+
+#define _WRAP_ARGS_68(TARGET, FIRST, _0, _1, _2, _3, _4, _5, _6, _7, _8, _9, _10, _11, _12, _13, _14, _15, _16, _17, _18, _19, _20, _21, _22, _23, _24, _25, _26, _27, _28, _29, _30, _31, _32, _33, _34, _35, _36, _37, _38, _39, _40, _41, _42, _43, _44, _45, _46, _47, _48, _49, _50, _51, _52, _53, _54, _55, _56, _57, _58, _59, _60, _61, _62, _63, _64, _65, _66, _67) \
+	TARGET(FIRST, 68, _WRAP_VAR(_0), _WRAP_VAR(_1), _WRAP_VAR(_2), _WRAP_VAR(_3), _WRAP_VAR(_4), _WRAP_VAR(_5), _WRAP_VAR(_6), _WRAP_VAR(_7), _WRAP_VAR(_8), _WRAP_VAR(_9), _WRAP_VAR(_10), _WRAP_VAR(_11), _WRAP_VAR(_12), _WRAP_VAR(_13), _WRAP_VAR(_14), _WRAP_VAR(_15), _WRAP_VAR(_16), _WRAP_VAR(_17), _WRAP_VAR(_18), _WRAP_VAR(_19), _WRAP_VAR(_20), _WRAP_VAR(_21), _WRAP_VAR(_22), _WRAP_VAR(_23), _WRAP_VAR(_24), _WRAP_VAR(_25), _WRAP_VAR(_26), _WRAP_VAR(_27), _WRAP_VAR(_28), _WRAP_VAR(_29), _WRAP_VAR(_30), _WRAP_VAR(_31), _WRAP_VAR(_32), _WRAP_VAR(_33), _WRAP_VAR(_34), _WRAP_VAR(_35), _WRAP_VAR(_36), _WRAP_VAR(_37), _WRAP_VAR(_38), _WRAP_VAR(_39), _WRAP_VAR(_40), _WRAP_VAR(_41), _WRAP_VAR(_42), _WRAP_VAR(_43), _WRAP_VAR(_44), _WRAP_VAR(_45), _WRAP_VAR(_46), _WRAP_VAR(_47), _WRAP_VAR(_48), _WRAP_VAR(_49), _WRAP_VAR(_50), _WRAP_VAR(_51), _WRAP_VAR(_52), _WRAP_VAR(_53), _WRAP_VAR(_54), _WRAP_VAR(_55), _WRAP_VAR(_56), _WRAP_VAR(_57), _WRAP_VAR(_58), _WRAP_VAR(_59), _WRAP_VAR(_60), _WRAP_VAR(_61), _WRAP_VAR(_62), _WRAP_VAR(_63), _WRAP_VAR(_64), _WRAP_VAR(_65), _WRAP_VAR(_66), _WRAP_VAR(_67))
+
+#define _WRAP_ARGS_69(TARGET, FIRST, _0, _1, _2, _3, _4, _5, _6, _7, _8, _9, _10, _11, _12, _13, _14, _15, _16, _17, _18, _19, _20, _21, _22, _23, _24, _25, _26, _27, _28, _29, _30, _31, _32, _33, _34, _35, _36, _37, _38, _39, _40, _41, _42, _43, _44, _45, _46, _47, _48, _49, _50, _51, _52, _53, _54, _55, _56, _57, _58, _59, _60, _61, _62, _63, _64, _65, _66, _67, _68) \
+	TARGET(FIRST, 69, _WRAP_VAR(_0), _WRAP_VAR(_1), _WRAP_VAR(_2), _WRAP_VAR(_3), _WRAP_VAR(_4), _WRAP_VAR(_5), _WRAP_VAR(_6), _WRAP_VAR(_7), _WRAP_VAR(_8), _WRAP_VAR(_9), _WRAP_VAR(_10), _WRAP_VAR(_11), _WRAP_VAR(_12), _WRAP_VAR(_13), _WRAP_VAR(_14), _WRAP_VAR(_15), _WRAP_VAR(_16), _WRAP_VAR(_17), _WRAP_VAR(_18), _WRAP_VAR(_19), _WRAP_VAR(_20), _WRAP_VAR(_21), _WRAP_VAR(_22), _WRAP_VAR(_23), _WRAP_VAR(_24), _WRAP_VAR(_25), _WRAP_VAR(_26), _WRAP_VAR(_27), _WRAP_VAR(_28), _WRAP_VAR(_29), _WRAP_VAR(_30), _WRAP_VAR(_31), _WRAP_VAR(_32), _WRAP_VAR(_33), _WRAP_VAR(_34), _WRAP_VAR(_35), _WRAP_VAR(_36), _WRAP_VAR(_37), _WRAP_VAR(_38), _WRAP_VAR(_39), _WRAP_VAR(_40), _WRAP_VAR(_41), _WRAP_VAR(_42), _WRAP_VAR(_43), _WRAP_VAR(_44), _WRAP_VAR(_45), _WRAP_VAR(_46), _WRAP_VAR(_47), _WRAP_VAR(_48), _WRAP_VAR(_49), _WRAP_VAR(_50), _WRAP_VAR(_51), _WRAP_VAR(_52), _WRAP_VAR(_53), _WRAP_VAR(_54), _WRAP_VAR(_55), _WRAP_VAR(_56), _WRAP_VAR(_57), _WRAP_VAR(_58), _WRAP_VAR(_59), _WRAP_VAR(_60), _WRAP_VAR(_61), _WRAP_VAR(_62), _WRAP_VAR(_63), _WRAP_VAR(_64), _WRAP_VAR(_65), _WRAP_VAR(_66), _WRAP_VAR(_67), _WRAP_VAR(_68))
+
+#define _WRAP_ARGS_70(TARGET, FIRST, _0, _1, _2, _3, _4, _5, _6, _7, _8, _9, _10, _11, _12, _13, _14, _15, _16, _17, _18, _19, _20, _21, _22, _23, _24, _25, _26, _27, _28, _29, _30, _31, _32, _33, _34, _35, _36, _37, _38, _39, _40, _41, _42, _43, _44, _45, _46, _47, _48, _49, _50, _51, _52, _53, _54, _55, _56, _57, _58, _59, _60, _61, _62, _63, _64, _65, _66, _67, _68, _69) \
+	TARGET(FIRST, 70, _WRAP_VAR(_0), _WRAP_VAR(_1), _WRAP_VAR(_2), _WRAP_VAR(_3), _WRAP_VAR(_4), _WRAP_VAR(_5), _WRAP_VAR(_6), _WRAP_VAR(_7), _WRAP_VAR(_8), _WRAP_VAR(_9), _WRAP_VAR(_10), _WRAP_VAR(_11), _WRAP_VAR(_12), _WRAP_VAR(_13), _WRAP_VAR(_14), _WRAP_VAR(_15), _WRAP_VAR(_16), _WRAP_VAR(_17), _WRAP_VAR(_18), _WRAP_VAR(_19), _WRAP_VAR(_20), _WRAP_VAR(_21), _WRAP_VAR(_22), _WRAP_VAR(_23), _WRAP_VAR(_24), _WRAP_VAR(_25), _WRAP_VAR(_26), _WRAP_VAR(_27), _WRAP_VAR(_28), _WRAP_VAR(_29), _WRAP_VAR(_30), _WRAP_VAR(_31), _WRAP_VAR(_32), _WRAP_VAR(_33), _WRAP_VAR(_34), _WRAP_VAR(_35), _WRAP_VAR(_36), _WRAP_VAR(_37), _WRAP_VAR(_38), _WRAP_VAR(_39), _WRAP_VAR(_40), _WRAP_VAR(_41), _WRAP_VAR(_42), _WRAP_VAR(_43), _WRAP_VAR(_44), _WRAP_VAR(_45), _WRAP_VAR(_46), _WRAP_VAR(_47), _WRAP_VAR(_48), _WRAP_VAR(_49), _WRAP_VAR(_50), _WRAP_VAR(_51), _WRAP_VAR(_52), _WRAP_VAR(_53), _WRAP_VAR(_54), _WRAP_VAR(_55), _WRAP_VAR(_56), _WRAP_VAR(_57), _WRAP_VAR(_58), _WRAP_VAR(_59), _WRAP_VAR(_60), _WRAP_VAR(_61), _WRAP_VAR(_62), _WRAP_VAR(_63), _WRAP_VAR(_64), _WRAP_VAR(_65), _WRAP_VAR(_66), _WRAP_VAR(_67), _WRAP_VAR(_68), _WRAP_VAR(_69))
+
+#define _WRAP_ARGS_DISPATCH(N, TARGET, ...) \
+    PP_CONCATENATE(_WRAP_ARGS_, N)(TARGET, __VA_ARGS__)
+
+#define MAKE_WRAPPED_CALL(TARGET, ...) \
+    _WRAP_ARGS_DISPATCH(PP_NARG(__VA_ARGS__), TARGET, __VA_ARGS__)
+
+#endif // _VAR_ARGS_MACROS_H
+
+/* End include: var_args_macros.h */
+
+#endif // _VAR_ARGS_H
+
+/* End include: var_args.h */
+#endif // _VAR_ARGS_H
+#ifndef _SYSTEM_1_H
+#endif // _SYSTEM_1_H
+#ifndef _MATH_H
+
+/* Begin include: math.h */
+#ifndef _MATH_H
+#define _MATH_H
+
+#ifndef _BASE_H
+#endif // _BASE_H
+
+
+/* Begin include: trig_tables.h */
+unit_local const float64 sine_table[721] = {
+    0,    0.0087144324270331964,    0.017428203055890986,    0.026140650138656747,    0.034851112027927629,    0.043558927227061874,    0.052263434440414709,    0.060963972623559001,
+    0.069659881033486762,    0.078350499278787858,    0.08703516736980188,    0.095713225768739682,    0.10438401543977047,    0.11304687789907079,    0.12170115526483169,    0.13034619030722,
+    0.1389813264982902,    0.14760590806184304,    0.15621928002322702,    0.16482078825907881,    0.17340977954699943,    0.1819856016151615,    0.19054760319184491,    0.19909513405489587,
+    0.20762754508110681,    0.21614418829551246,    0.224644416920599,    0.233127585425422,    0.24159304957462993,    0.25004016647738914,    0.25846829463620663,    0.26687679399564762,
+    0.27526502599094244,    0.28363235359648165,    0.29197814137419276,    0.300301755521798,    0.3086025639209462,    0.31687993618521826,    0.32513324370800006,    0.33336185971022075,
+    0.34156515928795211,    0.34974251945986523,    0.35789331921454187,    0.36601693955763548,    0.3741127635588794,    0.38218017639893831,    0.39021856541609934,    0.39822732015279921,
+    0.40620583240198399,    0.41415349625329845,    0.4220697081391,    0.42995386688029574,    0.43780537373199735,    0.44562363242899178,    0.45340804923102285,    0.46115803296788205,
+    0.46887299508430319,    0.47655234968465909,    0.48419551357745616,    0.49180190631962351,    0.49937095026059358,    0.50690207058617032,    0.51439469536218219,    0.52184825557791659,
+    0.52926218518933166,    0.53663592116204417,    0.543968903514087,    0.55126057535843598,    0.55851038294530153,    0.56571777570418202,    0.57288220628567565,    0.58000313060304731,
+    0.5870800078735483,    0.59411230065948495,    0.60109947490903326,    0.60804099999679573,    0.61493634876409886,    0.62178499755902716,    0.62858642627619077,    0.63534011839622317,
+    0.64204556102500776,    0.64870224493262785,    0.65530966459203976,    0.66186731821746325,    0.66837470780248853,    0.67483133915789684,    0.68123672194919016,    0.68759036973382859,
+    0.69389179999817197,    0.70014053419412359,    0.70633609777547257,    0.71247802023393181,    0.71856583513487005,    0.72459908015273378,    0.73057729710615815,    0.73650003199276193,
+    0.74236683502362633,    0.74817726065745227,    0.75393086763439732,    0.75962721900958474,    0.76526588218628766,    0.77084642894878075,    0.77636843549486056,    0.7818314824680298,
+    0.78723515498934493,    0.79257904268892321,    0.79786273973710675,    0.80308584487528301,    0.8082479614463568,    0.81334869742487448,    0.81838766544679442,    0.82336448283890518,
+    0.82827877164788666,    0.83313015866901274,    0.83791827547449349,    0.84264275844145475,    0.84730324877955288,    0.85189939255822134,    0.85643084073355058,    0.86089724917479449,
+    0.86529827869050424,    0.86963359505428861,    0.87390286903019521,    0.87810577639771381,    0.8822419979763988,    0.88631121965010784,    0.89031313239085785,    0.89424743228229231,
+    0.89811382054276245,    0.90191200354801726,    0.9056416928535016,    0.90930260521626205,    0.91289446261645746,    0.91641699227847151,    0.91986992669162904,    0.92325300363051099,
+    0.92656596617486875,    0.92980856272913559,    0.93298054704153288,    0.93608167822277177,    0.93911172076434679,    0.94207044455642075,    0.94495762490530066,    0.94777304255050043,
+    0.95051648368139341,    0.95318773995344863,    0.95578660850405395,    0.95831289196792147,    0.9607663984920759,    0.96314694175042515,    0.96545434095790961,    0.96768842088423201,
+    0.96984901186716455,    0.97193594982543374,    0.9739490762711811,    0.97588823832199945,    0.97775328871254241,    0.97954408580570929,    0.98126049360340029,    0.98290238175684552,
+    0.9844696255765033,    0.98596210604153001,    0.9873797098088184,    0.98872232922160552,    0.98998986231764807,    0.99118221283696639,    0.99229929022915386,    0.99334100966025429,
+    0.99430729201920387,    0.99519806392383958,    0.99601325772647153,    0.99675281151902095,    0.99741666913772076,    0.9980047801673817,    0.99851709994522064,    0.99895358956425229,
+    0.99931421587624392,    0.99959895149423306,    0.9998077747946067,    0.9999406699187442,    0.99999762677422099,    0.99997864103557565,    0.99988371414463784,    0.99971285331041881,
+    0.99946607150856448,    0.99914338748036957,    0.99874482573135437,    0.99827041652940385,    0.99772019590246896,    0.99709420563583062,    0.99639249326892643,    0.99561511209174036,
+    0.99476212114075568,    0.99383358519447174,    0.99282957476848432,    0.99175016611013067,    0.99059544119269904,    0.98936548770920318,    0.98806039906572296,    0.98668027437431083,
+    0.98522521844546473,    0.98369534178016871,    0.98209076056150124,    0.98041159664581168,    0.97865797755346629,    0.97683003645916433,    0.97492791218182362,    0.97295174917403904,
+    0.97090169751111211,    0.96877791287965331,    0.96658055656576003,    0.96430979544276685,    0.9619658019585734,    0.95954875412254781,    0.95705883549200854,    0.95449623515828441,
+    0.9518611477323542,    0.94915377333006767,    0.94637431755694823,    0.94352299149257834,    0.94060001167457019,    0.93760560008212024,    0.93453998411915251,    0.93140339659704829,
+    0.92819607571696605,    0.92491826505175156,    0.92157021352744051,    0.91815217540435456,    0.91466441025779144,    0.91110718295831272,    0.90748076365162855,    0.9037854277380819,
+    0.90002145585173421,    0.8961891338390533,    0.89228875273720498,    0.88832060875195107,    0.88428500323515491,    0.88018224266189538,    0.87601263860719325,    0.87177650772234827,
+    0.86747417171089236,    0.8631059573041584,    0.85867219623646718,    0.85417322521993533,    0.84960938591890356,    0.84498102492398997,    0.84028849372576919,    0.8355321486880789,
+    0.83071235102095753,    0.82582946675321156,    0.8208838667046191,    0.81587592645776863,    0.81080602632953602,    0.80567455134220323,    0.80048189119421709,    0.79522844023059547,
+    0.78991459741297942,    0.78454076628933478,    0.77910735496330641,    0.77361477606322449,    0.76806344671076898,    0.76245378848929224,    0.75678622741180268,    0.75106119388861214,
+    0.74527912269465024,    0.73944045293644456,    0.7335456280187751,    0.72759509561100044,    0.72158930761306017,    0.71552872012115765,    0.70941379339312094,    0.70324499181345057,
+    0.69702278385805316,    0.6907476420586629,    0.68442004296695824,    0.67804046711836885,    0.67160939899558392,    0.66512732699175869,    0.65859474337342427,    0.65201214424310505,
+    0.64538002950164108,    0.63869890281022568,    0.63196927155215554,    0.62519164679429839,    0.61836654324828266,    0.61149447923140654,    0.6045759766272768,    0.59761156084617573,
+    0.59060176078515902,    0.58354710878789184,    0.57644814060421834,    0.56930539534947755,    0.5621194154635607,    0.55489074666971627,    0.54761993793310804,    0.54030754141912296,
+    0.53295411245143942,    0.52556020946985427,    0.51812639398787286,    0.51065323055006751,    0.50314128668920266,    0.49559113288313578,    0.48800334251149374,    0.48037849181212855,
+    0.4727171598373559,    0.46501992840998202,    0.4572873820791159,    0.44952010807577869,    0.44171869626830745,    0.43388373911755823,    0.42601583163191475,    0.41811557132209948,
+    0.41018355815579843,    0.40222039451209757,    0.39422668513573633,    0.38620303709118287,    0.37815005971652926,    0.37006836457721998,    0.36195856541960497,    0.35382127812433167,
+    0.34565712065957255,    0.33746671303409659,    0.32925067725018153,    0.32100963725637899,    0.31274421890012954,    0.30445504988023403,    0.29614275969918569,    0.28780797961536164,
+    0.27945134259508508,    0.2710734832645556,    0.26267503786165342,    0.25425664418762356,    0.24581894155863676,    0.23736257075723985,    0.22888817398369241,    0.22039639480719592,
+    0.21188787811702114,    0.20336327007353069,    0.19482321805910965,    0.18626837062900109,    0.17769937746205303,    0.16911688931137953,    0.16052155795494241,    0.15191403614605098,
+    0.14329497756379167,    0.13466503676338554,    0.12602486912647898,    0.1173751308113741,    0.10871647870319553,    0.10004957036400651,    0.09137506398287136,    0.082693618325870369,
+    0.074005892686072966,    0.065312546833466628,    0.056614240964853783,    0.047911635653714264,    0.039205391800039034,    0.030496170580141417,    0.021784633396442842,    0.01307144182724591,
+    0.0043572575764918402,    -0.0043572575764915956,    -0.013071441827245664,    -0.021784633396442599,    -0.030496170580141171,    -0.039205391800038791,    -0.047911635653714021,    -0.056614240964853541,
+    -0.065312546833466378,    -0.074005892686072716,    -0.082693618325870119,    -0.091375063982871124,    -0.10004957036400627,    -0.10871647870319529,    -0.11737513081137387,    -0.12602486912647873,
+    -0.13466503676338529,    -0.14329497756379145,    -0.15191403614605073,    -0.16052155795494216,    -0.16911688931137928,    -0.1776993774620528,    -0.18626837062900087,    -0.1948232180591094,
+    -0.20336327007353044,    -0.21188787811702092,    -0.22039639480719569,    -0.22888817398369216,    -0.2373625707572396,    -0.24581894155863654,    -0.25425664418762334,    -0.26267503786165319,
+    -0.27107348326455538,    -0.27945134259508486,    -0.28780797961536142,    -0.29614275969918546,    -0.30445504988023381,    -0.31274421890012932,    -0.32100963725637877,    -0.32925067725018131,
+    -0.33746671303409637,    -0.34565712065957233,    -0.3538212781243314,    -0.36195856541960469,    -0.37006836457721975,    -0.37815005971652904,    -0.3862030370911822,    -0.39422668513573611,
+    -0.40222039451209696,    -0.41018355815579777,    -0.41811557132209887,    -0.42601583163191414,    -0.43388373911755801,    -0.44171869626830684,    -0.44952010807577808,    -0.45728738207911529,
+    -0.46501992840998141,    -0.47271715983735568,    -0.48037849181212794,    -0.48800334251149313,    -0.49559113288313522,    -0.50314128668920211,    -0.51065323055006728,    -0.51812639398787264,
+    -0.52556020946985371,    -0.53295411245143887,    -0.54030754141912241,    -0.54761993793310748,    -0.55489074666971605,    -0.56211941546356015,    -0.56930539534947699,    -0.57644814060421778,
+    -0.58354710878789118,    -0.5906017607851588,    -0.59761156084617517,    -0.60457597662727625,    -0.61149447923140599,    -0.61836654324828211,    -0.62519164679429817,    -0.63196927155215499,
+    -0.63869890281022512,    -0.64538002950164053,    -0.6520121442431045,    -0.65859474337342405,    -0.66512732699175814,    -0.67160939899558347,    -0.67804046711836841,    -0.6844200429669578,
+    -0.69074764205866268,    -0.69702278385805261,    -0.70324499181345013,    -0.70941379339312105,    -0.71552872012115776,    -0.72158930761306028,    -0.72759509561100033,    -0.73354562801877521,
+    -0.73944045293644467,    -0.74527912269465035,    -0.75106119388861226,    -0.75678622741180257,    -0.76245378848929202,    -0.76806344671076909,    -0.77361477606322437,    -0.77910735496330652,
+    -0.78454076628933511,    -0.7899145974129792,    -0.79522844023059558,    -0.80048189119421698,    -0.80567455134220334,    -0.81080602632953647,    -0.81587592645776852,    -0.82088386670461921,
+    -0.82582946675321145,    -0.83071235102095775,    -0.83553214868807923,    -0.84028849372576908,    -0.84498102492399008,    -0.84960938591890345,    -0.85417322521993544,    -0.85867219623646751,
+    -0.86310595730415829,    -0.86747417171089247,    -0.87177650772234816,    -0.87601263860719336,    -0.88018224266189571,    -0.8842850032351548,    -0.88832060875195118,    -0.89228875273720487,
+    -0.89618913383905341,    -0.90002145585173443,    -0.90378542773808179,    -0.90748076365162855,    -0.91110718295831261,    -0.91466441025779144,    -0.91815217540435479,    -0.92157021352744051,
+    -0.92491826505175156,    -0.92819607571696583,    -0.93140339659704818,    -0.93453998411915262,    -0.93760560008212013,    -0.94060001167457019,    -0.94352299149257823,    -0.94637431755694812,
+    -0.94915377333006767,    -0.95186114773235408,    -0.95449623515828441,    -0.95705883549200843,    -0.9595487541225477,    -0.9619658019585734,    -0.96430979544276674,    -0.96658055656576003,
+    -0.9687779128796532,    -0.97090169751111199,    -0.97295174917403915,    -0.97492791218182362,    -0.97683003645916433,    -0.97865797755346629,    -0.98041159664581168,    -0.98209076056150124,
+    -0.98369534178016871,    -0.98522521844546473,    -0.98668027437431072,    -0.98806039906572296,    -0.98936548770920307,    -0.99059544119269893,    -0.99175016611013067,    -0.99282957476848421,
+    -0.99383358519447174,    -0.99476212114075557,    -0.99561511209174036,    -0.99639249326892643,    -0.99709420563583062,    -0.99772019590246896,    -0.99827041652940374,    -0.99874482573135437,
+    -0.99914338748036957,    -0.99946607150856448,    -0.99971285331041881,    -0.99988371414463784,    -0.99997864103557565,    -0.99999762677422099,    -0.9999406699187442,    -0.9998077747946067,
+    -0.99959895149423306,    -0.99931421587624392,    -0.99895358956425229,    -0.99851709994522064,    -0.9980047801673817,    -0.99741666913772076,    -0.99675281151902095,    -0.99601325772647153,
+    -0.99519806392383969,    -0.99430729201920387,    -0.9933410096602544,    -0.99229929022915386,    -0.99118221283696639,    -0.98998986231764818,    -0.98872232922160552,    -0.98737970980881851,
+    -0.98596210604153012,    -0.9844696255765033,    -0.98290238175684563,    -0.98126049360340029,    -0.9795440858057094,    -0.97775328871254252,    -0.97588823832199945,    -0.97394907627118132,
+    -0.97193594982543374,    -0.96984901186716466,    -0.96768842088423213,    -0.96545434095790961,    -0.96314694175042526,    -0.9607663984920759,    -0.95831289196792158,    -0.95578660850405406,
+    -0.95318773995344874,    -0.95051648368139363,    -0.94777304255050054,    -0.94495762490530089,    -0.94207044455642097,    -0.93911172076434679,    -0.936081678222772,    -0.93298054704153299,
+    -0.92980856272913581,    -0.92656596617486897,    -0.92325300363051099,    -0.91986992669162926,    -0.91641699227847162,    -0.91289446261645779,    -0.90930260521626227,    -0.9056416928535016,
+    -0.90191200354801748,    -0.89811382054276256,    -0.89424743228229264,    -0.89031313239085796,    -0.88631121965010784,    -0.88224199797639902,    -0.87810577639771392,    -0.87390286903019554,
+    -0.86963359505428872,    -0.86529827869050424,    -0.86089724917479471,    -0.8564308407335508,    -0.85189939255822178,    -0.84730324877955299,    -0.84264275844145531,    -0.83791827547449371,
+    -0.83313015866901285,    -0.8282787716478871,    -0.8233644828389054,    -0.81838766544679498,    -0.81334869742487481,    -0.80824796144635702,    -0.80308584487528345,    -0.79786273973710709,
+    -0.79257904268892387,    -0.78723515498934538,    -0.78183148246802991,    -0.77636843549486101,    -0.77084642894878108,    -0.76526588218628833,    -0.75962721900958519,    -0.75393086763439743,
+    -0.74817726065745283,    -0.74236683502362655,    -0.7365000319927627,    -0.7305772971061586,    -0.72459908015273389,    -0.71856583513487049,    -0.71247802023393214,    -0.70633609777547268,
+    -0.70014053419412337,    -0.69389179999817208,    -0.68759036973382848,    -0.68123672194918994,    -0.67483133915789695,    -0.66837470780248831,    -0.66186731821746336,    -0.65530966459203976,
+    -0.64870224493262751,    -0.64204556102500776,    -0.63534011839622295,    -0.62858642627619099,    -0.62178499755902716,    -0.61493634876409853,    -0.60804099999679584,    -0.60109947490903315,
+    -0.59411230065948528,    -0.58708000787354819,    -0.58000313060304698,    -0.57288220628567577,    -0.56571777570418191,    -0.55851038294530175,    -0.55126057535843587,    -0.54396890351408667,
+    -0.53663592116204428,    -0.52926218518933144,    -0.5218482555779167,    -0.51439469536218208,    -0.50690207058616998,    -0.49937095026059369,    -0.49180190631962334,    -0.48419551357745638,
+    -0.47655234968465904,    -0.46887299508430286,    -0.46115803296788227,    -0.45340804923102274,    -0.44562363242899211,    -0.43780537373199735,    -0.42995386688029541,    -0.42206970813910016,
+    -0.41415349625329828,    -0.40620583240198432,    -0.39822732015279916,    -0.39021856541609901,    -0.38218017639893848,    -0.37411276355887924,    -0.36601693955763581,    -0.35789331921454187,
+    -0.34974251945986573,    -0.34156515928795222,    -0.33336185971022059,    -0.3251332437080004,    -0.31687993618521826,    -0.3086025639209467,    -0.30030175552179816,    -0.29197814137419265,
+    -0.28363235359648198,    -0.27526502599094249,    -0.26687679399564812,    -0.25846829463620685,    -0.25004016647738897,    -0.24159304957463032,    -0.23312758542542206,    -0.22464441692059958,
+    -0.21614418829551268,    -0.20762754508110667,    -0.19909513405489623,    -0.19054760319184494,    -0.18198560161516206,    -0.17340977954699963,    -0.16482078825907867,    -0.15621928002322741,
+    -0.14760590806184309,    -0.13898132649829076,    -0.13034619030722022,    -0.12170115526483156,    -0.1130468778990712,    -0.10438401543977051,    -0.095713225768740251,    -0.087035167369802102,
+    -0.078350499278787733,    -0.069659881033487178,    -0.060963972623559057,    -0.052263434440415299,    -0.043558927227062103,    -0.034851112027927511,    -0.026140650138657167,    -0.017428203055891052,
+    -0.0087144324270337966
+};
+
+unit_local const float64 cosine_table[721] = {
+    1,    0.99996202861282424,    0.99984811733494938,    0.99965827481711389,    0.99939251547648522,    0.99905085949556516,    0.99863333282065669,    0.99813996715989384,
+    0.99757079998083364,    0.99692587450761083,    0.99620523971765507,    0.9954089503379715,    0.99453706684098497,    0.99358965543994704,    0.99256678808390786,    0.99146854245225247,
+    0.99029500194880093,    0.98904625569547489,    0.98772239852552934,    0.9863235309763505,    0.98484975928182117,    0.98330119536425242,    0.98167795682588455,    0.97998016693995549,
+    0.97820795464133947,    0.97636145451675527,    0.97444080679454514,    0.97244615733402562,    0.97037765761441064,    0.96823546472330768,    0.96601974134478796,    0.96373065574703221,
+    0.96136838176955131,    0.95893309880998501,    0.95642499181047747,    0.9538442512436327,    0.95119107309804918,    0.94846565886343615,    0.94566821551531177,    0.94279895549928516,
+    0.93985809671492215,    0.93684586249919777,    0.93376248160953546,    0.93060818820643432,    0.92738322183568644,    0.92408782741018525,    0.92072225519132611,    0.91728676077000038,
+    0.91378160504718597,    0.91020705421413273,    0.90656337973214807,    0.90285085831198109,    0.89906977189280812,    0.89522040762082211,    0.89130305782742514,    0.88731802000702875,
+    0.88326559679446082,    0.87914609594198301,    0.87495983029591906,    0.87070711777289633,    0.86638828133570212,    0.8620036489687577,    0.85755355365320929,    0.85303833334164147,
+    0.84845833093241152,    0.84381389424360886,    0.83910537598664081,    0.83433313373944706,    0.82949752991934378,    0.82459893175550059,    0.81963771126105256,    0.81461424520484815,
+    0.80952891508283664,    0.80438210708909585,    0.79917421208650408,    0.79390562557705602,    0.7885767476718285,    0.78318798306059356,    0.77773974098108622,    0.77223243518792517,
+    0.76666648392119174,    0.76104230987466714,    0.75536034016373155,    0.74962100629292883,    0.7438247441231961,    0.73797199383876322,    0.73206319991372448,    0.72609881107828356,
+    0.72007928028467594,    0.71400506467277058,    0.7078766255353528,    0.70169442828309325,    0.69545894240920281,    0.68917064145377815,    0.68283000296783991,    0.67643750847706585,
+    0.66999364344522261,    0.66349889723729805,    0.65695376308233822,    0.6503587380359892,    0.64371432294274988,    0.63702102239793645,    0.63027934470936187,    0.62348980185873359,
+    0.61665290946277229,    0.60976918673405434,    0.6028391564415817,    0.59586334487108106,    0.58884228178503673,    0.58177650038245798,    0.57466653725838757,    0.56751293236315081,
+    0.56031622896135003,    0.55307697359060759,    0.54579571602006072,    0.5384730092086103,    0.53110940926292693,    0.52370547539522005,    0.51626176988076855,    0.50877885801522049,
+    0.50125730807166347,    0.49369769125746737,    0.48610058167090636,    0.47846655625755935,    0.47079619476649553,    0.46309007970624716,    0.45534879630057101,    0.44757293244400631,
+    0.43976307865722719,    0.43191982804219725,    0.42404377623712852,    0.41613552137124582,    0.40819566401936375,    0.40022480715627801,    0.39222355611097226,    0.38419251852064956,
+    0.37613230428458538,    0.36804352551781028,    0.3599267965046255,    0.35178273365195045,    0.34361195544251311,    0.33541508238787909,    0.32719273698132895,    0.31894554365058497,
+    0.31067412871038891,    0.30237912031493952,    0.29406114841018749,    0.2857208446859959,    0.277358842528169,    0.26897577697034936,    0.26057228464579341,    0.25214900373902238,
+    0.2437065739373572,    0.2352456363823397,    0.22676683362104122,    0.21827080955726644,    0.20975820940265413,    0.20122967962767654,    0.19268586791254613,    0.18412742309802835,
+    0.17555499513616607,    0.16696923504092209,    0.15837079483873773,    0.14976032751901686,    0.1411384869845366,    0.13250592800178673,    0.12386330615124659,    0.11521127777759697,
+    0.10655049993987611,    0.097881630361581498,    0.089205327380719165,    0.080522249899808385,    0.0718330573358434,    0.063138409570213952,    0.054438966898593823,    0.045735389980794579,
+    0.037028339790593917,    0.028318477565540148,    0.019606464756734419,    0.010892962978600058,    0.002178633958636194,    -0.0065358605128350081,    -0.015249858632925868,    -0.023962698636443899,
+    -0.032673718846146303,    -0.041382257722991145,    -0.050087653916375798,    -0.058789246314361054,    -0.067486374093879392,    -0.076178376770917877,    -0.084864594250678785,    -0.093544366877708299,
+    -0.10221703548599194,    -0.11088194144901477,    -0.1195384267297787,    -0.12818583393077493,    -0.13682350634391011,    -0.14545078800037681,    -0.15406702372047112,    -0.16267155916334824,
+    -0.17126374087671417,    -0.17984291634645233,    -0.18840843404617544,    -0.19695964348670583,    -0.20549589526547477,    -0.21401654111583918,    -0.22252093395631434,    -0.23100842793971332,
+    -0.239478378502196,    -0.2479301424122182,    -0.25636307781938,    -0.26477654430317116,    -0.27316990292160448,    -0.28154251625974053,    -0.28989374847809418,    -0.29822296536092097,
+    -0.30652953436438291,    -0.31481282466458471,    -0.32307220720547986,    -0.33130705474664413,    -0.33951674191090847,    -0.34770064523185334,    -0.35585814320115561,    -0.36398861631578744,
+    -0.37209144712506403,    -0.38016602027753327,    -0.38821172256770881,    -0.39622794298263636,    -0.4042140727482984,    -0.41216950537584379,    -0.42009363670764782,    -0.4279858649631928,
+    -0.43584559078476964,    -0.443672217282993,    -0.45146515008213317,    -0.45922379736525309,    -0.46694756991915276,    -0.47463588117911648,    -0.48228814727345626,    -0.4899037870678552,
+    -0.49748222220949889,    -0.50502287717099736,    -0.51252517929409291,    -0.51998855883314732,    -0.527412448998413,    -0.53479628599907414,    -0.54213950908606356,    -0.54944156059464777,
+    -0.55670188598677606,    -0.56391993389319561,    -0.57109515615532336,    -0.57822700786687375,    -0.58531494741524215,    -0.59235843652263409,    -0.59935694028694586,    -0.60630992722238541,
+    -0.61321686929983477,    -0.62007724198695069,    -0.62689052428799752,    -0.63365619878341517,    -0.64037375166911215,    -0.64704267279548544,    -0.65366245570616277,    -0.66023259767646469,
+    -0.66675259975158141,    -0.67322196678446677,    -0.67964020747344023,    -0.68600683439949717,    -0.69232136406332601,    -0.69858331692202469,    -0.70479221742552067,    -0.71094759405268393,
+    -0.71704897934713618,    -0.72309590995275119,    -0.72908792664884181,    -0.73502457438503654,    -0.74090540231583579,    -0.74672996383485124,    -0.75249781660872184,    -0.75820852261070537,
+    -0.76386164815394475,    -0.76945676392440265,    -0.77499344501346457,    -0.78047127095020818,    -0.78588982573333377,    -0.79124869786275853,    -0.79654748037086553,    -0.80178577085341041,
+    -0.80696317150008134,    -0.81207928912470884,    -0.81713373519512666,    -0.82212612586267741,    -0.82705608199136338,    -0.83192322918663886,    -0.83672719782384208,    -0.8414676230762671,
+    -0.84614414494286871,    -0.85075640827560206,    -0.85530406280639371,    -0.85978676317374159,    -0.86420416894894325,    -0.86855594466194863,    -0.87284175982683698,    -0.87706128896691404,
+    -0.88121421163943092,    -0.88530021245991763,    -0.88931898112613605,    -0.89327021244164428,    -0.89715360633897401,    -0.90096886790241903,    -0.90471570739043106,    -0.90839384025762437,
+    -0.91200298717638462,    -0.91554287405808177,    -0.9190132320738853,    -0.92241379767517917,    -0.92574431261357759,    -0.92900452396053579,    -0.9321941841265593,    -0.93531305088000583,
+    -0.9383608873654814,    -0.94133746212182734,    -0.94424254909969862,    -0.9470759276787305,    -0.94983738268429285,    -0.95252670440383147,    -0.95514368860279364,    -0.95768813654013885,
+    -0.96015985498343159,    -0.96255865622351588,    -0.9648843580887706,    -0.96713678395894354,    -0.96931576277856513,    -0.9714211290699386,    -0.97345272294570673,    -0.97541039012099451,
+    -0.97729398192512495,    -0.97910335531291093,    -0.98083837287551745,    -0.98249890285089736,    -0.98408481913379742,    -0.98559600128533531,    -0.98703233454214567,    -0.98839370982509611,
+    -0.98968002374757091,    -0.99089117862332188,    -0.99202708247388782,    -0.99308764903557878,    -0.99407279776602764,    -0.9949824538503067,    -0.99581654820660925,    -0.99657501749149591,
+    -0.99725780410470466,    -0.99786485619352594,    -0.99839612765674002,    -0.99885157814811798,    -0.99923117307948583,    -0.99953488362335152,    -0.99976268671509372,    -0.99991456505471354,
+    -0.99999050710814852,    -0.99999050710814852,    -0.99991456505471354,    -0.99976268671509372,    -0.99953488362335152,    -0.99923117307948583,    -0.99885157814811798,    -0.99839612765674002,
+    -0.99786485619352594,    -0.99725780410470466,    -0.99657501749149591,    -0.99581654820660925,    -0.9949824538503067,    -0.99407279776602764,    -0.99308764903557878,    -0.99202708247388782,
+    -0.99089117862332188,    -0.98968002374757091,    -0.98839370982509611,    -0.98703233454214567,    -0.98559600128533531,    -0.98408481913379742,    -0.98249890285089747,    -0.98083837287551745,
+    -0.97910335531291093,    -0.97729398192512495,    -0.97541039012099451,    -0.97345272294570684,    -0.9714211290699386,    -0.96931576277856513,    -0.96713678395894354,    -0.96488435808877071,
+    -0.962558656223516,    -0.9601598549834317,    -0.95768813654013885,    -0.95514368860279364,    -0.95252670440383158,    -0.94983738268429296,    -0.94707592767873061,    -0.94424254909969874,
+    -0.94133746212182745,    -0.93836088736548151,    -0.93531305088000594,    -0.93219418412655941,    -0.9290045239605359,    -0.9257443126135777,    -0.9224137976751795,    -0.91901323207388541,
+    -0.91554287405808199,    -0.91200298717638484,    -0.9083938402576246,    -0.90471570739043139,    -0.90096886790241915,    -0.89715360633897434,    -0.89327021244164451,    -0.88931898112613639,
+    -0.88530021245991786,    -0.88121421163943103,    -0.87706128896691438,    -0.87284175982683732,    -0.86855594466194908,    -0.86420416894894359,    -0.8597867631737417,    -0.85530406280639393,
+    -0.85075640827560239,    -0.84614414494286905,    -0.84146762307626743,    -0.83672719782384242,    -0.83192322918663897,    -0.82705608199136382,    -0.82212612586267786,    -0.817133735195127,
+    -0.81207928912470917,    -0.80696317150008157,    -0.80178577085341085,    -0.79654748037086598,    -0.79124869786275898,    -0.78588982573333421,    -0.7804712709502083,    -0.77499344501346501,
+    -0.7694567639244031,    -0.76386164815394519,    -0.7582085226107057,    -0.75249781660872195,    -0.74672996383485157,    -0.74090540231583624,    -0.73502457438503699,    -0.72908792664884225,
+    -0.72309590995275141,    -0.71704897934713663,    -0.71094759405268437,    -0.70479221742552056,    -0.69858331692202458,    -0.69232136406332589,    -0.68600683439949739,    -0.67964020747344001,
+    -0.67322196678446666,    -0.66675259975158119,    -0.66023259767646458,    -0.65366245570616299,    -0.64704267279548566,    -0.64037375166911203,    -0.63365619878341539,    -0.62689052428799741,
+    -0.62007724198695024,    -0.61321686929983499,    -0.6063099272223853,    -0.59935694028694608,    -0.59235843652263387,    -0.5853149474152417,    -0.57822700786687398,    -0.57109515615532314,
+    -0.56391993389319583,    -0.55670188598677584,    -0.54944156059464722,    -0.54213950908606379,    -0.53479628599907392,    -0.52741244899841322,    -0.51998855883314721,    -0.51252517929409236,
+    -0.50502287717099759,    -0.49748222220949867,    -0.48990378706785542,    -0.48228814727345609,    -0.47463588117911593,    -0.46694756991915298,    -0.45922379736525287,    -0.45146515008213339,
+    -0.44367221728299283,    -0.43584559078476909,    -0.42798586496319302,    -0.42009363670764766,    -0.41216950537584401,    -0.40421407274829824,    -0.39622794298263597,    -0.38821172256770881,
+    -0.38016602027753327,    -0.37209144712506448,    -0.36398861631578766,    -0.35585814320115544,    -0.34770064523185373,    -0.33951674191090853,    -0.33130705474664457,    -0.32307220720548008,
+    -0.31481282466458455,    -0.30652953436438335,    -0.29822296536092097,    -0.28989374847809463,    -0.2815425162597408,    -0.27316990292160426,    -0.26477654430317138,    -0.25636307781938006,
+    -0.24793014241221864,    -0.23947837850219622,    -0.23100842793971313,    -0.22252093395631459,    -0.2140165411158392,    -0.20549589526547524,    -0.19695964348670608,    -0.18840843404617524,
+    -0.17984291634645255,    -0.1712637408767142,    -0.16267155916334869,    -0.15406702372047135,    -0.14545078800037747,    -0.13682350634391036,    -0.12818583393077496,    -0.11953842672977917,
+    -0.11088194144901502,    -0.10221703548599262,    -0.093544366877708535,    -0.084864594250678813,    -0.076178376770918335,    -0.067486374093879406,    -0.058789246314361741,    -0.05008765391637604,
+    -0.041382257722991173,    -0.032673718846146768,    -0.023962698636443919,    -0.015249858632926556,    -0.0065358605128352527,    0.002178633958636171,    0.010892962978599591,    0.019606464756734394,
+    0.028318477565539461,    0.037028339790593674,    0.045735389980794551,    0.054438966898593358,    0.063138409570213938,    0.071833057335842707,    0.080522249899808149,    0.089205327380719152,
+    0.09788163036158104,    0.1065504999398761,    0.11521127777759629,    0.12386330615124636,    0.13250592800178693,    0.14113848698453613,    0.14976032751901683,    0.15837079483873706,
+    0.16696923504092184,    0.17555499513616626,    0.18412742309802788,    0.19268586791254613,    0.20122967962767585,    0.20975820940265366,    0.21827080955726641,    0.22676683362104055,
+    0.23524563638233947,    0.24370657393735654,    0.25214900373902194,    0.26057228464579341,    0.26897577697034891,    0.27735884252816878,    0.28572084468599523,    0.29406114841018699,
+    0.30237912031493952,    0.31067412871038846,    0.31894554365058475,    0.32719273698132834,    0.33541508238787865,    0.34361195544251311,    0.35178273365195001,    0.35992679650462528,
+    0.36804352551780967,    0.37613230428458494,    0.38419251852064956,    0.39222355611097182,    0.40022480715627778,    0.40819566401936314,    0.41613552137124543,    0.42404377623712852,
+    0.43191982804219681,    0.43976307865722697,    0.4475729324440057,    0.45534879630057079,    0.46309007970624716,    0.47079619476649509,    0.47846655625755913,    0.48610058167090575,
+    0.49369769125746715,    0.50125730807166347,    0.50877885801522005,    0.51626176988076833,    0.52370547539521939,    0.53110940926292671,    0.53847300920860952,    0.54579571602006038,
+    0.55307697359060748,    0.56031622896134936,    0.56751293236315037,    0.57466653725838679,    0.58177650038245732,    0.58884228178503639,    0.59586334487108039,    0.60283915644158126,
+    0.60976918673405356,    0.61665290946277174,    0.62348980185873337,    0.63027934470936131,    0.63702102239793612,    0.64371432294274911,    0.65035873803598865,    0.65695376308233799,
+    0.66349889723729749,    0.66999364344522228,    0.67643750847706519,    0.68283000296783947,    0.68917064145377804,    0.69545894240920225,    0.70169442828309292,    0.70787662553535269,
+    0.7140050646727707,    0.72007928028467583,    0.72609881107828367,    0.7320631999137247,    0.73797199383876311,    0.74382474412319621,    0.74962100629292872,    0.75536034016373166,
+    0.76104230987466737,    0.76666648392119174,    0.77223243518792539,    0.777739740981086,    0.78318798306059356,    0.78857674767182873,    0.79390562557705602,    0.79917421208650419,
+    0.80438210708909563,    0.80952891508283664,    0.81461424520484838,    0.81963771126105245,    0.8245989317555007,    0.82949752991934356,    0.83433313373944717,    0.83910537598664103,
+    0.84381389424360875,    0.84845833093241163,    0.85303833334164136,    0.8575535536532094,    0.86200364896875792,    0.86638828133570212,    0.87070711777289633,    0.87495983029591895,
+    0.87914609594198301,    0.88326559679446093,    0.88731802000702864,    0.89130305782742525,    0.89522040762082189,    0.89906977189280812,    0.9028508583119812,    0.90656337973214807,
+    0.91020705421413273,    0.91378160504718575,    0.91728676077000038,    0.92072225519132622,    0.92408782741018525,    0.92738322183568656,    0.93060818820643421,    0.93376248160953546,
+    0.93684586249919755,    0.93985809671492204,    0.94279895549928527,    0.94566821551531166,    0.94846565886343615,    0.95119107309804896,    0.95384425124363259,    0.95642499181047747,
+    0.9589330988099849,    0.96136838176955131,    0.96373065574703209,    0.96601974134478796,    0.96823546472330768,    0.97037765761441053,    0.97244615733402562,    0.97444080679454503,
+    0.97636145451675527,    0.97820795464133958,    0.97998016693995538,    0.98167795682588455,    0.98330119536425231,    0.98484975928182117,    0.9863235309763505,    0.98772239852552923,
+    0.98904625569547489,    0.99029500194880082,    0.99146854245225247,    0.99256678808390786,    0.99358965543994693,    0.99453706684098497,    0.9954089503379715,    0.99620523971765507,
+    0.99692587450761083,    0.99757079998083364,    0.99813996715989384,    0.99863333282065669,    0.99905085949556516,    0.99939251547648522,    0.99965827481711389,    0.99984811733494938,
+    0.99996202861282424
+};
+
+unit_local const float64 tan_table[721] = {
+    0,    0.0043572989398591418,    0.0087147633386860761,    0.013072558680581331,    0.017430850499919014,    0.021789804406503899,    0.026149586110752843,    0.03051036144890874,
+    0.034872296408295082,    0.039235557152619407,    0.043600310047333717,    0.047966721685060248,    0.052334958911090773,    0.056705188848967775,    0.061077578926155826,    0.065452296899811649,
+    0.069829510882661303,    0.074209389368992976,    0.078592101260774025,    0.082977815893900922,    0.087366703064590823,    0.091758933055923517,    0.096154676664542887,    0.10055410522752654,
+    0.10495739064943295,    0.10936470542953509,    0.11377622268925021,    0.11819211619977457,    0.12261256040993337,    0.12703773047425476,    0.13146780228127838,    0.13590295248210796,
+    0.14034335851921792,    0.14478919865552475,    0.14924065200373254,    0.15369789855596436,    0.15816111921368894,    0.16263049581795463,    0.16710621117994071,    0.17158844911183782,
+    0.17607739445806891,    0.18057323312686174,    0.18507615212218578,    0.18958633957606438,    0.19410398478127527,    0.19862927822445159,    0.20316241161959622,    0.20770357794202227,
+    0.21225297146273314,    0.21681078778325577,    0.22137722387094014,    0.22595247809474031,    0.23053675026149012,    0.23513024165268906,    0.23973315506181284,    0.24434569483216434,
+    0.24896806689528025,    0.25360047880990955,    0.25824313980158026,    0.26289626080277106,    0.2675600544937054,    0.27223473534378428,    0.27692051965367759,    0.28161762559809078,
+    0.28632627326922633,    0.29104668472095951,    0.29577908401374736,    0.30052369726029182,    0.3052807526719778,    0.31005048060610685,    0.31483311361394822,    0.31962888648963067,
+    0.32443803631989654,    0.32926080253474227,    0.33409742695897005,    0.3389481538646737,    0.34381323002468583,    0.34869290476701165,    0.35358743003027593,    0.35849706042021096,
+    0.36342205326721327,    0.36836266868499928,    0.37331916963038808,    0.37829182196424238,    0.3832808945136002,    0.38828665913502802,    0.39330939077922977,    0.39834936755694478,
+    0.40340687080617105,    0.40848218516074863,    0.4135755986203416,    0.41868740262185561,    0.42381789211233079,    0.4289673656233513,    0.43413612534701163,    0.43932447721348361,
+    0.44453273097022816,    0.44976120026289673,    0.4550102027179696,    0.46028006002717914,    0.465571098033768,    0.47088364682063255,    0.47621804080040508,    0.48157461880752861,
+    0.48695372419238092,    0.49235570491750447,    0.49778091365600247,    0.50322970789216215,    0.50870245002436887,    0.51419950747037568,    0.51972125277499615,    0.52526806372028945,
+    0.53084032343830967,    0.53643842052649393,    0.54206274916576325,    0.54771370924141838,    0.55339170646690949,    0.55909715251056313,    0.5648304651253564,    0.57059206828182485,
+    0.57638239230419697,    0.58220187400985324,    0.58805095685220521,    0.59393009106709993,    0.59983973382285238,    0.60578034937401637,    0.61175240921900809,    0.61775639226169543,
+    0.62379278497707724,    0.62986208158117551,    0.63596478420526881,    0.64210140307460351,    0.64827245669171762,    0.65447847202452181,    0.66071998469928739,    0.66699753919869043,
+    0.67331168906507566,    0.67966299710910083,    0.68605203562393335,    0.69247938660517683,    0.69894564197670761,    0.70545140382261384,    0.71199728462543144,    0.71858390751088086,
+    0.72521190649931788,    0.73188192676411312,    0.73859462489719352,    0.74535066918197512,    0.75215073987393521,    0.75899552948907856,    0.76588574310055635,    0.77282209864371798,
+    0.7798053272298725,    0.78683617346905976,    0.79391539580213522,    0.80104376684248746,    0.80822207372771659,    0.81545111848162199,    0.82273171838684966,    0.83006470636857776,
+    0.83745093138962079,    0.84489125885735572,    0.85238657104288973,    0.85993776751290119,    0.86754576557460661,    0.87521150073432785,    0.88293592717014358,    0.89072001821914248,
+    0.89856476687980269,    0.90647118633005674,    0.91444031046161656,    0.92247319443116049,    0.93057091522900715,    0.93873457226593549,    0.94696528797882407,    0.95526420845582982,
+    0.96363250408184065,    0.97207137020497947,    0.98058202782496928,    0.98916572430419836,    0.99782373410237246,    1.0065573595356683,    1.0153679315613549,    1.0242568105888854,
+    1.0332253873185102,    1.0422750836085091,    1.0514073533721935,    1.0606236835058758,    1.0699255948490696,    1.0793146431782308,    1.08879242023542,    1.0983605547933308,
+    1.1080207137581908,    1.1177746033121221,    1.1276239700966215,    1.1375706024388943,    1.1476163316228765,    1.1577630332068451,    1.1680126283896395,    1.1783670854275867,
+    1.188828421104354,    1.1993987022560464,    1.2100800473539879,    1.2208746281477587,    1.2317846713711744,    1.2428124605140458,    1.2539603376627038,    1.2652307054124159,
+    1.2766260288550066,    1.2881488376451482,    1.2998017281489822,    1.311587365678935,    1.3235084868187788,    1.335567901843234,    1.3477684972366204,    1.3601132383153258,
+    1.3726051719591301,    1.3852474294566803,    1.3980432294707361,    1.4109958811291097,    1.4241087872475553,    1.4373854476912411,    1.4508294628817997,    1.4644445374573696,
+    1.4782344840934822,    1.4922032274930903,    1.5063548085545559,    1.5206933887269145,    1.5352232545623274,    1.5499488224761993,    1.5648746437261183,    1.580005409621436,
+    1.5953459569760577,    1.6109012738177901,    1.626676505368454,    1.6426769603098528,    1.6589081173516773,    1.6753756321184599,    1.6920853443738029,    1.7090432856013298,
+    1.726255686963061,    1.7437289876573376,    1.7614698436998921,    1.7794851371532696,    1.7977819858315534,    1.8163677535091824,    1.8352500606646955,    1.8544367957923851,
+    1.8739361273171955,    1.8937565161507526,    1.9139067289291176,    1.9343958519758653,    1.955233306037272,    1.9764288618398891,    1.9979926565245705,    2.0199352110150861,
+    2.0422674483839427,    2.065000713282851,    2.0881467925105381,    2.1117179367963659,    2.1357268838844123,    2.1601868830095219,    2.1851117208642434,    2.2105157491636951,
+    2.23641391392426,    2.2628217865817541,    2.2897555970852981,    2.3172322691148257,    2.3452694575829334,    2.3738855885958152,    2.4030999020635222,    2.4329324971667141,
+    2.4634043809058741,    2.4945375199795676,    2.5263548962611502,    2.5588805661685448,    2.592139724249575,    2.6261587713362653,    2.6609653876557786,    2.6965886113237043,
+    2.7330589226877522,    2.7704083350369482,    2.808670492243984,    2.8478807739669332,    2.8880764091020272,    2.9292965982525252,    2.9715826460607833,    3.01497810434291,
+    3.0595289270690027,    3.1052836383486651,    3.1522935147131417,    3.2006127831339715,    3.2502988363863086,    3.3014124675556027,    3.3540181257027184,    3.4081841949487406,
+    3.4639832995210851,    3.5214926376228259,    3.5807943473534349,    3.6419759083290413,    3.7051305831327812,    3.7703579032810675,    3.8377642050325234,    3.9074632211073572,
+    3.979576735244148,    4.0542353075194537,    4.1315790795191072,    4.2117586698090097,    4.2949361717454009,    4.3812862675348221,    4.47099747465756,    4.5642735433727104,
+    4.6613350271103648,    4.7624210512290865,    4.867791310000106,    4.9777283269300021,    5.0925400198459938,    5.2125626197859498,    5.3381640019670185,    5.4697474983399479,
+    5.607756274966242,    5.7526783743132635,    5.9050525433615535,    6.0654749942091932,    6.2346072760083402,    6.4131854773698542,    6.6020310291859881,    6.8020634422870181,
+    7.0143153966650731,    7.2399507048358043,    7.480285808976042,    7.7368156503604864,    8.0112449849956402,    8.3055265317554614,    8.6219077578307282,    8.9629886725193266,
+    9.3317937745976565,    9.7318623692337383,    10.167362969410187,    10.643239623325679,    11.165401069328396,    11.740968092367394,    12.378601104157584,    13.088940036544376,
+    13.885204196091314,    14.78402432044359,    15.806618933876321,    16.980493527530459,    18.341955346162397,    19.939940237544636,    21.842026272952687,    24.144245443748776,
+    26.987821261435375,    30.589296437752836,    35.298470731018853,    41.719543715747896,    50.993781245096372,    65.566752991781016,    91.796940087209819,    152.99877331711969,
+    459.00212966487084,    -459.00212966489664,    -152.99877331712256,    -91.796940087210857,    -65.566752991781541,    -50.993781245096692,    -41.719543715748109,    -35.298470731019009,
+    -30.589296437752949,    -26.987821261435464,    -24.144245443748847,    -21.842026272952747,    -19.939940237544683,    -18.341955346162436,    -16.980493527530495,    -15.806618933876351,
+    -14.784024320443617,    -13.885204196091337,    -13.088940036544397,    -12.378601104157601,    -11.740968092367412,    -11.165401069328412,    -10.643239623325691,    -10.167362969410199,
+    -9.7318623692337489,    -9.3317937745976671,    -8.9629886725193373,    -8.621907757830737,    -8.3055265317554703,    -8.0112449849956473,    -7.7368156503604935,    -7.4802858089760491,
+    -7.2399507048358105,    -7.0143153966650793,    -6.8020634422870243,    -6.6020310291859934,    -6.4131854773698596,    -6.2346072760083455,    -6.0654749942091977,    -5.9050525433615579,
+    -5.752678374313267,    -5.6077562749662464,    -5.4697474983399514,    -5.338164001967022,    -5.2125626197859534,    -5.0925400198459974,    -4.977728326930011,    -4.8677913100001096,
+    -4.7624210512290945,    -4.6613350271103728,    -4.5642735433727184,    -4.4709974746575671,    -4.3812862675348248,    -4.294936171745408,    -4.2117586698090168,    -4.1315790795191134,
+    -4.054235307519459,    -3.9795767352441502,    -3.907463221107363,    -3.8377642050325287,    -3.7703579032810723,    -3.7051305831327861,    -3.6419759083290431,    -3.5807943473534367,
+    -3.5214926376228304,    -3.4639832995210895,    -3.408184194948745,    -3.3540181257027224,    -3.301412467555604,    -3.2502988363863126,    -3.2006127831339755,    -3.1522935147131452,
+    -3.1052836383486686,    -3.059528927069004,    -3.0149781043429136,    -2.9715826460607868,    -2.9292965982525287,    -2.8880764091020308,    -2.8478807739669345,    -2.8086704922439871,
+    -2.7704083350369508,    -2.7330589226877549,    -2.696588611323707,    -2.6609653876557795,    -2.626158771336268,    -2.5921397242495776,    -2.5588805661685474,    -2.5263548962611528,
+    -2.4945375199795685,    -2.4634043809058763,    -2.4329324971667168,    -2.4030999020635218,    -2.3738855885958148,    -2.3452694575829325,    -2.3172322691148266,    -2.2897555970852972,
+    -2.2628217865817533,    -2.2364139139242591,    -2.2105157491636942,    -2.1851117208642439,    -2.1601868830095228,    -2.1357268838844119,    -2.1117179367963668,    -2.0881467925105373,
+    -2.0650007132828492,    -2.0422674483839431,    -2.0199352110150852,    -1.9979926565245709,    -1.9764288618398886,    -1.9552333060372706,    -1.9343958519758659,    -1.9139067289291172,
+    -1.893756516150753,    -1.8739361273171951,    -1.8544367957923837,    -1.8352500606646962,    -1.816367753509182,    -1.7977819858315538,    -1.7794851371532692,    -1.7614698436998908,
+    -1.7437289876573381,    -1.7262556869630608,    -1.7090432856013302,    -1.6920853443738024,    -1.6753756321184585,    -1.6589081173516778,    -1.6426769603098526,    -1.6266765053684544,
+    -1.6109012738177897,    -1.5953459569760566,    -1.5800054096214364,    -1.5648746437261178,    -1.5499488224761997,    -1.5352232545623272,    -1.5206933887269138,    -1.5063548085545559,
+    -1.4922032274930903,    -1.4782344840934831,    -1.46444453745737,    -1.4508294628817995,    -1.437385447691242,    -1.4241087872475553,    -1.4109958811291106,    -1.3980432294707366,
+    -1.3852474294566799,    -1.3726051719591308,    -1.3601132383153258,    -1.3477684972366211,    -1.3355679018432345,    -1.3235084868187785,    -1.3115873656789352,    -1.2998017281489824,
+    -1.2881488376451489,    -1.2766260288550071,    -1.2652307054124154,    -1.2539603376627042,    -1.242812460514046,    -1.2317846713711751,    -1.2208746281477592,    -1.2100800473539877,
+    -1.1993987022560466,    -1.188828421104354,    -1.1783670854275874,    -1.1680126283896397,    -1.157763033206846,    -1.1476163316228769,    -1.1375706024388945,    -1.127623970096622,
+    -1.1177746033121225,    -1.1080207137581914,    -1.0983605547933313,    -1.08879242023542,    -1.0793146431782312,    -1.0699255948490696,    -1.0606236835058764,    -1.0514073533721937,
+    -1.0422750836085091,    -1.0332253873185107,    -1.0242568105888854,    -1.0153679315613555,    -1.0065573595356685,    -0.99782373410237246,    -0.98916572430419891,    -0.98058202782496928,
+    -0.97207137020498013,    -0.96363250408184087,    -0.95526420845582993,    -0.94696528797882451,    -0.93873457226593549,    -0.93057091522900781,    -0.92247319443116071,    -0.91444031046161667,
+    -0.90647118633005719,    -0.89856476687980269,    -0.89072001821914304,    -0.8829359271701438,    -0.87521150073432763,    -0.86754576557460705,    -0.85993776751290119,    -0.8523865710428904,
+    -0.84489125885735583,    -0.83745093138962057,    -0.8300647063685781,    -0.82273171838684966,    -0.81545111848162255,    -0.80822207372771704,    -0.80104376684248746,    -0.79391539580213577,
+    -0.78683617346905987,    -0.77980532722987306,    -0.77282209864371842,    -0.76588574310055646,    -0.75899552948907889,    -0.75215073987393544,    -0.74535066918197568,    -0.73859462489719396,
+    -0.73188192676411312,    -0.72521190649931822,    -0.71858390751088108,    -0.71199728462543199,    -0.70545140382261418,    -0.69894564197670761,    -0.69247938660517716,    -0.68605203562393346,
+    -0.67966299710910127,    -0.67331168906507599,    -0.66699753919869043,    -0.66071998469928772,    -0.65447847202452192,    -0.64827245669171807,    -0.64210140307460384,    -0.63596478420526881,
+    -0.62986208158117585,    -0.62379278497707746,    -0.61775639226169587,    -0.61175240921900831,    -0.60578034937401637,    -0.59983973382285272,    -0.59393009106710004,    -0.58805095685220565,
+    -0.58220187400985335,    -0.57638239230419697,    -0.57059206828182518,    -0.56483046512535662,    -0.55909715251056358,    -0.55339170646690972,    -0.54771370924141893,    -0.54206274916576347,
+    -0.53643842052649393,    -0.53084032343831022,    -0.52526806372028967,    -0.51972125277499681,    -0.51419950747037613,    -0.50870245002436909,    -0.5032297078921627,    -0.49778091365600274,
+    -0.49235570491750513,    -0.48695372419238137,    -0.48157461880752878,    -0.47621804080040553,    -0.47088364682063283,    -0.46557109803376862,    -0.46028006002717953,    -0.45501020271796971,
+    -0.44976120026289723,    -0.44453273097022844,    -0.43932447721348422,    -0.43413612534701201,    -0.42896736562335147,    -0.42381789211233128,    -0.41868740262185583,    -0.41357559862034166,
+    -0.40848218516074847,    -0.40340687080617116,    -0.39834936755694472,    -0.3933093907792295,    -0.38828665913502808,    -0.38328089451360003,    -0.37829182196424249,    -0.37331916963038803,
+    -0.36836266868499906,    -0.36342205326721327,    -0.35849706042021079,    -0.35358743003027615,    -0.34869290476701165,    -0.34381323002468561,    -0.33894815386467375,    -0.33409742695896993,
+    -0.32926080253474244,    -0.32443803631989648,    -0.31962888648963045,    -0.31483311361394828,    -0.31005048060610674,    -0.30528075267197796,    -0.30052369726029177,    -0.29577908401374708,
+    -0.29104668472095957,    -0.28632627326922622,    -0.28161762559809089,    -0.27692051965367753,    -0.27223473534378406,    -0.26756005449370546,    -0.26289626080277095,    -0.25824313980158037,
+    -0.25360047880990949,    -0.24896806689528006,    -0.24434569483216445,    -0.23973315506181275,    -0.23513024165268925,    -0.23053675026149015,    -0.22595247809474014,    -0.22137722387094022,
+    -0.21681078778325566,    -0.21225297146273334,    -0.20770357794202227,    -0.20316241161959603,    -0.1986292782244517,    -0.19410398478127519,    -0.18958633957606458,    -0.18507615212218578,
+    -0.18057323312686199,    -0.17607739445806897,    -0.17158844911183774,    -0.1671062111799409,    -0.16263049581795463,    -0.15816111921368922,    -0.15369789855596444,    -0.14924065200373246,
+    -0.14478919865552495,    -0.14034335851921795,    -0.13590295248210824,    -0.13146780228127847,    -0.12703773047425468,    -0.12261256040993357,    -0.1181921161997746,    -0.1137762226892505,
+    -0.10936470542953521,    -0.10495739064943288,    -0.10055410522752674,    -0.096154676664542901,    -0.091758933055923794,    -0.087366703064590906,    -0.082977815893900853,    -0.078592101260774219,
+    -0.07420938936899299,    -0.069829510882661594,    -0.06545229689981176,    -0.061077578926155764,    -0.056705188848967983,    -0.052334958911090801,    -0.047966721685060533,    -0.043600310047333821,
+    -0.039235557152619345,    -0.03487229640829529,    -0.030510361448908768,    -0.026149586110753138,    -0.021789804406504014,    -0.017430850499918955,    -0.013072558680581539,    -0.0087147633386861073,
+    -0.004357298939859441
+};
+
+unit_local const float64 asine_table[722] = {
+    -1.5707963267948966,    -1.4962952060392576,    -1.4654114361854385,    -1.4416968071613971,    -1.4216904554075338,    -1.4040521771716885,    -1.3880947964449746,    -1.3734101931173543,
+    -1.3597325146115664,    -1.3468771404313582,    -1.3347096792915085,    -1.3231286988839646,    -1.3120554135246518,    -1.3014271825926671,    -1.2911932281581628,    -1.2813117107829752,
+    -1.2717476714505254,    -1.2624715453188522,    -1.2534580643424631,    -1.2446854312063778,    -1.2361346868384331,    -1.2277892187900701,    -1.2196343739412812,    -1.2116571496869093,
+    -1.2038459450022934,    -1.1961903577824962,    -1.1886810183584364,    -1.1813094515977722,    -1.1740679618123335,    -1.1669495360254591,    -1.1599477621421805,    -1.1530567593090582,
+    -1.1462711183155678,    -1.139585850322423,    -1.1329963425378169,    -1.126498319724571,    -1.1200878106273899,    -1.1137611185729057,    -1.1075147956257361,    -1.1013456197887017,
+    -1.0952505748201906,    -1.0892268323106848,    -1.0832717357169281,    -1.0773827860986398,    -1.0715576293410565,    -1.0657940446784411,    -1.060089934360279,    -1.0544433143241452,
+    -1.0488523057579504,    -1.0433151274500907,    -1.0378300888394274,    -1.032395583688428,    -1.0270100843125265,    -1.0216721363071009,    -1.0163803537206193,    -1.0111334146286819,
+    -1.0059300570690075,    -1.0007690753020437,    -0.99564931636588572,    -0.9905696768976856,    -0.98552910019679729,    -0.98052657350756223,    -0.97556112550199692,    -0.97063182394470215,
+    -0.96573777352413337,    -0.96087811383597599,    -0.95605201750579261,    -0.95125868843936856,    -0.94649736019029962,    -0.94176729443536722,    -0.93706777954912779,    -0.9323981292699447,
+    -0.92775768145039239,    -0.92314579688560683,    -0.91856185821372138,    -0.91400526888304279,    -0.90947545218108528,    -0.90497185032099414,    -0.90049392358127001,    -0.89604114949504243,
+    -0.89161302208545001,    -0.88720905114396453,    -0.88282876154874768,    -0.87847169262036051,    -0.8741373975123562,    -0.8698254426344747,    -0.86553540710633392,    -0.86126688223967141,
+    -0.85701947104733278,    -0.85279278777733925,    -0.84858645747048755,    -0.84440011554004335,    -0.84023340737219931,    -0.83608598794605338,    -0.83195752147195889,    -0.82784768104716988,
+    -0.82375614832778354,    -0.81968261321604552,    -0.81562677356215074,    -0.81158833487972415,    -0.80756701007422471,    -0.80356251918356103,    -0.79957458913025581,    -0.79560295348453536,
+    -0.79164735223776328,    -0.78770753158567031,    -0.78378324372086805,    -0.77987424663416616,    -0.77598030392423945,    -0.77210118461522148,    -0.7682366629818238,    -0.76438651838160554,
+    -0.76055053509403947,    -0.75672850216603949,    -0.75292021326363889,    -0.74912546652951695,    -0.74534406444610091,    -0.74157581370397407,    -0.73782052507534335,    -0.73407801329232947,
+    -0.73034809692985803,    -0.72663059829293897,    -0.72292534330813718,    -0.71923216141904311,    -0.71555088548556678,    -0.7118813516868836,    -0.70822339942787349,    -0.70457687124889845,
+    -0.70094161273877598,    -0.69731747245081033,    -0.6937043018217508,    -0.69010195509355454,    -0.68651028923783364,    -0.68292916388287805,    -0.67935844124314493,    -0.67579798605111452,
+    -0.67224766549141557,    -0.66870734913712981,    -0.66517690888818504,    -0.66165621891175774,    -0.65814515558460163,    -0.65464359743722911,    -0.65115142509987178,    -0.64766852125015317,
+    -0.64419477056240415,    -0.64073005965856245,    -0.63727427706059281,    -0.63382731314437291,    -0.63038906009498807,    -0.62695941186338389,    -0.623538264124326,    -0.62012551423561901,
+    -0.61672106119853909,    -0.61332480561943514,    -0.60993664967245842,    -0.60655649706337822,    -0.60318425299444645,    -0.59981982413027346,    -0.5964631185646796,    -0.5931140457884887,
+    -0.58977251665823149,    -0.58643844336572581,    -0.58311173940850558,    -0.57979231956106847,    -0.57648009984691528,    -0.5731749975113537,    -0.56987693099504189,    -0.56658581990824597,
+    -0.56330158500578953,    -0.56002414816267088,    -0.5567534323503277,    -0.55348936161352624,    -0.55023186104785737,    -0.54698085677781783,    -0.5437362759354587,    -0.54049804663958456,
+    -0.5372660979754833,    -0.5340403599751723,    -0.53082076359814323,    -0.5276072407125918,    -0.52439972407711521,    -0.52119814732286529,    -0.51800244493614167,    -0.51481255224141254,
+    -0.51162840538474996,    -0.50844994131766674,    -0.50527709778134422,    -0.50210981329123716,    -0.49894802712204772,    -0.49579167929305368,    -0.49264071055378461,    -0.4894950623700331,
+    -0.48635467691019202,    -0.48321949703190931,    -0.48008946626905002,    -0.47696452881895757,    -0.47384462953000522,    -0.4707297138894303,    -0.46761972801144236,    -0.46451461862559812,
+    -0.461414333065436,    -0.45831881925736206,    -0.45522802570978183,    -0.45214190150246997,    -0.44906039627617211,    -0.44598346022243213,    -0.44291104407363896,    -0.43984309909328706,
+    -0.43677957706644449,    -0.4337204302904234,    -0.43066561156564742,    -0.42761507418671091,    -0.4245687719336243,    -0.42152665906324194,    -0.41848869030086633,    -0.41545482083202484,
+    -0.41242500629441481,    -0.40939920277001152,    -0.40637736677733616,    -0.40335945526387884,    -0.4003454255986727,    -0.39733523556501615,    -0.39432884335333829,    -0.39132620755420489,
+    -0.38832728715146053,    -0.38533204151550465,    -0.38234043039669691,    -0.37935241391888969,    -0.37636795257308342,    -0.37338700721120349,    -0.37040953903999374,    -0.36743550961502525,
+    -0.36446488083481676,    -0.36149761493506422,    -0.35853367448297724,    -0.35557302237171895,    -0.35261562181494777,    -0.34966143634145808,    -0.34671042978991751,    -0.34376256630369867,
+    -0.34081781032580316,    -0.33787612659387517,    -0.33493748013530333,    -0.33200183626240798,    -0.32906916056771263,    -0.32613941891929676,    -0.32321257745622889,    -0.32028860258407754,
+    -0.31736746097049839,    -0.31444911954089605,    -0.31153354547415846,    -0.30862070619846255,    -0.30571056938714924,    -0.30280310295466617,    -0.29989827505257716,    -0.29699605406563589,
+    -0.29409640860792358,    -0.29119930751904816,    -0.28830471986040379,    -0.28541261491149,    -0.28252296216628831,    -0.27963573132969527,    -0.27675089231401095,    -0.2738684152354815,
+    -0.27098827041089379,    -0.26811042835422283,    -0.26523485977332828,    -0.26236153556670161,    -0.25949042682026024,    -0.25662150480418977,    -0.2537547409698318,    -0.25089010694661684,
+    -0.24802757453904151,    -0.24516711572368871,    -0.24230870264628973,    -0.23945230761882785,    -0.23659790311668202,    -0.23374546177580999,    -0.23089495638996985,    -0.22804635990797933,
+    -0.22519964543101198,    -0.22235478620992905,    -0.21951175564264672,    -0.21667052727153799,    -0.21383107478086769,    -0.21099337199426077,    -0.20815739287220258,    -0.20532311150957069,
+    -0.20249050213319719,    -0.1996595390994613,    -0.19683019689191114,    -0.19400245011891429,    -0.19117627351133631,    -0.18835164192024675,    -0.18552853031465183,    -0.18270691377925327,
+    -0.17988676751223287,    -0.17706806682306181,    -0.17425078713033448,    -0.17143490395962613,    -0.16862039294137368,    -0.1658072298087794,    -0.16299539039573668,    -0.16018485063477741,
+    -0.15737558655504055,    -0.15456757428026138,    -0.15176079002678081,    -0.14895521010157431,    -0.14615081090029997,    -0.1433475689053654,    -0.14054546068401266,    -0.13774446288642098,
+    -0.13494455224382684,    -0.13214570556666089,    -0.12934789974270128,    -0.12655111173524286,    -0.12375531858128215,    -0.12096049738971759,    -0.11816662533956378,    -0.11537367967818096,
+    -0.11258163771951793,    -0.10979047684236858,    -0.10700017448864166,    -0.10421070816164323,    -0.10142205542437148,    -0.098634193897823685,    -0.095847101259314699,    -0.0930607552408068,
+    -0.090275133627250384,    -0.087490214254935333,    -0.084705975009852538,    -0.081922393826065323,    -0.079139448684090383,    -0.076357117609287928,    -0.073575378670260705,    -0.070794209977261505,
+    -0.068013589680608957,    -0.065233495969111072,    -0.062453907068496461,    -0.059674801239852686,    -0.056896156778071631,    -0.054117952010301389,    -0.051340165294404508,    -0.048562775017422177,
+    -0.045785759594044101,    -0.043009097465083801,    -0.040232767095958896,    -0.037456746975176251,    -0.034681015612821511,    -0.031905551539052925,    -0.029130333302598909,    -0.026355339469259342,
+    -0.023580548620410067,    -0.020805939351510424,    -0.018031490270613515,    -0.015257179996878874,    -0.012482987159087289,    -0.0097088903941574874,    -0.006934868345664362,    -0.0041608996623585075,
+    -0.0013869629966867276,    0.0013869629966867276,    0.0041608996623585075,    0.006934868345664362,    0.0097088903941574874,    0.012482987159087289,    0.015257179996878874,    0.018031490270613515,
+    0.020805939351510424,    0.023580548620410067,    0.026355339469259342,    0.029130333302598909,    0.031905551539052925,    0.034681015612821511,    0.037456746975176251,    0.040232767095958896,
+    0.043009097465083801,    0.045785759594044101,    0.048562775017422177,    0.051340165294404508,    0.054117952010301389,    0.056896156778071631,    0.059674801239852686,    0.062453907068496461,
+    0.065233495969111072,    0.068013589680608957,    0.070794209977261505,    0.073575378670260705,    0.076357117609287928,    0.079139448684090383,    0.081922393826065323,    0.084705975009852538,
+    0.087490214254935333,    0.090275133627250384,    0.0930607552408068,    0.095847101259314699,    0.098634193897823685,    0.10142205542437148,    0.10421070816164323,    0.10700017448864166,
+    0.10979047684236858,    0.11258163771951793,    0.11537367967818096,    0.11816662533956378,    0.12096049738971759,    0.12375531858128215,    0.12655111173524275,    0.12934789974270117,
+    0.13214570556666078,    0.13494455224382673,    0.13774446288642087,    0.14054546068401255,    0.14334756890536529,    0.14615081090029985,    0.1489552101015742,    0.1517607900267807,
+    0.15456757428026127,    0.15737558655504044,    0.1601848506347773,    0.16299539039573657,    0.16580722980877929,    0.16862039294137357,    0.17143490395962602,    0.17425078713033437,
+    0.1770680668230617,    0.17988676751223276,    0.18270691377925316,    0.18552853031465172,    0.18835164192024664,    0.1911762735113362,    0.19400245011891418,    0.19683019689191103,
+    0.19965953909946119,    0.20249050213319708,    0.20532311150957058,    0.20815739287220247,    0.21099337199426066,    0.21383107478086757,    0.21667052727153788,    0.21951175564264661,
+    0.22235478620992893,    0.22519964543101187,    0.22804635990797922,    0.23089495638996971,    0.23374546177580988,    0.23659790311668191,    0.23945230761882774,    0.24230870264628962,
+    0.2451671157236886,    0.2480275745390414,    0.25089010694661673,    0.25375474096983192,    0.25662150480418988,    0.25949042682026036,    0.26236153556670172,    0.26523485977332839,
+    0.26811042835422294,    0.27098827041089391,    0.27386841523548161,    0.27675089231401107,    0.27963573132969538,    0.28252296216628842,    0.28541261491149011,    0.2883047198604039,
+    0.29119930751904827,    0.29409640860792369,    0.29699605406563601,    0.29989827505257727,    0.30280310295466628,    0.30571056938714936,    0.30862070619846266,    0.31153354547415857,
+    0.31444911954089616,    0.31736746097049851,    0.32028860258407765,    0.32321257745622906,    0.32613941891929688,    0.32906916056771274,    0.33200183626240809,    0.33493748013530344,
+    0.33787612659387528,    0.34081781032580327,    0.34376256630369878,    0.34671042978991762,    0.34966143634145819,    0.35261562181494793,    0.35557302237171912,    0.3585336744829774,
+    0.36149761493506438,    0.36446488083481687,    0.36743550961502536,    0.37040953903999385,    0.3733870072112036,    0.37636795257308353,    0.3793524139188898,    0.38234043039669702,
+    0.38533204151550465,    0.38832728715146053,    0.39132620755420489,    0.39432884335333829,    0.39733523556501615,    0.4003454255986727,    0.40335945526387884,    0.40637736677733616,
+    0.40939920277001152,    0.41242500629441481,    0.41545482083202484,    0.41848869030086633,    0.42152665906324194,    0.4245687719336243,    0.42761507418671091,    0.43066561156564742,
+    0.4337204302904234,    0.43677957706644449,    0.43984309909328706,    0.44291104407363896,    0.44598346022243213,    0.44906039627617211,    0.45214190150246997,    0.45522802570978183,
+    0.45831881925736206,    0.461414333065436,    0.46451461862559812,    0.46761972801144236,    0.4707297138894303,    0.47384462953000522,    0.47696452881895757,    0.48008946626905002,
+    0.48321949703190931,    0.48635467691019202,    0.4894950623700331,    0.49264071055378461,    0.49579167929305368,    0.49894802712204772,    0.50210981329123716,    0.50527709778134422,
+    0.50844994131766674,    0.51162840538474996,    0.51481255224141254,    0.51800244493614167,    0.52119814732286529,    0.52439972407711521,    0.5276072407125918,    0.53082076359814323,
+    0.5340403599751723,    0.5372660979754833,    0.54049804663958456,    0.5437362759354587,    0.54698085677781783,    0.55023186104785737,    0.55348936161352624,    0.5567534323503277,
+    0.56002414816267088,    0.56330158500578953,    0.56658581990824597,    0.56987693099504189,    0.5731749975113537,    0.57648009984691528,    0.57979231956106847,    0.58311173940850558,
+    0.58643844336572581,    0.58977251665823149,    0.5931140457884887,    0.5964631185646796,    0.59981982413027346,    0.60318425299444645,    0.60655649706337822,    0.60993664967245842,
+    0.61332480561943514,    0.61672106119853909,    0.62012551423561901,    0.623538264124326,    0.62695941186338389,    0.63038906009498807,    0.63382731314437291,    0.63727427706059281,
+    0.64073005965856245,    0.64419477056240415,    0.64766852125015317,    0.65115142509987178,    0.65464359743722911,    0.65814515558460163,    0.66165621891175774,    0.66517690888818504,
+    0.66870734913712981,    0.67224766549141557,    0.67579798605111452,    0.67935844124314493,    0.68292916388287805,    0.68651028923783364,    0.69010195509355454,    0.6937043018217508,
+    0.69731747245081033,    0.70094161273877598,    0.70457687124889845,    0.70822339942787349,    0.7118813516868836,    0.71555088548556678,    0.71923216141904311,    0.72292534330813718,
+    0.72663059829293897,    0.73034809692985803,    0.73407801329232947,    0.73782052507534335,    0.74157581370397407,    0.74534406444610091,    0.74912546652951695,    0.75292021326363889,
+    0.75672850216603949,    0.76055053509403925,    0.76438651838160543,    0.76823666298182358,    0.77210118461522137,    0.77598030392423933,    0.77987424663416594,    0.78378324372086794,
+    0.78770753158567008,    0.79164735223776317,    0.79560295348453514,    0.79957458913025559,    0.80356251918356092,    0.8075670100742246,    0.81158833487972404,    0.81562677356215063,
+    0.81968261321604541,    0.82375614832778332,    0.82784768104716977,    0.83195752147195867,    0.83608598794605316,    0.84023340737219909,    0.84440011554004324,    0.84858645747048767,
+    0.85279278777733947,    0.85701947104733289,    0.86126688223967163,    0.86553540710633414,    0.86982544263447492,    0.87413739751235642,    0.87847169262036073,    0.8828287615487479,
+    0.88720905114396476,    0.89161302208545012,    0.89604114949504254,    0.90049392358127023,    0.90497185032099436,    0.9094754521810855,    0.91400526888304301,    0.91856185821372149,
+    0.92314579688560694,    0.9277576814503925,    0.93239812926994492,    0.93706777954912801,    0.94176729443536733,    0.94649736019029984,    0.95125868843936867,    0.95605201750579283,
+    0.9608781138359761,    0.96573777352413359,    0.97063182394470238,    0.97556112550199703,    0.98052657350756234,    0.98552910019679751,    0.99056967689768571,    0.99564931636588594,
+    1.000769075302044,    1.0059300570690075,    1.0111334146286819,    1.0163803537206193,    1.0216721363071009,    1.0270100843125265,    1.032395583688428,    1.0378300888394274,
+    1.0433151274500907,    1.0488523057579504,    1.0544433143241452,    1.060089934360279,    1.0657940446784411,    1.0715576293410565,    1.0773827860986398,    1.0832717357169281,
+    1.0892268323106848,    1.0952505748201906,    1.1013456197887017,    1.1075147956257361,    1.1137611185729057,    1.1200878106273899,    1.126498319724571,    1.1329963425378169,
+    1.139585850322423,    1.1462711183155678,    1.1530567593090582,    1.1599477621421805,    1.1669495360254591,    1.1740679618123335,    1.1813094515977722,    1.1886810183584364,
+    1.1961903577824962,    1.2038459450022934,    1.2116571496869093,    1.2196343739412812,    1.2277892187900701,    1.2361346868384331,    1.2446854312063778,    1.2534580643424631,
+    1.2624715453188522,    1.2717476714505254,    1.2813117107829752,    1.2911932281581628,    1.3014271825926671,    1.3120554135246518,    1.3231286988839646,    1.3347096792915085,
+    1.3468771404313582,    1.3597325146115664,    1.3734101931173543,    1.3880947964449746,    1.4040521771716885,    1.4216904554075338,    1.4416968071613971,    1.4654114361854385,
+    1.4962952060392576,    1.5707963267948966
+};
+
+unit_local const float64 acosine_table[722] = {
+    3.1415926535897931,    3.0670915328341541,    3.036207762980335,    3.0124931339562937,    2.9924867822024304,    2.9748485039665851,    2.9588911232398711,    2.9442065199122509,
+    2.930528841406463,    2.9176734672262548,    2.9055060060864051,    2.8939250256788611,    2.8828517403195484,    2.8722235093875637,    2.8619895549530594,    2.8521080375778718,
+    2.8425439982454219,    2.833267872113749,    2.8242543911373597,    2.8154817580012743,    2.8069310136333296,    2.7985855455849666,    2.7904307007361777,    2.7824534764818059,
+    2.7746422717971901,    2.7669866845773927,    2.759477345153333,    2.7521057783926688,    2.7448642886072303,    2.7377458628203559,    2.7307440889370773,    2.7238530861039547,
+    2.7170674451104642,    2.7103821771173195,    2.7037926693327137,    2.6972946465194676,    2.6908841374222865,    2.6845574453678021,    2.6783111224206326,    2.672141946583598,
+    2.6660469016150872,    2.6600231591055814,    2.6540680625118247,    2.6481791128935361,    2.642353956135953,    2.6365903714733374,    2.6308862611551755,    2.625239641119042,
+    2.6196486325528472,    2.6141114542449873,    2.608626415634324,    2.6031919104833245,    2.5978064111074231,    2.5924684631019974,    2.5871766805155163,    2.5819297414235787,
+    2.5767263838639041,    2.5715654020969403,    2.5664456431607823,    2.5613660036925823,    2.5563254269916937,    2.5513229003024587,    2.5463574522968937,    2.5414281507395988,
+    2.53653410031903,    2.5316744406308724,    2.5268483443006891,    2.5220550152342653,    2.5172936869851963,    2.5125636212302638,    2.5078641063440243,    2.5031944560648416,
+    2.4985540082452893,    2.4939421236805037,    2.4893581850086179,    2.4848015956779395,    2.4802717789759816,    2.4757681771158908,    2.4712902503761667,    2.466837476289939,
+    2.4624093488803465,    2.4580053779388611,    2.4536250883436441,    2.449268019415257,    2.4449337243072526,    2.4406217694293715,    2.4363317339012305,    2.4320632090345682,
+    2.4278157978422295,    2.4235891145722359,    2.4193827842653839,    2.4151964423349401,    2.4110297341670961,    2.4068823147409502,    2.4027538482668556,    2.3986440078420666,
+    2.3945524751226799,    2.3904789400109423,    2.3864231003570473,    2.3823846616746209,    2.3783633368691213,    2.3743588459784579,    2.3703709159251525,    2.366399280279432,
+    2.3624436790326602,    2.3585038583805669,    2.3545795705157646,    2.3506705734290625,    2.3467766307191358,    2.342897511410118,    2.3390329897767206,    2.3351828451765022,
+    2.3313468618889361,    2.3275248289609358,    2.3237165400585353,    2.3199217933244136,    2.3161403912409977,    2.3123721404988706,    2.3086168518702399,    2.3048743400872258,
+    2.3011444237247547,    2.2974269250878354,    2.2937216701030336,    2.2900284882139399,    2.2863472122804636,    2.2826776784817802,    2.2790197262227703,    2.2753731980437952,
+    2.2717379395336725,    2.268113799245707,    2.2645006286166476,    2.2608982818884513,    2.2573066160327304,    2.2537254906777746,    2.2501547680380414,    2.2465943128460113,
+    2.2430439922863119,    2.2395036759320264,    2.2359732356830815,    2.2324525457066544,    2.2289414823794984,    2.2254399242321257,    2.2219477518947683,    2.2184648480450497,
+    2.2149910973573008,    2.2115263864534591,    2.2080706038554894,    2.2046236399392694,    2.2011853868898847,    2.1977557386582807,    2.1943345909192224,    2.1909218410305158,
+    2.1875173879934358,    2.1841211324143317,    2.1807329764673549,    2.1773528238582749,    2.173980579789343,    2.17061615092517,    2.1672594453595764,    2.163910372583385,
+    2.1605688434531283,    2.1572347701606223,    2.1539080662034022,    2.1505886463559651,    2.1472764266418118,    2.1439713243062504,    2.1406732577899383,    2.1373821467031426,
+    2.1340979118006862,    2.1308204749575674,    2.1275497591452242,    2.1242856884084231,    2.1210281878427537,    2.1177771835727146,    2.114532602730355,    2.1112943734344811,
+    2.1080624247703801,    2.104836686770069,    2.1016170903930398,    2.0984035675074884,    2.095196050872012,    2.0919944741177616,    2.0887987717310383,    2.0856088790363092,
+    2.0824247321796467,    2.0792462681125636,    2.0760734245762409,    2.0729061400861339,    2.0697443539169442,    2.0665880060879505,    2.0634370373486814,    2.0602913891649299,
+    2.0571510037050889,    2.054015823826806,    2.0508857930639466,    2.0477608556138542,    2.0446409563249017,    2.0415260406843267,    2.0384160548063388,    2.0353109454204947,
+    2.0322106598603327,    2.0291151460522587,    2.0260243525046784,    2.0229382282973667,    2.0198567230710687,    2.0167797870173287,    2.0137073708685356,    2.0106394258881837,
+    2.007575903861341,    2.00451675708532,    2.0014619383605439,    1.9984114009816074,    1.995365098728521,    1.9923229858581386,    1.989285017095763,    1.9862511476269216,
+    1.9832213330893114,    1.9801955295649081,    1.9771736935722328,    1.9741557820587754,    1.9711417523935693,    1.9681315623599127,    1.9651251701482351,    1.9621225343491016,
+    1.9591236139463573,    1.9561283683104014,    1.9531367571915936,    1.9501487407137863,    1.94716427936798,    1.9441833340061001,    1.9412058658348903,    1.9382318364099218,
+    1.9352612076297133,    1.9322939417299609,    1.929330001277874,    1.9263693491666156,    1.9234119486098444,    1.9204577631363546,    1.9175067565848141,    1.9145588930985953,
+    1.9116141371206998,    1.9086724533887718,    1.9057338069301999,    1.9027981630573045,    1.8998654873626093,    1.8969357457141933,    1.8940089042511254,    1.8910849293789742,
+    1.888163787765395,    1.8852454463357926,    1.8823298722690551,    1.8794170329933593,    1.8765068961820459,    1.8735994297495628,    1.8706946018474737,    1.8677923808605326,
+    1.8648927354028202,    1.8619956343139448,    1.8591010466553004,    1.8562089417063867,    1.8533192889611849,    1.8504320581245919,    1.8475472191089075,    1.8446647420303781,
+    1.8417845972057905,    1.8389067551491194,    1.8360311865682248,    1.8331578623615983,    1.8302867536151568,    1.8274178315990866,    1.8245510677647285,    1.8216864337415135,
+    1.8188239013339382,    1.8159634425185853,    1.8131050294411863,    1.8102486344137245,    1.8073942299115786,    1.8045417885707067,    1.8016912831848664,    1.7988426867028759,
+    1.7959959722259087,    1.7931511130048257,    1.7903080824375435,    1.7874668540664347,    1.7846274015757644,    1.7817896987891575,    1.7789537196670993,    1.7761194383044674,
+    1.7732868289280939,    1.7704558658943579,    1.7676265236868078,    1.7647987769138109,    1.7619726003062328,    1.7591479687151435,    1.7563248571095484,    1.75350324057415,
+    1.7506830943071294,    1.7478643936179585,    1.745047113925231,    1.7422312307545227,    1.7394167197362702,    1.7366035566036762,    1.7337917171906334,    1.7309811774296739,
+    1.7281719133499371,    1.725363901075158,    1.7225571168216773,    1.7197515368964709,    1.7169471376951966,    1.7141438957002619,    1.7113417874789092,    1.7085407896813176,
+    1.7057408790387234,    1.7029420323615576,    1.7001442265375979,    1.6973474385301395,    1.6945516453761789,    1.6917568241846141,    1.6889629521344605,    1.6861700064730776,
+    1.6833779645144145,    1.6805868036372651,    1.6777965012835383,    1.6750070349565398,    1.672218382219268,    1.6694305206927202,    1.6666434280542113,    1.6638570820357035,
+    1.661071460422147,    1.658286541049832,    1.6555023018047492,    1.6527187206209619,    1.649935775478987,    1.6471534444041847,    1.6443717054651574,    1.6415905367721582,
+    1.6388099164755057,    1.6360298227640078,    1.6332502338633932,    1.6304711280347493,    1.6276924835729683,    1.624914278805198,    1.6221364920893011,    1.6193591018123188,
+    1.6165820863889406,    1.6138054242599804,    1.6110290938908556,    1.6082530737700729,    1.6054773424077182,    1.6027018783339495,    1.5999266600974955,    1.5971516662641561,
+    1.5943768754153067,    1.5916022661464071,    1.5888278170655101,    1.5860535067917756,    1.5832793139539838,    1.5805052171890541,    1.577731195140561,    1.5749572264572551,
+    1.5721832897915833,    1.5694093637982098,    1.566635427132538,    1.5638614584492323,    1.5610874364007392,    1.5583133396358093,    1.5555391467980177,    1.5527648365242832,
+    1.5499903874433862,    1.5472157781744866,    1.5444409873256373,    1.5416659934922976,    1.5388907752558436,    1.5361153111820751,    1.5333395798197205,    1.5305635596989378,
+    1.5277872293298129,    1.5250105672008525,    1.5222335517774745,    1.519456161500492,    1.5166783747845953,    1.5139001700168251,    1.5111215255550439,    1.5083424197264002,
+    1.5055628308257856,    1.5027827371142877,    1.5000021168176352,    1.4972209481246359,    1.4944392091856087,    1.4916568781108062,    1.4888739329688312,    1.4860903517850441,
+    1.4833061125399614,    1.4805211931676463,    1.4777355715540899,    1.4749492255355818,    1.4721621328970729,    1.4693742713705251,    1.4665856186332533,    1.463796152306255,
+    1.461005849952528,    1.4582146890753787,    1.4554226471167158,    1.4526297014553329,    1.449835829405179,    1.4470410082136145,    1.4442452150596539,    1.4414484270521954,
+    1.4386506212282359,    1.4358517745510699,    1.4330518639084757,    1.4302508661108841,    1.4274487578895314,    1.4246455158945968,    1.4218411166933225,    1.419035536768116,
+    1.4162287525146353,    1.4134207402398562,    1.4106114761601194,    1.4078009363991599,    1.4049890969861174,    1.4021759338535231,    1.3993614228352707,    1.3965455396645623,
+    1.393728259971835,    1.3909095592826639,    1.3880894130156434,    1.3852677964802449,    1.3824446848746499,    1.3796200532835603,    1.3767938766759824,    1.3739661299029855,
+    1.3711367876954355,    1.3683058246616995,    1.3654732152853259,    1.3626389339226941,    1.3598029548006361,    1.356965252014029,    1.3541257995233587,    1.3512845711522501,
+    1.3484415405849677,    1.3455966813638847,    1.3427499668869174,    1.339901370404927,    1.3370508650190867,    1.3341984236782147,    1.3313440191760688,    1.328487624148607,
+    1.325629211071208,    1.3227687522558553,    1.3199062198482798,    1.3170415858250646,    1.3141748219907068,    1.3113058999746363,    1.3084347912281948,    1.3055614670215683,
+    1.3026858984406737,    1.2998080563840027,    1.296927911559415,    1.2940454344808856,    1.2911605954652012,    1.2882733646286082,    1.2853837118834064,    1.2824916069344927,
+    1.2795970192758483,    1.2766999181869729,    1.2738002727292606,    1.2708980517423194,    1.2679932238402303,    1.2650857574077472,    1.2621756205964338,    1.259262781320738,
+    1.2563472072540005,    1.2534288658243982,    1.2505077242108189,    1.2475837493386677,    1.2446569078755998,    1.2417271662271838,    1.2387944905324886,    1.2358588466595932,
+    1.2329202002010213,    1.2299785164690933,    1.2270337604911978,    1.2240858970049791,    1.2211348904534385,    1.2181807049799487,    1.2152233044231775,    1.2122626523119191,
+    1.2092987118598324,    1.2063314459600798,    1.2033608171798713,    1.2003867877549028,    1.197409319583693,    1.1944283742218131,    1.1914439128760068,    1.1884558963981995,
+    1.185464285279392,    1.1824690396434361,    1.1794701192406918,    1.1764674834415583,    1.1734610912298804,    1.1704509011962239,    1.1674368715310177,    1.1644189600175605,
+    1.161397124024885,    1.158371320500482,    1.1553415059628718,    1.1523076364940303,    1.1492696677316547,    1.1462275548612724,    1.1431812526081857,    1.1401307152292492,
+    1.1370758965044732,    1.1340167497284521,    1.1309532277016094,    1.1278852827212575,    1.1248128665724644,    1.1217359305187244,    1.1186544252924266,    1.1155683010851147,
+    1.1124775075375346,    1.1093819937294607,    1.1062817081692984,    1.1031765987834543,    1.1000666129054664,    1.0969516972648914,    1.0938317979759391,    1.0907068605258465,
+    1.0875768297629873,    1.0844416498847047,    1.0813012644248636,    1.0781556162411121,    1.0750046475018429,    1.0718482996728489,    1.0686865135036594,    1.0655192290135524,
+    1.0623463854772299,    1.0591679214101466,    1.0559837745534839,    1.052793881858755,    1.0495981794720315,    1.0463966027177816,    1.043189086082305,    1.0399755631967533,
+    1.0367559668197244,    1.0335302288194133,    1.030298280155312,    1.0270600508594379,    1.023815470017079,    1.0205644657470392,    1.0173069651813704,    1.014042894444569,
+    1.0107721786322257,    1.0074947417891071,    1.0042105068866507,    1.0009193957998548,    0.99762132928354286,    0.99431622694798139,    0.9910040072338282,    0.98768458738639109,
+    0.98435788342917074,    0.98102381013666506,    0.97768228100640786,    0.97433320823021707,    0.9709765026646231,    0.96761207380045011,    0.96423982973151834,    0.96085967712243825,
+    0.95747152117546153,    0.95407526559635758,    0.95067081255927754,    0.94725806267057056,    0.94383691493151267,    0.94040726669990848,    0.93696901365052365,    0.93352204973430375,
+    0.93006626713633422,    0.92660155623249241,    0.92312780554474339,    0.91964490169502477,    0.91615272935766756,    0.91265117121029493,    0.90914010788313881,    0.90561941790671152,
+    0.90208897765776686,    0.89854866130348099,    0.89499834074378215,    0.89143788555175174,    0.88786716291201861,    0.88428603755706303,    0.88069437170134213,    0.87709202497314576,
+    0.87347885434408634,    0.86985471405612069,    0.86621945554599822,    0.86257292736702307,    0.85891497510801307,    0.85524544130932989,    0.85156416537585344,    0.84787098348675938,
+    0.84416572850195759,    0.84044822986503864,    0.8367183135025672,    0.83297580171955332,    0.82922051309092248,    0.82545226234879565,    0.82167086026537961,    0.81787611353125778,
+    0.81406782462885707,    0.81024579170085731,    0.80640980841329124,    0.80255966381307298,    0.7986951421796753,    0.79481602287065733,    0.79092208016073062,    0.78701308307402873,
+    0.78308879520922647,    0.7791489745571335,    0.77519337331036142,    0.77122173766464097,    0.76723380761133575,    0.76322931672067207,    0.75920799191517263,    0.75516955323274604,
+    0.75111371357885126,    0.74704017846711324,    0.7429486457477269,    0.73883880532293789,    0.7347103388488434,    0.73056291942269747,    0.72639621125485343,    0.722209869324409,
+    0.7180035390175572,    0.71377685574756367,    0.70952944455522504,    0.70526091968856242,    0.70097088416042175,    0.69665892928254025,    0.69232463417453594,    0.68796756524614877,
+    0.68358727565093191,    0.67918330470944643,    0.67475517729985401,    0.67030240321362644,    0.6658244764739023,    0.66132087461381117,    0.65679105791185366,    0.65223446858117518,
+    0.64765052990928962,    0.64303864534450406,    0.63839819752495175,    0.63372854724576855,    0.62902903235952923,    0.62429896660459683,    0.61953763835552789,    0.61474430928910384,
+    0.60991821295892046,    0.60505855327076308,    0.60016450285019429,    0.59523520129289953,    0.59026975328733422,    0.58526722659809916,    0.58022664989721084,    0.57514701042901073,
+    0.5700272514928526,    0.56486626972588905,    0.55966291216621467,    0.55441597307427726,    0.5491241904877957,    0.54378624248237006,    0.53840074310646868,    0.53296623795546927,
+    0.52748119934480608,    0.52194402103694626,    0.51635301247075149,    0.51070639243461768,    0.50500228211645559,    0.49923869745384014,    0.49341354069625687,    0.48752459107796858,
+    0.48156949448421182,    0.47554575197470605,    0.46945070700619496,    0.46328153116916065,    0.45703520822199095,    0.45070851616750657,    0.44429800707032557,    0.43779998425707967,
+    0.43121047647247351,    0.42452520847932884,    0.41773956748583835,    0.41084856465271608,    0.40384679076943747,    0.39672836498256314,    0.38948687519712444,    0.38211530843646024,
+    0.37460596901240051,    0.3669503817926032,    0.35913917710798732,    0.35116195285361551,    0.34300710800482653,    0.33466163995646353,    0.32611089558851875,    0.31733826245243341,
+    0.30832478147604436,    0.29904865534437131,    0.28948461601192138,    0.27960309863673377,    0.26936914420222952,    0.25874091327024473,    0.24766762791093216,    0.23608664750338815,
+    0.22391918636353844,    0.21106381218333031,    0.19738613367754229,    0.18270153034992215,    0.16674414962320824,    0.14910587138736278,    0.12909951963349944,    0.10538489060945802,
+    0.074501120755639194,    0
+};
+
+/* End include: trig_tables.h */
+
+#if defined(__GNUC__) || defined(__GNUG__)
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wfloat-equal"
+#pragma GCC diagnostic ignored "-Wbad-function-cast"
+#endif
+
+#ifdef __clang__
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wfloat-equal"
+#pragma clang diagnostic ignored "-Wbad-function-cast"
+#endif // __clang__
+
+#define clamp(x, a, b) (min(max((x), (a)), (b)))
+
+#define abs(x) ((x) < 0 ? -(x) : (x))
+
+#define PI 3.141592653589793
+#define TAU (PI*2)
+
+unit_local inline f32 lerp32(f32 a, f32 b, f32 t) {
+    return a + (b-a)*t;
+}
+unit_local inline f64 lerp64(f64 a, f64 b, f64 t) {
+    return a + (b-a)*t;
+}
+
+unit_local inline f32 floor32(f32 f) {
+    return (f32)((f) < 0 ? (s64)(f) - 1 : (s64)(f));
+}
+unit_local inline f32 ceil32(f32 f) {
+    return (f32)((f) == (f32)(s64)(f) ? (s64)(f) : (f) > 0 ? (s64)(f) + 1 : (s64)(f));
+}
+unit_local inline f64 floor64(f64 f) {
+    return (f64)((f) < 0 ? (s64)(f) - 1 : (s64)(f));
+}
+unit_local inline f64 ceil64(f64 f) {
+    return (f64)((f) == (f64)(s64)(f) ? (s64)(f) : (f) > 0 ? (s64)(f) + 1 : (s64)(f));
+}
+
+
+#define trig_lookup_cyclic(t, f) do { \
+    s64 c = sizeof(t) / sizeof(f64); \
+    f64 norm_index = (f) * (f64)c; \
+    s64 ilo = ((s64)floor64(norm_index)) % c; \
+    s64 ihi = (ilo + 1) % c; \
+    f64 t_frac = norm_index - floor64(norm_index); \
+    return lerp64(t[ilo], t[ihi], t_frac); \
+} while (0)
+#define trig_lookup_noncyclic(t, f) do { \
+    s64 c = sizeof(t) / sizeof(f64); \
+    f64 norm_index = (f) * (f64)(c - 1); \
+    s64 ilo = (s64)floor64(norm_index); \
+    s64 ihi = (ilo + 1 < c) ? ilo + 1 : ilo; \
+    f64 t_frac = norm_index - (f64)ilo; \
+    return lerp64(t[ilo], t[ihi], t_frac); \
+} while (0)
+
+
+unit_local inline float64 fmod_cycling(float64 x, float64 y) {
+    if (y == 0.0) {
+        return 0.0;
+    }
+    float64 n = floor64(x / y);
+    return x - n * y;
+}
+
+unit_local inline float64 sin(float64 x) {
+    if (x == 0.0) return 0.0;
+    x = fmod_cycling(x, TAU);
+    trig_lookup_cyclic(sine_table, x/TAU);
+}
+unit_local inline float64 asin(float64 x) {
+    x = clamp(x, -1.0, 1.0);
+    trig_lookup_noncyclic(asine_table, (x + 1.0) / 2.0);
+}
+unit_local inline float64 cos(float64 x) {
+    if (x == 0.0) return 1.0;
+    x = fmod_cycling(x, TAU);
+    trig_lookup_cyclic(cosine_table, x/TAU);
+}
+unit_local inline float64 acos(float64 x) {
+    x = clamp(x, -1.0, 1.0);
+    trig_lookup_noncyclic(acosine_table, (x + 1.0) / 2.0);
+}
+unit_local inline float64 tan(float64 x) {
+    x = fmod_cycling(x, PI);
+    const s64 table_size = sizeof(tan_table) / sizeof(float64);
+    s64 i = (s64)((x / PI) * (f64)table_size);
+    if (i >= table_size)
+        i = table_size - 1;
+    return tan_table[i];
+}
+unit_local inline float64 atan(float64 x) {
+    if (x == 0.0) return 0.0;
+    float64 theta = (abs(x) <= 1.0) ? x : (x > 0.0 ? PI / 2 : -PI / 2);
+    
+    for (int i = 0; i < 5; ++i) { 
+        float64 sin_theta = sin(theta);
+        float64 cos_theta = cos(theta);
+        float64 tan_theta = sin_theta / cos_theta;
+        
+        theta -= (tan_theta - x) / (1.0 + tan_theta * tan_theta);
+    }
+    
+    return theta;
+}
+
+unit_local inline float64 atan2(float64 y, float64 x) {
+    return (x > 0) ? atan(y / x) :
+           (x < 0 && y >= 0) ? atan(y / x) + PI :
+           (x < 0 && y < 0) ? atan(y / x) - PI :
+           (y > 0) ? PI / 2 :
+           (y < 0) ? -PI / 2 : 0.0;
+}
+
+unit_local inline f32 ln32(f32 x) {
+    u32 bx = * (u32 *) (&x);
+    u32 ex = bx >> 23;
+    s32 t = (s32)ex-(s32)127;
+    bx = 1065353216 | (bx & 8388607);
+    x = * (f32 *) (&bx);
+    return -1.49278f+(2.11263f+(-0.729104f+0.10969f*x)*x)*x+0.6931471806f*(f32)t;
+}
+unit_local inline float64 ln64(float64 x) {
+    u64 bx = *(u64 *)(&x);
+    u64 ex = bx >> 52;
+    s32 t = (s32)ex - 1023;
+    bx = 4607182418800017408ULL | (bx & 4503599627370495ULL);
+    x = *(float64 *)(&bx);
+    return -1.49278 + (2.11263 + (-0.729104 + 0.10969 * x) * x) * x + 0.6931471806 * t;
+}
+
+unit_local inline u64 powu(u64 x, u64 e) {
+    if (e == 0) return 1;
+    u64 result = x;
+    for (u64 i = 0; i < e-1; i += 1) {
+        result *= x;
+    }
+    return result;
+}
+unit_local inline f64 powf64(f64 x, f64 e) {
+    if (e == 0) return 1;
+    f64 result = x;
+    for (f64 i = 0; i < e-1; i += 1) {
+        result *= x;
+    }
+    return result;
+}
+
+unit_local inline f32 sqrt32(f32 n) {
+    if (n < 0.0f) {
+        return -1.0f;
+    }
+    if (n == 0.0f) {
+        return 0.0f;
+    }
+
+    f32 x = n;
+    f32 tolerance = 0.000001f;
+    f32 delta;
+
+    do {
+        f32 next_x = 0.5f * (x + n / x);
+        delta = next_x - x;
+        if (delta < 0.0f) {
+            delta = -delta;
+        }
+        x = next_x;
+    } while (delta > tolerance);
+
+    return x;
+}
+
+unit_local inline float64 sqrt64(float64 n) {
+    if (n < 0.0) {
+        return -1.0;
+    }
+    if (n == 0.0) {
+        return 0.0;
+    }
+
+    float64 x = n;
+    float64 tolerance = 0.000001;
+    float64 delta;
+
+    do {
+        float64 next_x = 0.5 * (x + n / x);
+        delta = next_x - x;
+        if (delta < 0.0) {
+            delta = -delta;
+        }
+        x = next_x;
+    } while (delta > tolerance);
+
+    return x;
+}
+
+
+
+#define v2_expand(v) (v).x, (v).y
+#define v3_expand(v) (v).x, (v).y, (v).z
+#define v4_expand(v) (v).x, (v).y, (v).z, (v).w
+
+#define v2(x, y)       (f32v2) {x, y}
+#define v3(x, y, z)    (f32v3) {x, y, z}
+#define v4(x, y, z, w) (f32v4) {x, y, z, w}
+
+#define v2_scalar f32v2_scalar
+#define v3_scalar f32v3_scalar
+#define v4_scalar f32v4_scalar
+
+#define v2_one  f32v2_one
+#define v3_one  f32v3_one
+#define v4_one  f32v4_one
+
+#define v2_zero  f32v2_zero
+#define v3_zero  f32v3_zero
+#define v4_zero  f32v4_zero
+
+#define v2_add  f32v2_add
+#define v3_add  f32v3_add
+#define v4_add  f32v4_add
+
+#define v2_sub  f32v2_sub
+#define v3_sub  f32v3_sub
+#define v4_sub  f32v4_sub
+
+#define v2_mul  f32v2_mul
+#define v3_mul  f32v3_mul
+#define v4_mul  f32v4_mul
+
+#define v2_mulf  f32v2_mulf32
+#define v3_mulf  f32v3_mulf32
+#define v4_mulf  f32v4_mulf32
+
+#define v2_div  f32v2_div
+#define v3_div  f32v3_div
+#define v4_div  f32v4_div
+
+#define v2_divf  f32v2_divf32
+#define v3_divf  f32v3_divf32
+#define v4_divf  f32v4_divf32
+
+#define v2_len  f32v2_len
+#define v3_len  f32v3_len
+#define v4_len  f32v4_len
+
+#define v2_lensq  f32v2_lensq
+#define v3_lensq  f32v3_lensq
+#define v4_lensq  f32v4_lensq
+
+#define v2_average  f32v2_average
+#define v3_average  f32v3_average
+#define v4_average  f32v4_average
+
+#define v2_normalize  f32v2_normalize
+#define v3_normalize  f32v3_normalize
+#define v4_normalize  f32v4_normalize
+
+#define v2_dot  f32v2_dot
+#define v3_dot  f32v3_dot
+#define v4_dot  f32v4_dot
+
+#define v2_perp  f32v2_perp
+#define v3_cross  f32v3_cross
+
+typedef struct f32v2 {
+    f32 x, y;
+} f32v2;
+typedef struct f32v3 {
+    f32 x, y, z;
+} f32v3;
+typedef struct f32v4 {
+    f32 x, y, z, w;
+} f32v4;
+
+unit_local inline f32v2 f32v2_scalar(f32 a) { return (f32v2){a, a}; }
+unit_local inline f32v3 f32v3_scalar(f32 a) { return (f32v3){a, a, a}; }
+unit_local inline f32v4 f32v4_scalar(f32 a) { return (f32v4){a, a, a, a}; }
+
+unit_local const f32v2 f32v2_one = {1, 1};
+unit_local const f32v3 f32v3_one = {1, 1, 1};
+unit_local const f32v4 f32v4_one = {1, 1, 1, 1};
+
+unit_local const f32v2 f32v2_zero = {0, 0};
+unit_local const f32v3 f32v3_zero = {0, 0, 0};
+unit_local const f32v4 f32v4_zero = {0, 0, 0, 0};
+
+unit_local inline f32v2 f32v2_add(f32v2 a, f32v2 b)  { return (f32v2){a.x+b.x, a.y+b.y}; }
+unit_local inline f32v3 f32v3_add(f32v3 a, f32v3 b)  { return (f32v3){a.x+b.x, a.y+b.y, a.z+b.z}; }
+unit_local inline f32v4 f32v4_add(f32v4 a, f32v4 b)  { return (f32v4){a.x+b.x, a.y+b.y, a.z+b.z, a.w+b.w}; }
+
+unit_local inline f32v2 f32v2_sub(f32v2 a, f32v2 b)  { return (f32v2){a.x-b.x, a.y-b.y}; }
+unit_local inline f32v3 f32v3_sub(f32v3 a, f32v3 b)  { return (f32v3){a.x-b.x, a.y-b.y, a.z-b.z}; }
+unit_local inline f32v4 f32v4_sub(f32v4 a, f32v4 b)  { return (f32v4){a.x-b.x, a.y-b.y, a.z-b.z, a.w-b.w}; }
+
+unit_local inline f32v2 f32v2_mul(f32v2 a, f32v2 b)  { return (f32v2){a.x*b.x, a.y*b.y}; }
+unit_local inline f32v3 f32v3_mul(f32v3 a, f32v3 b)  { return (f32v3){a.x*b.x, a.y*b.y, a.z*b.z}; }
+unit_local inline f32v4 f32v4_mul(f32v4 a, f32v4 b)  { return (f32v4){a.x*b.x, a.y*b.y, a.z*b.z, a.w*b.w}; }
+
+unit_local inline f32v2 f32v2_mulf32(f32v2 a, f32 s) { return f32v2_mul(a, (f32v2){s, s}); }
+unit_local inline f32v3 f32v3_mulf32(f32v3 a, f32 s) { return f32v3_mul(a, (f32v3){s, s, s}); }
+unit_local inline f32v4 f32v4_mulf32(f32v4 a, f32 s) { return f32v4_mul(a, (f32v4){s, s, s, s}); }
+
+unit_local inline f32v2 f32v2_div(f32v2 a, f32v2 b)  { return (f32v2){a.x/b.x, a.y/b.y}; }
+unit_local inline f32v3 f32v3_div(f32v3 a, f32v3 b)  { return (f32v3){a.x/b.x, a.y/b.y, a.z/b.z}; }
+unit_local inline f32v4 f32v4_div(f32v4 a, f32v4 b)  { return (f32v4){a.x/b.x, a.y/b.y, a.z/b.z, a.w/b.w}; }
+
+unit_local inline f32v2 f32v2_divf32(f32v2 a, f32 s) { return f32v2_div(a, (f32v2){s, s}); }
+unit_local inline f32v3 f32v3_divf32(f32v3 a, f32 s) { return f32v3_div(a, (f32v3){s, s, s}); }
+unit_local inline f32v4 f32v4_divf32(f32v4 a, f32 s) { return f32v4_div(a, (f32v4){s, s, s, s}); }
+
+unit_local inline f32 f32v2_lensq(f32v2 a) { return a.x*a.x + a.y*a.y; }
+unit_local inline f32 f32v3_lensq(f32v3 a) { return a.x * a.x + a.y * a.y + a.z * a.z; }
+unit_local inline f32 f32v4_lensq(f32v4 a) { return a.x * a.x + a.y * a.y + a.z * a.z + a.w * a.w; }
+
+unit_local inline f32 f32v2_len(f32v2 a) { return sqrt32(a.x*a.x + a.y*a.y); }
+unit_local inline f32 f32v3_len(f32v3 a) { return sqrt32(a.x * a.x + a.y * a.y + a.z * a.z); }
+unit_local inline f32 f32v4_len(f32v4 a) { return sqrt32(a.x * a.x + a.y * a.y + a.z * a.z + a.w * a.w); }
+
+unit_local inline f32 f32v2_average(f32v2 a) { return (a.x+a.y)/2.0f; }
+unit_local inline f32 f32v3_average(f32v3 a) { return (a.x + a.y + a.z) / 3.0f; }
+unit_local inline f32 f32v4_average(f32v4 a) { return (a.x + a.y + a.z + a.w) / 4.0f; }
+
+
+typedef struct s32v2 {
+    s32 x, y;
+} s32v2;
+typedef struct s32v3 {
+    s32 x, y, z;
+} s32v3;
+typedef struct s32v4 {
+    s32 x, y, z, w;
+} s32v4;
+
+typedef struct u32v2 {
+    u32 x, y;
+} u32v2;
+typedef struct u32v3 {
+    u32 x, y, z;
+} u32v3;
+typedef struct u32v4 {
+    u32 x, y, z, w;
+} u32v4;
+
+
+#if defined(__GNUC__) || defined(__GNUG__)
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wfloat-equal"
+#endif
+
+#ifdef __clang__
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wfloat-equal"
+#endif // __clang__
+
+unit_local inline f32v2 f32v2_normalize(f32v2 a) { return f32v2_lensq(a) == 0 ? f32v2_scalar(0) : f32v2_divf32(a, f32v2_len(a)); }
+unit_local inline f32v3 f32v3_normalize(f32v3 a) { return f32v3_lensq(a) == 0 ? f32v3_scalar(0) : f32v3_divf32(a, f32v3_len(a)); }
+unit_local inline f32v4 f32v4_normalize(f32v4 a) { return f32v4_lensq(a) == 0 ? f32v4_scalar(0) : f32v4_divf32(a, f32v4_len(a)); }
+
+#if defined(__GNUC__) || defined(__GNUG__)
+#pragma GCC diagnostic pop
+#endif
+
+#ifdef __clang__
+#pragma clang diagnostic pop
+#endif // __clang__
+
+unit_local inline f32 f32v2_dot(f32v2 a, f32v2 b) { return a.x * b.x + a.y * b.y; }
+unit_local inline f32 f32v3_dot(f32v3 a, f32v3 b) { return a.x * b.x + a.y * b.y + a.z * b.z; }
+unit_local inline f32 f32v4_dot(f32v4 a, f32v4 b) { return a.x * b.x + a.y * b.y + a.z * b.z + a.w * b.w; }
+
+unit_local inline f32 f32v2_perp(f32v2 a, f32v2 b) { return (a.x * b.y) - (a.y * b.x); }
+unit_local inline f32v3 f32v3_cross(f32v3 a, f32v3 b) { return (f32v3){(a.y*b.z)-(a.z*b.y), (a.z*b.x)-(a.x*b.z), (a.x*b.y)-(a.y*b.x)}; }
+
+
+// Column major
+typedef union f32m4x4 {
+    f32 data[4][4];
+    f32v4 cols[4];
+} f32m4x4;
+typedef f32m4x4 f32m4;
+
+unit_local inline f32m4x4 m4_scalar(f32 scalar) {
+    f32m4x4 m = (f32m4x4){0};
+    m.data[0][0] = scalar; 
+    m.data[1][1] = scalar; 
+    m.data[2][2] = scalar; 
+    m.data[3][3] = scalar; 
+    return m;
+}
+
+unit_local inline f32m4x4 m4_identity(void) { return m4_scalar(1.0); }
+
+unit_local inline f32m4x4 m4_make_translation(f32v3 translation) {
+    f32m4x4 m = m4_identity();    
+    *(f32v3*)m.data[3] = translation;
+    
+    return m;
+}
+
+unit_local inline f32m4x4 m4_translate(f32m4x4 m, f32v3 translation) {
+    m.data[3][0] = translation.x;
+    m.data[3][1] = translation.y;
+    m.data[3][2] = translation.z;
+    return m;
+}
+
+unit_local inline f32m4x4 m4_add(f32m4x4 m0, f32m4x4 m1) {
+    *(f32v4*)m0.data[0] = v4_add(*(f32v4*)m0.data[0], *(f32v4*)m1.data[0]);
+    *(f32v4*)m0.data[1] = v4_add(*(f32v4*)m0.data[1], *(f32v4*)m1.data[1]);
+    *(f32v4*)m0.data[2] = v4_add(*(f32v4*)m0.data[2], *(f32v4*)m1.data[2]);
+    *(f32v4*)m0.data[3] = v4_add(*(f32v4*)m0.data[3], *(f32v4*)m1.data[3]);
+    
+    return m0;
+}
+
+unit_local inline f32m4x4 m4_make_scale(f32v3 scalars) {
+    f32m4x4 m = m4_identity();
+    *(f32v4*)m.data[0] = v4_mulf(*(f32v4*)m.data[0], scalars.x);
+    *(f32v4*)m.data[1] = v4_mulf(*(f32v4*)m.data[1], scalars.y);
+    *(f32v4*)m.data[2] = v4_mulf(*(f32v4*)m.data[2], scalars.z);
+    
+    return m;
+}
+
+unit_local inline f32m4x4 m4_scalef(f32m4x4 m, f32 scalar) {
+    *(f32v4*)m.data[0] = v4_mulf(*(f32v4*)m.data[0], scalar);
+    *(f32v4*)m.data[1] = v4_mulf(*(f32v4*)m.data[1], scalar);
+    *(f32v4*)m.data[2] = v4_mulf(*(f32v4*)m.data[2], scalar);
+    *(f32v4*)m.data[3] = v4_mulf(*(f32v4*)m.data[3], scalar);
+    
+    return m;
+}
+unit_local inline f32m4x4 m4_scale(f32m4x4 m, f32v3 scalars) {
+    *(f32v4*)m.data[0] = v4_mulf(*(f32v4*)m.data[0], scalars.x);
+    *(f32v4*)m.data[1] = v4_mulf(*(f32v4*)m.data[1], scalars.y);
+    *(f32v4*)m.data[2] = v4_mulf(*(f32v4*)m.data[2], scalars.z);
+    
+    return m;
+}
+unit_local inline f32m4x4 m4_scale_v4(f32m4x4 m, f32v4 scalars) {
+    *(f32v4*)m.data[0] = v4_mulf(*(f32v4*)m.data[0], scalars.x);
+    *(f32v4*)m.data[1] = v4_mulf(*(f32v4*)m.data[1], scalars.y);
+    *(f32v4*)m.data[2] = v4_mulf(*(f32v4*)m.data[2], scalars.z);
+    *(f32v4*)m.data[3] = v4_mulf(*(f32v4*)m.data[3], scalars.w);
+    
+    return m;
+}
+
+unit_local inline f32m4x4 m4_make_rotation_x(float rad) {
+    float c = (f32)cos((f64)rad);
+    float s = (f32)sin((f64)rad);
+    return (f32m4x4){{
+        { 1,  0,   0,  0 },
+        { 0,  c,   s,  0 }, 
+        { 0, -s,   c,  0 }, 
+        { 0,  0,   0,  1 } 
+    }};
+}
+
+unit_local inline f32m4x4 m4_make_rotation_y(float rad) {
+    float c = (f32)cos((f64)rad);
+    float s = (f32)sin((f64)rad);
+    return (f32m4x4){{
+        {  c,  0,  -s,  0 },
+        {  0,  1,   0,  0 }, 
+        {  s,  0,   c,  0 }, 
+        {  0,  0,   0,  1 } 
+    }};
+}
+unit_local inline f32m4x4 m4_make_rotation_z(float rad) {
+    float c = (f32)cos((f64)rad);
+    float s = (f32)sin((f64)rad);
+    return (f32m4x4){{
+        {  c,  s,  0,  0 },
+        { -s,  c,  0,  0 },
+        {  0,  0,  1,  0 },
+        {  0,  0,  0,  1 },
+    }};
+}
+
+unit_local inline f32m4x4 m4_make_rotation(f32v3 axis, float rad) {
+    float c = (f32)cos((f64)rad);
+    float s = (f32)sin((f64)rad);
+    float t = 1.0f - c;
+    
+    float len = sqrt32(axis.x * axis.x + axis.y * axis.y + axis.z * axis.z);
+    f32v3 u = { axis.x / len, axis.y / len, axis.z / len };
+
+    return (f32m4x4){{
+        { t*u.x*u.x + c,    t*u.x*u.y + s*u.z,   t*u.x*u.z - s*u.y,   0 },
+        { t*u.x*u.y - s*u.z,  t*u.y*u.y + c,       t*u.y*u.z + s*u.x,   0 },
+        { t*u.x*u.z + s*u.y,  t*u.y*u.z - s*u.x,   t*u.z*u.z + c,       0 },
+        { 0,                 0,                   0,                   1 }
+    }};
+}
+
+
+unit_local inline f32m4x4 m4_make_perspective_left_handed(f32 fov_rad, f32 aspect_ratio, f32 n, f32 f) {
+    f32m4x4 proj = (f32m4x4){0};
+    f32 s = 1.0f / (f32)tan((f64)fov_rad * 0.5);
+    proj.cols[0].x = s / aspect_ratio;
+    proj.cols[1].y = s;
+    proj.cols[2].z = f / (f - n);
+    proj.cols[2].w = 1.0f;
+    proj.cols[3].z = -n * f / (f - n);
+
+    return proj;
+}
+
+unit_local inline f32m4x4 m4_transpose(f32m4x4 m) {
+    f32m4x4 tm = m;
+    
+    // Diagonal is copied over, but swap each side of it
+    
+    tm.data[0][1] = m.data[1][0];
+    tm.data[0][2] = m.data[2][0];
+    tm.data[0][3] = m.data[3][0];
+    
+    tm.data[1][0] = m.data[0][1];
+    tm.data[1][2] = m.data[2][1];
+    tm.data[1][3] = m.data[3][1];
+    
+    tm.data[2][0] = m.data[0][2];
+    tm.data[2][1] = m.data[1][2];
+    tm.data[2][3] = m.data[3][2];
+    
+    tm.data[3][0] = m.data[0][3];
+    tm.data[3][1] = m.data[1][3];
+    tm.data[3][2] = m.data[2][3];
+    
+    return tm;
+} 
+
+unit_local inline f32m4x4 m4_mulm4(f32m4x4 m0, f32m4x4 m1) {
+/*
+        m = m0 * m1
+        
+        each ij in m should be dot(m0[row:i], m1[col:j])
+        
+        We transpose m0 so we can read rows trivially (since our matrices are column-major)
+*/
+
+    // todo(charlie) very easily vectorized
+
+
+    f32m4x4 tm0 = m4_transpose(m0);
+    f32m4x4 m;
+    
+    *(float*)&m.data[0][0] = v4_dot(*(f32v4*)tm0.data[0], *(f32v4*)m1.data[0]);
+    *(float*)&m.data[0][1] = v4_dot(*(f32v4*)tm0.data[1], *(f32v4*)m1.data[0]);
+    *(float*)&m.data[0][2] = v4_dot(*(f32v4*)tm0.data[2], *(f32v4*)m1.data[0]);
+    *(float*)&m.data[0][3] = v4_dot(*(f32v4*)tm0.data[3], *(f32v4*)m1.data[0]);
+    
+    *(float*)&m.data[1][0] = v4_dot(*(f32v4*)tm0.data[0], *(f32v4*)m1.data[1]);
+    *(float*)&m.data[1][1] = v4_dot(*(f32v4*)tm0.data[1], *(f32v4*)m1.data[1]);
+    *(float*)&m.data[1][2] = v4_dot(*(f32v4*)tm0.data[2], *(f32v4*)m1.data[1]);
+    *(float*)&m.data[1][3] = v4_dot(*(f32v4*)tm0.data[3], *(f32v4*)m1.data[1]);
+    
+    *(float*)&m.data[2][0] = v4_dot(*(f32v4*)tm0.data[0], *(f32v4*)m1.data[2]);
+    *(float*)&m.data[2][1] = v4_dot(*(f32v4*)tm0.data[1], *(f32v4*)m1.data[2]);
+    *(float*)&m.data[2][2] = v4_dot(*(f32v4*)tm0.data[2], *(f32v4*)m1.data[2]);
+    *(float*)&m.data[2][3] = v4_dot(*(f32v4*)tm0.data[3], *(f32v4*)m1.data[2]);
+    
+    *(float*)&m.data[3][0] = v4_dot(*(f32v4*)tm0.data[0], *(f32v4*)m1.data[3]);
+    *(float*)&m.data[3][1] = v4_dot(*(f32v4*)tm0.data[1], *(f32v4*)m1.data[3]);
+    *(float*)&m.data[3][2] = v4_dot(*(f32v4*)tm0.data[2], *(f32v4*)m1.data[3]);
+    *(float*)&m.data[3][3] = v4_dot(*(f32v4*)tm0.data[3], *(f32v4*)m1.data[3]);
+    
+    return m;
+}
+
+unit_local inline f32v4 m4_mulv4(f32m4x4 m0, f32v4 m1) {
+    f32m4x4 tm0 = m4_transpose(m0);
+    
+    f32v4 f;
+    f.x = v4_dot(*(f32v4*)tm0.data[0], m1);
+    f.y = v4_dot(*(f32v4*)tm0.data[1], m1);
+    f.z = v4_dot(*(f32v4*)tm0.data[2], m1);
+    f.w = v4_dot(*(f32v4*)tm0.data[3], m1);
+    
+    return f;
+}
+
+unit_local inline f32v3 m4_mulv3_trunc(f32m4x4 m0, f32v3 m1) {
+    f32m4x4 tm0 = m4_transpose(m0);
+    
+    f32v3 f;
+    f.x = v4_dot(*(f32v4*)tm0.data[0], v4(m1.x, m1.y, m1.z, 1.0f));
+    f.y = v4_dot(*(f32v4*)tm0.data[1], v4(m1.x, m1.y, m1.z, 1.0f));
+    f.z = v4_dot(*(f32v4*)tm0.data[2], v4(m1.x, m1.y, m1.z, 1.0f));
+    
+    return f;
+} 
+unit_local inline f32v2 m4_mulv2_trunc(f32m4x4 m0, f32v2 m1) {
+    f32m4x4 tm0 = m4_transpose(m0);
+    
+    f32v2 f;
+    f.x = v4_dot(*(f32v4*)tm0.data[0], v4(m1.x, m1.y, 0.0f, 1.0f));
+    f.y = v4_dot(*(f32v4*)tm0.data[1], v4(m1.x, m1.y, 0.0f, 1.0f));
+    
+    return f;
+} 
+
+unit_local inline f64 get_power_of_two_f64(f64 x, u64 exp) {
+    return x * (f64)(1ULL << exp);
+}
+
+// Column major
+typedef union f32m3x3 {
+    f32 data[3][3];
+    f32v3 cols[3];
+} f32m3x3;
+typedef f32m3x3 f32m3;
+
+unit_local inline f32m3x3 m3_scalar(f32 scalar) {
+    f32m3x3 m = (f32m3x3){0};
+    m.data[0][0] = scalar;
+    m.data[1][1] = scalar;
+    m.data[2][2] = scalar;
+    return m;
+}
+
+unit_local inline f32m3x3 m3_identity(void) { return m3_scalar(1.0f); }
+
+unit_local inline f32m3x3 m3_make_translation(f32v2 translation) {
+    f32m3x3 m = m3_identity();
+    m.data[2][0] = translation.x;
+    m.data[2][1] = translation.y;
+    return m;
+}
+
+unit_local inline f32m3x3 m3_translate(f32m3x3 m, f32v2 translation) {
+    m.data[2][0] = translation.x;
+    m.data[2][1] = translation.y;
+    return m;
+}
+
+unit_local inline f32m3x3 m3_add(f32m3x3 m0, f32m3x3 m1) {
+    *(f32v3*)m0.data[0] = v3_add(*(f32v3*)m0.data[0], *(f32v3*)m1.data[0]);
+    *(f32v3*)m0.data[1] = v3_add(*(f32v3*)m0.data[1], *(f32v3*)m1.data[1]);
+    *(f32v3*)m0.data[2] = v3_add(*(f32v3*)m0.data[2], *(f32v3*)m1.data[2]);
+    return m0;
+}
+
+unit_local inline f32m3x3 m3_make_scale(f32v2 scalars) {
+    f32m3x3 m = m3_identity();
+    *(f32v3*)m.data[0] = v3_mulf(*(f32v3*)m.data[0], scalars.x);
+    *(f32v3*)m.data[1] = v3_mulf(*(f32v3*)m.data[1], scalars.y);
+    return m;
+}
+
+unit_local inline f32m3x3 m3_scalef(f32m3x3 m, f32 scalar) {
+    *(f32v3*)m.data[0] = v3_mulf(*(f32v3*)m.data[0], scalar);
+    *(f32v3*)m.data[1] = v3_mulf(*(f32v3*)m.data[1], scalar);
+    *(f32v3*)m.data[2] = v3_mulf(*(f32v3*)m.data[2], scalar);
+    return m;
+}
+
+unit_local inline f32m3x3 m3_scale(f32m3x3 m, f32v2 scalars) {
+    *(f32v3*)m.data[0] = v3_mulf(*(f32v3*)m.data[0], scalars.x);
+    *(f32v3*)m.data[1] = v3_mulf(*(f32v3*)m.data[1], scalars.y);
+    return m;
+}
+
+unit_local inline f32m3x3 m3_make_rotation(f32v3 axis, f32 rad) {
+    f32v3 u = v3_normalize(axis);
+    float c  = (f32)cos((f64)rad);
+    float s  = (f32)sin((f64)rad);
+    float oc = 1.0f - c;
+    
+    return (f32m3x3){{
+        { c + u.x * u.x * oc,        u.x * u.y * oc + u.z * s,  u.x * u.z * oc - u.y * s },
+        { u.x * u.y * oc - u.z * s,  c + u.y * u.y * oc,        u.y * u.z * oc + u.x * s },
+        { u.x * u.z * oc + u.y * s,  u.y * u.z * oc - u.x * s,  c + u.z * u.z * oc }
+    }};
+}
+
+unit_local inline f32m3x3 m3_make_rotation_z(float rad) {
+    float c = (f32)cos((f64)rad);
+    float s = (f32)sin((f64)rad);
+    return (f32m3x3){{
+        {  c,  s,  0 },
+        { -s,  c,  0 },
+        {  0,  0,  1 },
+    }};
+}
+
+unit_local inline f32m3x3 m3_transpose(f32m3x3 m) {
+    f32m3x3 tm = m;
+    
+    tm.data[0][1] = m.data[1][0];
+    tm.data[0][2] = m.data[2][0];
+    
+    tm.data[1][0] = m.data[0][1];
+    tm.data[1][2] = m.data[2][1];
+    
+    tm.data[2][0] = m.data[0][2];
+    tm.data[2][1] = m.data[1][2];
+    
+    return tm;
+}
+
+unit_local inline f32m3x3 m3_mulm3(f32m3x3 m0, f32m3x3 m1) {
+    f32m3x3 tm0 = m3_transpose(m0);
+    f32m3x3 m;
+    
+    m.data[0][0] = v3_dot(*(f32v3*)tm0.data[0], *(f32v3*)m1.data[0]);
+    m.data[0][1] = v3_dot(*(f32v3*)tm0.data[1], *(f32v3*)m1.data[0]);
+    m.data[0][2] = v3_dot(*(f32v3*)tm0.data[2], *(f32v3*)m1.data[0]);
+    
+    m.data[1][0] = v3_dot(*(f32v3*)tm0.data[0], *(f32v3*)m1.data[1]);
+    m.data[1][1] = v3_dot(*(f32v3*)tm0.data[1], *(f32v3*)m1.data[1]);
+    m.data[1][2] = v3_dot(*(f32v3*)tm0.data[2], *(f32v3*)m1.data[1]);
+    
+    m.data[2][0] = v3_dot(*(f32v3*)tm0.data[0], *(f32v3*)m1.data[2]);
+    m.data[2][1] = v3_dot(*(f32v3*)tm0.data[1], *(f32v3*)m1.data[2]);
+    m.data[2][2] = v3_dot(*(f32v3*)tm0.data[2], *(f32v3*)m1.data[2]);
+    
+    return m;
+}
+
+unit_local inline f32v3 m3_mulv3(f32m3x3 m, f32v3 v) {
+    f32m3x3 tm = m3_transpose(m);
+    
+    f32v3 f;
+    f.x = v3_dot(*(f32v3*)tm.data[0], v);
+    f.y = v3_dot(*(f32v3*)tm.data[1], v);
+    f.z = v3_dot(*(f32v3*)tm.data[2], v);
+    
+    return f;
+}
+
+unit_local inline f32v2 m3_mulv2_trunc(f32m3x3 m, f32v2 v) {
+    f32m3x3 tm = m3_transpose(m);
+    
+    f32v2 f;
+    f.x = v3_dot(*(f32v3*)tm.data[0], v3(v.x, v.y, 1.0f));
+    f.y = v3_dot(*(f32v3*)tm.data[1], v3(v.x, v.y, 1.0f));
+    
+    return f;
+}
+
+
+#if defined(__GNUC__) || defined(__GNUG__)
+#pragma GCC diagnostic pop
+#endif
+
+#ifdef __clang__
+#pragma clang diagnostic pop
+#endif // __clang__
+
+#endif //_MATH_H
+
+/* End include: math.h */
+#endif // _MATH_H
+
+/*
+
+    TODO:
+
+        - Specify int base
+            %i16  - base 16
+        - Padding, 0 padding
+            %4-i   "   5"
+                   "  81"
+            %i-4   "5   "
+                   "81  "
+            %i04   "0005"
+                   "0081"
+        - Decimal places
+            %f.3   "1.123"
+            %f.5   "1.12340"
+
+            %f04.3 "0001.123""
+
+        - Null terminated string is %s0
+
+        - Stack-backed buffered print() (instead of temporary allocation)
+
+
+*/
+
+//////
+// Formatting
+//////
+
+#define format_string(buffer, buffer_size, /*fmt, */...)  _format_string_ugly(buffer, buffer_size, __VA_ARGS__)
+#define format_strings(buffer, buffer_size, fmt, /*fmt, */...)  _format_strings_ugly(buffer, buffer_size, __VA_ARGS__)
+
+u64 format_string_args(void *buffer, u64 buffer_size, string fmt, u64 arg_count, Var_Arg *args, u64 *consumed_args);
+
+u64 format_signed_int(s64 x, int base, void *buffer, u64 buffer_size);
+u64 format_unsigned_int(u64 x, int base, void *buffer, u64 buffer_size);
+u64 format_float(float64 x, int decimal_places, void *buffer, u64 buffer_size);
+
+u64 string_to_unsigned_int(string str, int base, bool *success);
+s64 string_to_signed_int(string str, int base, bool *success);
+float64 string_to_float(string str, bool *success);
+
+//////
+// Printing
+//////
+
+typedef struct Source_Location {
+    u64 line;
+    string file;
+    string function;
+} Source_Location;
+#define HERE(...) (Source_Location) {__LINE__, STR(__FILE__), STR(__func__)}
+
+#define sprint(allocator, /*fmt, */...)  _sprint_ugly(allocator, __VA_ARGS__)
+#define sprints(allocator, /*fmt, */...) _sprints_ugly(allocator, __VA_ARGS__)
+#define tprint(/*fmt, */...)             _tprint_ugly(__VA_ARGS__)
+#define tprints(/*fmt, */...)            _tprints_ugly(__VA_ARGS__)
+#define print(/*fmt, */...)              _print_ugly(__VA_ARGS__)
+#define prints(/*fmt, */...)             _prints_ugly(__VA_ARGS__)
+#define fprint(file, /*fmt, */...)       _fprint_ugly(file, __VA_ARGS__)
+#define fprints(file, /*fmt, */...)      _fprints_ugly(file, __VA_ARGS__)
+
+string sprint_args(Allocator a, string fmt, u64 arg_count, Var_Arg *args);
+string tprint_args(string fmt, u64 arg_count, Var_Arg *args);
+void   print_args(string fmt, u64 arg_count, Var_Arg *args);
+void   fprint_args(File_Handle f, string fmt, u64 arg_count, Var_Arg *args);
+void   log_args(u64 flags, Source_Location location, string fmt, u64 arg_count, Var_Arg *args);
+
+typedef void (*Logger_Proc)(string message, u64 flags, Source_Location location);
+extern Logger_Proc logger;
+
+void default_logger(string message, u64 flags, Source_Location location);
+
+#define log(flags, /*fmt, */...)              _log_ugly(flags, __VA_ARGS__)
+#define logs(flags, /*fmt, */ ...)             _logs_ugly(flags, __VA_ARGS__)
+
+//////
+// Internal
+//////
+
+// note(charlie): These bloat the code and makes it less good at self-documenting,
+// so I made a prettier indirection for the readable part of the file.
+
+#define _format_string_ugly(buffer, buffer_size, ...)\
+    MAKE_WRAPPED_CALL(format_string_impl, _make_format_string_desc(buffer, buffer_size, STR(PP_FIRST_ARG(__VA_ARGS__))), PP_EXCLUDE_FIRST_ARG(__VA_ARGS__, (string){0}))
+#define _format_strings_ugly(buffer, buffer_size, ...)\
+    MAKE_WRAPPED_CALL(format_string_impl, _make_format_string_desc(buffer, buffer_size, PP_FIRST_ARG(__VA_ARGS__)), PP_EXCLUDE_FIRST_ARG(__VA_ARGS__, (string){0}))
+
+
+#define _sprint_ugly(allocator, ...)\
+    MAKE_WRAPPED_CALL(sprint_impl, _make_print_desc(allocator, STR(PP_FIRST_ARG(__VA_ARGS__)), 0), PP_EXCLUDE_FIRST_ARG(__VA_ARGS__, (string){0}))
+#define _sprints_ugly(allocator, ...)\
+    MAKE_WRAPPED_CALL(sprint_impl, _make_print_desc(allocator, PP_FIRST_ARG(__VA_ARGS__), 0), PP_EXCLUDE_FIRST_ARG(__VA_ARGS__, (string){0}))
+#define _tprint_ugly(...)\
+    MAKE_WRAPPED_CALL(tprint_impl, _make_print_desc((Allocator){0}, STR(PP_FIRST_ARG(__VA_ARGS__)), 0), PP_EXCLUDE_FIRST_ARG(__VA_ARGS__, (string){0}))
+#define _tprints_ugly(...)\
+    MAKE_WRAPPED_CALL(tprint_impl, _make_print_desc((Allocator){0}, PP_FIRST_ARG(__VA_ARGS__), 0), PP_EXCLUDE_FIRST_ARG(__VA_ARGS__, (string){0}))
+#define _print_ugly(...)\
+    MAKE_WRAPPED_CALL(print_impl, _make_print_desc((Allocator){0}, STR(PP_FIRST_ARG(__VA_ARGS__)), 0), PP_EXCLUDE_FIRST_ARG(__VA_ARGS__, (string){0}))
+#define _prints_ugly(...)\
+    MAKE_WRAPPED_CALL(print_impl, _make_print_desc((Allocator){0}, PP_FIRST_ARG(__VA_ARGS__), 0), PP_EXCLUDE_FIRST_ARG(__VA_ARGS__, (string){0}))
+#define _fprint_ugly(file, ...)\
+    MAKE_WRAPPED_CALL(fprint_impl, _make_print_desc((Allocator){0}, STR(PP_FIRST_ARG(__VA_ARGS__)), file), PP_EXCLUDE_FIRST_ARG(__VA_ARGS__, (string){0}))
+#define _fprints_ugly(file, ...)\
+    MAKE_WRAPPED_CALL(fprint_impl, _make_print_desc((Allocator){0}, PP_FIRST_ARG(__VA_ARGS__), file), PP_EXCLUDE_FIRST_ARG(__VA_ARGS__, (string){0}))
+
+#define _log_ugly(flags, ...)\
+    MAKE_WRAPPED_CALL(log_impl, _make_log_desc((Allocator){0}, STR(PP_FIRST_ARG(__VA_ARGS__)), flags, HERE()), PP_EXCLUDE_FIRST_ARG(__VA_ARGS__, (string){0}))
+#define _logs_ugly(flags, ...)\
+    MAKE_WRAPPED_CALL(log_impl, _make_log_desc((Allocator){0}, PP_FIRST_ARG(__VA_ARGS__), flags, HERE()), PP_EXCLUDE_FIRST_ARG(__VA_ARGS__,  (string){0}))
+
+typedef struct _Format_String_Desc {
+    void *buffer;
+    u64 buffer_size;
+    string fmt;
+} _Format_String_Desc;
+unit_local inline _Format_String_Desc _make_format_string_desc(void *buffer, u64 buffer_size, string fmt) {
+    return (_Format_String_Desc) {buffer, buffer_size, fmt};
+}
+
+typedef struct _Print_Desc {
+    Allocator a;
+    string fmt;
+    File_Handle file;
+} _Print_Desc;
+unit_local inline _Print_Desc _make_print_desc(Allocator a, string fmt, File_Handle f) {
+    return (_Print_Desc) {a, fmt, f};
+}
+
+typedef struct _Log_Desc {
+    Allocator a;
+    string fmt;
+    u64 flags;
+    Source_Location location;
+} _Log_Desc;
+unit_local inline _Log_Desc _make_log_desc(Allocator a, string fmt, u64 flags, Source_Location location) {
+    return (_Log_Desc) {a, fmt, flags, location};
+}
+
+u64 format_string_impl(_Format_String_Desc desc, u64 arg_count, ...);
+string sprint_impl(_Print_Desc desc, u64 arg_count, ...);
+string tprint_impl(_Print_Desc desc, u64 arg_count, ...);
+void print_impl(_Print_Desc desc, u64 arg_count, ...);
+void fprint_impl(_Print_Desc desc, u64 arg_count, ...);
+void log_impl(_Log_Desc desc, u64 arg_count, ...);
+
+
+// todo(charlie) move to appropriate file
+string string_replace(Allocator a, string s, string sub, string new);
+
+
+#ifdef OSTD_IMPL
+
+u64 format_string_impl(_Format_String_Desc desc, u64 arg_count, ...) {
+    Var_Arg args[MAX_VAR_ARGS];
+
+    get_var_args(arg_count, args);
+
+    return format_string_args(desc.buffer, desc.buffer_size, desc.fmt, arg_count, args, 0);
+}
+
+u64 format_string_args(void *buffer, u64 buffer_size, string fmt, u64 arg_count, Var_Arg *args, u64 *consumed_args) {
+
+    if (!buffer) buffer_size = U64_MAX;
+
+    u64 next_arg_index = 0;
+
+    u64 written = 0;
+
+    for (u64 i = 0; i < fmt.count; i += 1) {
+        if (fmt.data[i] == '%' && next_arg_index < arg_count && i < fmt.count-1) {
+            Var_Arg arg = args[next_arg_index];
+
+            //u32 left_padding = 0;
+            //u32 right_padding = 0;
+            //u32 left_0_padding = 0;
+            //u32 right_0_padding = 0;
+
+            int base = 10;
+            int decimal_places = 5;
+
+            u8 small_str[64];
+            string str = (string) { 0, small_str };
+
+            if (fmt.data[i+1] == 'u') {
+                str.count = format_unsigned_int(arg.int_val, base, str.data, 32);
+                i += 1;
+            } else if (fmt.data[i+1] == 'i') {
+                s64 signed_val;
+                if (arg.size == 1) {
+                    signed_val = (s64)(*(s8*)&arg.int_val);
+                } else if (arg.size == 2) {
+                    signed_val = (s64)(*(s16*)&arg.int_val);
+                } else if (arg.size == 4) {
+                    signed_val = (s64)(*(s32*)&arg.int_val);
+                } else {
+                    signed_val = *(s64*)&arg.int_val;
+                }
+                str.count = format_signed_int(signed_val, base, str.data, 32);
+                i += 1;
+            } else if (fmt.data[i+1] == 'f') {
+                // todo(charlie)
+                str.count = format_float(arg.flt_val, decimal_places, str.data, 32);
+                i += 1;
+            } else if (fmt.data[i+1] == 'b') {
+                str = arg.int_val ? STR("true") : STR("false");
+                i += 1;
+            } else if (fmt.data[i+1] == 's') {
+                str = arg.str_val;
+                i += 1;
+            } else {
+
+                char msg[] = "<Unknown format specifier '  '>";
+                memcpy(str.data, msg, sizeof(msg)-1);
+                str.count = sizeof(msg)-1;
+                str.data[str.count-4] = '%';
+                str.data[str.count-3] = fmt.data[i+1];
+                i += 1;
+            }
+
+            if (str.count) {
+                u64 to_write = str.count;
+
+                if (written + to_write > buffer_size) {
+                    to_write -= buffer_size - (written + to_write);
+                }
+
+                if (to_write) {
+                    if (buffer) memcpy((u8*)buffer + written, str.data, (sys_uint)to_write);
+                    written += str.count;
+                }
+            }
+
+            if (consumed_args) (*consumed_args) += 1;
+
+            next_arg_index += 1;
+        } else {
+            if (written + 1 <= buffer_size) {
+                if (buffer) *((u8*)buffer + written) = fmt.data[i];
+                written += 1;
+            }
+        }
+    }
+
+    return written;
+}
+
+string sprint_impl(_Print_Desc desc, u64 arg_count, ...) {
+    Var_Arg args[MAX_VAR_ARGS];
+    get_var_args(arg_count, args);
+    return sprint_args(desc.a, desc.fmt, arg_count, args);
+}
+string tprint_impl(_Print_Desc desc, u64 arg_count, ...) {
+    Var_Arg args[MAX_VAR_ARGS];
+    get_var_args(arg_count, args);
+    return tprint_args(desc.fmt, arg_count, args);
+}
+void print_impl(_Print_Desc desc, u64 arg_count, ...) {
+    Var_Arg args[MAX_VAR_ARGS];
+    get_var_args(arg_count, args);
+    print_args(desc.fmt, arg_count, args);
+}
+void log_impl(_Log_Desc desc, u64 arg_count, ...) {
+    Var_Arg args[MAX_VAR_ARGS];
+    get_var_args(arg_count, args);
+    log_args(desc.flags, desc.location, desc.fmt, arg_count, args);
+}
+void fprint_impl(_Print_Desc desc, u64 arg_count, ...) {
+    Var_Arg args[MAX_VAR_ARGS];
+    get_var_args(arg_count, args);
+    fprint_args(desc.file, desc.fmt, arg_count, args);
+}
+
+string sprint_args(Allocator a, string fmt, u64 arg_count, Var_Arg *args) {
+    u64 n = format_string_args(0, 0, fmt, arg_count, args, 0);
+
+    void *buffer = allocate(a, n);
+
+    format_string_args(buffer, n, fmt, arg_count, args, 0);
+
+    return (string) { n, (u8*)buffer };
+}
+string tprint_args(string fmt, u64 arg_count, Var_Arg *args) {
+    return sprint_args(get_temp(), fmt, arg_count, args);
+}
+void print_args(string fmt, u64 arg_count, Var_Arg *args) {
+    fprint_args(sys_get_stdout(), fmt, arg_count, args);
+}
+void fprint_args(File_Handle f, string fmt, u64 arg_count, Var_Arg *args) {
+
+    u64 n = format_string_args(0, 0, fmt, arg_count, args, 0);
+
+    u8 buffer[4096];
+    u64 written = 0;
+
+    while (written < n) {
+        u64 to_write = min(n, 4096);
+        u64 consumed_args;
+        format_string_args(buffer, to_write, fmt, arg_count, args, &consumed_args);
+        args += consumed_args;
+        arg_count -= consumed_args;
+
+        sys_write(f, buffer, to_write);
+
+        written += to_write;
+    }
+}
+void log_args(u64 flags, Source_Location location, string fmt, u64 arg_count, Var_Arg *args) {
+
+    string s = tprint_args(fmt, arg_count, args);
+
+    if (!logger) {
+        default_logger(s, flags, location);
+    } else {
+        logger(s, flags, location);
+    }
+}
+
+void default_logger(string message, u64 flags, Source_Location location) {
+    (void)flags;
+    print("%s:%u: %s\n", location.file, location.line, message);
+}
+
+// todo(charlie) make a less naive and slow version of this !
+unit_local u64 _format_int(void *px, int base, bool _signed, void *buffer, u64 buffer_size) {
+    assert(base >= 2 && base <= 36); // 0-z
+
+    if (!buffer) buffer_size = U64_MAX;
+
+    u8 digits[36];
+    memcpy(digits, "0123456789abcdefghijklmnopqrstuvxyz", 36);
+
+    void *tail = (u8*)buffer + buffer_size - 1;
+
+    u64 written = 0;
+
+    bool neg = false;
+
+    u64 abs_val;
+    if (_signed) {
+        s64 signed_val = *(s64*)px;
+        neg = signed_val < 0;
+        // todo(charlie), this shouldnt actually generate a mul but we may want to check
+        abs_val = (u64)(neg ? (signed_val*-1) : signed_val);
+    }
+    else {
+        abs_val = *(u64*)px;
+    }
+
+    if (abs_val == 0 && written < buffer_size) {
+        if (buffer) *(u8*)buffer = '0';
+        return 1;
+    }
+
+    u64 digit_count = (u64)(ln64((float64)abs_val)/ln64((float64)base));
+
+    u64 skip = 0;
+    if (digit_count > buffer_size) {
+        skip = digit_count-buffer_size+1;
+    }
+
+    while (abs_val != 0) {
+        u8 digit = digits[abs_val%(u64)base];
+
+        if (skip == 0 && written < buffer_size) {
+            if (buffer) *((u8*)tail - written) = digit;
+            written += 1;
+        }
+
+        abs_val /= (u64)base;
+        if (skip > 0) skip -= 1;
+    }
+
+    // Write the '-' if negative number
+    if (neg && written < buffer_size) {
+        if (buffer) *((u8*)tail - written) = '-';
+        written += 1;
+    }
+
+    // Since we wrote right-to-left, shift down to overwrite the bytes we did not touch
+    if (buffer) {
+        memmove(buffer, (u8*)tail - written + 1, (sys_uint)written);
+    }
+
+    return written;
+}
+u64 format_signed_int(s64 x, int base, void *buffer, u64 buffer_size) {
+    return _format_int(&x, base, true, buffer, buffer_size);
+}
+u64 format_unsigned_int(u64 x, int base, void *buffer, u64 buffer_size) {
+    return _format_int(&x, base, false, buffer, buffer_size);
+}
+
+u64 format_float(float64 x, int decimal_places, void *buffer, u64 buffer_size) {
+    assert(decimal_places >= 0);
+
+    if (!buffer) buffer_size = U64_MAX;
+
+    u64 written = 0;
+
+    bool neg = x < 0.0;
+    if (neg) x = -x;
+
+    s64 integral_part = (s64)x;
+    float64 fractional_part = x - (float64)integral_part;
+
+    written += format_signed_int(integral_part, 10, buffer, buffer_size);
+
+    if (decimal_places > 0 && written < buffer_size) {
+        if (buffer) *((u8*)buffer + written) = '.';
+        written += 1;
+    }
+
+    for (int i = 0; i < decimal_places && written < buffer_size; i++) {
+        fractional_part *= 10.0;
+        u8 digit = (u8) fractional_part;
+        fractional_part -= digit;
+
+        *((u8*)buffer + written) = '0' + digit;
+        if (buffer) written += 1;
+    }
+
+    if (neg && written < buffer_size) {
+        memmove((u8*)buffer + 1, buffer, (sys_uint)written);
+        *((u8*)buffer) = '-';
+        if (buffer) written += 1;
+    }
+
+    return written;
+}
+
+u64 string_to_unsigned_int(string str, int base, bool *success)
+{
+    if (!str.data || !str.count) {
+        *success = false;
+        return 0;
+    }
+    
+    u64 value = 0;
+    if (base < 2 || base > 36) {
+        if (success) *success = false;
+        return 0;
+    }
+    
+    u8 *p = str.data;
+
+    while (*p == ' ' || *p == '\t' || *p == '\n' ||
+           *p == '\r' || *p == '\f' || *p == '\v') {
+        p++;
+    }
+
+    while (p) {
+        if (p == str.data+str.count) {
+            break;
+        }
+        u8 c = *p;
+
+        s64 digit = -1;
+
+        if (c >= '0' && c <= '9') {
+            digit = (s64)(c - '0');
+        } else if (c >= 'a' && c <= 'z') {
+            digit = 10 + (s64)(c - 'a');
+        } else if (c >= 'A' && c <= 'Z') {
+            digit = 10 + (s64)(c - 'A');
+        } else {
+            if (success) *success = false;
+            return 0;
+        }
+
+        if (digit < 0 || digit >= base) {
+            if (success) *success = false;
+            return 0;
+        }
+
+        value = (value * (u64)base) + (u64)digit;
+        
+        p += 1;
+    }
+
+    if (success) *success = true;
+    return value;
+}
+
+s64 string_to_signed_int(string str, int base, bool *success)
+{
+    if (!str.data || !str.count) {
+        *success = false;
+        return 0;
+    }
+    u8 *p = str.data;
+
+    while (*p == ' ' || *p == '\t' || *p == '\n' ||
+           *p == '\r' || *p == '\f' || *p == '\v') {
+        p++;
+    }
+
+    int sign = 1;
+    if (*p == '-') {
+        sign = -1;
+        p++;
+        str.data++;
+        str.count--;
+    } else if (*p == '+') {
+        p++;
+    }
+
+    u64 unsigned_val = string_to_unsigned_int(str, base, success);
+
+    s64 signed_val = (s64)unsigned_val;
+    if (sign < 0) {
+        signed_val = -signed_val;
+    }
+
+    return signed_val;
+}
+
+float64 string_to_float(string str, bool *success)
+{
+    u8 *p = str.data;
+
+    while (*p == ' ' || *p == '\t' || *p == '\n' ||
+           *p == '\r' || *p == '\f' || *p == '\v') {
+        p++;
+    }
+
+    int sign = 1;
+    if (*p == '-') {
+        sign = -1;
+        p++;
+    } else if (*p == '+') {
+        p++;
+    }
+
+    float64 value = 0.0;
+    float64 fraction = 0.0;
+    float64 divisor = 1.0;
+
+    while (*p >= '0' && *p <= '9') {
+        value = (value * 10.0) + (float64)(*p - '0');
+        p++;
+    }
+
+    if (*p == '.') {
+        p++;
+        while (*p >= '0' && *p <= '9') {
+            fraction = (fraction * 10.0) + (float64)(*p - '0');
+            divisor *= 10.0;
+            p++;
+        }
+    }
+    
+    if (p != str.data+str.count) {
+        if (success) *success = false;
+        return 0;
+    }
+
+    value = value + (fraction / divisor);
+
+    if (sign < 0) {
+        value = -value;
+    }
+
+    if (success) *success = true;
+    return value;
+}
+
+Logger_Proc logger = 0;
+
+// todo(charlie) move to appropriate file
+// There probably needs to be a string_utilities file or something because this function needs
+// the memory module, but the string module must come before the memory module because the system
+// module must come before the memory module because it uses strings. 
+string string_replace(Allocator a, string s, string sub, string replacement) {
+    if (s.count < sub.count) return (string){0};
+
+    string temp_string = string_allocate(get_temp(), s.count * 2);
+
+    u64 out_index = 0;
+    for (u64 i = 0; i < s.count; ) {
+        if (i <= s.count - sub.count &&
+            strings_match((string){.count = sub.count, .data = s.data + i}, sub)) {
+            
+            while (out_index + replacement.count >= temp_string.count) {
+                string new_temp_string = string_allocate(get_temp(), temp_string.count * 2);
+                memcpy(new_temp_string.data, temp_string.data, (sys_uint)temp_string.count);
+                temp_string = new_temp_string;
+            }
+
+            if (replacement.count > 0) {
+                memcpy(temp_string.data + out_index, replacement.data, (sys_uint)replacement.count);
+            }
+            out_index += replacement.count;
+            i += sub.count;
+        } else {
+            while (out_index >= temp_string.count) {
+                string new_temp_string = string_allocate(get_temp(), temp_string.count * 2);
+                memcpy(new_temp_string.data, temp_string.data, (sys_uint)temp_string.count);
+                temp_string = new_temp_string;
+            }
+            temp_string.data[out_index++] = s.data[i++];
+        }
+    }
+
+    string final_string = string_allocate(a, out_index);
+    memcpy(final_string.data, temp_string.data, (sys_uint)out_index);
+
+    return final_string;
+}
+
+
+#endif // OSTD_IMPL
+
+
+#endif // _PRINT_H
+#endif // _ONE_PRINT_H
+#if defined(__clang__)
+#pragma clang diagnostic pop
+#endif
+
+#if defined(__GNUC__) || defined(__GNUG__)
+#pragma GCC diagnostic pop
+#endif
+
