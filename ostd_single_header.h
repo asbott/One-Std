@@ -1,26 +1,26 @@
 // This file was generated from One-Std/src/ostd.h
 // The following files were included & concatenated:
-// - c:\jac\One-Std\src\base.h
-// - c:\jac\One-Std\src\var_args_macros.h
-// - c:\jac\One-Std\src\system2.h
-// - c:\jac\One-Std\src\ostd.h
-// - c:\jac\One-Std\src\ignore_warnings.h
-// - c:\jac\One-Std\src\string.h
-// - c:\jac\One-Std\src\print.h
-// - c:\jac\One-Std\src\math.h
-// - c:\jac\One-Std\src\graphics_vulkan.h
-// - c:\jac\One-Std\src\osl_compiler.h
 // - c:\jac\One-Std\src\trig_tables.h
-// - c:\jac\One-Std\src\unicode.h
-// - c:\jac\One-Std\src\graphics_metal.h
-// - c:\jac\One-Std\src\system1.h
-// - c:\jac\One-Std\src\var_args.h
-// - c:\jac\One-Std\src\graphics_d3d12.h
-// - c:\jac\One-Std\src\memory.h
+// - c:\jac\One-Std\src\math.h
 // - c:\jac\One-Std\src\path_utils.h
-// - c:\jac\One-Std\src\oga_graphics.h
+// - c:\jac\One-Std\src\print.h
+// - c:\jac\One-Std\src\ignore_warnings.h
 // - c:\jac\One-Std\src\windows_loader.h
+// - c:\jac\One-Std\src\graphics_d3d12.h
+// - c:\jac\One-Std\src\ostd.h
+// - c:\jac\One-Std\src\base.h
+// - c:\jac\One-Std\src\unicode.h
+// - c:\jac\One-Std\src\oga_graphics.h
 // - c:\jac\One-Std\src\unignore_warnings.h
+// - c:\jac\One-Std\src\graphics_vulkan.h
+// - c:\jac\One-Std\src\system2.h
+// - c:\jac\One-Std\src\var_args_macros.h
+// - c:\jac\One-Std\src\system1.h
+// - c:\jac\One-Std\src\osl_compiler.h
+// - c:\jac\One-Std\src\string.h
+// - c:\jac\One-Std\src\memory.h
+// - c:\jac\One-Std\src\var_args.h
+// - c:\jac\One-Std\src\graphics_metal.h
 // I try to compile with -pedantic and -Weverything, but get really dumb warnings like these,
 // so I have to ignore them.
 #if defined(__GNUC__) || defined(__GNUG__)
@@ -96,6 +96,19 @@
 #ifndef _BASE_H
 #define _BASE_H
 
+#if defined(OSTD_SELF_CONTAINED)
+
+#ifdef __clang__
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wreserved-identifier"
+#pragma clang diagnostic ignored "-Wmissing-variable-declarations"
+#endif
+
+#ifdef __clang__
+#pragma clang diagnostic pop
+#endif
+
+#endif // OSTD_SELF_CONTAINED
 
 /*
             Compiler
@@ -471,18 +484,23 @@ typedef u32 sys_uint;
     #define OSTD_LIB
 #endif
 
-inline void *memcpy(void *dst, const void * src, sys_uint n);
+#ifndef BUILTIN_ATTRIB
+#define BUILTIN_ATTRIB
+#endif
+
 // todo(charlie) inline asm / dynamically load crt's if msvc
-inline void *memset(void *dst, s32 c, sys_uint n) {
-    sys_uint i;
-    for (i = 0; i+4 < n; i += 4)  *((s32*)dst + (i/4)) = c;
-    if (i < n) memcpy(dst, &c, n-i);
-    return dst;
-}
+BUILTIN_ATTRIB
 inline void *memcpy(void *dst, const void * src, sys_uint n) {
     for (sys_uint i = 0; i < n; i += 1)  *((u8*)dst + i) = *((const u8*)src + i);
     return dst;
 }
+BUILTIN_ATTRIB
+inline void *memset(void *dst, s32 c, sys_uint n) {
+    u8 *p = (u8*)dst;
+    while (n--) *p++ = (u8)c;
+    return dst;
+}
+BUILTIN_ATTRIB
 inline void *memmove(void *dst, const void *src, sys_uint n) {
     if (!n) return dst;
     if ((sys_uint)dst > (sys_uint)src)
@@ -492,6 +510,7 @@ inline void *memmove(void *dst, const void *src, sys_uint n) {
     return dst;
 }
 
+BUILTIN_ATTRIB
 inline int memcmp(const void* a, const void* b, sys_uint n) {
     const u8 *p1 = (const u8 *)a;
     const u8 *p2 = (const u8 *)b;
@@ -1552,7 +1571,6 @@ unit_local inline f32m4x4 m4_make_rotation(f32v3 axis, float rad) {
 typedef struct string { 
     u64 count;
     u8 *data;
-
 } string;
 
 unit_local inline u64 c_style_strlen(const char *s) {
@@ -2299,7 +2317,7 @@ typedef LRESULT (*WNDPROC)( HWND unnamedParam1, UINT unnamedParam2, WPARAM unnam
 #define WINAPI __stdcall
 
 #if COMPILER_FLAGS & COMPILER_FLAG_GNU
-#define WINDOWS_IMPORT __attribute__((dllimport))
+#define WINDOWS_IMPORT extern __attribute__((dllimport))
 #elif COMPILER_FLAGS & COMPILER_FLAG_MSC
 
 #define WINDOWS_IMPORT __declspec(dllimport)
@@ -5054,6 +5072,8 @@ WINDOWS_IMPORT void WINAPI ExitProcess(UINT uExitCode);
 WINDOWS_IMPORT void WINAPI ExitThread(DWORD dwExitCode);
 
 WINDOWS_IMPORT BOOL WINAPI GetExitCodeThread(HANDLE hThread, LPDWORD lpExitCode);
+
+WINDOWS_IMPORT DWORD WINAPI GetFullPathNameA( LPCSTR lpFileName, DWORD  nBufferLength, LPSTR  lpBuffer, LPSTR  *lpFilePart);
 
 /* End include: windows_loader.h */
     #endif // _WINDOWS_
@@ -10017,6 +10037,8 @@ Utf8_To_Utf16_Result one_utf8_to_utf16(u8 *s, s64 source_length, bool strict) {
 OSTD_LIB bool sys_read_entire_file(Allocator a, string path, string *result);
 OSTD_LIB bool sys_write_entire_file(string path, string data);
 
+OSTD_LIB bool sys_get_absolute_path(Allocator a, string path, string *result);
+
 #ifdef OSTD_IMPL
 
 bool sys_read_entire_file(Allocator a, string path, string *result) {
@@ -10050,6 +10072,38 @@ bool sys_write_entire_file(string path, string data) {
     return written == (s64)data.count;
 }
 
+#if OS_FLAGS & OS_FLAG_WINDOWS
+
+bool sys_get_absolute_path(Allocator a, string path, string *result) {
+    
+    char *cpath = (char*)allocate(a, path.count+1);
+    memcpy(cpath, path.data, path.count);
+    cpath[path.count] = 0;
+
+    DWORD count = GetFullPathNameA(cpath, 0, 0, 0);
+
+    *result = string_allocate(a, (u64)count);
+    result->count -= 1; // Null terminator
+
+    DWORD result_count = GetFullPathNameA(cpath, count, (LPSTR)result->data, 0);
+    
+    return result_count == count;
+}
+
+#endif // WINDOWS
+
+#if OS_FLAGS & OS_FLAG_UNIX
+#endif // UNIX
+
+#if OS_FLAGS & OS_FLAG_LINUX
+#endif // LINUX
+
+#if OS_FLAGS & OS_FLAG_ANDROID
+#endif // ANDROID
+
+#if OS_FLAGS & OS_FLAG_EMSCRIPTEN
+#endif // EMSCRIPTEN
+
 #endif // OSTD_IMPL
 
 #endif // _SYSTEM_2_H
@@ -10059,11 +10113,13 @@ bool sys_write_entire_file(string path, string data) {
 
 /* Begin include: path_utils.h */
 
-
+#ifndef _STRING_H
+#endif // _STRING_H
 
 OSTD_LIB string path_get_filename(string path);
 OSTD_LIB string path_strip_one_extension(string path);
 OSTD_LIB string path_strip_all_extensions(string path);
+OSTD_LIB string path_get_directory(string path);
 
 #ifdef OSTD_IMPL
 
@@ -10103,6 +10159,15 @@ string path_strip_all_extensions(string path) {
     if (lowest_index == -1) return path;
     
 	return string_slice(path, 0, (u64)lowest_index);
+}
+
+string path_get_directory(string path) {
+    for (s64 i = (s64)(path.count - 1); i >= 0; i -= 1) {
+        if (path.data[i] == '\\' || path.data[i] == '/') {
+            return string_slice(path, 0, (u64)i);
+        }
+    }
+    return (string){0};
 }
 
 #endif // OSTD_IMPL

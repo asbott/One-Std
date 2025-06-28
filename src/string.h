@@ -8,7 +8,6 @@
 typedef struct string { 
     u64 count;
     u8 *data;
-
 } string;
 
 unit_local inline u64 c_style_strlen(const char *s) {

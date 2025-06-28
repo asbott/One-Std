@@ -1,5 +1,6 @@
-// This file was generated from One-Std/src/string.h
+// This file was generated from One-Std/src/path_utils.h
 // The following files were included & concatenated:
+// - c:\jac\One-Std\src\path_utils.h
 // - c:\jac\One-Std\src\string.h
 // - c:\jac\One-Std\src\base.h
 // I try to compile with -pedantic and -Weverything, but get really dumb warnings like these,
@@ -31,9 +32,13 @@
 #pragma clang diagnostic ignored "-Wunsafe-buffer-usage"
 #endif
 #endif // __clang__
-#ifndef _ONE_STRING_H
-#define _ONE_STRING_H
+#ifndef _ONE_PATH_UTILS_H
+#define _ONE_PATH_UTILS_H
 
+
+#ifndef _STRING_H
+
+/* Begin include: string.h */
 #ifndef _STRING_H
 #define _STRING_H
 
@@ -605,7 +610,66 @@ unit_local s64 string_find_index_from_right(string s, string sub) {
 }
 
 #endif // _STRING_H
-#endif // _ONE_STRING_H
+
+/* End include: string.h */
+#endif // _STRING_H
+
+OSTD_LIB string path_get_filename(string path);
+OSTD_LIB string path_strip_one_extension(string path);
+OSTD_LIB string path_strip_all_extensions(string path);
+OSTD_LIB string path_get_directory(string path);
+
+#ifdef OSTD_IMPL
+
+string path_get_filename(string path) {
+	for (s64 i = (s64)(path.count-1); i >= 0; i -= 1) {
+		if (path.data[i] == '\\' || path.data[i] == '/') {
+			return string_slice(path, (u64)i+1, path.count-(u64)i-1);
+		}
+    }
+    return path;
+}
+
+string path_strip_one_extension(string path) {
+	for (s64 i = (s64)(path.count-1); i >= 0; i -= 1) {
+		if (path.data[i] == '\\' || path.data[i] == '/') {
+			return path;
+		}
+		if (path.data[i] == '.') {
+			return string_slice(path, 0, (u64)i);
+		}
+    }
+    return path;
+}
+
+string path_strip_all_extensions(string path) {
+	s64 lowest_index = -1;
+	for (s64 i = (s64)(path.count-1); i >= 0; i -= 1) {
+		if (path.data[i] == '\\' || path.data[i] == '/') {
+			break;
+		}
+		if (path.data[i] == '.') {
+			if (lowest_index == -1 || i < lowest_index) {
+				lowest_index = i;
+			}
+		}
+    }
+    if (lowest_index == -1) return path;
+    
+	return string_slice(path, 0, (u64)lowest_index);
+}
+
+string path_get_directory(string path) {
+    for (s64 i = (s64)(path.count - 1); i >= 0; i -= 1) {
+        if (path.data[i] == '\\' || path.data[i] == '/') {
+            return string_slice(path, 0, (u64)i);
+        }
+    }
+    return (string){0};
+}
+
+#endif // OSTD_IMPL
+#endif // _ONE_PATH_UTILS_H
 #if defined(__clang__)
 #pragma clang diagnostic pop
 #endif

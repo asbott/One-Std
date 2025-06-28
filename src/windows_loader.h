@@ -183,7 +183,7 @@ typedef LRESULT (*WNDPROC)( HWND unnamedParam1, UINT unnamedParam2, WPARAM unnam
 #define WINAPI __stdcall
 
 #if COMPILER_FLAGS & COMPILER_FLAG_GNU
-#define WINDOWS_IMPORT __attribute__((dllimport))
+#define WINDOWS_IMPORT extern __attribute__((dllimport))
 #elif COMPILER_FLAGS & COMPILER_FLAG_MSC
 
 #define WINDOWS_IMPORT __declspec(dllimport)
@@ -2938,3 +2938,5 @@ WINDOWS_IMPORT void WINAPI ExitProcess(UINT uExitCode);
 WINDOWS_IMPORT void WINAPI ExitThread(DWORD dwExitCode);
 
 WINDOWS_IMPORT BOOL WINAPI GetExitCodeThread(HANDLE hThread, LPDWORD lpExitCode);
+
+WINDOWS_IMPORT DWORD WINAPI GetFullPathNameA( LPCSTR lpFileName, DWORD  nBufferLength, LPSTR  lpBuffer, LPSTR  *lpFilePart);

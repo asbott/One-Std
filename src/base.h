@@ -2,6 +2,19 @@
 #ifndef _BASE_H
 #define _BASE_H
 
+#if defined(OSTD_SELF_CONTAINED)
+
+#ifdef __clang__
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wreserved-identifier"
+#pragma clang diagnostic ignored "-Wmissing-variable-declarations"
+#endif
+
+#ifdef __clang__
+#pragma clang diagnostic pop
+#endif
+
+#endif // OSTD_SELF_CONTAINED
 
 /*
             Compiler
@@ -377,18 +390,23 @@ typedef u32 sys_uint;
     #define OSTD_LIB
 #endif
 
-inline void *memcpy(void *dst, const void * src, sys_uint n);
+#ifndef BUILTIN_ATTRIB
+#define BUILTIN_ATTRIB
+#endif
+
 // todo(charlie) inline asm / dynamically load crt's if msvc
-inline void *memset(void *dst, s32 c, sys_uint n) {
-    sys_uint i;
-    for (i = 0; i+4 < n; i += 4)  *((s32*)dst + (i/4)) = c;
-    if (i < n) memcpy(dst, &c, n-i);
-    return dst;
-}
+BUILTIN_ATTRIB
 inline void *memcpy(void *dst, const void * src, sys_uint n) {
     for (sys_uint i = 0; i < n; i += 1)  *((u8*)dst + i) = *((const u8*)src + i);
     return dst;
 }
+BUILTIN_ATTRIB
+inline void *memset(void *dst, s32 c, sys_uint n) {
+    u8 *p = (u8*)dst;
+    while (n--) *p++ = (u8)c;
+    return dst;
+}
+BUILTIN_ATTRIB
 inline void *memmove(void *dst, const void *src, sys_uint n) {
     if (!n) return dst;
     if ((sys_uint)dst > (sys_uint)src)
@@ -398,6 +416,7 @@ inline void *memmove(void *dst, const void *src, sys_uint n) {
     return dst;
 }
 
+BUILTIN_ATTRIB
 inline int memcmp(const void* a, const void* b, sys_uint n) {
     const u8 *p1 = (const u8 *)a;
     const u8 *p2 = (const u8 *)b;

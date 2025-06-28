@@ -14,6 +14,8 @@
 OSTD_LIB bool sys_read_entire_file(Allocator a, string path, string *result);
 OSTD_LIB bool sys_write_entire_file(string path, string data);
 
+OSTD_LIB bool sys_get_absolute_path(Allocator a, string path, string *result);
+
 #ifdef OSTD_IMPL
 
 bool sys_read_entire_file(Allocator a, string path, string *result) {
@@ -46,6 +48,38 @@ bool sys_write_entire_file(string path, string data) {
     
     return written == (s64)data.count;
 }
+
+#if OS_FLAGS & OS_FLAG_WINDOWS
+
+bool sys_get_absolute_path(Allocator a, string path, string *result) {
+    
+    char *cpath = (char*)allocate(a, path.count+1);
+    memcpy(cpath, path.data, path.count);
+    cpath[path.count] = 0;
+
+    DWORD count = GetFullPathNameA(cpath, 0, 0, 0);
+
+    *result = string_allocate(a, (u64)count);
+    result->count -= 1; // Null terminator
+
+    DWORD result_count = GetFullPathNameA(cpath, count, (LPSTR)result->data, 0);
+    
+    return result_count == count;
+}
+
+#endif // WINDOWS
+
+#if OS_FLAGS & OS_FLAG_UNIX
+#endif // UNIX
+
+#if OS_FLAGS & OS_FLAG_LINUX
+#endif // LINUX
+
+#if OS_FLAGS & OS_FLAG_ANDROID
+#endif // ANDROID
+
+#if OS_FLAGS & OS_FLAG_EMSCRIPTEN
+#endif // EMSCRIPTEN
 
 #endif // OSTD_IMPL
 

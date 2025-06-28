@@ -1,19 +1,19 @@
 // This file was generated from One-Std/src/oga_graphics.h
 // The following files were included & concatenated:
-// - c:\jac\One-Std\src\memory.h
-// - c:\jac\One-Std\src\print.h
-// - c:\jac\One-Std\src\base.h
+// - c:\jac\One-Std\src\string.h
+// - c:\jac\One-Std\src\system1.h
+// - c:\jac\One-Std\src\math.h
+// - c:\jac\One-Std\src\var_args.h
 // - c:\jac\One-Std\src\graphics_vulkan.h
 // - c:\jac\One-Std\src\graphics_metal.h
-// - c:\jac\One-Std\src\oga_graphics.h
-// - c:\jac\One-Std\src\system1.h
-// - c:\jac\One-Std\src\graphics_d3d12.h
-// - c:\jac\One-Std\src\var_args.h
-// - c:\jac\One-Std\src\math.h
 // - c:\jac\One-Std\src\windows_loader.h
 // - c:\jac\One-Std\src\trig_tables.h
+// - c:\jac\One-Std\src\print.h
+// - c:\jac\One-Std\src\graphics_d3d12.h
+// - c:\jac\One-Std\src\memory.h
 // - c:\jac\One-Std\src\var_args_macros.h
-// - c:\jac\One-Std\src\string.h
+// - c:\jac\One-Std\src\base.h
+// - c:\jac\One-Std\src\oga_graphics.h
 // I try to compile with -pedantic and -Weverything, but get really dumb warnings like these,
 // so I have to ignore them.
 #if defined(__GNUC__) || defined(__GNUG__)
@@ -57,6 +57,19 @@
 #ifndef _BASE_H
 #define _BASE_H
 
+#if defined(OSTD_SELF_CONTAINED)
+
+#ifdef __clang__
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wreserved-identifier"
+#pragma clang diagnostic ignored "-Wmissing-variable-declarations"
+#endif
+
+#ifdef __clang__
+#pragma clang diagnostic pop
+#endif
+
+#endif // OSTD_SELF_CONTAINED
 
 /*
             Compiler
@@ -432,18 +445,23 @@ typedef u32 sys_uint;
     #define OSTD_LIB
 #endif
 
-inline void *memcpy(void *dst, const void * src, sys_uint n);
+#ifndef BUILTIN_ATTRIB
+#define BUILTIN_ATTRIB
+#endif
+
 // todo(charlie) inline asm / dynamically load crt's if msvc
-inline void *memset(void *dst, s32 c, sys_uint n) {
-    sys_uint i;
-    for (i = 0; i+4 < n; i += 4)  *((s32*)dst + (i/4)) = c;
-    if (i < n) memcpy(dst, &c, n-i);
-    return dst;
-}
+BUILTIN_ATTRIB
 inline void *memcpy(void *dst, const void * src, sys_uint n) {
     for (sys_uint i = 0; i < n; i += 1)  *((u8*)dst + i) = *((const u8*)src + i);
     return dst;
 }
+BUILTIN_ATTRIB
+inline void *memset(void *dst, s32 c, sys_uint n) {
+    u8 *p = (u8*)dst;
+    while (n--) *p++ = (u8)c;
+    return dst;
+}
+BUILTIN_ATTRIB
 inline void *memmove(void *dst, const void *src, sys_uint n) {
     if (!n) return dst;
     if ((sys_uint)dst > (sys_uint)src)
@@ -453,6 +471,7 @@ inline void *memmove(void *dst, const void *src, sys_uint n) {
     return dst;
 }
 
+BUILTIN_ATTRIB
 inline int memcmp(const void* a, const void* b, sys_uint n) {
     const u8 *p1 = (const u8 *)a;
     const u8 *p2 = (const u8 *)b;
@@ -526,7 +545,6 @@ unit_local inline u64 align_next(u64 n, u64 align) {
 typedef struct string { 
     u64 count;
     u8 *data;
-
 } string;
 
 unit_local inline u64 c_style_strlen(const char *s) {
@@ -1273,7 +1291,7 @@ typedef LRESULT (*WNDPROC)( HWND unnamedParam1, UINT unnamedParam2, WPARAM unnam
 #define WINAPI __stdcall
 
 #if COMPILER_FLAGS & COMPILER_FLAG_GNU
-#define WINDOWS_IMPORT __attribute__((dllimport))
+#define WINDOWS_IMPORT extern __attribute__((dllimport))
 #elif COMPILER_FLAGS & COMPILER_FLAG_MSC
 
 #define WINDOWS_IMPORT __declspec(dllimport)
@@ -4028,6 +4046,8 @@ WINDOWS_IMPORT void WINAPI ExitProcess(UINT uExitCode);
 WINDOWS_IMPORT void WINAPI ExitThread(DWORD dwExitCode);
 
 WINDOWS_IMPORT BOOL WINAPI GetExitCodeThread(HANDLE hThread, LPDWORD lpExitCode);
+
+WINDOWS_IMPORT DWORD WINAPI GetFullPathNameA( LPCSTR lpFileName, DWORD  nBufferLength, LPSTR  lpBuffer, LPSTR  *lpFilePart);
 
 /* End include: windows_loader.h */
     #endif // _WINDOWS_

@@ -1,9 +1,12 @@
 
-
+#ifndef _STRING_H
+#include "string.h"
+#endif // _STRING_H
 
 OSTD_LIB string path_get_filename(string path);
 OSTD_LIB string path_strip_one_extension(string path);
 OSTD_LIB string path_strip_all_extensions(string path);
+OSTD_LIB string path_get_directory(string path);
 
 #ifdef OSTD_IMPL
 
@@ -43,6 +46,15 @@ string path_strip_all_extensions(string path) {
     if (lowest_index == -1) return path;
     
 	return string_slice(path, 0, (u64)lowest_index);
+}
+
+string path_get_directory(string path) {
+    for (s64 i = (s64)(path.count - 1); i >= 0; i -= 1) {
+        if (path.data[i] == '\\' || path.data[i] == '/') {
+            return string_slice(path, 0, (u64)i);
+        }
+    }
+    return (string){0};
 }
 
 #endif // OSTD_IMPL
