@@ -1,14 +1,14 @@
 // This file was generated from One-Std/src/osl_compiler.h
 // The following files were included & concatenated:
-// - C:\jac\One-Std\src\system1.h
-// - C:\jac\One-Std\src\var_args_macros.h
-// - C:\jac\One-Std\src\string.h
-// - C:\jac\One-Std\src\base.h
-// - C:\jac\One-Std\src\var_args.h
-// - C:\jac\One-Std\src\osl_compiler.h
-// - C:\jac\One-Std\src\print.h
-// - C:\jac\One-Std\src\windows_loader.h
-// - C:\jac\One-Std\src\memory.h
+// - c:\jac\One-Std\src\memory.h
+// - c:\jac\One-Std\src\osl_compiler.h
+// - c:\jac\One-Std\src\string.h
+// - c:\jac\One-Std\src\print.h
+// - c:\jac\One-Std\src\var_args.h
+// - c:\jac\One-Std\src\windows_loader.h
+// - c:\jac\One-Std\src\base.h
+// - c:\jac\One-Std\src\system1.h
+// - c:\jac\One-Std\src\var_args_macros.h
 // I try to compile with -pedantic and -Weverything, but get really dumb warnings like these,
 // so I have to ignore them.
 #if defined(__GNUC__) || defined(__GNUG__)
@@ -7221,6 +7221,7 @@ typedef struct Arena {
 OSTD_LIB Arena make_arena(u64 reserved_size, u64 initial_allocated_size);
 OSTD_LIB void *arena_push(Arena *arena, u64 size);
 OSTD_LIB void *arena_push_copy(Arena *arena, void *src, u64 size);
+OSTD_LIB void *arena_push_string(Arena *arena, string data);
 OSTD_LIB void arena_pop(Arena *arena, u64 size);
 OSTD_LIB void arena_reset(Arena *arena);
 OSTD_LIB void free_arena(Arena arena);
@@ -7425,6 +7426,12 @@ void *arena_push(Arena *arena, u64 size) {
 void *arena_push_copy(Arena *arena, void *src, u64 size) {
     void *dst = arena_push(arena, size);
     memcpy(dst, src, (sys_uint)size);
+    return dst;
+}
+
+void *arena_push_string(Arena *arena, string data) {
+    void *dst = arena_push(arena, data.count);
+    memcpy(dst, data.data, (sys_uint)data.count);
     return dst;
 }
 

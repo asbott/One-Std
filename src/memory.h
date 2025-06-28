@@ -61,6 +61,7 @@ typedef struct Arena {
 OSTD_LIB Arena make_arena(u64 reserved_size, u64 initial_allocated_size);
 OSTD_LIB void *arena_push(Arena *arena, u64 size);
 OSTD_LIB void *arena_push_copy(Arena *arena, void *src, u64 size);
+OSTD_LIB void *arena_push_string(Arena *arena, string data);
 OSTD_LIB void arena_pop(Arena *arena, u64 size);
 OSTD_LIB void arena_reset(Arena *arena);
 OSTD_LIB void free_arena(Arena arena);
@@ -265,6 +266,12 @@ void *arena_push(Arena *arena, u64 size) {
 void *arena_push_copy(Arena *arena, void *src, u64 size) {
     void *dst = arena_push(arena, size);
     memcpy(dst, src, (sys_uint)size);
+    return dst;
+}
+
+void *arena_push_string(Arena *arena, string data) {
+    void *dst = arena_push(arena, data.count);
+    memcpy(dst, data.data, (sys_uint)data.count);
     return dst;
 }
 
