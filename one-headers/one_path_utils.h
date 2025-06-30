@@ -1,8 +1,8 @@
 // This file was generated from One-Std/src/path_utils.h
 // The following files were included & concatenated:
-// - c:\jac\One-Std\src\path_utils.h
-// - c:\jac\One-Std\src\string.h
-// - c:\jac\One-Std\src\base.h
+// - C:\jac\One-Std\src\path_utils.h
+// - C:\jac\One-Std\src\string.h
+// - C:\jac\One-Std\src\base.h
 // I try to compile with -pedantic and -Weverything, but get really dumb warnings like these,
 // so I have to ignore them.
 #if defined(__GNUC__) || defined(__GNUG__)
@@ -48,20 +48,6 @@
 
 #ifndef _BASE_H
 #define _BASE_H
-
-#if defined(OSTD_SELF_CONTAINED)
-
-#ifdef __clang__
-#pragma clang diagnostic push
-#pragma clang diagnostic ignored "-Wreserved-identifier"
-#pragma clang diagnostic ignored "-Wmissing-variable-declarations"
-#endif
-
-#ifdef __clang__
-#pragma clang diagnostic pop
-#endif
-
-#endif // OSTD_SELF_CONTAINED
 
 /*
             Compiler
@@ -220,6 +206,7 @@
 #define OS_FLAG_UNIX              (1 << 1)
 #define OS_FLAG_LINUX             (1 << 2)
 #define OS_FLAG_APPLE             (1 << 3)
+#define OS_FLAG_DARWIN            OS_FLAG_APPLE
 #define OS_FLAG_MACOS             (1 << 4)
 #define OS_FLAG_IOS               (1 << 5)
 #define OS_FLAG_ANDROID           (1 << 6)
@@ -438,23 +425,27 @@ typedef u32 sys_uint;
 #endif
 
 #ifndef BUILTIN_ATTRIB
-#define BUILTIN_ATTRIB
+    #ifdef OSTD_SELF_CONTAINED
+        #define BUILTIN_ATTRIB __attribute__((used))
+    #else
+        #define BUILTIN_ATTRIB
+    #endif
 #endif
 
 // todo(charlie) inline asm / dynamically load crt's if msvc
-BUILTIN_ATTRIB
-inline void *memcpy(void *dst, const void * src, sys_uint n) {
+
+void *memcpy(void *dst, const void * src, sys_uint n) {
     for (sys_uint i = 0; i < n; i += 1)  *((u8*)dst + i) = *((const u8*)src + i);
     return dst;
 }
-BUILTIN_ATTRIB
-inline void *memset(void *dst, s32 c, sys_uint n) {
+
+void *memset(void *dst, s32 c, sys_uint n) {
     u8 *p = (u8*)dst;
     while (n--) *p++ = (u8)c;
     return dst;
 }
-BUILTIN_ATTRIB
-inline void *memmove(void *dst, const void *src, sys_uint n) {
+
+void *memmove(void *dst, const void *src, sys_uint n) {
     if (!n) return dst;
     if ((sys_uint)dst > (sys_uint)src)
         for (s64 i = (s64)n-1; i >= 0; i -= 1)  *((u8*)dst + i) = *((const u8*)src + i);
@@ -463,8 +454,8 @@ inline void *memmove(void *dst, const void *src, sys_uint n) {
     return dst;
 }
 
-BUILTIN_ATTRIB
-inline int memcmp(const void* a, const void* b, sys_uint n) {
+
+int memcmp(const void* a, const void* b, sys_uint n) {
     const u8 *p1 = (const u8 *)a;
     const u8 *p2 = (const u8 *)b;
 

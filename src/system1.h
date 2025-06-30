@@ -1177,6 +1177,7 @@ Thread_Handle sys_get_current_thread(void) {
     #pragma comment(lib, "pdh")
     #pragma comment(lib, "winmm")
     #pragma comment(lib, "ws2_32.lib")
+    #pragma comment(lib, "shell32")
 #ifndef OSTD_HEADLESS
     #pragma comment(lib, "gdi32")
     #pragma comment(lib, "dxgi")
@@ -3598,11 +3599,111 @@ void sys_print_stack_trace(File_Handle handle) {
 
 #endif // OS_FLAGS & XXXXX
 
+
+#if defined(OSTD_SELF_CONTAINED)
+
+#ifdef __clang__
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wreserved-identifier"
+#pragma clang diagnostic ignored "-Wmissing-variable-declarations"
+#endif
+
+unit_local int ___argc;
+unit_local string *___argv;
+
+unit_local u64 sys_get_argc(void) { return (u64)___argc; }
+unit_local string *sys_get_argv(void) { return ___argv; }
+
+#if defined(_WIN32)
+int _fltused = 0;
+
+#ifndef _WIN64
+#error Only x86_64 windows supported
+#endif
+
+__attribute__((naked))
+void __chkstk(void) {
+    __asm__ volatile(
+        "movq %rcx, %rax\n"
+        "ret\n"
+    );
+}
+
+int ostd_main(void);
+int __premain(void) {
+    LPWSTR cmd = GetCommandLineW();
+    int argc = 0;
+    LPWSTR *wargv = CommandLineToArgvW(cmd, &argc);
+    
+    u64 argv_arr_size = (u64)argc*sizeof(string);
+    u64 argv_size = 0;
+    for (int i = 0; i < argc; ++i) {
+        int len = WideCharToMultiByte(CP_UTF8, 0, wargv[i], -1, 0, 0, 0, 0);
+        argv_size += (u64)len;
+    }
+    
+    u64 total_size = argv_size + argv_arr_size;
+    u64 ps = sys_get_info().page_size;
+    u64 page_count = (total_size + ps - 1) / ps;
+    
+    void *mem = sys_map_pages(SYS_MEMORY_RESERVE | SYS_MEMORY_ALLOCATE, 0, page_count, false);
+    
+    string *argv = (string*)mem;
+    char *pnext = (char*)mem + argv_arr_size;
+    
+    for (int i = 0; i < argc; ++i) {
+        int len = WideCharToMultiByte(CP_UTF8, 0, wargv[i], -1, 0, 0, 0, 0);
+        WideCharToMultiByte(CP_UTF8, 0, wargv[i], -1, pnext, len, 0, 0);
+        argv[i] = (string) { (u64)(len-1), (u8*)pnext };
+        pnext += len-1;
+    }
+    
+    ___argc = argc;
+    ___argv = argv;
+    
+    return ostd_main();
+}
+
+__attribute__((naked))
+void mainCRTStartup(void) { 
+    __asm__ volatile(
+        // reserve the 32-byte shadow space
+        "subq $32, %rsp\n"
+        // call your C main()
+        "call __premain\n"
+        // restore RSP
+        "addq $32, %rsp\n"
+        // move return value into RCX and tail-jump to sys_exit
+        "movq %rax, %rcx\n"
+        "jmp sys_exit\n"
+    );
+}
+
+
+#elif defined(__linux__)
+void __start(void) {
+    int main(void);
+    __asm__ (
+        "mov %%rsp, %%rdi\n"
+        "call init_linux_args\n"
+        "call main\n"
+        "mov %eax, %edi\n"
+        "call sys_exit\n"
+        :
+        :
+        : "rdi", "rax"
+    );
+}
+#else
+#error os missing startup implementation
+#endif
+
+#ifdef __clang__
+#pragma clang diagnostic pop
+#endif
+
+#endif // OSTD_SELF_CONTAINED
+
 #endif // OSTD_IMPL
-
-
-
-
-
 
 #endif // _SYSTEM_1_H

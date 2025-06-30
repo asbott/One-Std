@@ -2940,3 +2940,7 @@ WINDOWS_IMPORT void WINAPI ExitThread(DWORD dwExitCode);
 WINDOWS_IMPORT BOOL WINAPI GetExitCodeThread(HANDLE hThread, LPDWORD lpExitCode);
 
 WINDOWS_IMPORT DWORD WINAPI GetFullPathNameA( LPCSTR lpFileName, DWORD  nBufferLength, LPSTR  lpBuffer, LPSTR  *lpFilePart);
+
+WINDOWS_IMPORT LPWSTR  WINAPI GetCommandLineW(void);
+WINDOWS_IMPORT LPWSTR* WINAPI CommandLineToArgvW(LPCWSTR, int*);
+

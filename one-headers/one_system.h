@@ -1,15 +1,15 @@
 // This file was generated from One-Std/src/system.h
 // The following files were included & concatenated:
-// - c:\jac\One-Std\src\system1.h
-// - c:\jac\One-Std\src\base.h
-// - c:\jac\One-Std\src\string.h
-// - c:\jac\One-Std\src\memory.h
-// - c:\jac\One-Std\src\var_args.h
-// - c:\jac\One-Std\src\var_args_macros.h
-// - c:\jac\One-Std\src\windows_loader.h
-// - c:\jac\One-Std\src\system.h
-// - c:\jac\One-Std\src\print.h
-// - c:\jac\One-Std\src\system2.h
+// - C:\jac\One-Std\src\system.h
+// - C:\jac\One-Std\src\string.h
+// - C:\jac\One-Std\src\windows_loader.h
+// - C:\jac\One-Std\src\var_args_macros.h
+// - C:\jac\One-Std\src\system1.h
+// - C:\jac\One-Std\src\system2.h
+// - C:\jac\One-Std\src\base.h
+// - C:\jac\One-Std\src\var_args.h
+// - C:\jac\One-Std\src\print.h
+// - C:\jac\One-Std\src\memory.h
 // I try to compile with -pedantic and -Weverything, but get really dumb warnings like these,
 // so I have to ignore them.
 #if defined(__GNUC__) || defined(__GNUG__)
@@ -54,20 +54,6 @@
 
 #ifndef _BASE_H
 #define _BASE_H
-
-#if defined(OSTD_SELF_CONTAINED)
-
-#ifdef __clang__
-#pragma clang diagnostic push
-#pragma clang diagnostic ignored "-Wreserved-identifier"
-#pragma clang diagnostic ignored "-Wmissing-variable-declarations"
-#endif
-
-#ifdef __clang__
-#pragma clang diagnostic pop
-#endif
-
-#endif // OSTD_SELF_CONTAINED
 
 /*
             Compiler
@@ -226,6 +212,7 @@
 #define OS_FLAG_UNIX              (1 << 1)
 #define OS_FLAG_LINUX             (1 << 2)
 #define OS_FLAG_APPLE             (1 << 3)
+#define OS_FLAG_DARWIN            OS_FLAG_APPLE
 #define OS_FLAG_MACOS             (1 << 4)
 #define OS_FLAG_IOS               (1 << 5)
 #define OS_FLAG_ANDROID           (1 << 6)
@@ -444,23 +431,27 @@ typedef u32 sys_uint;
 #endif
 
 #ifndef BUILTIN_ATTRIB
-#define BUILTIN_ATTRIB
+    #ifdef OSTD_SELF_CONTAINED
+        #define BUILTIN_ATTRIB __attribute__((used))
+    #else
+        #define BUILTIN_ATTRIB
+    #endif
 #endif
 
 // todo(charlie) inline asm / dynamically load crt's if msvc
-BUILTIN_ATTRIB
-inline void *memcpy(void *dst, const void * src, sys_uint n) {
+
+void *memcpy(void *dst, const void * src, sys_uint n) {
     for (sys_uint i = 0; i < n; i += 1)  *((u8*)dst + i) = *((const u8*)src + i);
     return dst;
 }
-BUILTIN_ATTRIB
-inline void *memset(void *dst, s32 c, sys_uint n) {
+
+void *memset(void *dst, s32 c, sys_uint n) {
     u8 *p = (u8*)dst;
     while (n--) *p++ = (u8)c;
     return dst;
 }
-BUILTIN_ATTRIB
-inline void *memmove(void *dst, const void *src, sys_uint n) {
+
+void *memmove(void *dst, const void *src, sys_uint n) {
     if (!n) return dst;
     if ((sys_uint)dst > (sys_uint)src)
         for (s64 i = (s64)n-1; i >= 0; i -= 1)  *((u8*)dst + i) = *((const u8*)src + i);
@@ -469,8 +460,8 @@ inline void *memmove(void *dst, const void *src, sys_uint n) {
     return dst;
 }
 
-BUILTIN_ATTRIB
-inline int memcmp(const void* a, const void* b, sys_uint n) {
+
+int memcmp(const void* a, const void* b, sys_uint n) {
     const u8 *p1 = (const u8 *)a;
     const u8 *p2 = (const u8 *)b;
 
@@ -4025,6 +4016,10 @@ WINDOWS_IMPORT BOOL WINAPI GetExitCodeThread(HANDLE hThread, LPDWORD lpExitCode)
 
 WINDOWS_IMPORT DWORD WINAPI GetFullPathNameA( LPCSTR lpFileName, DWORD  nBufferLength, LPSTR  lpBuffer, LPSTR  *lpFilePart);
 
+WINDOWS_IMPORT LPWSTR  WINAPI GetCommandLineW(void);
+WINDOWS_IMPORT LPWSTR* WINAPI CommandLineToArgvW(LPCWSTR, int*);
+
+
 /* End include: windows_loader.h */
     #endif // _WINDOWS_
 
@@ -4741,6 +4736,7 @@ Thread_Handle sys_get_current_thread(void) {
     #pragma comment(lib, "pdh")
     #pragma comment(lib, "winmm")
     #pragma comment(lib, "ws2_32.lib")
+    #pragma comment(lib, "shell32")
 #ifndef OSTD_HEADLESS
     #pragma comment(lib, "gdi32")
     #pragma comment(lib, "dxgi")
@@ -7162,12 +7158,112 @@ void sys_print_stack_trace(File_Handle handle) {
 
 #endif // OS_FLAGS & XXXXX
 
+
+#if defined(OSTD_SELF_CONTAINED)
+
+#ifdef __clang__
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wreserved-identifier"
+#pragma clang diagnostic ignored "-Wmissing-variable-declarations"
+#endif
+
+unit_local int ___argc;
+unit_local string *___argv;
+
+unit_local u64 sys_get_argc(void) { return (u64)___argc; }
+unit_local string *sys_get_argv(void) { return ___argv; }
+
+#if defined(_WIN32)
+int _fltused = 0;
+
+#ifndef _WIN64
+#error Only x86_64 windows supported
+#endif
+
+__attribute__((naked))
+void __chkstk(void) {
+    __asm__ volatile(
+        "movq %rcx, %rax\n"
+        "ret\n"
+    );
+}
+
+int ostd_main(void);
+int __premain(void) {
+    LPWSTR cmd = GetCommandLineW();
+    int argc = 0;
+    LPWSTR *wargv = CommandLineToArgvW(cmd, &argc);
+    
+    u64 argv_arr_size = (u64)argc*sizeof(string);
+    u64 argv_size = 0;
+    for (int i = 0; i < argc; ++i) {
+        int len = WideCharToMultiByte(CP_UTF8, 0, wargv[i], -1, 0, 0, 0, 0);
+        argv_size += (u64)len;
+    }
+    
+    u64 total_size = argv_size + argv_arr_size;
+    u64 ps = sys_get_info().page_size;
+    u64 page_count = (total_size + ps - 1) / ps;
+    
+    void *mem = sys_map_pages(SYS_MEMORY_RESERVE | SYS_MEMORY_ALLOCATE, 0, page_count, false);
+    
+    string *argv = (string*)mem;
+    char *pnext = (char*)mem + argv_arr_size;
+    
+    for (int i = 0; i < argc; ++i) {
+        int len = WideCharToMultiByte(CP_UTF8, 0, wargv[i], -1, 0, 0, 0, 0);
+        WideCharToMultiByte(CP_UTF8, 0, wargv[i], -1, pnext, len, 0, 0);
+        argv[i] = (string) { (u64)(len-1), (u8*)pnext };
+        pnext += len-1;
+    }
+    
+    ___argc = argc;
+    ___argv = argv;
+    
+    return ostd_main();
+}
+
+__attribute__((naked))
+void mainCRTStartup(void) { 
+    __asm__ volatile(
+        // reserve the 32-byte shadow space
+        "subq $32, %rsp\n"
+        // call your C main()
+        "call __premain\n"
+        // restore RSP
+        "addq $32, %rsp\n"
+        // move return value into RCX and tail-jump to sys_exit
+        "movq %rax, %rcx\n"
+        "jmp sys_exit\n"
+    );
+}
+
+
+#elif defined(__linux__)
+void __start(void) {
+    int main(void);
+    __asm__ (
+        "mov %%rsp, %%rdi\n"
+        "call init_linux_args\n"
+        "call main\n"
+        "mov %eax, %edi\n"
+        "call sys_exit\n"
+        :
+        :
+        : "rdi", "rax"
+    );
+}
+#else
+#error os missing startup implementation
+#endif
+
+#ifdef __clang__
+#pragma clang diagnostic pop
+#endif
+
+#endif // OSTD_SELF_CONTAINED
+
 #endif // OSTD_IMPL
-
-
-
-
-
 
 #endif // _SYSTEM_1_H
 
