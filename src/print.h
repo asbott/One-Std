@@ -246,7 +246,7 @@ u64 format_string_args(void *buffer, u64 buffer_size, string fmt, u64 arg_count,
                 u64 to_write = str.count;
 
                 if (written + to_write > buffer_size) {
-                    to_write -= buffer_size - (written + to_write);
+                    to_write -= (written + to_write) - buffer_size;
                 }
 
                 if (to_write) {

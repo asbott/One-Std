@@ -160,7 +160,7 @@ unit_local inline _Per_Thread_Temporary_Storage* _lazy_init_temporary_storage(vo
 #if OS_FLAGS & OS_FLAG_EMSCRIPTEN
     s->temp->arena = make_arena(1024*1024, 1024*1024);
 #else
-    s->temp->arena = make_arena(sys_get_info().page_size*6900, 1024);
+    s->temp->arena = make_arena(sys_get_info().page_size*100000, 1024*32);
 #endif
     s->temp->a = (Allocator) { &s->temp->arena, arena_allocator_proc };
     
@@ -265,12 +265,14 @@ void *arena_push(Arena *arena, u64 size) {
 
 void *arena_push_copy(Arena *arena, void *src, u64 size) {
     void *dst = arena_push(arena, size);
+    if (!dst) return dst;
     memcpy(dst, src, (sys_uint)size);
     return dst;
 }
 
 void *arena_push_string(Arena *arena, string data) {
     void *dst = arena_push(arena, data.count);
+    if (!dst) return dst;
     memcpy(dst, data.data, (sys_uint)data.count);
     return dst;
 }
@@ -286,7 +288,8 @@ void* arena_allocator_proc(Allocator_Message msg, void *data, void *old, u64 old
     switch (msg) {
         case ALLOCATOR_ALLOCATE:
         {
-            return arena_push(a, n);
+            void *p = arena_push(a, n);
+            return p;
         }
         case ALLOCATOR_REALLOCATE:
         {
@@ -334,7 +337,9 @@ void deallocatef(Allocator a, void *p, u64 flags) {
 }
 
 string string_allocate(Allocator a, u64 n) {
-    return (string) {n, (u8*)allocate(a, n)};
+    u8 *p = (u8*)allocate(a, n);
+    assertmsg(p, "Ran out of memory.");
+    return (string) {n, p};
 }
 void string_deallocate(Allocator a, string s) {
     deallocate(a, s.data);

@@ -462,6 +462,11 @@ unit_local inline u64 align_next(u64 n, u64 align) {
     return (n+align-1) & ~(align-1);
 }
 
+#define KiB(N) (1024ULL*N)
+#define MiB(N) (1024ULL*1024ULL*N)
+#define GiB(N) (1024ULL*1024ULL*1024ULL*N)
+#define TiB(N) (1024ULL*1024ULL*1024ULL*1024ULL*N)
+
 #endif // _BASE_H
 
 

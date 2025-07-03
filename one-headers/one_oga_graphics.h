@@ -1,19 +1,19 @@
 // This file was generated from One-Std/src/oga_graphics.h
 // The following files were included & concatenated:
-// - C:\jac\One-Std\src\math.h
-// - C:\jac\One-Std\src\oga_graphics.h
-// - C:\jac\One-Std\src\trig_tables.h
-// - C:\jac\One-Std\src\print.h
-// - C:\jac\One-Std\src\var_args.h
-// - C:\jac\One-Std\src\system1.h
-// - C:\jac\One-Std\src\memory.h
-// - C:\jac\One-Std\src\base.h
-// - C:\jac\One-Std\src\string.h
-// - C:\jac\One-Std\src\graphics_d3d12.h
-// - C:\jac\One-Std\src\graphics_metal.h
-// - C:\jac\One-Std\src\windows_loader.h
-// - C:\jac\One-Std\src\var_args_macros.h
-// - C:\jac\One-Std\src\graphics_vulkan.h
+// - C:\nowgrep\One-Std\src\print.h
+// - C:\nowgrep\One-Std\src\string.h
+// - C:\nowgrep\One-Std\src\var_args.h
+// - C:\nowgrep\One-Std\src\memory.h
+// - C:\nowgrep\One-Std\src\windows_loader.h
+// - C:\nowgrep\One-Std\src\system1.h
+// - C:\nowgrep\One-Std\src\math.h
+// - C:\nowgrep\One-Std\src\var_args_macros.h
+// - C:\nowgrep\One-Std\src\base.h
+// - C:\nowgrep\One-Std\src\graphics_d3d12.h
+// - C:\nowgrep\One-Std\src\graphics_metal.h
+// - C:\nowgrep\One-Std\src\graphics_vulkan.h
+// - C:\nowgrep\One-Std\src\trig_tables.h
+// - C:\nowgrep\One-Std\src\oga_graphics.h
 // I try to compile with -pedantic and -Weverything, but get really dumb warnings like these,
 // so I have to ignore them.
 #if defined(__GNUC__) || defined(__GNUG__)
@@ -517,6 +517,11 @@ unit_local inline u64 align_next(u64 n, u64 align) {
     return (n+align-1) & ~(align-1);
 }
 
+#define KiB(N) (1024ULL*N)
+#define MiB(N) (1024ULL*1024ULL*N)
+#define GiB(N) (1024ULL*1024ULL*1024ULL*N)
+#define TiB(N) (1024ULL*1024ULL*1024ULL*1024ULL*N)
+
 #endif // _BASE_H
 
 
@@ -538,18 +543,8 @@ typedef struct string {
     u8 *data;
 } string;
 
-unit_local inline u64 c_style_strlen(const char *s) {
-    const char *p = s;
-    while (*p++) {}
-    return (u64)(p-s-1);
-}
-unit_local inline u64 c_style_strcmp(const char *a, const char *b) {
-    while (*a && (*a == *b)) {
-        a++;
-        b++;
-    }
-    return (u64)(*a - *b);
-}
+OSTD_LIB u64 c_style_strlen(const char *s);
+OSTD_LIB u64 c_style_strcmp(const char *a, const char *b);
 
 
 #define STR(c) ((string){ c_style_strlen((const char*)c), (u8*)(uintptr)(const void*)(c) })
@@ -615,6 +610,43 @@ unit_local s64 string_find_index_from_right(string s, string sub) {
     }
     return -1;
 }
+
+unit_local string string_trim_left(string s) {
+
+    while (s.count > 0 && !(s.data[0] >= 33 && s.data[0] <= 126)) {
+        s.data += 1;
+        s.count -= 1;
+    }
+    return s;
+}
+
+unit_local string string_trim_right(string s) {
+    while (s.count > 0 && !(s.data[s.count-1] >= 33 && s.data[s.count-1] <= 126)) {
+        s.count -= 1;
+    }
+    return s;
+}
+
+unit_local string string_trim(string s) {
+    return string_trim_left(string_trim_right(s));
+}
+
+#ifdef OSTD_IMPL
+OSTD_LIB u64 c_style_strlen(const char *s) {
+    const char *p = s;
+    while (*p) {
+        p += 1;
+    }
+    return (u64)(p - s);
+}
+OSTD_LIB u64 c_style_strcmp(const char *a, const char *b) {
+    while (*a && (*a == *b)) {
+        a++;
+        b++;
+    }
+    return (u64)(*a - *b);
+}
+#endif
 
 #endif // _STRING_H
 
@@ -839,6 +871,12 @@ OSTD_LIB bool sys_mutex_uninit(Mutex *mutex);
 OSTD_LIB void sys_mutex_acquire(Mutex mutex);
 OSTD_LIB void sys_mutex_release(Mutex mutex);
 
+typedef void *Semaphore;
+OSTD_LIB bool sys_semaphore_init(Semaphore *sem);
+OSTD_LIB void sys_semaphore_signal(Semaphore *sem);
+OSTD_LIB void sys_semaphore_wait(Semaphore sem);
+OSTD_LIB void sys_semaphore_release(Semaphore sem);
+
 ////////
 // Atomics
 
@@ -996,6 +1034,7 @@ _Ostd_Thread_Storage *_ostd_get_thread_storage(void);
 unit_local _Ostd_Thread_Storage *_ostd_thread_storage = 0;
 unit_local u64 _ostd_thread_storage_allocated_count = 0;
 unit_local Mutex _ostd_thread_storage_register_mutex;
+unit_local bool _ostd_thread_storage_register_mutex_initted;
 unit_local u64 _ostd_main_thread_id;
 unit_local bool _ostd_main_thread_is_unknown = true;
 unit_local _Ostd_Thread_Storage _ostd_main_thread_storage;
@@ -1022,15 +1061,25 @@ _Ostd_Thread_Storage *_ostd_get_thread_storage(void) {
             = (struct _Per_Thread_Temporary_Storage*)_ostd_main_thread_storage.temporary_storage_struct_backing;
         return &_ostd_main_thread_storage;
     }
-
+    
+    assert(false);
+    
     return 0;
 }
 
 unit_local void _ostd_register_thread_storage(u64 thread_id) {
 
-    if (_ostd_thread_storage) {
-        sys_mutex_acquire(_ostd_thread_storage_register_mutex);
+    static u64 crazy_counter = 0;
+    u64 me = sys_atomic_add_64(&crazy_counter, 1);
+    
+    while (!_ostd_thread_storage_register_mutex_initted && me > 0) {}
+    
+    if (!_ostd_thread_storage_register_mutex_initted) {
+        sys_mutex_init(&_ostd_thread_storage_register_mutex);
+        _ostd_thread_storage_register_mutex_initted = true;
     }
+    
+    sys_mutex_acquire(_ostd_thread_storage_register_mutex);
 
     for (u64 i = 0; i < _ostd_thread_storage_allocated_count; i += 1) {
         _Ostd_Thread_Storage *s = &_ostd_thread_storage[i];
@@ -1049,8 +1098,7 @@ unit_local void _ostd_register_thread_storage(u64 thread_id) {
     assertmsg(sizeof(_Ostd_Thread_Storage) < page_size, "refactor time");
 
     if (!_ostd_thread_storage) {
-        sys_mutex_init(&_ostd_thread_storage_register_mutex);
-        _ostd_thread_storage = sys_map_pages(SYS_MEMORY_RESERVE, 0, 1024*1024*10, false);
+        _ostd_thread_storage = sys_map_pages(SYS_MEMORY_RESERVE, 0, 100000, false);
         assert(_ostd_thread_storage);
         void *allocated = sys_map_pages(SYS_MEMORY_ALLOCATE, _ostd_thread_storage, 1, false);
         assert(allocated == _ostd_thread_storage);
@@ -1154,6 +1202,22 @@ typedef DWORD               *LPDWORD;
 typedef void                *LPVOID;
 typedef const void          *LPCVOID;
 typedef void                *PVOID;
+
+typedef u64 DWORDLONG;
+
+
+#if !defined(_M_IX86)
+ typedef s64 LONGLONG; 
+#else
+ typedef double LONGLONG;
+#endif
+
+#if !defined(_M_IX86)
+ typedef u64 ULONGLONG;
+#else
+ typedef double ULONGLONG;
+#endif
+typedef LONGLONG USN;
 
 typedef WORD ATOM;
 
@@ -4041,8 +4105,987 @@ WINDOWS_IMPORT BOOL WINAPI GetExitCodeThread(HANDLE hThread, LPDWORD lpExitCode)
 WINDOWS_IMPORT DWORD WINAPI GetFullPathNameA( LPCSTR lpFileName, DWORD  nBufferLength, LPSTR  lpBuffer, LPSTR  *lpFilePart);
 
 WINDOWS_IMPORT LPWSTR  WINAPI GetCommandLineW(void);
+WINDOWS_IMPORT LPCSTR  WINAPI GetCommandLineA(void);
 WINDOWS_IMPORT LPWSTR* WINAPI CommandLineToArgvW(LPCWSTR, int*);
 
+WINDOWS_IMPORT HANDLE WINAPI CreateSemaphoreA( LPSECURITY_ATTRIBUTES lpSemaphoreAttributes, LONG lInitialCount, LONG lMaximumCount, LPCSTR lpName);
+
+WINDOWS_IMPORT BOOL WINAPI ReleaseSemaphore( HANDLE hSemaphore, LONG   lReleaseCount, LPLONG lpPreviousCount);
+
+typedef struct {
+  LARGE_INTEGER VolumeSerialNumber;
+  LARGE_INTEGER NumberSectors;
+  LARGE_INTEGER TotalClusters;
+  LARGE_INTEGER FreeClusters;
+  LARGE_INTEGER TotalReserved;
+  ULONG         BytesPerSector;
+  ULONG         BytesPerCluster;
+  ULONG         BytesPerFileRecordSegment;
+  ULONG         ClustersPerFileRecordSegment;
+  LARGE_INTEGER MftValidDataLength;
+  LARGE_INTEGER MftStartLcn;
+  LARGE_INTEGER Mft2StartLcn;
+  LARGE_INTEGER MftZoneStart;
+  LARGE_INTEGER MftZoneEnd;
+} NTFS_VOLUME_DATA_BUFFER, *PNTFS_VOLUME_DATA_BUFFER;
+
+WINDOWS_IMPORT BOOL WINAPI DeviceIoControl( HANDLE hDevice, DWORD dwIoControlCode, LPVOID lpInBuffer, DWORD nInBufferSize, LPVOID lpOutBuffer, DWORD nOutBufferSize, LPDWORD lpBytesReturned, LPOVERLAPPED lpOverlapped);
+
+typedef struct {
+  DWORDLONG StartFileReferenceNumber;
+  USN       LowUsn;
+  USN       HighUsn;
+} MFT_ENUM_DATA_V0, *PMFT_ENUM_DATA_V0;
+
+#define DEVICE_TYPE DWORD
+
+#define FILE_DEVICE_BEEP                0x00000001
+#define FILE_DEVICE_CD_ROM              0x00000002
+#define FILE_DEVICE_CD_ROM_FILE_SYSTEM  0x00000003
+#define FILE_DEVICE_CONTROLLER          0x00000004
+#define FILE_DEVICE_DATALINK            0x00000005
+#define FILE_DEVICE_DFS                 0x00000006
+#define FILE_DEVICE_DISK                0x00000007
+#define FILE_DEVICE_DISK_FILE_SYSTEM    0x00000008
+#define FILE_DEVICE_FILE_SYSTEM         0x00000009
+#define FILE_DEVICE_INPORT_PORT         0x0000000a
+#define FILE_DEVICE_KEYBOARD            0x0000000b
+#define FILE_DEVICE_MAILSLOT            0x0000000c
+#define FILE_DEVICE_MIDI_IN             0x0000000d
+#define FILE_DEVICE_MIDI_OUT            0x0000000e
+#define FILE_DEVICE_MOUSE               0x0000000f
+#define FILE_DEVICE_MULTI_UNC_PROVIDER  0x00000010
+#define FILE_DEVICE_NAMED_PIPE          0x00000011
+#define FILE_DEVICE_NETWORK             0x00000012
+#define FILE_DEVICE_NETWORK_BROWSER     0x00000013
+#define FILE_DEVICE_NETWORK_FILE_SYSTEM 0x00000014
+#define FILE_DEVICE_NULL                0x00000015
+#define FILE_DEVICE_PARALLEL_PORT       0x00000016
+#define FILE_DEVICE_PHYSICAL_NETCARD    0x00000017
+#define FILE_DEVICE_PRINTER             0x00000018
+#define FILE_DEVICE_SCANNER             0x00000019
+#define FILE_DEVICE_SERIAL_MOUSE_PORT   0x0000001a
+#define FILE_DEVICE_SERIAL_PORT         0x0000001b
+#define FILE_DEVICE_SCREEN              0x0000001c
+#define FILE_DEVICE_SOUND               0x0000001d
+#define FILE_DEVICE_STREAMS             0x0000001e
+#define FILE_DEVICE_TAPE                0x0000001f
+#define FILE_DEVICE_TAPE_FILE_SYSTEM    0x00000020
+#define FILE_DEVICE_TRANSPORT           0x00000021
+#define FILE_DEVICE_UNKNOWN             0x00000022
+#define FILE_DEVICE_VIDEO               0x00000023
+#define FILE_DEVICE_VIRTUAL_DISK        0x00000024
+#define FILE_DEVICE_WAVE_IN             0x00000025
+#define FILE_DEVICE_WAVE_OUT            0x00000026
+#define FILE_DEVICE_8042_PORT           0x00000027
+#define FILE_DEVICE_NETWORK_REDIRECTOR  0x00000028
+#define FILE_DEVICE_BATTERY             0x00000029
+#define FILE_DEVICE_BUS_EXTENDER        0x0000002a
+#define FILE_DEVICE_MODEM               0x0000002b
+#define FILE_DEVICE_VDM                 0x0000002c
+#define FILE_DEVICE_MASS_STORAGE        0x0000002d
+#define FILE_DEVICE_SMB                 0x0000002e
+#define FILE_DEVICE_KS                  0x0000002f
+#define FILE_DEVICE_CHANGER             0x00000030
+#define FILE_DEVICE_SMARTCARD           0x00000031
+#define FILE_DEVICE_ACPI                0x00000032
+#define FILE_DEVICE_DVD                 0x00000033
+#define FILE_DEVICE_FULLSCREEN_VIDEO    0x00000034
+#define FILE_DEVICE_DFS_FILE_SYSTEM     0x00000035
+#define FILE_DEVICE_DFS_VOLUME          0x00000036
+#define FILE_DEVICE_SERENUM             0x00000037
+#define FILE_DEVICE_TERMSRV             0x00000038
+#define FILE_DEVICE_KSEC                0x00000039
+#define FILE_DEVICE_FIPS                0x0000003A
+#define FILE_DEVICE_INFINIBAND          0x0000003B
+#define FILE_DEVICE_VMBUS               0x0000003E
+#define FILE_DEVICE_CRYPT_PROVIDER      0x0000003F
+#define FILE_DEVICE_WPD                 0x00000040
+#define FILE_DEVICE_BLUETOOTH           0x00000041
+#define FILE_DEVICE_MT_COMPOSITE        0x00000042
+#define FILE_DEVICE_MT_TRANSPORT        0x00000043
+#define FILE_DEVICE_BIOMETRIC           0x00000044
+#define FILE_DEVICE_PMI                 0x00000045
+#define FILE_DEVICE_EHSTOR              0x00000046
+#define FILE_DEVICE_DEVAPI              0x00000047
+#define FILE_DEVICE_GPIO                0x00000048
+#define FILE_DEVICE_USBEX               0x00000049
+#define FILE_DEVICE_CONSOLE             0x00000050
+#define FILE_DEVICE_NFP                 0x00000051
+#define FILE_DEVICE_SYSENV              0x00000052
+#define FILE_DEVICE_VIRTUAL_BLOCK       0x00000053
+#define FILE_DEVICE_POINT_OF_SERVICE    0x00000054
+#define FILE_DEVICE_STORAGE_REPLICATION 0x00000055
+#define FILE_DEVICE_TRUST_ENV           0x00000056
+#define FILE_DEVICE_UCM                 0x00000057
+#define FILE_DEVICE_UCMTCPCI            0x00000058
+#define FILE_DEVICE_PERSISTENT_MEMORY   0x00000059
+#define FILE_DEVICE_NVDIMM              0x0000005a
+#define FILE_DEVICE_HOLOGRAPHIC         0x0000005b
+#define FILE_DEVICE_SDFXHCI             0x0000005c
+#define FILE_DEVICE_UCMUCSI             0x0000005d
+
+#define DEVICE_TYPE_FROM_CTL_CODE(ctrlCode)     (((DWORD)(ctrlCode & 0xffff0000)) >> 16)
+
+//
+// Macro to extract buffering method out of the device io control code
+//
+#define METHOD_FROM_CTL_CODE(ctrlCode)          ((DWORD)(ctrlCode & 3))
+
+//
+// Define the method codes for how buffers are passed for I/O and FS controls
+//
+
+#define METHOD_BUFFERED                 0
+#define METHOD_IN_DIRECT                1
+#define METHOD_OUT_DIRECT               2
+#define METHOD_NEITHER                  3
+
+//
+// Define some easier to comprehend aliases:
+//   METHOD_DIRECT_TO_HARDWARE (writes, aka METHOD_IN_DIRECT)
+//   METHOD_DIRECT_FROM_HARDWARE (reads, aka METHOD_OUT_DIRECT)
+//
+
+#define METHOD_DIRECT_TO_HARDWARE       METHOD_IN_DIRECT
+#define METHOD_DIRECT_FROM_HARDWARE     METHOD_OUT_DIRECT
+
+#define FILE_ANY_ACCESS                 0
+#define FILE_SPECIAL_ACCESS    (FILE_ANY_ACCESS)
+#define FILE_READ_ACCESS          ( 0x0001 )    // file & pipe
+#define FILE_WRITE_ACCESS         ( 0x0002 )    // file & pipe
+
+//
+// _WIN32_WINNT version constants
+//
+#define _WIN32_WINNT_NT4                    0x0400
+#define _WIN32_WINNT_WIN2K                  0x0500
+#define _WIN32_WINNT_WINXP                  0x0501
+#define _WIN32_WINNT_WS03                   0x0502
+#define _WIN32_WINNT_WIN6                   0x0600
+#define _WIN32_WINNT_VISTA                  0x0600
+#define _WIN32_WINNT_WS08                   0x0600
+#define _WIN32_WINNT_LONGHORN               0x0600
+#define _WIN32_WINNT_WIN7                   0x0601
+#define _WIN32_WINNT_WIN8                   0x0602
+#define _WIN32_WINNT_WINBLUE                0x0603
+#define _WIN32_WINNT_WINTHRESHOLD           0x0A00 /* ABRACADABRA_THRESHOLD*/
+#define _WIN32_WINNT_WIN10                  0x0A00 /* ABRACADABRA_THRESHOLD*/
+
+//
+// _WIN32_IE_ version constants
+//
+#define _WIN32_IE_IE20                      0x0200
+#define _WIN32_IE_IE30                      0x0300
+#define _WIN32_IE_IE302                     0x0302
+#define _WIN32_IE_IE40                      0x0400
+#define _WIN32_IE_IE401                     0x0401
+#define _WIN32_IE_IE50                      0x0500
+#define _WIN32_IE_IE501                     0x0501
+#define _WIN32_IE_IE55                      0x0550
+#define _WIN32_IE_IE60                      0x0600
+#define _WIN32_IE_IE60SP1                   0x0601
+#define _WIN32_IE_IE60SP2                   0x0603
+#define _WIN32_IE_IE70                      0x0700
+#define _WIN32_IE_IE80                      0x0800
+#define _WIN32_IE_IE90                      0x0900
+#define _WIN32_IE_IE100                     0x0A00
+#define _WIN32_IE_IE110                     0x0A00  /* ABRACADABRA_THRESHOLD */
+
+//
+// IE <-> OS version mapping
+//
+// NT4 supports IE versions 2.0 -> 6.0 SP1
+#define _WIN32_IE_NT4                       _WIN32_IE_IE20
+#define _WIN32_IE_NT4SP1                    _WIN32_IE_IE20
+#define _WIN32_IE_NT4SP2                    _WIN32_IE_IE20
+#define _WIN32_IE_NT4SP3                    _WIN32_IE_IE302
+#define _WIN32_IE_NT4SP4                    _WIN32_IE_IE401
+#define _WIN32_IE_NT4SP5                    _WIN32_IE_IE401
+#define _WIN32_IE_NT4SP6                    _WIN32_IE_IE50
+// Win98 supports IE versions 4.01 -> 6.0 SP1
+#define _WIN32_IE_WIN98                     _WIN32_IE_IE401
+// Win98SE supports IE versions 5.0 -> 6.0 SP1
+#define _WIN32_IE_WIN98SE                   _WIN32_IE_IE50
+// WinME supports IE versions 5.5 -> 6.0 SP1
+#define _WIN32_IE_WINME                     _WIN32_IE_IE55
+// Win2k supports IE versions 5.01 -> 6.0 SP1
+#define _WIN32_IE_WIN2K                     _WIN32_IE_IE501
+#define _WIN32_IE_WIN2KSP1                  _WIN32_IE_IE501
+#define _WIN32_IE_WIN2KSP2                  _WIN32_IE_IE501
+#define _WIN32_IE_WIN2KSP3                  _WIN32_IE_IE501
+#define _WIN32_IE_WIN2KSP4                  _WIN32_IE_IE501
+#define _WIN32_IE_XP                        _WIN32_IE_IE60
+#define _WIN32_IE_XPSP1                     _WIN32_IE_IE60SP1
+#define _WIN32_IE_XPSP2                     _WIN32_IE_IE60SP2
+#define _WIN32_IE_WS03                      0x0602
+#define _WIN32_IE_WS03SP1                   _WIN32_IE_IE60SP2
+#define _WIN32_IE_WIN6                      _WIN32_IE_IE70
+#define _WIN32_IE_LONGHORN                  _WIN32_IE_IE70
+#define _WIN32_IE_WIN7                      _WIN32_IE_IE80
+#define _WIN32_IE_WIN8                      _WIN32_IE_IE100
+#define _WIN32_IE_WINBLUE                   _WIN32_IE_IE100
+#define _WIN32_IE_WINTHRESHOLD              _WIN32_IE_IE110  /* ABRACADABRA_THRESHOLD */
+#define _WIN32_IE_WIN10                     _WIN32_IE_IE110  /* ABRACADABRA_THRESHOLD */
+
+
+//
+// NTDDI version constants
+//
+#define NTDDI_WIN2K                         0x05000000
+#define NTDDI_WIN2KSP1                      0x05000100
+#define NTDDI_WIN2KSP2                      0x05000200
+#define NTDDI_WIN2KSP3                      0x05000300
+#define NTDDI_WIN2KSP4                      0x05000400
+
+#define NTDDI_WINXP                         0x05010000
+#define NTDDI_WINXPSP1                      0x05010100
+#define NTDDI_WINXPSP2                      0x05010200
+#define NTDDI_WINXPSP3                      0x05010300
+#define NTDDI_WINXPSP4                      0x05010400
+
+#define NTDDI_WS03                          0x05020000
+#define NTDDI_WS03SP1                       0x05020100
+#define NTDDI_WS03SP2                       0x05020200
+#define NTDDI_WS03SP3                       0x05020300
+#define NTDDI_WS03SP4                       0x05020400
+
+#define NTDDI_WIN6                          0x06000000
+#define NTDDI_WIN6SP1                       0x06000100
+#define NTDDI_WIN6SP2                       0x06000200
+#define NTDDI_WIN6SP3                       0x06000300
+#define NTDDI_WIN6SP4                       0x06000400
+
+#define NTDDI_VISTA                         NTDDI_WIN6
+#define NTDDI_VISTASP1                      NTDDI_WIN6SP1
+#define NTDDI_VISTASP2                      NTDDI_WIN6SP2
+#define NTDDI_VISTASP3                      NTDDI_WIN6SP3
+#define NTDDI_VISTASP4                      NTDDI_WIN6SP4
+
+#define NTDDI_LONGHORN  NTDDI_VISTA
+
+#define NTDDI_WS08                          NTDDI_WIN6SP1
+#define NTDDI_WS08SP2                       NTDDI_WIN6SP2
+#define NTDDI_WS08SP3                       NTDDI_WIN6SP3
+#define NTDDI_WS08SP4                       NTDDI_WIN6SP4
+
+#define NTDDI_WIN7                          0x06010000
+#define NTDDI_WIN8                          0x06020000
+#define NTDDI_WINBLUE                       0x06030000
+#define NTDDI_WINTHRESHOLD                  0x0A000000  /* ABRACADABRA_THRESHOLD */
+#define NTDDI_WIN10                         0x0A000000  /* ABRACADABRA_THRESHOLD */
+#define NTDDI_WIN10_TH2                     0x0A000001  /* ABRACADABRA_WIN10_TH2 */
+#define NTDDI_WIN10_RS1                     0x0A000002  /* ABRACADABRA_WIN10_RS1 */
+#define NTDDI_WIN10_RS2                     0x0A000003  /* ABRACADABRA_WIN10_RS2 */
+#define NTDDI_WIN10_RS3                     0x0A000004  /* ABRACADABRA_WIN10_RS3 */
+#define NTDDI_WIN10_RS4                     0x0A000005  /* ABRACADABRA_WIN10_RS4 */
+#define NTDDI_WIN10_RS5                     0x0A000006  /* ABRACADABRA_WIN10_RS5 */
+#define NTDDI_WIN10_19H1                    0x0A000007  /* ABRACADABRA_WIN10_19H1*/
+#define NTDDI_WIN10_VB                      0x0A000008  /* ABRACADABRA_WIN10_VB */
+
+#define WDK_NTDDI_VERSION                   NTDDI_WIN10_VB /* ABRACADABRA_WIN10_VB */
+
+
+//
+// masks for version macros
+//
+#define OSVERSION_MASK      0xFFFF0000
+#define SPVERSION_MASK      0x0000FF00
+#define SUBVERSION_MASK     0x000000FF
+
+
+//
+// macros to extract various version fields from the NTDDI version
+//
+#define OSVER(Version)  ((Version) & OSVERSION_MASK)
+#define SPVER(Version)  (((Version) & SPVERSION_MASK) >> 8)
+#define SUBVER(Version) (((Version) & SUBVERSION_MASK) )
+
+#define CTL_CODE( DeviceType, Function, Method, Access ) (                 \
+    ((DeviceType) << 16) | ((Access) << 14) | ((Function) << 2) | (Method) \
+)
+#define FSCTL_REQUEST_OPLOCK_LEVEL_1    CTL_CODE(FILE_DEVICE_FILE_SYSTEM,  0, METHOD_BUFFERED, FILE_ANY_ACCESS)
+#define FSCTL_REQUEST_OPLOCK_LEVEL_2    CTL_CODE(FILE_DEVICE_FILE_SYSTEM,  1, METHOD_BUFFERED, FILE_ANY_ACCESS)
+#define FSCTL_REQUEST_BATCH_OPLOCK      CTL_CODE(FILE_DEVICE_FILE_SYSTEM,  2, METHOD_BUFFERED, FILE_ANY_ACCESS)
+#define FSCTL_OPLOCK_BREAK_ACKNOWLEDGE  CTL_CODE(FILE_DEVICE_FILE_SYSTEM,  3, METHOD_BUFFERED, FILE_ANY_ACCESS)
+#define FSCTL_OPBATCH_ACK_CLOSE_PENDING CTL_CODE(FILE_DEVICE_FILE_SYSTEM,  4, METHOD_BUFFERED, FILE_ANY_ACCESS)
+#define FSCTL_OPLOCK_BREAK_NOTIFY       CTL_CODE(FILE_DEVICE_FILE_SYSTEM,  5, METHOD_BUFFERED, FILE_ANY_ACCESS)
+#define FSCTL_LOCK_VOLUME               CTL_CODE(FILE_DEVICE_FILE_SYSTEM,  6, METHOD_BUFFERED, FILE_ANY_ACCESS)
+#define FSCTL_UNLOCK_VOLUME             CTL_CODE(FILE_DEVICE_FILE_SYSTEM,  7, METHOD_BUFFERED, FILE_ANY_ACCESS)
+#define FSCTL_DISMOUNT_VOLUME           CTL_CODE(FILE_DEVICE_FILE_SYSTEM,  8, METHOD_BUFFERED, FILE_ANY_ACCESS)
+// decommissioned fsctl value                                              9
+#define FSCTL_IS_VOLUME_MOUNTED         CTL_CODE(FILE_DEVICE_FILE_SYSTEM, 10, METHOD_BUFFERED, FILE_ANY_ACCESS)
+#define FSCTL_IS_PATHNAME_VALID         CTL_CODE(FILE_DEVICE_FILE_SYSTEM, 11, METHOD_BUFFERED, FILE_ANY_ACCESS) // PATHNAME_BUFFER,
+#define FSCTL_MARK_VOLUME_DIRTY         CTL_CODE(FILE_DEVICE_FILE_SYSTEM, 12, METHOD_BUFFERED, FILE_ANY_ACCESS)
+// decommissioned fsctl value                                             13
+#define FSCTL_QUERY_RETRIEVAL_POINTERS  CTL_CODE(FILE_DEVICE_FILE_SYSTEM, 14,  METHOD_NEITHER, FILE_ANY_ACCESS)
+#define FSCTL_GET_COMPRESSION           CTL_CODE(FILE_DEVICE_FILE_SYSTEM, 15, METHOD_BUFFERED, FILE_ANY_ACCESS)
+#define FSCTL_SET_COMPRESSION           CTL_CODE(FILE_DEVICE_FILE_SYSTEM, 16, METHOD_BUFFERED, FILE_READ_DATA | FILE_WRITE_DATA)
+// decommissioned fsctl value                                             17
+// decommissioned fsctl value                                             18
+#define FSCTL_SET_BOOTLOADER_ACCESSED   CTL_CODE(FILE_DEVICE_FILE_SYSTEM, 19,  METHOD_NEITHER, FILE_ANY_ACCESS)
+#define FSCTL_MARK_AS_SYSTEM_HIVE       FSCTL_SET_BOOTLOADER_ACCESSED
+#define FSCTL_OPLOCK_BREAK_ACK_NO_2     CTL_CODE(FILE_DEVICE_FILE_SYSTEM, 20, METHOD_BUFFERED, FILE_ANY_ACCESS)
+#define FSCTL_INVALIDATE_VOLUMES        CTL_CODE(FILE_DEVICE_FILE_SYSTEM, 21, METHOD_BUFFERED, FILE_ANY_ACCESS)
+#define FSCTL_QUERY_FAT_BPB             CTL_CODE(FILE_DEVICE_FILE_SYSTEM, 22, METHOD_BUFFERED, FILE_ANY_ACCESS) // FSCTL_QUERY_FAT_BPB_BUFFER
+#define FSCTL_REQUEST_FILTER_OPLOCK     CTL_CODE(FILE_DEVICE_FILE_SYSTEM, 23, METHOD_BUFFERED, FILE_ANY_ACCESS)
+#define FSCTL_FILESYSTEM_GET_STATISTICS CTL_CODE(FILE_DEVICE_FILE_SYSTEM, 24, METHOD_BUFFERED, FILE_ANY_ACCESS) // FILESYSTEM_STATISTICS
+
+#if (_WIN32_WINNT >= _WIN32_WINNT_NT4)
+#define FSCTL_GET_NTFS_VOLUME_DATA      CTL_CODE(FILE_DEVICE_FILE_SYSTEM, 25, METHOD_BUFFERED, FILE_ANY_ACCESS) // NTFS_VOLUME_DATA_BUFFER
+#define FSCTL_GET_NTFS_FILE_RECORD      CTL_CODE(FILE_DEVICE_FILE_SYSTEM, 26, METHOD_BUFFERED, FILE_ANY_ACCESS) // NTFS_FILE_RECORD_INPUT_BUFFER, NTFS_FILE_RECORD_OUTPUT_BUFFER
+#define FSCTL_GET_VOLUME_BITMAP         CTL_CODE(FILE_DEVICE_FILE_SYSTEM, 27,  METHOD_NEITHER, FILE_ANY_ACCESS) // STARTING_LCN_INPUT_BUFFER, VOLUME_BITMAP_BUFFER
+#define FSCTL_GET_RETRIEVAL_POINTERS    CTL_CODE(FILE_DEVICE_FILE_SYSTEM, 28,  METHOD_NEITHER, FILE_ANY_ACCESS) // STARTING_VCN_INPUT_BUFFER, RETRIEVAL_POINTERS_BUFFER
+#define FSCTL_MOVE_FILE                 CTL_CODE(FILE_DEVICE_FILE_SYSTEM, 29, METHOD_BUFFERED, FILE_SPECIAL_ACCESS) // MOVE_FILE_DATA,
+#define FSCTL_IS_VOLUME_DIRTY           CTL_CODE(FILE_DEVICE_FILE_SYSTEM, 30, METHOD_BUFFERED, FILE_ANY_ACCESS)
+// decommissioned fsctl value                                             31
+#define FSCTL_ALLOW_EXTENDED_DASD_IO    CTL_CODE(FILE_DEVICE_FILE_SYSTEM, 32, METHOD_NEITHER,  FILE_ANY_ACCESS)
+#endif /* _WIN32_WINNT >= _WIN32_WINNT_NT4 */
+
+#if (_WIN32_WINNT >= _WIN32_WINNT_WIN2K)
+// decommissioned fsctl value                                             33
+// decommissioned fsctl value                                             34
+#define FSCTL_FIND_FILES_BY_SID         CTL_CODE(FILE_DEVICE_FILE_SYSTEM, 35, METHOD_NEITHER, FILE_ANY_ACCESS)
+// decommissioned fsctl value                                             36
+// decommissioned fsctl value                                             37
+#define FSCTL_SET_OBJECT_ID             CTL_CODE(FILE_DEVICE_FILE_SYSTEM, 38, METHOD_BUFFERED, FILE_SPECIAL_ACCESS) // FILE_OBJECTID_BUFFER
+#define FSCTL_GET_OBJECT_ID             CTL_CODE(FILE_DEVICE_FILE_SYSTEM, 39, METHOD_BUFFERED, FILE_ANY_ACCESS) // FILE_OBJECTID_BUFFER
+#define FSCTL_DELETE_OBJECT_ID          CTL_CODE(FILE_DEVICE_FILE_SYSTEM, 40, METHOD_BUFFERED, FILE_SPECIAL_ACCESS)
+#define FSCTL_SET_REPARSE_POINT         CTL_CODE(FILE_DEVICE_FILE_SYSTEM, 41, METHOD_BUFFERED, FILE_SPECIAL_ACCESS) // REPARSE_DATA_BUFFER,
+#define FSCTL_GET_REPARSE_POINT         CTL_CODE(FILE_DEVICE_FILE_SYSTEM, 42, METHOD_BUFFERED, FILE_ANY_ACCESS) // REPARSE_DATA_BUFFER
+#define FSCTL_DELETE_REPARSE_POINT      CTL_CODE(FILE_DEVICE_FILE_SYSTEM, 43, METHOD_BUFFERED, FILE_SPECIAL_ACCESS) // REPARSE_DATA_BUFFER,
+#define FSCTL_ENUM_USN_DATA             CTL_CODE(FILE_DEVICE_FILE_SYSTEM, 44,  METHOD_NEITHER, FILE_ANY_ACCESS) // MFT_ENUM_DATA,
+#define FSCTL_SECURITY_ID_CHECK         CTL_CODE(FILE_DEVICE_FILE_SYSTEM, 45,  METHOD_NEITHER, FILE_READ_DATA)  // BULK_SECURITY_TEST_DATA,
+#define FSCTL_READ_USN_JOURNAL          CTL_CODE(FILE_DEVICE_FILE_SYSTEM, 46,  METHOD_NEITHER, FILE_ANY_ACCESS) // READ_USN_JOURNAL_DATA, USN
+#define FSCTL_SET_OBJECT_ID_EXTENDED    CTL_CODE(FILE_DEVICE_FILE_SYSTEM, 47, METHOD_BUFFERED, FILE_SPECIAL_ACCESS)
+#define FSCTL_CREATE_OR_GET_OBJECT_ID   CTL_CODE(FILE_DEVICE_FILE_SYSTEM, 48, METHOD_BUFFERED, FILE_ANY_ACCESS) // FILE_OBJECTID_BUFFER
+#define FSCTL_SET_SPARSE                CTL_CODE(FILE_DEVICE_FILE_SYSTEM, 49, METHOD_BUFFERED, FILE_SPECIAL_ACCESS)
+#define FSCTL_SET_ZERO_DATA             CTL_CODE(FILE_DEVICE_FILE_SYSTEM, 50, METHOD_BUFFERED, FILE_WRITE_DATA) // FILE_ZERO_DATA_INFORMATION,
+#define FSCTL_QUERY_ALLOCATED_RANGES    CTL_CODE(FILE_DEVICE_FILE_SYSTEM, 51,  METHOD_NEITHER, FILE_READ_DATA)  // FILE_ALLOCATED_RANGE_BUFFER, FILE_ALLOCATED_RANGE_BUFFER
+#define FSCTL_ENABLE_UPGRADE            CTL_CODE(FILE_DEVICE_FILE_SYSTEM, 52, METHOD_BUFFERED, FILE_WRITE_DATA)
+#define FSCTL_SET_ENCRYPTION            CTL_CODE(FILE_DEVICE_FILE_SYSTEM, 53,  METHOD_NEITHER, FILE_ANY_ACCESS) // ENCRYPTION_BUFFER, DECRYPTION_STATUS_BUFFER
+#define FSCTL_ENCRYPTION_FSCTL_IO       CTL_CODE(FILE_DEVICE_FILE_SYSTEM, 54,  METHOD_NEITHER, FILE_ANY_ACCESS)
+#define FSCTL_WRITE_RAW_ENCRYPTED       CTL_CODE(FILE_DEVICE_FILE_SYSTEM, 55,  METHOD_NEITHER, FILE_SPECIAL_ACCESS) // ENCRYPTED_DATA_INFO, EXTENDED_ENCRYPTED_DATA_INFO
+#define FSCTL_READ_RAW_ENCRYPTED        CTL_CODE(FILE_DEVICE_FILE_SYSTEM, 56,  METHOD_NEITHER, FILE_SPECIAL_ACCESS) // REQUEST_RAW_ENCRYPTED_DATA, ENCRYPTED_DATA_INFO, EXTENDED_ENCRYPTED_DATA_INFO
+#define FSCTL_CREATE_USN_JOURNAL        CTL_CODE(FILE_DEVICE_FILE_SYSTEM, 57,  METHOD_NEITHER, FILE_ANY_ACCESS) // CREATE_USN_JOURNAL_DATA,
+#define FSCTL_READ_FILE_USN_DATA        CTL_CODE(FILE_DEVICE_FILE_SYSTEM, 58,  METHOD_NEITHER, FILE_ANY_ACCESS) // Read the Usn Record for a file
+#define FSCTL_WRITE_USN_CLOSE_RECORD    CTL_CODE(FILE_DEVICE_FILE_SYSTEM, 59,  METHOD_NEITHER, FILE_ANY_ACCESS) // Generate Close Usn Record
+#define FSCTL_EXTEND_VOLUME             CTL_CODE(FILE_DEVICE_FILE_SYSTEM, 60, METHOD_BUFFERED, FILE_ANY_ACCESS)
+#define FSCTL_QUERY_USN_JOURNAL         CTL_CODE(FILE_DEVICE_FILE_SYSTEM, 61, METHOD_BUFFERED, FILE_ANY_ACCESS)
+#define FSCTL_DELETE_USN_JOURNAL        CTL_CODE(FILE_DEVICE_FILE_SYSTEM, 62, METHOD_BUFFERED, FILE_ANY_ACCESS)
+#define FSCTL_MARK_HANDLE               CTL_CODE(FILE_DEVICE_FILE_SYSTEM, 63, METHOD_BUFFERED, FILE_ANY_ACCESS)
+#define FSCTL_SIS_COPYFILE              CTL_CODE(FILE_DEVICE_FILE_SYSTEM, 64, METHOD_BUFFERED, FILE_ANY_ACCESS)
+#define FSCTL_SIS_LINK_FILES            CTL_CODE(FILE_DEVICE_FILE_SYSTEM, 65, METHOD_BUFFERED, FILE_READ_DATA | FILE_WRITE_DATA)
+// decommissional fsctl value                                             66
+// decommissioned fsctl value                                             67
+// decommissioned fsctl value                                             68
+#define FSCTL_RECALL_FILE               CTL_CODE(FILE_DEVICE_FILE_SYSTEM, 69, METHOD_NEITHER, FILE_ANY_ACCESS)
+// decommissioned fsctl value                                             70
+#define FSCTL_READ_FROM_PLEX            CTL_CODE(FILE_DEVICE_FILE_SYSTEM, 71, METHOD_OUT_DIRECT, FILE_READ_DATA)
+#define FSCTL_FILE_PREFETCH             CTL_CODE(FILE_DEVICE_FILE_SYSTEM, 72, METHOD_BUFFERED, FILE_SPECIAL_ACCESS) // FILE_PREFETCH
+#endif /* _WIN32_WINNT >= _WIN32_WINNT_WIN2K */
+
+#if (_WIN32_WINNT >= _WIN32_WINNT_VISTA)
+#define FSCTL_MAKE_MEDIA_COMPATIBLE         CTL_CODE(FILE_DEVICE_FILE_SYSTEM, 76, METHOD_BUFFERED, FILE_WRITE_DATA) // UDFS R/W
+#define FSCTL_SET_DEFECT_MANAGEMENT         CTL_CODE(FILE_DEVICE_FILE_SYSTEM, 77, METHOD_BUFFERED, FILE_WRITE_DATA) // UDFS R/W
+#define FSCTL_QUERY_SPARING_INFO            CTL_CODE(FILE_DEVICE_FILE_SYSTEM, 78, METHOD_BUFFERED, FILE_ANY_ACCESS) // UDFS R/W
+#define FSCTL_QUERY_ON_DISK_VOLUME_INFO     CTL_CODE(FILE_DEVICE_FILE_SYSTEM, 79, METHOD_BUFFERED, FILE_ANY_ACCESS) // C/UDFS
+#define FSCTL_SET_VOLUME_COMPRESSION_STATE  CTL_CODE(FILE_DEVICE_FILE_SYSTEM, 80, METHOD_BUFFERED, FILE_SPECIAL_ACCESS) // VOLUME_COMPRESSION_STATE
+// decommissioned fsctl value                                                 80
+#define FSCTL_TXFS_MODIFY_RM                CTL_CODE(FILE_DEVICE_FILE_SYSTEM, 81, METHOD_BUFFERED, FILE_WRITE_DATA) // TxF
+#define FSCTL_TXFS_QUERY_RM_INFORMATION     CTL_CODE(FILE_DEVICE_FILE_SYSTEM, 82, METHOD_BUFFERED, FILE_READ_DATA)  // TxF
+// decommissioned fsctl value                                                 83
+#define FSCTL_TXFS_ROLLFORWARD_REDO         CTL_CODE(FILE_DEVICE_FILE_SYSTEM, 84, METHOD_BUFFERED, FILE_WRITE_DATA) // TxF
+#define FSCTL_TXFS_ROLLFORWARD_UNDO         CTL_CODE(FILE_DEVICE_FILE_SYSTEM, 85, METHOD_BUFFERED, FILE_WRITE_DATA) // TxF
+#define FSCTL_TXFS_START_RM                 CTL_CODE(FILE_DEVICE_FILE_SYSTEM, 86, METHOD_BUFFERED, FILE_WRITE_DATA) // TxF
+#define FSCTL_TXFS_SHUTDOWN_RM              CTL_CODE(FILE_DEVICE_FILE_SYSTEM, 87, METHOD_BUFFERED, FILE_WRITE_DATA) // TxF
+#define FSCTL_TXFS_READ_BACKUP_INFORMATION  CTL_CODE(FILE_DEVICE_FILE_SYSTEM, 88, METHOD_BUFFERED, FILE_READ_DATA)  // TxF
+#define FSCTL_TXFS_WRITE_BACKUP_INFORMATION CTL_CODE(FILE_DEVICE_FILE_SYSTEM, 89, METHOD_BUFFERED, FILE_WRITE_DATA) // TxF
+#define FSCTL_TXFS_CREATE_SECONDARY_RM      CTL_CODE(FILE_DEVICE_FILE_SYSTEM, 90, METHOD_BUFFERED, FILE_WRITE_DATA) // TxF
+#define FSCTL_TXFS_GET_METADATA_INFO        CTL_CODE(FILE_DEVICE_FILE_SYSTEM, 91, METHOD_BUFFERED, FILE_READ_DATA)  // TxF
+#define FSCTL_TXFS_GET_TRANSACTED_VERSION   CTL_CODE(FILE_DEVICE_FILE_SYSTEM, 92, METHOD_BUFFERED, FILE_READ_DATA)  // TxF
+// decommissioned fsctl value                                                 93
+#define FSCTL_TXFS_SAVEPOINT_INFORMATION    CTL_CODE(FILE_DEVICE_FILE_SYSTEM, 94, METHOD_BUFFERED, FILE_WRITE_DATA) // TxF
+#define FSCTL_TXFS_CREATE_MINIVERSION       CTL_CODE(FILE_DEVICE_FILE_SYSTEM, 95, METHOD_BUFFERED, FILE_WRITE_DATA) // TxF
+// decommissioned fsctl value                                                 96
+// decommissioned fsctl value                                                 97
+// decommissioned fsctl value                                                 98
+#define FSCTL_TXFS_TRANSACTION_ACTIVE       CTL_CODE(FILE_DEVICE_FILE_SYSTEM, 99, METHOD_BUFFERED, FILE_READ_DATA)  // TxF
+#define FSCTL_SET_ZERO_ON_DEALLOCATION      CTL_CODE(FILE_DEVICE_FILE_SYSTEM, 101, METHOD_BUFFERED, FILE_SPECIAL_ACCESS)
+#define FSCTL_SET_REPAIR                    CTL_CODE(FILE_DEVICE_FILE_SYSTEM, 102, METHOD_BUFFERED, FILE_ANY_ACCESS)
+#define FSCTL_GET_REPAIR                    CTL_CODE(FILE_DEVICE_FILE_SYSTEM, 103, METHOD_BUFFERED, FILE_ANY_ACCESS)
+#define FSCTL_WAIT_FOR_REPAIR               CTL_CODE(FILE_DEVICE_FILE_SYSTEM, 104, METHOD_BUFFERED, FILE_ANY_ACCESS)
+// decommissioned fsctl value                                                 105
+#define FSCTL_INITIATE_REPAIR               CTL_CODE(FILE_DEVICE_FILE_SYSTEM, 106, METHOD_BUFFERED, FILE_ANY_ACCESS)
+#define FSCTL_CSC_INTERNAL                  CTL_CODE(FILE_DEVICE_FILE_SYSTEM, 107, METHOD_NEITHER, FILE_ANY_ACCESS) // CSC internal implementation
+#define FSCTL_SHRINK_VOLUME                 CTL_CODE(FILE_DEVICE_FILE_SYSTEM, 108, METHOD_BUFFERED, FILE_SPECIAL_ACCESS) // SHRINK_VOLUME_INFORMATION
+#define FSCTL_SET_SHORT_NAME_BEHAVIOR       CTL_CODE(FILE_DEVICE_FILE_SYSTEM, 109, METHOD_BUFFERED, FILE_ANY_ACCESS)
+#define FSCTL_DFSR_SET_GHOST_HANDLE_STATE   CTL_CODE(FILE_DEVICE_FILE_SYSTEM, 110, METHOD_BUFFERED, FILE_ANY_ACCESS)
+
+//
+//  Values 111 - 119 are reserved for FSRM.
+//
+
+#define FSCTL_TXFS_LIST_TRANSACTION_LOCKED_FILES \
+                                            CTL_CODE(FILE_DEVICE_FILE_SYSTEM, 120, METHOD_BUFFERED, FILE_READ_DATA) // TxF
+#define FSCTL_TXFS_LIST_TRANSACTIONS        CTL_CODE(FILE_DEVICE_FILE_SYSTEM, 121, METHOD_BUFFERED, FILE_READ_DATA) // TxF
+#define FSCTL_QUERY_PAGEFILE_ENCRYPTION     CTL_CODE(FILE_DEVICE_FILE_SYSTEM, 122, METHOD_BUFFERED, FILE_ANY_ACCESS)
+#endif /* _WIN32_WINNT >= _WIN32_WINNT_VISTA */
+
+#if (_WIN32_WINNT >= _WIN32_WINNT_VISTA)
+#define FSCTL_RESET_VOLUME_ALLOCATION_HINTS CTL_CODE(FILE_DEVICE_FILE_SYSTEM, 123, METHOD_BUFFERED, FILE_ANY_ACCESS)
+#endif /* _WIN32_WINNT >= _WIN32_WINNT_VISTA */
+
+#if (_WIN32_WINNT >= _WIN32_WINNT_WIN7)
+#define FSCTL_QUERY_DEPENDENT_VOLUME        CTL_CODE(FILE_DEVICE_FILE_SYSTEM, 124, METHOD_BUFFERED, FILE_ANY_ACCESS)    // Dependency File System Filter
+#define FSCTL_SD_GLOBAL_CHANGE              CTL_CODE(FILE_DEVICE_FILE_SYSTEM, 125, METHOD_BUFFERED, FILE_ANY_ACCESS) // Query/Change NTFS Security Descriptors
+#endif /* _WIN32_WINNT >= _WIN32_WINNT_WIN7 */
+
+#if (_WIN32_WINNT >= _WIN32_WINNT_VISTA)
+#define FSCTL_TXFS_READ_BACKUP_INFORMATION2 CTL_CODE(FILE_DEVICE_FILE_SYSTEM, 126, METHOD_BUFFERED, FILE_ANY_ACCESS) // TxF
+#endif /* _WIN32_WINNT >= _WIN32_WINNT_VISTA */
+
+#if (_WIN32_WINNT >= _WIN32_WINNT_WIN7)
+#define FSCTL_LOOKUP_STREAM_FROM_CLUSTER    CTL_CODE(FILE_DEVICE_FILE_SYSTEM, 127, METHOD_BUFFERED, FILE_ANY_ACCESS)
+#define FSCTL_TXFS_WRITE_BACKUP_INFORMATION2 CTL_CODE(FILE_DEVICE_FILE_SYSTEM, 128, METHOD_BUFFERED, FILE_ANY_ACCESS) // TxF
+#define FSCTL_FILE_TYPE_NOTIFICATION        CTL_CODE(FILE_DEVICE_FILE_SYSTEM, 129, METHOD_BUFFERED, FILE_ANY_ACCESS)
+#endif
+
+#if (_WIN32_WINNT >= _WIN32_WINNT_WIN8)
+#define FSCTL_FILE_LEVEL_TRIM               CTL_CODE(FILE_DEVICE_FILE_SYSTEM, 130, METHOD_BUFFERED, FILE_WRITE_DATA)
+#endif /*_WIN32_WINNT >= _WIN32_WINNT_WIN8 */
+
+//
+//  Values 131 - 139 are reserved for FSRM.
+//
+
+#if (_WIN32_WINNT >= _WIN32_WINNT_WIN7)
+#define FSCTL_GET_BOOT_AREA_INFO            CTL_CODE(FILE_DEVICE_FILE_SYSTEM, 140, METHOD_BUFFERED, FILE_ANY_ACCESS) // BOOT_AREA_INFO
+#define FSCTL_GET_RETRIEVAL_POINTER_BASE    CTL_CODE(FILE_DEVICE_FILE_SYSTEM, 141, METHOD_BUFFERED, FILE_ANY_ACCESS) // RETRIEVAL_POINTER_BASE
+#define FSCTL_SET_PERSISTENT_VOLUME_STATE   CTL_CODE(FILE_DEVICE_FILE_SYSTEM, 142, METHOD_BUFFERED, FILE_ANY_ACCESS)  // FILE_FS_PERSISTENT_VOLUME_INFORMATION
+#define FSCTL_QUERY_PERSISTENT_VOLUME_STATE CTL_CODE(FILE_DEVICE_FILE_SYSTEM, 143, METHOD_BUFFERED, FILE_ANY_ACCESS)  // FILE_FS_PERSISTENT_VOLUME_INFORMATION
+
+#define FSCTL_REQUEST_OPLOCK                CTL_CODE(FILE_DEVICE_FILE_SYSTEM, 144, METHOD_BUFFERED, FILE_ANY_ACCESS)
+
+#define FSCTL_CSV_TUNNEL_REQUEST            CTL_CODE(FILE_DEVICE_FILE_SYSTEM, 145, METHOD_BUFFERED, FILE_ANY_ACCESS) // CSV_TUNNEL_REQUEST
+#define FSCTL_IS_CSV_FILE                   CTL_CODE(FILE_DEVICE_FILE_SYSTEM, 146, METHOD_BUFFERED, FILE_ANY_ACCESS) // IS_CSV_FILE
+
+#define FSCTL_QUERY_FILE_SYSTEM_RECOGNITION CTL_CODE(FILE_DEVICE_FILE_SYSTEM, 147, METHOD_BUFFERED, FILE_ANY_ACCESS) //
+#define FSCTL_CSV_GET_VOLUME_PATH_NAME      CTL_CODE(FILE_DEVICE_FILE_SYSTEM, 148, METHOD_BUFFERED, FILE_ANY_ACCESS)
+#define FSCTL_CSV_GET_VOLUME_NAME_FOR_VOLUME_MOUNT_POINT CTL_CODE(FILE_DEVICE_FILE_SYSTEM, 149, METHOD_BUFFERED, FILE_ANY_ACCESS)
+#define FSCTL_CSV_GET_VOLUME_PATH_NAMES_FOR_VOLUME_NAME CTL_CODE(FILE_DEVICE_FILE_SYSTEM, 150,  METHOD_BUFFERED, FILE_ANY_ACCESS)
+#define FSCTL_IS_FILE_ON_CSV_VOLUME         CTL_CODE(FILE_DEVICE_FILE_SYSTEM, 151,  METHOD_BUFFERED, FILE_ANY_ACCESS)
+#endif /* _WIN32_WINNT >= _WIN32_WINNT_WIN7 */
+
+#if (_WIN32_WINNT >= _WIN32_WINNT_WIN8)
+#define FSCTL_CORRUPTION_HANDLING           CTL_CODE(FILE_DEVICE_FILE_SYSTEM, 152, METHOD_BUFFERED, FILE_ANY_ACCESS)
+#define FSCTL_OFFLOAD_READ                  CTL_CODE(FILE_DEVICE_FILE_SYSTEM, 153, METHOD_BUFFERED, FILE_READ_ACCESS)
+#define FSCTL_OFFLOAD_WRITE                 CTL_CODE(FILE_DEVICE_FILE_SYSTEM, 154, METHOD_BUFFERED, FILE_WRITE_ACCESS)
+#endif /*_WIN32_WINNT >= _WIN32_WINNT_WIN8 */
+
+#if (_WIN32_WINNT >= _WIN32_WINNT_WIN7)
+#define FSCTL_CSV_INTERNAL                  CTL_CODE(FILE_DEVICE_FILE_SYSTEM, 155,  METHOD_BUFFERED, FILE_ANY_ACCESS)
+#endif /* _WIN32_WINNT >= _WIN32_WINNT_WIN7 */
+
+#if (_WIN32_WINNT >= _WIN32_WINNT_WIN8)
+#define FSCTL_SET_PURGE_FAILURE_MODE        CTL_CODE(FILE_DEVICE_FILE_SYSTEM, 156, METHOD_BUFFERED, FILE_ANY_ACCESS)
+#define FSCTL_QUERY_FILE_LAYOUT             CTL_CODE(FILE_DEVICE_FILE_SYSTEM, 157, METHOD_NEITHER, FILE_ANY_ACCESS)
+#define FSCTL_IS_VOLUME_OWNED_BYCSVFS       CTL_CODE(FILE_DEVICE_FILE_SYSTEM, 158,  METHOD_BUFFERED, FILE_ANY_ACCESS)
+
+#define FSCTL_GET_INTEGRITY_INFORMATION     CTL_CODE(FILE_DEVICE_FILE_SYSTEM, 159, METHOD_BUFFERED, FILE_ANY_ACCESS)                  // FSCTL_GET_INTEGRITY_INFORMATION_BUFFER
+#define FSCTL_SET_INTEGRITY_INFORMATION     CTL_CODE(FILE_DEVICE_FILE_SYSTEM, 160, METHOD_BUFFERED, FILE_READ_DATA | FILE_WRITE_DATA) // FSCTL_SET_INTEGRITY_INFORMATION_BUFFER
+
+#define FSCTL_QUERY_FILE_REGIONS            CTL_CODE(FILE_DEVICE_FILE_SYSTEM, 161, METHOD_BUFFERED, FILE_ANY_ACCESS)
+
+#endif /*_WIN32_WINNT >= _WIN32_WINNT_WIN8 */
+
+
+#if (_WIN32_WINNT >= _WIN32_WINNT_WIN8)
+#define FSCTL_RKF_INTERNAL                  CTL_CODE(FILE_DEVICE_FILE_SYSTEM, 171, METHOD_NEITHER, FILE_ANY_ACCESS) // Resume Key Filter
+
+#define FSCTL_SCRUB_DATA                    CTL_CODE(FILE_DEVICE_FILE_SYSTEM, 172, METHOD_BUFFERED, FILE_ANY_ACCESS)
+#define FSCTL_REPAIR_COPIES                 CTL_CODE(FILE_DEVICE_FILE_SYSTEM, 173, METHOD_BUFFERED, FILE_READ_DATA | FILE_WRITE_DATA)
+#define FSCTL_DISABLE_LOCAL_BUFFERING       CTL_CODE(FILE_DEVICE_FILE_SYSTEM, 174, METHOD_BUFFERED, FILE_ANY_ACCESS)
+#define FSCTL_CSV_MGMT_LOCK                 CTL_CODE(FILE_DEVICE_FILE_SYSTEM, 175, METHOD_BUFFERED, FILE_ANY_ACCESS)
+#define FSCTL_CSV_QUERY_DOWN_LEVEL_FILE_SYSTEM_CHARACTERISTICS CTL_CODE(FILE_DEVICE_FILE_SYSTEM, 176, METHOD_BUFFERED, FILE_ANY_ACCESS)
+#define FSCTL_ADVANCE_FILE_ID               CTL_CODE(FILE_DEVICE_FILE_SYSTEM, 177, METHOD_BUFFERED, FILE_ANY_ACCESS)
+#define FSCTL_CSV_SYNC_TUNNEL_REQUEST       CTL_CODE(FILE_DEVICE_FILE_SYSTEM, 178, METHOD_BUFFERED, FILE_ANY_ACCESS)
+#define FSCTL_CSV_QUERY_VETO_FILE_DIRECT_IO CTL_CODE(FILE_DEVICE_FILE_SYSTEM, 179, METHOD_BUFFERED, FILE_ANY_ACCESS)
+#define FSCTL_WRITE_USN_REASON              CTL_CODE(FILE_DEVICE_FILE_SYSTEM, 180, METHOD_BUFFERED, FILE_ANY_ACCESS)
+#define FSCTL_CSV_CONTROL                   CTL_CODE(FILE_DEVICE_FILE_SYSTEM, 181, METHOD_BUFFERED, FILE_ANY_ACCESS)
+#define FSCTL_GET_REFS_VOLUME_DATA          CTL_CODE(FILE_DEVICE_FILE_SYSTEM, 182, METHOD_BUFFERED, FILE_ANY_ACCESS)
+#define FSCTL_CSV_H_BREAKING_SYNC_TUNNEL_REQUEST CTL_CODE(FILE_DEVICE_FILE_SYSTEM, 185, METHOD_BUFFERED, FILE_ANY_ACCESS)
+#endif /*_WIN32_WINNT >= _WIN32_WINNT_WIN8 */
+
+#if (_WIN32_WINNT >= _WIN32_WINNT_WINBLUE)
+#define FSCTL_QUERY_STORAGE_CLASSES         CTL_CODE(FILE_DEVICE_FILE_SYSTEM, 187, METHOD_BUFFERED, FILE_ANY_ACCESS)
+#define FSCTL_QUERY_REGION_INFO             CTL_CODE(FILE_DEVICE_FILE_SYSTEM, 188, METHOD_BUFFERED, FILE_ANY_ACCESS)
+#define FSCTL_USN_TRACK_MODIFIED_RANGES     CTL_CODE(FILE_DEVICE_FILE_SYSTEM, 189, METHOD_BUFFERED, FILE_ANY_ACCESS) // USN_TRACK_MODIFIED_RANGES
+#endif /* (_WIN32_WINNT >= _WIN32_WINNT_WINBLUE) */
+#if (_WIN32_WINNT >= _WIN32_WINNT_WINBLUE)
+#define FSCTL_QUERY_SHARED_VIRTUAL_DISK_SUPPORT CTL_CODE(FILE_DEVICE_FILE_SYSTEM, 192, METHOD_BUFFERED, FILE_ANY_ACCESS)
+#define FSCTL_SVHDX_SYNC_TUNNEL_REQUEST         CTL_CODE(FILE_DEVICE_FILE_SYSTEM, 193, METHOD_BUFFERED, FILE_ANY_ACCESS)
+#define FSCTL_SVHDX_SET_INITIATOR_INFORMATION   CTL_CODE(FILE_DEVICE_FILE_SYSTEM, 194, METHOD_BUFFERED, FILE_ANY_ACCESS)
+#endif /* (_WIN32_WINNT >= _WIN32_WINNT_WINBLUE) */
+#if (_WIN32_WINNT >= _WIN32_WINNT_WIN7)
+#define FSCTL_SET_EXTERNAL_BACKING              CTL_CODE(FILE_DEVICE_FILE_SYSTEM, 195, METHOD_BUFFERED, FILE_SPECIAL_ACCESS)
+#define FSCTL_GET_EXTERNAL_BACKING              CTL_CODE(FILE_DEVICE_FILE_SYSTEM, 196, METHOD_BUFFERED, FILE_ANY_ACCESS)
+#define FSCTL_DELETE_EXTERNAL_BACKING           CTL_CODE(FILE_DEVICE_FILE_SYSTEM, 197, METHOD_BUFFERED, FILE_SPECIAL_ACCESS)
+#define FSCTL_ENUM_EXTERNAL_BACKING             CTL_CODE(FILE_DEVICE_FILE_SYSTEM, 198, METHOD_BUFFERED, FILE_ANY_ACCESS)
+#define FSCTL_ENUM_OVERLAY                      CTL_CODE(FILE_DEVICE_FILE_SYSTEM, 199, METHOD_NEITHER, FILE_ANY_ACCESS)
+#define FSCTL_ADD_OVERLAY                       CTL_CODE(FILE_DEVICE_FILE_SYSTEM, 204, METHOD_BUFFERED, FILE_WRITE_DATA)
+#define FSCTL_REMOVE_OVERLAY                    CTL_CODE(FILE_DEVICE_FILE_SYSTEM, 205, METHOD_BUFFERED, FILE_WRITE_DATA)
+#define FSCTL_UPDATE_OVERLAY                    CTL_CODE(FILE_DEVICE_FILE_SYSTEM, 206, METHOD_BUFFERED, FILE_WRITE_DATA)
+#endif /* (_WIN32_WINNT >= _WIN32_WINNT_WIN7) */
+#if (_WIN32_WINNT >= _WIN32_WINNT_WIN8)
+#define FSCTL_SHUFFLE_FILE                      CTL_CODE(FILE_DEVICE_FILE_SYSTEM, 208, METHOD_BUFFERED, FILE_READ_ACCESS | FILE_WRITE_ACCESS) // SHUFFLE_FILE_DATA
+#endif /*_WIN32_WINNT >= _WIN32_WINNT_WIN8 */
+#if (_WIN32_WINNT >= _WIN32_WINNT_WINBLUE)
+#define FSCTL_DUPLICATE_EXTENTS_TO_FILE         CTL_CODE(FILE_DEVICE_FILE_SYSTEM, 209, METHOD_BUFFERED, FILE_WRITE_DATA )
+#endif /* (_WIN32_WINNT >= _WIN32_WINNT_WINBLUE) */
+#if (_WIN32_WINNT >= _WIN32_WINNT_WINBLUE)
+#define FSCTL_SPARSE_OVERALLOCATE               CTL_CODE(FILE_DEVICE_FILE_SYSTEM, 211, METHOD_BUFFERED, FILE_SPECIAL_ACCESS)
+#define FSCTL_STORAGE_QOS_CONTROL               CTL_CODE(FILE_DEVICE_FILE_SYSTEM, 212, METHOD_BUFFERED, FILE_ANY_ACCESS)
+#endif /* (_WIN32_WINNT >= _WIN32_WINNT_WINBLUE) */
+#if (_WIN32_WINNT >= _WIN32_WINNT_WINTHRESHOLD)
+#define FSCTL_INITIATE_FILE_METADATA_OPTIMIZATION       CTL_CODE(FILE_DEVICE_FILE_SYSTEM, 215, METHOD_BUFFERED, FILE_SPECIAL_ACCESS)
+#define FSCTL_QUERY_FILE_METADATA_OPTIMIZATION          CTL_CODE(FILE_DEVICE_FILE_SYSTEM, 216, METHOD_BUFFERED, FILE_SPECIAL_ACCESS)
+#endif /* (_WIN32_WINNT >= _WIN32_WINNT_WINTHRESHOLD) */
+#if (_WIN32_WINNT >= _WIN32_WINNT_WINBLUE)
+#define FSCTL_SVHDX_ASYNC_TUNNEL_REQUEST         CTL_CODE(FILE_DEVICE_FILE_SYSTEM, 217, METHOD_BUFFERED, FILE_ANY_ACCESS)
+#endif /* (_WIN32_WINNT >= _WIN32_WINNT_WINBLUE) */
+#if (_WIN32_WINNT >= _WIN32_WINNT_WIN7)
+#define FSCTL_GET_WOF_VERSION                    CTL_CODE(FILE_DEVICE_FILE_SYSTEM, 218, METHOD_BUFFERED, FILE_ANY_ACCESS)
+#endif
+
+#if (_WIN32_WINNT >= _WIN32_WINNT_WINTHRESHOLD)
+#define FSCTL_HCS_SYNC_TUNNEL_REQUEST            CTL_CODE(FILE_DEVICE_FILE_SYSTEM, 219, METHOD_BUFFERED, FILE_ANY_ACCESS)
+#define FSCTL_HCS_ASYNC_TUNNEL_REQUEST           CTL_CODE(FILE_DEVICE_FILE_SYSTEM, 220, METHOD_BUFFERED, FILE_ANY_ACCESS)
+#define FSCTL_QUERY_EXTENT_READ_CACHE_INFO       CTL_CODE(FILE_DEVICE_FILE_SYSTEM, 221, METHOD_NEITHER, FILE_ANY_ACCESS)  // VCN_RANGE_INPUT_BUFFER, EXTENT_READ_CACHE_INFO_BUFFER
+#define FSCTL_QUERY_REFS_VOLUME_COUNTER_INFO     CTL_CODE(FILE_DEVICE_FILE_SYSTEM, 222, METHOD_NEITHER, FILE_ANY_ACCESS)  // REFS_VOLUME_COUNTER_INFO_INPUT_BUFFER, VOLUME_REFS_INFO_BUFFER
+#define FSCTL_CLEAN_VOLUME_METADATA              CTL_CODE(FILE_DEVICE_FILE_SYSTEM, 223, METHOD_BUFFERED, FILE_ANY_ACCESS)
+#define FSCTL_SET_INTEGRITY_INFORMATION_EX       CTL_CODE(FILE_DEVICE_FILE_SYSTEM, 224, METHOD_BUFFERED, FILE_ANY_ACCESS) // FSCTL_SET_INTEGRITY_INFORMATION_BUFFER_EX
+#endif /* (_WIN32_WINNT >= _WIN32_WINNT_WINTHRESHOLD) */
+#if (_WIN32_WINNT >= _WIN32_WINNT_WIN7)
+#define FSCTL_SUSPEND_OVERLAY                    CTL_CODE(FILE_DEVICE_FILE_SYSTEM, 225, METHOD_BUFFERED, FILE_ANY_ACCESS)
+#endif
+#if (_WIN32_WINNT >= _WIN32_WINNT_WINTHRESHOLD)
+#define FSCTL_VIRTUAL_STORAGE_QUERY_PROPERTY     CTL_CODE(FILE_DEVICE_FILE_SYSTEM, 226, METHOD_BUFFERED, FILE_ANY_ACCESS)
+#define FSCTL_FILESYSTEM_GET_STATISTICS_EX       CTL_CODE(FILE_DEVICE_FILE_SYSTEM, 227, METHOD_BUFFERED, FILE_ANY_ACCESS) // FILESYSTEM_STATISTICS_EX
+#define FSCTL_QUERY_VOLUME_CONTAINER_STATE       CTL_CODE(FILE_DEVICE_FILE_SYSTEM, 228, METHOD_BUFFERED, FILE_ANY_ACCESS)
+#define FSCTL_SET_LAYER_ROOT                     CTL_CODE(FILE_DEVICE_FILE_SYSTEM, 229, METHOD_BUFFERED, FILE_ANY_ACCESS) // CONTAINER_ROOT_INFO_INPUT CONTAINER_ROOT_INFO_OUTPUT
+#endif
+
+#ifdef __clang__
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wundef"
+#endif
+
+#if (_WIN32_WINNT >= _WIN32_WINNT_WIN10_TH2)
+#define FSCTL_QUERY_DIRECT_ACCESS_EXTENTS        CTL_CODE(FILE_DEVICE_FILE_SYSTEM, 230, METHOD_NEITHER, FILE_ANY_ACCESS)
+#define FSCTL_NOTIFY_STORAGE_SPACE_ALLOCATION    CTL_CODE(FILE_DEVICE_FILE_SYSTEM, 231, METHOD_BUFFERED, FILE_ANY_ACCESS)
+#define FSCTL_SSDI_STORAGE_REQUEST               CTL_CODE(FILE_DEVICE_FILE_SYSTEM, 232, METHOD_BUFFERED, FILE_ANY_ACCESS)
+#endif
+
+#if (_WIN32_WINNT >= _WIN32_WINNT_WIN10_RS1)
+#define FSCTL_QUERY_DIRECT_IMAGE_ORIGINAL_BASE   CTL_CODE(FILE_DEVICE_FILE_SYSTEM, 233, METHOD_BUFFERED, FILE_ANY_ACCESS)
+#define FSCTL_READ_UNPRIVILEGED_USN_JOURNAL      CTL_CODE(FILE_DEVICE_FILE_SYSTEM, 234,  METHOD_NEITHER, FILE_ANY_ACCESS) // READ_USN_JOURNAL_DATA, USN
+#endif
+
+#if (_WIN32_WINNT >= _WIN32_WINNT_WIN10_TH2)
+#define FSCTL_GHOST_FILE_EXTENTS                 CTL_CODE(FILE_DEVICE_FILE_SYSTEM, 235, METHOD_BUFFERED, FILE_WRITE_ACCESS) // FSCTL_GHOST_FILE_EXTENTS_INPUT_BUFFER
+#define FSCTL_QUERY_GHOSTED_FILE_EXTENTS         CTL_CODE(FILE_DEVICE_FILE_SYSTEM, 236, METHOD_BUFFERED, FILE_ANY_ACCESS)
+#endif
+#if (_WIN32_WINNT >= _WIN32_WINNT_WIN10_TH2)
+#define FSCTL_UNMAP_SPACE                        CTL_CODE(FILE_DEVICE_FILE_SYSTEM, 237, METHOD_BUFFERED, FILE_ANY_ACCESS)
+#endif
+#if (_WIN32_WINNT >= _WIN32_WINNT_WINTHRESHOLD)
+#define FSCTL_HCS_SYNC_NO_WRITE_TUNNEL_REQUEST   CTL_CODE(FILE_DEVICE_FILE_SYSTEM, 238, METHOD_BUFFERED, FILE_ANY_ACCESS)
+#endif
+
+#if (_WIN32_WINNT >= _WIN32_WINNT_WIN10_RS2)
+#define FSCTL_STREAMS_QUERY_PARAMETERS          CTL_CODE(FILE_DEVICE_FILE_SYSTEM, 241, METHOD_BUFFERED, FILE_ANY_ACCESS)
+#define FSCTL_STREAMS_ASSOCIATE_ID              CTL_CODE(FILE_DEVICE_FILE_SYSTEM, 242, METHOD_BUFFERED, FILE_ANY_ACCESS)
+#define FSCTL_STREAMS_QUERY_ID                  CTL_CODE(FILE_DEVICE_FILE_SYSTEM, 243, METHOD_BUFFERED, FILE_ANY_ACCESS)
+
+#define FSCTL_GET_RETRIEVAL_POINTERS_AND_REFCOUNT CTL_CODE(FILE_DEVICE_FILE_SYSTEM, 244, METHOD_NEITHER,  FILE_ANY_ACCESS) // STARTING_VCN_INPUT_BUFFER, RETRIEVAL_POINTERS_AND_REFCOUNT_BUFFER
+
+#define FSCTL_QUERY_VOLUME_NUMA_INFO            CTL_CODE(FILE_DEVICE_FILE_SYSTEM, 245, METHOD_BUFFERED, FILE_ANY_ACCESS)
+
+#endif
+#if (_WIN32_WINNT >= _WIN32_WINNT_WIN10_RS2)
+
+#define FSCTL_REFS_DEALLOCATE_RANGES            CTL_CODE(FILE_DEVICE_FILE_SYSTEM, 246, METHOD_BUFFERED, FILE_ANY_ACCESS)
+#endif
+#if (_WIN32_WINNT >= _WIN32_WINNT_WIN10_TH2)
+#define FSCTL_QUERY_REFS_SMR_VOLUME_INFO         CTL_CODE(FILE_DEVICE_FILE_SYSTEM, 247, METHOD_BUFFERED, FILE_ANY_ACCESS)
+#define FSCTL_SET_REFS_SMR_VOLUME_GC_PARAMETERS  CTL_CODE(FILE_DEVICE_FILE_SYSTEM, 248, METHOD_BUFFERED, FILE_ANY_ACCESS)
+#define FSCTL_SET_REFS_FILE_STRICTLY_SEQUENTIAL  CTL_CODE(FILE_DEVICE_FILE_SYSTEM, 249, METHOD_BUFFERED, FILE_ANY_ACCESS)
+#endif
+#if (_WIN32_WINNT >= _WIN32_WINNT_WIN10_RS3)
+#define FSCTL_DUPLICATE_EXTENTS_TO_FILE_EX      CTL_CODE(FILE_DEVICE_FILE_SYSTEM, 250, METHOD_BUFFERED, FILE_WRITE_DATA)
+#define FSCTL_QUERY_BAD_RANGES                  CTL_CODE(FILE_DEVICE_FILE_SYSTEM, 251, METHOD_BUFFERED, FILE_ANY_ACCESS)
+#define FSCTL_SET_DAX_ALLOC_ALIGNMENT_HINT      CTL_CODE(FILE_DEVICE_FILE_SYSTEM, 252, METHOD_BUFFERED, FILE_ANY_ACCESS)
+#define FSCTL_DELETE_CORRUPTED_REFS_CONTAINER   CTL_CODE(FILE_DEVICE_FILE_SYSTEM, 253, METHOD_BUFFERED, FILE_ANY_ACCESS)
+#define FSCTL_SCRUB_UNDISCOVERABLE_ID           CTL_CODE(FILE_DEVICE_FILE_SYSTEM, 254, METHOD_BUFFERED, FILE_ANY_ACCESS)
+#endif /* (_WIN32_WINNT >= _WIN32_WINNT_WIN10_RS3) */
+#if (_WIN32_WINNT >= _WIN32_WINNT_WIN10_RS4)
+#define FSCTL_NOTIFY_DATA_CHANGE                CTL_CODE(FILE_DEVICE_FILE_SYSTEM, 255, METHOD_BUFFERED, FILE_ANY_ACCESS)
+#endif /* (_WIN32_WINNT >= _WIN32_WINNT_WIN10_RS4) */
+#if (_WIN32_WINNT >= _WIN32_WINNT_WIN10_RS1)
+#define FSCTL_START_VIRTUALIZATION_INSTANCE_EX  CTL_CODE(FILE_DEVICE_FILE_SYSTEM, 256, METHOD_BUFFERED, FILE_ANY_ACCESS)
+#endif /* (_WIN32_WINNT >= _WIN32_WINNT_WIN10_RS1) */
+#if (_WIN32_WINNT >= _WIN32_WINNT_WIN10_RS4)
+#define FSCTL_ENCRYPTION_KEY_CONTROL            CTL_CODE(FILE_DEVICE_FILE_SYSTEM, 257, METHOD_BUFFERED, FILE_ANY_ACCESS)  // protect/unprotect under DPL
+#define FSCTL_VIRTUAL_STORAGE_SET_BEHAVIOR      CTL_CODE(FILE_DEVICE_FILE_SYSTEM, 258, METHOD_BUFFERED, FILE_ANY_ACCESS)
+#endif /* (_WIN32_WINNT >= _WIN32_WINNT_WIN10_RS4) */
+
+#if (_WIN32_WINNT >= _WIN32_WINNT_WIN10_RS1)
+#define FSCTL_SET_REPARSE_POINT_EX              CTL_CODE(FILE_DEVICE_FILE_SYSTEM, 259, METHOD_BUFFERED, FILE_SPECIAL_ACCESS) // REPARSE_DATA_BUFFER_EX
+#endif /* (_WIN32_WINNT >= _WIN32_WINNT_WIN10_RS1) */
+#if (_WIN32_WINNT >= _WIN32_WINNT_WIN10_RS5)
+#define FSCTL_REARRANGE_FILE                    CTL_CODE(FILE_DEVICE_FILE_SYSTEM, 264, METHOD_BUFFERED, FILE_READ_ACCESS | FILE_WRITE_ACCESS) // REARRANGE_FILE_DATA
+#define FSCTL_VIRTUAL_STORAGE_PASSTHROUGH       CTL_CODE(FILE_DEVICE_FILE_SYSTEM, 265, METHOD_BUFFERED, FILE_ANY_ACCESS)
+#define FSCTL_GET_RETRIEVAL_POINTER_COUNT       CTL_CODE(FILE_DEVICE_FILE_SYSTEM, 266, METHOD_NEITHER,  FILE_ANY_ACCESS) // STARTING_VCN_INPUT_BUFFER, RETRIEVAL_POINTER_COUNT
+#if defined(_WIN64)
+#define FSCTL_ENABLE_PER_IO_FLAGS               CTL_CODE(FILE_DEVICE_FILE_SYSTEM, 267, METHOD_BUFFERED, FILE_ANY_ACCESS)
+#endif /* _WIN64 */
+#endif /* (_WIN32_WINNT >= _WIN32_WINNT_WIN10_RS5) */
+//
+// AVIO IOCTLS.
+//
+
+#ifdef __clang__
+#pragma clang diagnostic pop
+#endif
+
+#define IOCTL_AVIO_ALLOCATE_STREAM      CTL_CODE(FILE_DEVICE_AVIO, 1, METHOD_BUFFERED, FILE_SPECIAL_ACCESS)
+#define IOCTL_AVIO_FREE_STREAM          CTL_CODE(FILE_DEVICE_AVIO, 2, METHOD_BUFFERED, FILE_SPECIAL_ACCESS)
+#define IOCTL_AVIO_MODIFY_STREAM        CTL_CODE(FILE_DEVICE_AVIO, 3, METHOD_BUFFERED, FILE_SPECIAL_ACCESS)
+
+typedef struct {
+
+    DWORD RecordLength;
+    WORD   MajorVersion;
+    WORD   MinorVersion;
+    DWORDLONG FileReferenceNumber;
+    DWORDLONG ParentFileReferenceNumber;
+    USN Usn;
+    LARGE_INTEGER TimeStamp;
+    DWORD Reason;
+    DWORD SourceInfo;
+    DWORD SecurityId;
+    DWORD FileAttributes;
+    WORD   FileNameLength;
+    WORD   FileNameOffset;
+    WCHAR FileName[1];
+
+} USN_RECORD_V2, *PUSN_RECORD_V2;
+
+
+//
+//  These are the generic rights.
+//
+
+#define GENERIC_READ                     (0x80000000L)
+#define GENERIC_WRITE                    (0x40000000L)
+#define GENERIC_EXECUTE                  (0x20000000L)
+#define GENERIC_ALL                      (0x10000000L)
+typedef HANDLE HKEY;
+
+typedef struct _SHELLEXECUTEINFOA {
+  DWORD     cbSize;
+  ULONG     fMask;
+  HWND      hwnd;
+  LPCSTR    lpVerb;
+  LPCSTR    lpFile;
+  LPCSTR    lpParameters;
+  LPCSTR    lpDirectory;
+  int       nShow;
+  HINSTANCE hInstApp;
+  void      *lpIDList;
+  LPCSTR    lpClass;
+  HKEY      hkeyClass;
+  DWORD     dwHotKey;
+  union {
+    HANDLE hIcon;
+    HANDLE hMonitor;
+  } DUMMYUNIONNAME;
+  HANDLE    hProcess;
+} SHELLEXECUTEINFOA, *LPSHELLEXECUTEINFOA;
+
+WINDOWS_IMPORT BOOL WINAPI ShellExecuteExA(SHELLEXECUTEINFOA *pExecInfo);
+
+WINDOWS_IMPORT BOOL WINAPI OpenProcessToken( HANDLE ProcessHandle, DWORD DesiredAccess, HANDLE* TokenHandle);
+
+typedef enum _TOKEN_INFORMATION_CLASS {
+  TokenUser = 1,
+  TokenGroups,
+  TokenPrivileges,
+  TokenOwner,
+  TokenPrimaryGroup,
+  TokenDefaultDacl,
+  TokenSource,
+  TokenType,
+  TokenImpersonationLevel,
+  TokenStatistics,
+  TokenRestrictedSids,
+  TokenSessionId,
+  TokenGroupsAndPrivileges,
+  TokenSessionReference,
+  TokenSandBoxInert,
+  TokenAuditPolicy,
+  TokenOrigin,
+  TokenElevationType,
+  TokenLinkedToken,
+  TokenElevation,
+  TokenHasRestrictions,
+  TokenAccessInformation,
+  TokenVirtualizationAllowed,
+  TokenVirtualizationEnabled,
+  TokenIntegrityLevel,
+  TokenUIAccess,
+  TokenMandatoryPolicy,
+  TokenLogonSid,
+  TokenIsAppContainer,
+  TokenCapabilities,
+  TokenAppContainerSid,
+  TokenAppContainerNumber,
+  TokenUserClaimAttributes,
+  TokenDeviceClaimAttributes,
+  TokenRestrictedUserClaimAttributes,
+  TokenRestrictedDeviceClaimAttributes,
+  TokenDeviceGroups,
+  TokenRestrictedDeviceGroups,
+  TokenSecurityAttributes,
+  TokenIsRestricted,
+  TokenProcessTrustLevel,
+  TokenPrivateNameSpace,
+  TokenSingletonAttributes,
+  TokenBnoIsolation,
+  TokenChildProcessFlags,
+  TokenIsLessPrivilegedAppContainer,
+  TokenIsSandboxed,
+  TokenIsAppSilo,
+  TokenLoggingInformation,
+  TokenLearningMode,
+  MaxTokenInfoClass
+} TOKEN_INFORMATION_CLASS, *PTOKEN_INFORMATION_CLASS;
+
+typedef struct _TOKEN_ELEVATION {
+    DWORD TokenIsElevated;
+} TOKEN_ELEVATION, *PTOKEN_ELEVATION;
+
+#define TOKEN_ASSIGN_PRIMARY    (0x0001)
+#define TOKEN_DUPLICATE         (0x0002)
+#define TOKEN_IMPERSONATE       (0x0004)
+#define TOKEN_QUERY             (0x0008)
+#define TOKEN_QUERY_SOURCE      (0x0010)
+#define TOKEN_ADJUST_PRIVILEGES (0x0020)
+#define TOKEN_ADJUST_GROUPS     (0x0040)
+#define TOKEN_ADJUST_DEFAULT    (0x0080)
+#define TOKEN_ADJUST_SESSIONID  (0x0100)
+
+#define TOKEN_ALL_ACCESS_P (STANDARD_RIGHTS_REQUIRED  |\
+                          TOKEN_ASSIGN_PRIMARY      |\
+                          TOKEN_DUPLICATE           |\
+                          TOKEN_IMPERSONATE         |\
+                          TOKEN_QUERY               |\
+                          TOKEN_QUERY_SOURCE        |\
+                          TOKEN_ADJUST_PRIVILEGES   |\
+                          TOKEN_ADJUST_GROUPS       |\
+                          TOKEN_ADJUST_DEFAULT )
+
+#if ((defined(_WIN32_WINNT) && (_WIN32_WINNT > 0x0400)) || (!defined(_WIN32_WINNT)))
+#define TOKEN_ALL_ACCESS  (TOKEN_ALL_ACCESS_P |\
+                          TOKEN_ADJUST_SESSIONID )
+#else
+#define TOKEN_ALL_ACCESS  (TOKEN_ALL_ACCESS_P)
+#endif
+
+#define TOKEN_READ       (STANDARD_RIGHTS_READ      |\
+                          TOKEN_QUERY)
+
+
+#define TOKEN_WRITE      (STANDARD_RIGHTS_WRITE     |\
+                          TOKEN_ADJUST_PRIVILEGES   |\
+                          TOKEN_ADJUST_GROUPS       |\
+                          TOKEN_ADJUST_DEFAULT)
+
+#define TOKEN_EXECUTE    (STANDARD_RIGHTS_EXECUTE)
+
+#define TOKEN_TRUST_CONSTRAINT_MASK    (STANDARD_RIGHTS_READ  | \
+                                       TOKEN_QUERY  |\
+                                       TOKEN_QUERY_SOURCE )
+
+WINDOWS_IMPORT BOOL WINAPI GetTokenInformation( HANDLE TokenHandle, TOKEN_INFORMATION_CLASS TokenInformationClass, LPVOID TokenInformation, DWORD TokenInformationLength, PDWORD ReturnLength);
+
+#define SEE_MASK_DEFAULT           0x00000000
+#define SEE_MASK_CLASSNAME         0x00000001   // SHELLEXECUTEINFO.lpClass is valid
+#define SEE_MASK_CLASSKEY          0x00000003   // SHELLEXECUTEINFO.hkeyClass is valid
+// Note SEE_MASK_INVOKEIDLIST(0xC) implies SEE_MASK_IDLIST(0x04)
+#define SEE_MASK_IDLIST            0x00000004   // SHELLEXECUTEINFO.lpIDList is valid
+#define SEE_MASK_INVOKEIDLIST      0x0000000c   // enable IContextMenu based verbs
+#define SEE_MASK_HOTKEY            0x00000020   // SHELLEXECUTEINFO.dwHotKey is valid
+#define SEE_MASK_NOCLOSEPROCESS    0x00000040   // SHELLEXECUTEINFO.hProcess
+#define SEE_MASK_CONNECTNETDRV     0x00000080   // enables re-connecting disconnected network drives
+#define SEE_MASK_NOASYNC           0x00000100   // block on the call until the invoke has completed, use for callers that exit after calling ShellExecuteEx()
+#define SEE_MASK_FLAG_DDEWAIT      SEE_MASK_NOASYNC // Use SEE_MASK_NOASYNC instead of SEE_MASK_FLAG_DDEWAIT as it more accuratly describes the behavior
+#define SEE_MASK_DOENVSUBST        0x00000200   // indicates that SHELLEXECUTEINFO.lpFile contains env vars that should be expanded
+#define SEE_MASK_FLAG_NO_UI        0x00000400   // disable UI including error messages
+#define SEE_MASK_UNICODE           0x00004000
+#define SEE_MASK_NO_CONSOLE        0x00008000
+#define SEE_MASK_ASYNCOK           0x00100000
+
+#define FILE_FLAG_WRITE_THROUGH         0x80000000
+#define FILE_FLAG_OVERLAPPED            0x40000000
+#define FILE_FLAG_NO_BUFFERING          0x20000000
+#define FILE_FLAG_RANDOM_ACCESS         0x10000000
+#define FILE_FLAG_SEQUENTIAL_SCAN       0x08000000
+#define FILE_FLAG_DELETE_ON_CLOSE       0x04000000
+#define FILE_FLAG_BACKUP_SEMANTICS      0x02000000
+#define FILE_FLAG_POSIX_SEMANTICS       0x01000000
+#define FILE_FLAG_SESSION_AWARE         0x00800000
+#define FILE_FLAG_OPEN_REPARSE_POINT    0x00200000
+#define FILE_FLAG_OPEN_NO_RECALL        0x00100000
+#define FILE_FLAG_FIRST_PIPE_INSTANCE   0x00080000
+
+#define PAGE_NOACCESS           0x01    
+#define PAGE_READONLY           0x02    
+#define PAGE_READWRITE          0x04    
+#define PAGE_WRITECOPY          0x08    
+#define PAGE_EXECUTE            0x10    
+#define PAGE_EXECUTE_READ       0x20    
+#define PAGE_EXECUTE_READWRITE  0x40    
+#define PAGE_EXECUTE_WRITECOPY  0x80    
+#define PAGE_GUARD             0x100    
+#define PAGE_NOCACHE           0x200    
+#define PAGE_WRITECOMBINE      0x400    
+#define PAGE_ENCLAVE_THREAD_CONTROL 0x80000000  
+#define PAGE_REVERT_TO_FILE_MAP     0x80000000  
+#define PAGE_TARGETS_NO_UPDATE      0x40000000  
+#define PAGE_TARGETS_INVALID        0x40000000  
+#define PAGE_ENCLAVE_UNVALIDATED    0x20000000  
+#define PAGE_ENCLAVE_DECOMMIT       0x10000000  
+#define MEM_COMMIT                      0x00001000  
+#define MEM_RESERVE                     0x00002000  
+#define MEM_REPLACE_PLACEHOLDER         0x00004000  
+#define MEM_RESERVE_PLACEHOLDER         0x00040000  
+#define MEM_RESET                       0x00080000  
+#define MEM_TOP_DOWN                    0x00100000  
+#define MEM_WRITE_WATCH                 0x00200000  
+#define MEM_PHYSICAL                    0x00400000  
+#define MEM_ROTATE                      0x00800000  
+#define MEM_DIFFERENT_IMAGE_BASE_OK     0x00800000  
+#define MEM_RESET_UNDO                  0x01000000  
+#define MEM_LARGE_PAGES                 0x20000000  
+#define MEM_4MB_PAGES                   0x80000000  
+#define MEM_64K_PAGES                   (MEM_LARGE_PAGES | MEM_PHYSICAL)  
+#define MEM_UNMAP_WITH_TRANSIENT_BOOST  0x00000001  
+#define MEM_COALESCE_PLACEHOLDERS       0x00000001  
+#define MEM_PRESERVE_PLACEHOLDER        0x00000002  
+#define MEM_DECOMMIT                    0x00004000  
+#define MEM_RELEASE                     0x00008000  
+#define MEM_FREE                        0x00010000  
+
+#define SECTION_QUERY                0x0001
+#define SECTION_MAP_WRITE            0x0002
+#define SECTION_MAP_READ             0x0004
+#define SECTION_MAP_EXECUTE          0x0008
+#define SECTION_EXTEND_SIZE          0x0010
+#define SECTION_MAP_EXECUTE_EXPLICIT 0x0020 // not included in SECTION_ALL_ACCESS
+
+#define SECTION_ALL_ACCESS (STANDARD_RIGHTS_REQUIRED|SECTION_QUERY|\
+                            SECTION_MAP_WRITE |      \
+                            SECTION_MAP_READ |       \
+                            SECTION_MAP_EXECUTE |    \
+                            SECTION_EXTEND_SIZE)
+
+#define FILE_MAP_WRITE            SECTION_MAP_WRITE
+#define FILE_MAP_READ             SECTION_MAP_READ
+#define FILE_MAP_ALL_ACCESS       SECTION_ALL_ACCESS
+#define FILE_MAP_EXECUTE          SECTION_MAP_EXECUTE_EXPLICIT  // not included in FILE_MAP_ALL_ACCESS
+#define FILE_MAP_COPY             0x00000001
+#define FILE_MAP_RESERVE          0x80000000
+#define FILE_MAP_TARGETS_INVALID  0x40000000
+#define FILE_MAP_LARGE_PAGES      0x20000000
+
+#define SE_CREATE_TOKEN_NAME                         (L"SeCreateTokenPrivilege")
+#define SE_ASSIGNPRIMARYTOKEN_NAME                   (L"SeAssignPrimaryTokenPrivilege")
+#define SE_LOCK_MEMORY_NAME                          (L"SeLockMemoryPrivilege")
+#define SE_INCREASE_QUOTA_NAME                       (L"SeIncreaseQuotaPrivilege")
+#define SE_UNSOLICITED_INPUT_NAME                    (L"SeUnsolicitedInputPrivilege")
+#define SE_MACHINE_ACCOUNT_NAME                      (L"SeMachineAccountPrivilege")
+#define SE_TCB_NAME                                  (L"SeTcbPrivilege")
+#define SE_SECURITY_NAME                             (L"SeSecurityPrivilege")
+#define SE_TAKE_OWNERSHIP_NAME                       (L"SeTakeOwnershipPrivilege")
+#define SE_LOAD_DRIVER_NAME                          (L"SeLoadDriverPrivilege")
+#define SE_SYSTEM_PROFILE_NAME                       (L"SeSystemProfilePrivilege")
+#define SE_SYSTEMTIME_NAME                           (L"SeSystemtimePrivilege")
+#define SE_PROF_SINGLE_PROCESS_NAME                  (L"SeProfileSingleProcessPrivilege")
+#define SE_INC_BASE_PRIORITY_NAME                    (L"SeIncreaseBasePriorityPrivilege")
+#define SE_CREATE_PAGEFILE_NAME                      (L"SeCreatePagefilePrivilege")
+#define SE_CREATE_PERMANENT_NAME                     (L"SeCreatePermanentPrivilege")
+#define SE_BACKUP_NAME                               (L"SeBackupPrivilege")
+#define SE_RESTORE_NAME                              (L"SeRestorePrivilege")
+#define SE_SHUTDOWN_NAME                             (L"SeShutdownPrivilege")
+#define SE_DEBUG_NAME                                (L"SeDebugPrivilege")
+#define SE_AUDIT_NAME                                (L"SeAuditPrivilege")
+#define SE_SYSTEM_ENVIRONMENT_NAME                   (L"SeSystemEnvironmentPrivilege")
+#define SE_CHANGE_NOTIFY_NAME                        (L"SeChangeNotifyPrivilege")
+#define SE_REMOTE_SHUTDOWN_NAME                      (L"SeRemoteShutdownPrivilege")
+#define SE_UNDOCK_NAME                               (L"SeUndockPrivilege")
+#define SE_SYNC_AGENT_NAME                           (L"SeSyncAgentPrivilege")
+#define SE_ENABLE_DELEGATION_NAME                    (L"SeEnableDelegationPrivilege")
+#define SE_MANAGE_VOLUME_NAME                        (L"SeManageVolumePrivilege")
+#define SE_IMPERSONATE_NAME                          (L"SeImpersonatePrivilege")
+#define SE_CREATE_GLOBAL_NAME                        (L"SeCreateGlobalPrivilege")
+#define SE_TRUSTED_CREDMAN_ACCESS_NAME               (L"SeTrustedCredManAccessPrivilege")
+#define SE_RELABEL_NAME                              (L"SeRelabelPrivilege")
+#define SE_INC_WORKING_SET_NAME                      (L"SeIncreaseWorkingSetPrivilege")
+#define SE_TIME_ZONE_NAME                            (L"SeTimeZonePrivilege")
+#define SE_CREATE_SYMBOLIC_LINK_NAME                 (L"SeCreateSymbolicLinkPrivilege")
+#define SE_DELEGATE_SESSION_USER_IMPERSONATE_NAME    (L"SeDelegateSessionUserImpersonatePrivilege")
+
+#define SE_PRIVILEGE_ENABLED_BY_DEFAULT (0x00000001L)
+#define SE_PRIVILEGE_ENABLED            (0x00000002L)
+#define SE_PRIVILEGE_REMOVED            (0X00000004L)
+#define SE_PRIVILEGE_USED_FOR_ACCESS    (0x80000000L)
+
+#define SE_PRIVILEGE_VALID_ATTRIBUTES   (SE_PRIVILEGE_ENABLED_BY_DEFAULT | \
+                                         SE_PRIVILEGE_ENABLED            | \
+                                         SE_PRIVILEGE_REMOVED            | \
+                                         SE_PRIVILEGE_USED_FOR_ACCESS)
+
+
+#define ANYSIZE_ARRAY 1 
+
+typedef struct {
+    LUID Luid;
+    DWORD Attributes;
+    } LUID_AND_ATTRIBUTES, * PLUID_AND_ATTRIBUTES;
+typedef LUID_AND_ATTRIBUTES LUID_AND_ATTRIBUTES_ARRAY[ANYSIZE_ARRAY];
+typedef LUID_AND_ATTRIBUTES_ARRAY *PLUID_AND_ATTRIBUTES_ARRAY;
+
+typedef struct  {
+    DWORD PrivilegeCount;
+    LUID_AND_ATTRIBUTES Privileges[ANYSIZE_ARRAY];
+} TOKEN_PRIVILEGES, *PTOKEN_PRIVILEGES;
+
+WINDOWS_IMPORT BOOL WINAPI SetFilePointerEx( HANDLE hFile, LARGE_INTEGER liDistanceToMove, LARGE_INTEGER* lpNewFilePointer, DWORD dwMoveMethod);
+
+WINDOWS_IMPORT HANDLE WINAPI CreateFileMappingW(HANDLE hFile,LPSECURITY_ATTRIBUTES lpFileMappingAttributes,DWORD flProtect,DWORD dwMaximumSizeHigh,DWORD dwMaximumSizeLow,LPCWSTR lpName);
+
+WINDOWS_IMPORT PVOID WINAPI MapViewOfFile(HANDLE hFileMappingObject,DWORD dwDesiredAccess,DWORD dwFileOffsetHigh,DWORD dwFileOffsetLow,size_t dwNumberOfBytesToMap);
+
+WINDOWS_IMPORT BOOL WINAPI LookupPrivilegeValueW(LPCWSTR lpSystemName,LPCWSTR lpName,LUID *lpLuid);
+
+WINDOWS_IMPORT BOOL WINAPI AdjustTokenPrivileges(HANDLE TokenHandle,BOOL DisableAllPrivileges,TOKEN_PRIVILEGES *NewState,DWORD BufferLength,PTOKEN_PRIVILEGES PreviousState,PDWORD ReturnLength);
+
+WINDOWS_IMPORT BOOL WINAPI GetVolumePathNameW( LPCWSTR lpszFileName, LPWSTR lpszVolumePathName, DWORD cchBufferLength);
+
+WINDOWS_IMPORT BOOL WINAPI GetVolumeNameForVolumeMountPointW( LPCWSTR lpszVolumeMountPoint, LPWSTR  lpszVolumeName, DWORD   cchBufferLength
+);
 
 /* End include: windows_loader.h */
     #endif // _WINDOWS_
@@ -4756,6 +5799,7 @@ Thread_Handle sys_get_current_thread(void) {
     #pragma comment(lib, "kernel32")
     #pragma comment(lib, "user32")
     #pragma comment(lib, "shcore")
+    #pragma comment(lib, "advapi32")
     #pragma comment(lib, "dbghelp")
     #pragma comment(lib, "pdh")
     #pragma comment(lib, "winmm")
@@ -4794,7 +5838,7 @@ unit_local s64 _wide_strcmp(u16 *s1, u16 *s2) {
 
 unit_local void _win_wide_to_utf8(u16 *s, string *utf8) {
     u64 len = _wide_strlen(s);
-    int result = WideCharToMultiByte(CP_UTF8, 0, (LPCWCH)s, -1, (char*)utf8->data, (int)len+1, 0, 0);
+    int result = WideCharToMultiByte(CP_UTF8, 0, (LPCWCH)s, -1, (char*)utf8->data, (int)len*4+1, 0, 0);
     assert(result);
 
     utf8->count = (u64)(len);
@@ -5160,6 +6204,7 @@ File_Handle sys_open_file(string path, File_Open_Flags flags) {
     if (flags & FILE_OPEN_WRITE) {
         access_mode |= FILE_GENERIC_WRITE;
     }
+    
     if (flags & FILE_OPEN_READ) {
         access_mode |= FILE_GENERIC_READ;
     }
@@ -5355,10 +6400,10 @@ void sys_walk_directory(string path, bool recursive, bool walk_directories, Walk
         }
     }
 
-    u16 path_wide[2048];
+    static u16 path_wide[2048];
     u64 path_len = _win_utf8_to_wide(path, path_wide, 2048);
 
-    u16 search_pattern[2048];
+    static u16 search_pattern[2048];
     u64 pos = 0;
     for (u64 i = 0; i < path_len; i++) {
         search_pattern[pos++] = path_wide[i];
@@ -5367,6 +6412,7 @@ void sys_walk_directory(string path, bool recursive, bool walk_directories, Walk
         search_pattern[pos++] = '\\';
     }
     search_pattern[pos++] = '*';
+    search_pattern[pos] = 0;
 
     WIN32_FIND_DATAW findData;
     HANDLE hFind = FindFirstFileW((LPCWSTR)search_pattern, &findData);
@@ -5396,7 +6442,7 @@ void sys_walk_directory(string path, bool recursive, bool walk_directories, Walk
         }
         new_path_wide[new_pos++] = 0;
 
-        u8 new_path[2048];
+        static u8 new_path[2048];
 
         string entry_str;
         entry_str.count = new_path_len;
@@ -5795,8 +6841,31 @@ void sys_mutex_release(Mutex mutex) {
     LeaveCriticalSection(mutex.handle);
 }
 
+OSTD_LIB bool sys_semaphore_init(Semaphore *sem) {
+    if (!sem) return false;
+    HANDLE handle = CreateSemaphoreA(0, 0, S32_MAX, 0);
+    if (!handle) return false;
+    *sem = handle;
+    return true;
+}
+
+OSTD_LIB void sys_semaphore_signal(Semaphore *sem) {
+    if (!sem || !*sem) return;
+    ReleaseSemaphore((HANDLE)*sem, 1, 0);
+}
+
+OSTD_LIB void sys_semaphore_wait(Semaphore sem) {
+    if (!sem) return;
+    WaitForSingleObject((HANDLE)sem, 0xFFFFFFFF);
+}
+
+OSTD_LIB void sys_semaphore_release(Semaphore sem) {
+    if (!sem) return;
+    CloseHandle((HANDLE)sem);
+}
+
 inline unit_local u32 sys_atomic_add_32(volatile u32 *addend, u32 value) {
-    return (u32)_InterlockedExchangeAdd((volatile long*)addend, (long)value) + value;
+    return (u32)_InterlockedExchangeAdd((volatile long*)addend, (long)value);
 }
 inline unit_local u64 sys_atomic_add_64(volatile u64 *addend, u64 value) {
     long long old;
@@ -5805,7 +6874,7 @@ inline unit_local u64 sys_atomic_add_64(volatile u64 *addend, u64 value) {
         old = (long long)*addend;
     } while (_InterlockedCompareExchange64((volatile long long*)addend, old + (long long)value, (long long)old) != (long long)old);
 
-    return (u64)(old + (long long)value);
+    return (u64)old;
 }
 
 #ifndef OSTD_HEADLESS
@@ -7441,7 +8510,7 @@ unit_local inline _Per_Thread_Temporary_Storage* _lazy_init_temporary_storage(vo
 #if OS_FLAGS & OS_FLAG_EMSCRIPTEN
     s->temp->arena = make_arena(1024*1024, 1024*1024);
 #else
-    s->temp->arena = make_arena(sys_get_info().page_size*6900, 1024);
+    s->temp->arena = make_arena(sys_get_info().page_size*100000, 1024*32);
 #endif
     s->temp->a = (Allocator) { &s->temp->arena, arena_allocator_proc };
     
@@ -7546,12 +8615,14 @@ void *arena_push(Arena *arena, u64 size) {
 
 void *arena_push_copy(Arena *arena, void *src, u64 size) {
     void *dst = arena_push(arena, size);
+    if (!dst) return dst;
     memcpy(dst, src, (sys_uint)size);
     return dst;
 }
 
 void *arena_push_string(Arena *arena, string data) {
     void *dst = arena_push(arena, data.count);
+    if (!dst) return dst;
     memcpy(dst, data.data, (sys_uint)data.count);
     return dst;
 }
@@ -7567,7 +8638,8 @@ void* arena_allocator_proc(Allocator_Message msg, void *data, void *old, u64 old
     switch (msg) {
         case ALLOCATOR_ALLOCATE:
         {
-            return arena_push(a, n);
+            void *p = arena_push(a, n);
+            return p;
         }
         case ALLOCATOR_REALLOCATE:
         {
@@ -7615,7 +8687,9 @@ void deallocatef(Allocator a, void *p, u64 flags) {
 }
 
 string string_allocate(Allocator a, u64 n) {
-    return (string) {n, (u8*)allocate(a, n)};
+    u8 *p = (u8*)allocate(a, n);
+    assertmsg(p, "Ran out of memory.");
+    return (string) {n, p};
 }
 void string_deallocate(Allocator a, string s) {
     deallocate(a, s.data);
@@ -9299,7 +10373,7 @@ u64 format_string_args(void *buffer, u64 buffer_size, string fmt, u64 arg_count,
                 u64 to_write = str.count;
 
                 if (written + to_write > buffer_size) {
-                    to_write -= buffer_size - (written + to_write);
+                    to_write -= (written + to_write) - buffer_size;
                 }
 
                 if (to_write) {

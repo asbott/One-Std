@@ -16,6 +16,13 @@ OSTD_LIB bool sys_write_entire_file(string path, string data);
 
 OSTD_LIB bool sys_get_absolute_path(Allocator a, string path, string *result);
 
+//typedef struct Disk_Entry {
+//    u64 parent_index;
+//    string name;
+//    bool is_directory;
+//} Disk_Entry;
+//OSTD_LIB bool sys_scrape_disk(Allocator a, string disk_id, Disk_Entry *result, u64 *count);
+
 #ifdef OSTD_IMPL
 
 bool sys_read_entire_file(Allocator a, string path, string *result) {
@@ -28,7 +35,7 @@ bool sys_read_entire_file(Allocator a, string path, string *result) {
     if (!f) return false;
     
     u64 size = sys_get_file_size(f);
-    assert(size > 0);
+    if (size == 0) return false;
     
     *result = string_allocate(a, size);
     s64 readeded =  sys_read(f, result->data, result->count);
@@ -64,8 +71,10 @@ bool sys_get_absolute_path(Allocator a, string path, string *result) {
 
     DWORD result_count = GetFullPathNameA(cpath, count, (LPSTR)result->data, 0);
     
-    return result_count == count;
+    return result_count == count-1;
 }
+
+
 
 #endif // WINDOWS
 

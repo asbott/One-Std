@@ -204,6 +204,12 @@ OSTD_LIB bool sys_mutex_uninit(Mutex *mutex);
 OSTD_LIB void sys_mutex_acquire(Mutex mutex);
 OSTD_LIB void sys_mutex_release(Mutex mutex);
 
+typedef void *Semaphore;
+OSTD_LIB bool sys_semaphore_init(Semaphore *sem);
+OSTD_LIB void sys_semaphore_signal(Semaphore *sem);
+OSTD_LIB void sys_semaphore_wait(Semaphore sem);
+OSTD_LIB void sys_semaphore_release(Semaphore sem);
+
 ////////
 // Atomics
 
@@ -361,6 +367,7 @@ _Ostd_Thread_Storage *_ostd_get_thread_storage(void);
 unit_local _Ostd_Thread_Storage *_ostd_thread_storage = 0;
 unit_local u64 _ostd_thread_storage_allocated_count = 0;
 unit_local Mutex _ostd_thread_storage_register_mutex;
+unit_local bool _ostd_thread_storage_register_mutex_initted;
 unit_local u64 _ostd_main_thread_id;
 unit_local bool _ostd_main_thread_is_unknown = true;
 unit_local _Ostd_Thread_Storage _ostd_main_thread_storage;
@@ -387,15 +394,25 @@ _Ostd_Thread_Storage *_ostd_get_thread_storage(void) {
             = (struct _Per_Thread_Temporary_Storage*)_ostd_main_thread_storage.temporary_storage_struct_backing;
         return &_ostd_main_thread_storage;
     }
-
+    
+    assert(false);
+    
     return 0;
 }
 
 unit_local void _ostd_register_thread_storage(u64 thread_id) {
 
-    if (_ostd_thread_storage) {
-        sys_mutex_acquire(_ostd_thread_storage_register_mutex);
+    static u64 crazy_counter = 0;
+    u64 me = sys_atomic_add_64(&crazy_counter, 1);
+    
+    while (!_ostd_thread_storage_register_mutex_initted && me > 0) {}
+    
+    if (!_ostd_thread_storage_register_mutex_initted) {
+        sys_mutex_init(&_ostd_thread_storage_register_mutex);
+        _ostd_thread_storage_register_mutex_initted = true;
     }
+    
+    sys_mutex_acquire(_ostd_thread_storage_register_mutex);
 
     for (u64 i = 0; i < _ostd_thread_storage_allocated_count; i += 1) {
         _Ostd_Thread_Storage *s = &_ostd_thread_storage[i];
@@ -414,8 +431,7 @@ unit_local void _ostd_register_thread_storage(u64 thread_id) {
     assertmsg(sizeof(_Ostd_Thread_Storage) < page_size, "refactor time");
 
     if (!_ostd_thread_storage) {
-        sys_mutex_init(&_ostd_thread_storage_register_mutex);
-        _ostd_thread_storage = sys_map_pages(SYS_MEMORY_RESERVE, 0, 1024*1024*10, false);
+        _ostd_thread_storage = sys_map_pages(SYS_MEMORY_RESERVE, 0, 100000, false);
         assert(_ostd_thread_storage);
         void *allocated = sys_map_pages(SYS_MEMORY_ALLOCATE, _ostd_thread_storage, 1, false);
         assert(allocated == _ostd_thread_storage);
@@ -1173,6 +1189,7 @@ Thread_Handle sys_get_current_thread(void) {
     #pragma comment(lib, "kernel32")
     #pragma comment(lib, "user32")
     #pragma comment(lib, "shcore")
+    #pragma comment(lib, "advapi32")
     #pragma comment(lib, "dbghelp")
     #pragma comment(lib, "pdh")
     #pragma comment(lib, "winmm")
@@ -1211,7 +1228,7 @@ unit_local s64 _wide_strcmp(u16 *s1, u16 *s2) {
 
 unit_local void _win_wide_to_utf8(u16 *s, string *utf8) {
     u64 len = _wide_strlen(s);
-    int result = WideCharToMultiByte(CP_UTF8, 0, (LPCWCH)s, -1, (char*)utf8->data, (int)len+1, 0, 0);
+    int result = WideCharToMultiByte(CP_UTF8, 0, (LPCWCH)s, -1, (char*)utf8->data, (int)len*4+1, 0, 0);
     assert(result);
 
     utf8->count = (u64)(len);
@@ -1577,6 +1594,7 @@ File_Handle sys_open_file(string path, File_Open_Flags flags) {
     if (flags & FILE_OPEN_WRITE) {
         access_mode |= FILE_GENERIC_WRITE;
     }
+    
     if (flags & FILE_OPEN_READ) {
         access_mode |= FILE_GENERIC_READ;
     }
@@ -1772,10 +1790,10 @@ void sys_walk_directory(string path, bool recursive, bool walk_directories, Walk
         }
     }
 
-    u16 path_wide[2048];
+    static u16 path_wide[2048];
     u64 path_len = _win_utf8_to_wide(path, path_wide, 2048);
 
-    u16 search_pattern[2048];
+    static u16 search_pattern[2048];
     u64 pos = 0;
     for (u64 i = 0; i < path_len; i++) {
         search_pattern[pos++] = path_wide[i];
@@ -1784,6 +1802,7 @@ void sys_walk_directory(string path, bool recursive, bool walk_directories, Walk
         search_pattern[pos++] = '\\';
     }
     search_pattern[pos++] = '*';
+    search_pattern[pos] = 0;
 
     WIN32_FIND_DATAW findData;
     HANDLE hFind = FindFirstFileW((LPCWSTR)search_pattern, &findData);
@@ -1813,7 +1832,7 @@ void sys_walk_directory(string path, bool recursive, bool walk_directories, Walk
         }
         new_path_wide[new_pos++] = 0;
 
-        u8 new_path[2048];
+        static u8 new_path[2048];
 
         string entry_str;
         entry_str.count = new_path_len;
@@ -2212,8 +2231,31 @@ void sys_mutex_release(Mutex mutex) {
     LeaveCriticalSection(mutex.handle);
 }
 
+OSTD_LIB bool sys_semaphore_init(Semaphore *sem) {
+    if (!sem) return false;
+    HANDLE handle = CreateSemaphoreA(0, 0, S32_MAX, 0);
+    if (!handle) return false;
+    *sem = handle;
+    return true;
+}
+
+OSTD_LIB void sys_semaphore_signal(Semaphore *sem) {
+    if (!sem || !*sem) return;
+    ReleaseSemaphore((HANDLE)*sem, 1, 0);
+}
+
+OSTD_LIB void sys_semaphore_wait(Semaphore sem) {
+    if (!sem) return;
+    WaitForSingleObject((HANDLE)sem, 0xFFFFFFFF);
+}
+
+OSTD_LIB void sys_semaphore_release(Semaphore sem) {
+    if (!sem) return;
+    CloseHandle((HANDLE)sem);
+}
+
 inline unit_local u32 sys_atomic_add_32(volatile u32 *addend, u32 value) {
-    return (u32)_InterlockedExchangeAdd((volatile long*)addend, (long)value) + value;
+    return (u32)_InterlockedExchangeAdd((volatile long*)addend, (long)value);
 }
 inline unit_local u64 sys_atomic_add_64(volatile u64 *addend, u64 value) {
     long long old;
@@ -2222,7 +2264,7 @@ inline unit_local u64 sys_atomic_add_64(volatile u64 *addend, u64 value) {
         old = (long long)*addend;
     } while (_InterlockedCompareExchange64((volatile long long*)addend, old + (long long)value, (long long)old) != (long long)old);
 
-    return (u64)(old + (long long)value);
+    return (u64)old;
 }
 
 #ifndef OSTD_HEADLESS

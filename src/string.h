@@ -10,18 +10,8 @@ typedef struct string {
     u8 *data;
 } string;
 
-unit_local inline u64 c_style_strlen(const char *s) {
-    const char *p = s;
-    while (*p++) {}
-    return (u64)(p-s-1);
-}
-unit_local inline u64 c_style_strcmp(const char *a, const char *b) {
-    while (*a && (*a == *b)) {
-        a++;
-        b++;
-    }
-    return (u64)(*a - *b);
-}
+OSTD_LIB u64 c_style_strlen(const char *s);
+OSTD_LIB u64 c_style_strcmp(const char *a, const char *b);
 
 
 #define STR(c) ((string){ c_style_strlen((const char*)c), (u8*)(uintptr)(const void*)(c) })
@@ -87,5 +77,42 @@ unit_local s64 string_find_index_from_right(string s, string sub) {
     }
     return -1;
 }
+
+unit_local string string_trim_left(string s) {
+
+    while (s.count > 0 && !(s.data[0] >= 33 && s.data[0] <= 126)) {
+        s.data += 1;
+        s.count -= 1;
+    }
+    return s;
+}
+
+unit_local string string_trim_right(string s) {
+    while (s.count > 0 && !(s.data[s.count-1] >= 33 && s.data[s.count-1] <= 126)) {
+        s.count -= 1;
+    }
+    return s;
+}
+
+unit_local string string_trim(string s) {
+    return string_trim_left(string_trim_right(s));
+}
+
+#ifdef OSTD_IMPL
+OSTD_LIB u64 c_style_strlen(const char *s) {
+    const char *p = s;
+    while (*p) {
+        p += 1;
+    }
+    return (u64)(p - s);
+}
+OSTD_LIB u64 c_style_strcmp(const char *a, const char *b) {
+    while (*a && (*a == *b)) {
+        a++;
+        b++;
+    }
+    return (u64)(*a - *b);
+}
+#endif
 
 #endif // _STRING_H
