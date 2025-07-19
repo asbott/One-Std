@@ -210,9 +210,9 @@ unit_local inline float64 sqrt64(float64 n) {
 #define v3_expand(v) (v).x, (v).y, (v).z
 #define v4_expand(v) (v).x, (v).y, (v).z, (v).w
 
-#define v2(x, y)       (f32v2) {x, y}
-#define v3(x, y, z)    (f32v3) {x, y, z}
-#define v4(x, y, z, w) (f32v4) {x, y, z, w}
+#define v2(...) (f32v2) {__VA_ARGS__}
+#define v3(...) (f32v3) {__VA_ARGS__}
+#define v4(...) (f32v4) {__VA_ARGS__}
 
 #define v2_scalar f32v2_scalar
 #define v3_scalar f32v3_scalar

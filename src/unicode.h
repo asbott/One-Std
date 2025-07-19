@@ -5,6 +5,10 @@
 #include "base.h"
 #endif // _BASE_H
 
+#ifndef _STRING_H
+#include "string.h"
+#endif // _STRING_H
+
 #define UTF16_SURROGATE_HIGH_START  0xD800
 #define UTF16_SURROGATE_HIGH_END    0xDBFF
 #define UTF16_SURROGATE_LOW_START   0xDC00
@@ -26,7 +30,7 @@ typedef struct {
 	bool error;
 } Utf8_To_Utf32_Result;
 typedef struct {
-    u32 utf32;
+    u32 utf16;
     s64 continuation_bytes;
     bool reached_end;
     bool error;
@@ -34,6 +38,7 @@ typedef struct {
 
 Utf8_To_Utf32_Result one_utf8_to_utf32(u8 *s, s64 source_length, bool strict);
 Utf8_To_Utf16_Result one_utf8_to_utf16(u8 *s, s64 source_length, bool strict);
+u32 next_utf8(string *s);
 
 #ifdef OSTD_IMPL
 
@@ -87,28 +92,37 @@ Utf8_To_Utf32_Result one_utf8_to_utf32(u8 *s, s64 source_length, bool strict) {
 Utf8_To_Utf16_Result one_utf8_to_utf16(u8 *s, s64 source_length, bool strict) {
     Utf8_To_Utf32_Result utf32_res = one_utf8_to_utf32(s, source_length, strict);
     Utf8_To_Utf16_Result res = {0};
-    res.utf32 = utf32_res.utf32;
+    res.utf16 = utf32_res.utf32;
     res.continuation_bytes = utf32_res.continuation_bytes;
     res.reached_end = utf32_res.reached_end;
     res.error = utf32_res.error;
 
     if (res.error) {
-        res.utf32 = UNI_REPLACEMENT_CHAR;
+        res.utf16 = UNI_REPLACEMENT_CHAR;
     }
 
-    if (res.utf32 <= 0xFFFF) {
-        res.utf32 = res.utf32;
+    if (res.utf16 <= 0xFFFF) {
+        res.utf16 = res.utf16;
     }
-    else if (res.utf32 <= UNI_MAX_UTF16) {
-        res.utf32 -= UTF16_SURROGATE_OFFSET;
-        res.utf32 = UTF16_SURROGATE_HIGH_START + ((res.utf32 >> 10) & UTF16_SURROGATE_MASK);
-        res.utf32 = (UTF16_SURROGATE_LOW_START) | (res.utf32 & UTF16_SURROGATE_MASK);
+    else if (res.utf16 <= UNI_MAX_UTF16) {
+        res.utf16 -= UTF16_SURROGATE_OFFSET;
+        res.utf16 = UTF16_SURROGATE_HIGH_START + ((res.utf16 >> 10) & UTF16_SURROGATE_MASK);
+        res.utf16 = (UTF16_SURROGATE_LOW_START) | (res.utf16 & UTF16_SURROGATE_MASK);
     }
     else {
-        res.utf32 = UNI_REPLACEMENT_CHAR;
+        res.utf16 = UNI_REPLACEMENT_CHAR;
     }
 
     return res;
+}
+
+u32 next_utf8(string *s) {
+    Utf8_To_Utf32_Result res = one_utf8_to_utf32(s->data, (s64)s->count, false);
+
+    s->data  += (u64)res.continuation_bytes;
+    s->count -= (u64)res.continuation_bytes;
+
+    return res.reached_end || res.error ? 0 : res.utf32;
 }
 
 #endif //OSTD_IMPL

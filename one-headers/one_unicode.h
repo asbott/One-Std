@@ -1,7 +1,7 @@
-// This file was generated from One-Std/src/path_utils.h
+// This file was generated from One-Std/src/unicode.h
 // The following files were included & concatenated:
-// - c:\nowgrep\One-Std\src\path_utils.h
 // - c:\nowgrep\One-Std\src\string.h
+// - c:\nowgrep\One-Std\src\unicode.h
 // - c:\nowgrep\One-Std\src\base.h
 // I try to compile with -pedantic and -Weverything, but get really dumb warnings like these,
 // so I have to ignore them.
@@ -32,15 +32,11 @@
 #pragma clang diagnostic ignored "-Wunsafe-buffer-usage"
 #endif
 #endif // __clang__
-#ifndef _ONE_PATH_UTILS_H
-#define _ONE_PATH_UTILS_H
+#ifndef _ONE_UNICODE_H
+#define _ONE_UNICODE_H
 
-
-#ifndef _STRING_H
-
-/* Begin include: string.h */
-#ifndef _STRING_H
-#define _STRING_H
+#ifndef _UNICODE_H
+#define _UNICODE_H
 
 #ifndef _BASE_H
 
@@ -522,6 +518,15 @@ unit_local inline u64 align_next(u64 n, u64 align) {
 /* End include: base.h */
 #endif // _BASE_H
 
+#ifndef _STRING_H
+
+/* Begin include: string.h */
+#ifndef _STRING_H
+#define _STRING_H
+
+#ifndef _BASE_H
+#endif // _BASE_H
+
 typedef struct string { 
     u64 count;
     u8 *data;
@@ -646,62 +651,127 @@ OSTD_LIB u64 c_style_strcmp(const char *a, const char *b) {
 /* End include: string.h */
 #endif // _STRING_H
 
-OSTD_LIB string path_get_filename(string path);
-OSTD_LIB string path_strip_one_extension(string path);
-OSTD_LIB string path_strip_all_extensions(string path);
-OSTD_LIB string path_get_directory(string path);
+#define UTF16_SURROGATE_HIGH_START  0xD800
+#define UTF16_SURROGATE_HIGH_END    0xDBFF
+#define UTF16_SURROGATE_LOW_START   0xDC00
+#define UTF16_SURROGATE_LOW_END     0xDFFF
+#define UTF16_SURROGATE_OFFSET      0x10000
+#define UTF16_SURROGATE_MASK        0x3FF
+
+
+#define UNI_REPLACEMENT_CHAR 0x0000FFFD
+#define UNI_MAX_UTF32        0x7FFFFFFF
+#define UNI_MAX_UTF16        0x0010FFFF
+#define SURROGATES_START     0xD800
+#define SURROGATES_END       0xDFFF
+
+typedef struct {
+	u32 utf32;
+	s64 continuation_bytes;
+	bool reached_end;
+	bool error;
+} Utf8_To_Utf32_Result;
+typedef struct {
+    u32 utf16;
+    s64 continuation_bytes;
+    bool reached_end;
+    bool error;
+} Utf8_To_Utf16_Result;
+
+Utf8_To_Utf32_Result one_utf8_to_utf32(u8 *s, s64 source_length, bool strict);
+Utf8_To_Utf16_Result one_utf8_to_utf16(u8 *s, s64 source_length, bool strict);
+u32 next_utf8(string *s);
 
 #ifdef OSTD_IMPL
 
-string path_get_filename(string path) {
-	for (s64 i = (s64)(path.count-1); i >= 0; i -= 1) {
-		if (path.data[i] == '\\' || path.data[i] == '/') {
-			return string_slice(path, (u64)i+1, path.count-(u64)i-1);
-		}
-    }
-    return path;
-}
+unit_local const u8 trailing_bytes_for_utf8[] = {
+	0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0, 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+	0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0, 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+	0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0, 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+	0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0, 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+	0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0, 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+	0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0, 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+	1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1, 1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,
+	2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2, 3,3,3,3,3,3,3,3,4,4,4,4,5,5,5,5
+};
+unit_local const u8 utf8_inital_byte_mask[] = { 0x7F, 0x1F, 0x0F, 0x07, 0x03, 0x01 };
 
-string path_strip_one_extension(string path) {
-	for (s64 i = (s64)(path.count-1); i >= 0; i -= 1) {
-		if (path.data[i] == '\\' || path.data[i] == '/') {
-			return path;
-		}
-		if (path.data[i] == '.') {
-			return string_slice(path, 0, (u64)i);
-		}
-    }
-    return path;
-}
+// Convert single utf8 character to a single utf32 codepoint
+Utf8_To_Utf32_Result one_utf8_to_utf32(u8 *s, s64 source_length, bool strict) {
+    s64 continuation_bytes = trailing_bytes_for_utf8[s[0]];
 
-string path_strip_all_extensions(string path) {
-	s64 lowest_index = -1;
-	for (s64 i = (s64)(path.count-1); i >= 0; i -= 1) {
-		if (path.data[i] == '\\' || path.data[i] == '/') {
-			break;
-		}
-		if (path.data[i] == '.') {
-			if (lowest_index == -1 || i < lowest_index) {
-				lowest_index = i;
-			}
-		}
+    if (continuation_bytes + 1 > source_length) {
+        return (Utf8_To_Utf32_Result){UNI_REPLACEMENT_CHAR, source_length, true, true};
     }
-    if (lowest_index == -1) return path;
-    
-	return string_slice(path, 0, (u64)lowest_index);
-}
 
-string path_get_directory(string path) {
-    for (s64 i = (s64)(path.count - 1); i >= 0; i -= 1) {
-        if (path.data[i] == '\\' || path.data[i] == '/') {
-            return string_slice(path, 0, (u64)i);
+    u32 ch = s[0] & utf8_inital_byte_mask[continuation_bytes];
+
+    for (s64 i = 1; i <= continuation_bytes; i++) {  // Do nothing if it is 0.
+        ch = ch << 6;
+        if (strict) if ((s[i] & 0xC0) != 0x80)  return (Utf8_To_Utf32_Result){UNI_REPLACEMENT_CHAR, i - 1, true, true};
+    	ch |= s[i] & 0x3F;
+    }
+
+    if (strict) {
+        if (ch > UNI_MAX_UTF16 ||
+          (SURROGATES_START <= ch && ch <= SURROGATES_END) ||
+          (ch <= 0x0000007F && continuation_bytes != 0) ||
+          (ch <= 0x000007FF && continuation_bytes != 1) ||
+          (ch <= 0x0000FFFF && continuation_bytes != 2) ||
+          continuation_bytes > 3) {
+            return (Utf8_To_Utf32_Result){UNI_REPLACEMENT_CHAR, continuation_bytes+1, true, true};
         }
     }
-    return (string){0};
+
+    if (ch > UNI_MAX_UTF32) {
+        ch = UNI_REPLACEMENT_CHAR;
+    }
+
+	return (Utf8_To_Utf32_Result){ ch, continuation_bytes+1, false, false };
 }
 
-#endif // OSTD_IMPL
-#endif // _ONE_PATH_UTILS_H
+// Convert single utf8 character to utf16 code units
+Utf8_To_Utf16_Result one_utf8_to_utf16(u8 *s, s64 source_length, bool strict) {
+    Utf8_To_Utf32_Result utf32_res = one_utf8_to_utf32(s, source_length, strict);
+    Utf8_To_Utf16_Result res = {0};
+    res.utf16 = utf32_res.utf32;
+    res.continuation_bytes = utf32_res.continuation_bytes;
+    res.reached_end = utf32_res.reached_end;
+    res.error = utf32_res.error;
+
+    if (res.error) {
+        res.utf16 = UNI_REPLACEMENT_CHAR;
+    }
+
+    if (res.utf16 <= 0xFFFF) {
+        res.utf16 = res.utf16;
+    }
+    else if (res.utf16 <= UNI_MAX_UTF16) {
+        res.utf16 -= UTF16_SURROGATE_OFFSET;
+        res.utf16 = UTF16_SURROGATE_HIGH_START + ((res.utf16 >> 10) & UTF16_SURROGATE_MASK);
+        res.utf16 = (UTF16_SURROGATE_LOW_START) | (res.utf16 & UTF16_SURROGATE_MASK);
+    }
+    else {
+        res.utf16 = UNI_REPLACEMENT_CHAR;
+    }
+
+    return res;
+}
+
+u32 next_utf8(string *s) {
+    Utf8_To_Utf32_Result res = one_utf8_to_utf32(s->data, (s64)s->count, false);
+
+    s->data  += (u64)res.continuation_bytes;
+    s->count -= (u64)res.continuation_bytes;
+
+    return res.reached_end || res.error ? 0 : res.utf32;
+}
+
+#endif //OSTD_IMPL
+
+
+#endif // _UNICODE_H
+#endif // _ONE_UNICODE_H
 #if defined(__clang__)
 #pragma clang diagnostic pop
 #endif

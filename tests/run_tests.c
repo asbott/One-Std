@@ -203,6 +203,7 @@ int main(void) {
 		STR("ostd.h"),
 		STR("print.h"),
 		STR("path_utils.h"),
+		STR("unicode.h"),
 	};
 	
 	for (u64 i = 0; i < sizeof(concat_headers)/sizeof(string); i += 1) {

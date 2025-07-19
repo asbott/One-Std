@@ -98,6 +98,15 @@ unit_local string string_trim(string s) {
     return string_trim_left(string_trim_right(s));
 }
 
+unit_local u64 string_count_occurences(string s, string sub) {
+    if (sub.count > s.count) return 0;
+    u64 n = 0;
+    for (u64 i = 0; i < s.count-sub.count; i += 1) {
+        if (strings_match(string_slice(s, i, sub.count), sub)) n += 1;
+    }
+    return n;
+}
+
 #ifdef OSTD_IMPL
 OSTD_LIB u64 c_style_strlen(const char *s) {
     const char *p = s;

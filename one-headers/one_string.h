@@ -1,7 +1,7 @@
 // This file was generated from One-Std/src/string.h
 // The following files were included & concatenated:
-// - C:\nowgrep\One-Std\src\base.h
-// - C:\nowgrep\One-Std\src\string.h
+// - c:\nowgrep\One-Std\src\base.h
+// - c:\nowgrep\One-Std\src\string.h
 // I try to compile with -pedantic and -Weverything, but get really dumb warnings like these,
 // so I have to ignore them.
 #if defined(__GNUC__) || defined(__GNUG__)
@@ -608,6 +608,15 @@ unit_local string string_trim_right(string s) {
 
 unit_local string string_trim(string s) {
     return string_trim_left(string_trim_right(s));
+}
+
+unit_local u64 string_count_occurences(string s, string sub) {
+    if (sub.count > s.count) return 0;
+    u64 n = 0;
+    for (u64 i = 0; i < s.count-sub.count; i += 1) {
+        if (strings_match(string_slice(s, i, sub.count), sub)) n += 1;
+    }
+    return n;
 }
 
 #ifdef OSTD_IMPL

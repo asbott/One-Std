@@ -1,19 +1,19 @@
 // This file was generated from One-Std/src/oga_graphics.h
 // The following files were included & concatenated:
-// - C:\nowgrep\One-Std\src\print.h
-// - C:\nowgrep\One-Std\src\string.h
-// - C:\nowgrep\One-Std\src\var_args.h
-// - C:\nowgrep\One-Std\src\memory.h
-// - C:\nowgrep\One-Std\src\windows_loader.h
-// - C:\nowgrep\One-Std\src\system1.h
-// - C:\nowgrep\One-Std\src\math.h
-// - C:\nowgrep\One-Std\src\var_args_macros.h
-// - C:\nowgrep\One-Std\src\base.h
-// - C:\nowgrep\One-Std\src\graphics_d3d12.h
-// - C:\nowgrep\One-Std\src\graphics_metal.h
-// - C:\nowgrep\One-Std\src\graphics_vulkan.h
-// - C:\nowgrep\One-Std\src\trig_tables.h
-// - C:\nowgrep\One-Std\src\oga_graphics.h
+// - c:\nowgrep\One-Std\src\print.h
+// - c:\nowgrep\One-Std\src\memory.h
+// - c:\nowgrep\One-Std\src\graphics_metal.h
+// - c:\nowgrep\One-Std\src\trig_tables.h
+// - c:\nowgrep\One-Std\src\system1.h
+// - c:\nowgrep\One-Std\src\graphics_d3d12.h
+// - c:\nowgrep\One-Std\src\oga_graphics.h
+// - c:\nowgrep\One-Std\src\var_args_macros.h
+// - c:\nowgrep\One-Std\src\windows_loader.h
+// - c:\nowgrep\One-Std\src\string.h
+// - c:\nowgrep\One-Std\src\base.h
+// - c:\nowgrep\One-Std\src\graphics_vulkan.h
+// - c:\nowgrep\One-Std\src\var_args.h
+// - c:\nowgrep\One-Std\src\math.h
 // I try to compile with -pedantic and -Weverything, but get really dumb warnings like these,
 // so I have to ignore them.
 #if defined(__GNUC__) || defined(__GNUG__)
@@ -631,6 +631,15 @@ unit_local string string_trim(string s) {
     return string_trim_left(string_trim_right(s));
 }
 
+unit_local u64 string_count_occurences(string s, string sub) {
+    if (sub.count > s.count) return 0;
+    u64 n = 0;
+    for (u64 i = 0; i < s.count-sub.count; i += 1) {
+        if (strings_match(string_slice(s, i, sub.count), sub)) n += 1;
+    }
+    return n;
+}
+
 #ifdef OSTD_IMPL
 OSTD_LIB u64 c_style_strlen(const char *s) {
     const char *p = s;
@@ -1174,6 +1183,7 @@ typedef HANDLE HMODULE;
 typedef HANDLE HMENU;
 typedef HANDLE HBITMAP;
 typedef HANDLE HGDIOBJ;
+typedef HANDLE HFONT;
 
 typedef unsigned long ULONG;
 typedef ULONG *PULONG;
@@ -5086,6 +5096,395 @@ WINDOWS_IMPORT BOOL WINAPI GetVolumePathNameW( LPCWSTR lpszFileName, LPWSTR lpsz
 
 WINDOWS_IMPORT BOOL WINAPI GetVolumeNameForVolumeMountPointW( LPCWSTR lpszVolumeMountPoint, LPWSTR  lpszVolumeName, DWORD   cchBufferLength
 );
+
+typedef struct _DISK_PERFORMANCE {
+  LARGE_INTEGER BytesRead;
+  LARGE_INTEGER BytesWritten;
+  LARGE_INTEGER ReadTime;
+  LARGE_INTEGER WriteTime;
+  LARGE_INTEGER IdleTime;
+  DWORD         ReadCount;
+  DWORD         WriteCount;
+  DWORD         QueueDepth;
+  DWORD         SplitCount;
+  LARGE_INTEGER QueryTime;
+  DWORD         StorageDeviceNumber;
+  WCHAR         StorageManagerName[8];
+} DISK_PERFORMANCE, *PDISK_PERFORMANCE;
+
+
+#define IOCTL_DISK_BASE                 FILE_DEVICE_DISK
+#define IOCTL_DISK_GET_DRIVE_GEOMETRY   CTL_CODE(IOCTL_DISK_BASE, 0x0000, METHOD_BUFFERED, FILE_ANY_ACCESS)
+#define IOCTL_DISK_GET_PARTITION_INFO   CTL_CODE(IOCTL_DISK_BASE, 0x0001, METHOD_BUFFERED, FILE_READ_ACCESS)
+#define IOCTL_DISK_SET_PARTITION_INFO   CTL_CODE(IOCTL_DISK_BASE, 0x0002, METHOD_BUFFERED, FILE_READ_ACCESS | FILE_WRITE_ACCESS)
+#define IOCTL_DISK_GET_DRIVE_LAYOUT     CTL_CODE(IOCTL_DISK_BASE, 0x0003, METHOD_BUFFERED, FILE_READ_ACCESS)
+#define IOCTL_DISK_SET_DRIVE_LAYOUT     CTL_CODE(IOCTL_DISK_BASE, 0x0004, METHOD_BUFFERED, FILE_READ_ACCESS | FILE_WRITE_ACCESS)
+#define IOCTL_DISK_VERIFY               CTL_CODE(IOCTL_DISK_BASE, 0x0005, METHOD_BUFFERED, FILE_ANY_ACCESS)
+#define IOCTL_DISK_FORMAT_TRACKS        CTL_CODE(IOCTL_DISK_BASE, 0x0006, METHOD_BUFFERED, FILE_READ_ACCESS | FILE_WRITE_ACCESS)
+#define IOCTL_DISK_REASSIGN_BLOCKS      CTL_CODE(IOCTL_DISK_BASE, 0x0007, METHOD_BUFFERED, FILE_READ_ACCESS | FILE_WRITE_ACCESS)
+#define IOCTL_DISK_PERFORMANCE          CTL_CODE(IOCTL_DISK_BASE, 0x0008, METHOD_BUFFERED, FILE_ANY_ACCESS)
+#define IOCTL_DISK_IS_WRITABLE          CTL_CODE(IOCTL_DISK_BASE, 0x0009, METHOD_BUFFERED, FILE_ANY_ACCESS)
+#define IOCTL_DISK_LOGGING              CTL_CODE(IOCTL_DISK_BASE, 0x000a, METHOD_BUFFERED, FILE_ANY_ACCESS)
+#define IOCTL_DISK_FORMAT_TRACKS_EX     CTL_CODE(IOCTL_DISK_BASE, 0x000b, METHOD_BUFFERED, FILE_READ_ACCESS | FILE_WRITE_ACCESS)
+#define IOCTL_DISK_HISTOGRAM_STRUCTURE  CTL_CODE(IOCTL_DISK_BASE, 0x000c, METHOD_BUFFERED, FILE_ANY_ACCESS)
+#define IOCTL_DISK_HISTOGRAM_DATA       CTL_CODE(IOCTL_DISK_BASE, 0x000d, METHOD_BUFFERED, FILE_ANY_ACCESS)
+#define IOCTL_DISK_HISTOGRAM_RESET      CTL_CODE(IOCTL_DISK_BASE, 0x000e, METHOD_BUFFERED, FILE_ANY_ACCESS)
+#define IOCTL_DISK_REQUEST_STRUCTURE    CTL_CODE(IOCTL_DISK_BASE, 0x000f, METHOD_BUFFERED, FILE_ANY_ACCESS)
+#define IOCTL_DISK_REQUEST_DATA         CTL_CODE(IOCTL_DISK_BASE, 0x0010, METHOD_BUFFERED, FILE_ANY_ACCESS)
+#define IOCTL_DISK_PERFORMANCE_OFF      CTL_CODE(IOCTL_DISK_BASE, 0x0018, METHOD_BUFFERED, FILE_ANY_ACCESS)
+
+typedef struct _GLYPHMETRICS {
+    UINT    gmBlackBoxX;
+    UINT    gmBlackBoxY;
+    POINT   gmptGlyphOrigin;
+    short   gmCellIncX;
+    short   gmCellIncY;
+} GLYPHMETRICS, *LPGLYPHMETRICS;
+
+typedef struct _FIXED {
+#ifndef _MAC
+    WORD    fract;
+    short   value;
+#else
+    short   value;
+    WORD    fract;
+#endif
+} FIXED;
+
+typedef struct _MAT2 {
+  FIXED eM11;
+  FIXED eM12;
+  FIXED eM21;
+  FIXED eM22;
+} MAT2, *LPMAT2;
+
+#define FW_DONTCARE         0
+#define FW_THIN             100
+#define FW_EXTRALIGHT       200
+#define FW_LIGHT            300
+#define FW_NORMAL           400
+#define FW_MEDIUM           500
+#define FW_SEMIBOLD         600
+#define FW_BOLD             700
+#define FW_EXTRABOLD        800
+#define FW_HEAVY            900
+
+#define FW_ULTRALIGHT       FW_EXTRALIGHT
+#define FW_REGULAR          FW_NORMAL
+#define FW_DEMIBOLD         FW_SEMIBOLD
+#define FW_ULTRABOLD        FW_EXTRABOLD
+#define FW_BLACK            FW_HEAVY
+
+#define ANSI_CHARSET            0
+#define DEFAULT_CHARSET         1
+#define SYMBOL_CHARSET          2
+#define SHIFTJIS_CHARSET        128
+#define HANGEUL_CHARSET         129
+#define HANGUL_CHARSET          129
+#define GB2312_CHARSET          134
+#define CHINESEBIG5_CHARSET     136
+#define OEM_CHARSET             255
+
+#define JOHAB_CHARSET           130
+#define HEBREW_CHARSET          177
+#define ARABIC_CHARSET          178
+#define GREEK_CHARSET           161
+#define TURKISH_CHARSET         162
+#define VIETNAMESE_CHARSET      163
+#define THAI_CHARSET            222
+#define EASTEUROPE_CHARSET      238
+#define RUSSIAN_CHARSET         204
+
+#define OUT_DEFAULT_PRECIS          0
+#define OUT_STRING_PRECIS           1
+#define OUT_CHARACTER_PRECIS        2
+#define OUT_STROKE_PRECIS           3
+#define OUT_TT_PRECIS               4
+#define OUT_DEVICE_PRECIS           5
+#define OUT_RASTER_PRECIS           6
+#define OUT_TT_ONLY_PRECIS          7
+#define OUT_OUTLINE_PRECIS          8
+#define OUT_SCREEN_OUTLINE_PRECIS   9
+#define OUT_PS_ONLY_PRECIS          10
+
+#define CLIP_DEFAULT_PRECIS     0
+#define CLIP_CHARACTER_PRECIS   1
+#define CLIP_STROKE_PRECIS      2
+#define CLIP_MASK               0xf
+#define CLIP_LH_ANGLES          (1<<4)
+#define CLIP_TT_ALWAYS          (2<<4)
+#if (_WIN32_WINNT >= _WIN32_WINNT_LONGHORN)
+#define CLIP_DFA_DISABLE        (4<<4)
+#endif // (_WIN32_WINNT >= _WIN32_WINNT_LONGHORN)
+#define CLIP_EMBEDDED           (8<<4)
+
+#define DEFAULT_QUALITY         0
+#define DRAFT_QUALITY           1
+#define PROOF_QUALITY           2
+#if(WINVER >= 0x0400)
+#define NONANTIALIASED_QUALITY  3
+#define ANTIALIASED_QUALITY     4
+#endif /* WINVER >= 0x0400 */
+
+#if (_WIN32_WINNT >= _WIN32_WINNT_WINXP)
+#define CLEARTYPE_QUALITY       5
+#define CLEARTYPE_NATURAL_QUALITY       6
+#endif
+
+#define DEFAULT_PITCH           0
+#define FIXED_PITCH             1
+#define VARIABLE_PITCH          2
+#if(WINVER >= 0x0400)
+#define MONO_FONT               8
+#endif /* WINVER >= 0x0400 */
+
+#define ANSI_CHARSET            0
+#define DEFAULT_CHARSET         1
+#define SYMBOL_CHARSET          2
+#define SHIFTJIS_CHARSET        128
+#define HANGEUL_CHARSET         129
+#define HANGUL_CHARSET          129
+#define GB2312_CHARSET          134
+#define CHINESEBIG5_CHARSET     136
+#define OEM_CHARSET             255
+#if(WINVER >= 0x0400)
+#define JOHAB_CHARSET           130
+#define HEBREW_CHARSET          177
+#define ARABIC_CHARSET          178
+#define GREEK_CHARSET           161
+#define TURKISH_CHARSET         162
+#define VIETNAMESE_CHARSET      163
+#define THAI_CHARSET            222
+#define EASTEUROPE_CHARSET      238
+#define RUSSIAN_CHARSET         204
+
+#define MAC_CHARSET             77
+#define BALTIC_CHARSET          186
+
+#define FS_LATIN1               0x00000001L
+#define FS_LATIN2               0x00000002L
+#define FS_CYRILLIC             0x00000004L
+#define FS_GREEK                0x00000008L
+#define FS_TURKISH              0x00000010L
+#define FS_HEBREW               0x00000020L
+#define FS_ARABIC               0x00000040L
+#define FS_BALTIC               0x00000080L
+#define FS_VIETNAMESE           0x00000100L
+#define FS_THAI                 0x00010000L
+#define FS_JISJAPAN             0x00020000L
+#define FS_CHINESESIMP          0x00040000L
+#define FS_WANSUNG              0x00080000L
+#define FS_CHINESETRAD          0x00100000L
+#define FS_JOHAB                0x00200000L
+#define FS_SYMBOL               0x80000000L
+#endif /* WINVER >= 0x0400 */
+
+/* Font Families */
+#define FF_DONTCARE         (0<<4)  /* Don't care or don't know. */
+#define FF_ROMAN            (1<<4)  /* Variable stroke width, serifed. */
+                                    /* Times Roman, Century Schoolbook, etc. */
+#define FF_SWISS            (2<<4)  /* Variable stroke width, sans-serifed. */
+                                    /* Helvetica, Swiss, etc. */
+#define FF_MODERN           (3<<4)  /* Constant stroke width, serifed or sans-serifed. */
+                                    /* Pica, Elite, Courier, etc. */
+#define FF_SCRIPT           (4<<4)  /* Cursive, etc. */
+#define FF_DECORATIVE       (5<<4)  /* Old English, etc. */
+
+#define GGO_METRICS        0
+#define GGO_BITMAP         1
+#define GGO_NATIVE         2
+#define GGO_BEZIER         3
+
+#if(WINVER >= 0x0400)
+#define  GGO_GRAY2_BITMAP   4
+#define  GGO_GRAY4_BITMAP   5
+#define  GGO_GRAY8_BITMAP   6
+#define  GGO_GLYPH_INDEX    0x0080
+#endif /* WINVER >= 0x0400 */
+
+#if (_WIN32_WINNT >= _WIN32_WINNT_WIN2K)
+#define  GGO_UNHINTED       0x0100
+#endif // (_WIN32_WINNT >= _WIN32_WINNT_WIN2K)
+
+#define TT_POLYGON_TYPE   24
+
+#define TT_PRIM_LINE       1
+#define TT_PRIM_QSPLINE    2
+#define TT_PRIM_CSPLINE    3
+
+WINDOWS_IMPORT HFONT WINAPI CreateFontA( int cHeight, int cWidth, int cEscapement, int cOrientation, int cWeight, DWORD bItalic, DWORD bUnderline, DWORD bStrikeOut, DWORD iCharSet, DWORD iOutPrecision, DWORD iClipPrecision, DWORD iQuality, DWORD iPitchAndFamily, LPCSTR pszFaceName);
+
+WINDOWS_IMPORT DWORD WINAPI GetGlyphOutlineA( HDC hdc, UINT uChar, UINT fuFormat, LPGLYPHMETRICS lpgm, DWORD cjBuffer, LPVOID pvBuffer, const MAT2 *lpmat2);
+
+WINDOWS_IMPORT HGDIOBJ WINAPI SelectObject(HDC hdc,HGDIOBJ h);
+
+WINDOWS_IMPORT void WINAPI Sleep(DWORD dwMilliseconds);
+typedef DWORD COLORREF;
+typedef DWORD* LPCOLORREF;
+typedef struct tagLOGFONTA {
+  LONG lfHeight;
+  LONG lfWidth;
+  LONG lfEscapement;
+  LONG lfOrientation;
+  LONG lfWeight;
+  BYTE lfItalic;
+  BYTE lfUnderline;
+  BYTE lfStrikeOut;
+  BYTE lfCharSet;
+  BYTE lfOutPrecision;
+  BYTE lfClipPrecision;
+  BYTE lfQuality;
+  BYTE lfPitchAndFamily;
+  CHAR lfFaceName[32];
+} LOGFONTA, *PLOGFONTA, *NPLOGFONTA, *LPLOGFONTA;
+
+WINDOWS_IMPORT int WINAPI GetObjectA( HANDLE h, int c, LPVOID pv);
+
+WINDOWS_IMPORT COLORREF WINAPI SetTextColor( HDC hdc, COLORREF color);
+
+WINDOWS_IMPORT int WINAPI SetBkMode( HDC hdc, int mode);
+WINDOWS_IMPORT UINT WINAPI SetTextAlign( HDC hdc, UINT align);
+
+
+
+/* EnumFonts Masks */
+#define RASTER_FONTTYPE     0x0001
+#define DEVICE_FONTTYPE     0x0002
+#define TRUETYPE_FONTTYPE   0x0004
+
+#define RGB(r,g,b)          ((COLORREF)(((BYTE)(r)|((WORD)((BYTE)(g))<<8))|(((DWORD)(BYTE)(b))<<16)))
+#define PALETTERGB(r,g,b)   (0x02000000 | RGB(r,g,b))
+#define PALETTEINDEX(i)     ((COLORREF)(0x01000000 | (DWORD)(WORD)(i)))
+
+/* palette entry flags */
+
+#define PC_RESERVED     0x01    /* palette index used for animation */
+#define PC_EXPLICIT     0x02    /* palette index is explicit to device */
+#define PC_NOCOLLAPSE   0x04    /* do not match color to system palette */
+
+#define GetRValue(rgb)      (LOBYTE(rgb))
+#define GetGValue(rgb)      (LOBYTE(((WORD)(rgb)) >> 8))
+#define GetBValue(rgb)      (LOBYTE((rgb)>>16))
+
+/* Background Modes */
+#define TRANSPARENT         1
+#define OPAQUE              2
+#define BKMODE_LAST         2
+
+/* Text Alignment Options */
+#define TA_NOUPDATECP                0
+#define TA_UPDATECP                  1
+
+#define TA_LEFT                      0
+#define TA_RIGHT                     2
+#define TA_CENTER                    6
+
+#define TA_TOP                       0
+#define TA_BOTTOM                    8
+#define TA_BASELINE                  24
+#if (WINVER >= 0x0400)
+#define TA_RTLREADING                256
+#define TA_MASK       (TA_BASELINE+TA_CENTER+TA_UPDATECP+TA_RTLREADING)
+#else
+#define TA_MASK       (TA_BASELINE+TA_CENTER+TA_UPDATECP)
+#endif
+
+#define VTA_BASELINE TA_BASELINE
+#define VTA_LEFT     TA_BOTTOM
+#define VTA_RIGHT    TA_TOP
+#define VTA_CENTER   TA_CENTER
+#define VTA_BOTTOM   TA_RIGHT
+#define VTA_TOP      TA_LEFT
+
+WINDOWS_IMPORT BOOL WINAPI ExtTextOutW( HDC hdc, int x, int y, UINT options , RECT *lprect, LPCWSTR lpString, UINT c, INT  *lpDx);
+WINDOWS_IMPORT BOOL WINAPI TextOutW( HDC hdc, int x, int y, LPCWSTR lpString, int c);
+
+#define GCP_DBCS           0x0001
+#define GCP_REORDER        0x0002
+#define GCP_USEKERNING     0x0008
+#define GCP_GLYPHSHAPE     0x0010
+#define GCP_LIGATE         0x0020
+////#define GCP_GLYPHINDEXING  0x0080
+#define GCP_DIACRITIC      0x0100
+#define GCP_KASHIDA        0x0400
+#define GCP_ERROR          0x8000
+#define FLI_MASK           0x103B
+
+#define GCP_JUSTIFY        0x00010000L
+////#define GCP_NODIACRITICS   0x00020000L
+#define FLI_GLYPHS         0x00040000L
+#define GCP_CLASSIN        0x00080000L
+#define GCP_MAXEXTENT      0x00100000L
+#define GCP_JUSTIFYIN      0x00200000L
+#define GCP_DISPLAYZWG      0x00400000L
+#define GCP_SYMSWAPOFF      0x00800000L
+#define GCP_NUMERICOVERRIDE 0x01000000L
+#define GCP_NEUTRALOVERRIDE 0x02000000L
+#define GCP_NUMERICSLATIN   0x04000000L
+#define GCP_NUMERICSLOCAL   0x08000000L
+
+#define GCPCLASS_LATIN                  1
+#define GCPCLASS_HEBREW                 2
+#define GCPCLASS_ARABIC                 2
+#define GCPCLASS_NEUTRAL                3
+#define GCPCLASS_LOCALNUMBER            4
+#define GCPCLASS_LATINNUMBER            5
+#define GCPCLASS_LATINNUMERICTERMINATOR 6
+#define GCPCLASS_LATINNUMERICSEPARATOR  7
+#define GCPCLASS_NUMERICSEPARATOR       8
+#define GCPCLASS_PREBOUNDLTR         0x80
+#define GCPCLASS_PREBOUNDRTL         0x40
+#define GCPCLASS_POSTBOUNDLTR        0x20
+#define GCPCLASS_POSTBOUNDRTL        0x10
+
+#define GCPGLYPH_LINKBEFORE          0x8000
+#define GCPGLYPH_LINKAFTER           0x4000
+
+typedef struct tagGCP_RESULTSA
+{
+    DWORD   lStructSize;
+    LPSTR     lpOutString;
+    UINT *lpOrder;
+    int  *lpDx;
+    int  *lpCaretPos;
+    LPSTR   lpClass;
+    LPWSTR  lpGlyphs;
+    UINT    nGlyphs;
+    int     nMaxFit;
+} GCP_RESULTSA, *LPGCP_RESULTSA;
+typedef struct tagGCP_RESULTSW
+{
+    DWORD   lStructSize;
+    LPWSTR    lpOutString;
+    UINT *lpOrder;
+    int  *lpDx;
+    int  *lpCaretPos;
+    LPSTR   lpClass;
+    LPWSTR  lpGlyphs;
+    UINT    nGlyphs;
+    int     nMaxFit;
+} GCP_RESULTSW, *LPGCP_RESULTSW;
+
+WINDOWS_IMPORT DWORD WINAPI GetCharacterPlacementW( HDC hdc, LPCWSTR lpString, int nCount, int nMexExtent, LPGCP_RESULTSW lpResults, DWORD dwFlags);
+
+WINDOWS_IMPORT DWORD WINAPI GetGlyphIndicesW( HDC hdc, LPCWSTR lpstr, int c, LPWORD pgi, DWORD fl);
+
+typedef struct tagKERNINGPAIR {
+  WORD wFirst;
+  WORD wSecond;
+  int  iKernAmount;
+} KERNINGPAIR, *LPKERNINGPAIR;
+
+WINDOWS_IMPORT DWORD WINAPI GetKerningPairsW( HDC hdc, DWORD nPairs, LPKERNINGPAIR lpKernPair);
+
+/* flAccel flags for the GLYPHSET structure above */
+
+#define GS_8BIT_INDICES     0x00000001
+
+/* flags for GetGlyphIndices */
+
+#define GGI_MARK_NONEXISTING_GLYPHS  0X0001
+
 
 /* End include: windows_loader.h */
     #endif // _WINDOWS_
@@ -9511,9 +9910,9 @@ unit_local inline float64 sqrt64(float64 n) {
 #define v3_expand(v) (v).x, (v).y, (v).z
 #define v4_expand(v) (v).x, (v).y, (v).z, (v).w
 
-#define v2(x, y)       (f32v2) {x, y}
-#define v3(x, y, z)    (f32v3) {x, y, z}
-#define v4(x, y, z, w) (f32v4) {x, y, z, w}
+#define v2(...) (f32v2) {__VA_ARGS__}
+#define v3(...) (f32v3) {__VA_ARGS__}
+#define v4(...) (f32v4) {__VA_ARGS__}
 
 #define v2_scalar f32v2_scalar
 #define v3_scalar f32v3_scalar
