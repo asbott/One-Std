@@ -20,4 +20,4 @@ OGA currently only targets Vulkan, which means the OSL shader compiler currently
 
 The source code is in src/, but before pushing I generate single-headers in one-headers/ if you only want some of the modules to be compiled. If you want to include the library in its entirety, you would just grab ostd_single_header.h.
 
-To compile the library, you must `#define OSTD_IMPL`. If you don't graphics or window system to be compiled, do `#define OSTD_HEADLESS`. 
+To compile the library, you must `#define OSTD_IMPL`. If you don't want graphics or window system to be compiled, do `#define OSTD_HEADLESS`. 
