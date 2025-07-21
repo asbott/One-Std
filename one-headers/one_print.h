@@ -1,13 +1,13 @@
 // This file was generated from One-Std/src/print.h
 // The following files were included & concatenated:
-// - c:\nowgrep\One-Std\src\var_args.h
-// - c:\nowgrep\One-Std\src\memory.h
-// - c:\nowgrep\One-Std\src\string.h
-// - c:\nowgrep\One-Std\src\print.h
-// - c:\nowgrep\One-Std\src\windows_loader.h
-// - c:\nowgrep\One-Std\src\var_args_macros.h
-// - c:\nowgrep\One-Std\src\base.h
-// - c:\nowgrep\One-Std\src\system1.h
+// - C:\nowgrep\One-Std\src\base.h
+// - C:\nowgrep\One-Std\src\print.h
+// - C:\nowgrep\One-Std\src\var_args.h
+// - C:\nowgrep\One-Std\src\var_args_macros.h
+// - C:\nowgrep\One-Std\src\string.h
+// - C:\nowgrep\One-Std\src\memory.h
+// - C:\nowgrep\One-Std\src\windows_loader.h
+// - C:\nowgrep\One-Std\src\system1.h
 // I try to compile with -pedantic and -Weverything, but get really dumb warnings like these,
 // so I have to ignore them.
 #if defined(__GNUC__) || defined(__GNUG__)
@@ -5478,6 +5478,12 @@ WINDOWS_IMPORT DWORD WINAPI GetKerningPairsW( HDC hdc, DWORD nPairs, LPKERNINGPA
 
 #define GGI_MARK_NONEXISTING_GLYPHS  0X0001
 
+WINDOWS_IMPORT BOOL WINAPI GetOverlappedResult( HANDLE hFile, LPOVERLAPPED lpOverlapped, LPDWORD lpNumberOfBytesTransferred, BOOL bWait);
+
+WINDOWS_IMPORT HANDLE WINAPI CreateEventA( LPSECURITY_ATTRIBUTES lpEventAttributes, BOOL bManualReset, BOOL bInitialState, LPCSTR lpName
+);
+
+WINDOWS_IMPORT BOOL WINAPI ResetEvent(HANDLE hEvent);
 
 /* End include: windows_loader.h */
     #endif // _WINDOWS_
@@ -7196,6 +7202,7 @@ bool sys_thread_init(Thread *thread, Thread_Proc proc, void *userdata) {
     return thread->handle != 0;
 }
 void sys_thread_start(Thread *thread) {
+    (void)_ostd_get_thread_storage();
     thread->is_suspended = false;
     ResumeThread(thread->handle);
 }

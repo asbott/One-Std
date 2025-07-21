@@ -2194,6 +2194,7 @@ bool sys_thread_init(Thread *thread, Thread_Proc proc, void *userdata) {
     return thread->handle != 0;
 }
 void sys_thread_start(Thread *thread) {
+    (void)_ostd_get_thread_storage();
     thread->is_suspended = false;
     ResumeThread(thread->handle);
 }

@@ -1,8 +1,8 @@
 // This file was generated from One-Std/src/path_utils.h
 // The following files were included & concatenated:
-// - c:\nowgrep\One-Std\src\path_utils.h
-// - c:\nowgrep\One-Std\src\string.h
-// - c:\nowgrep\One-Std\src\base.h
+// - C:\nowgrep\One-Std\src\base.h
+// - C:\nowgrep\One-Std\src\string.h
+// - C:\nowgrep\One-Std\src\path_utils.h
 // I try to compile with -pedantic and -Weverything, but get really dumb warnings like these,
 // so I have to ignore them.
 #if defined(__GNUC__) || defined(__GNUG__)

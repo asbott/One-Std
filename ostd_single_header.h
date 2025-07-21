@@ -1,26 +1,26 @@
 // This file was generated from One-Std/src/ostd.h
 // The following files were included & concatenated:
-// - c:\nowgrep\One-Std\src\osl_compiler.h
-// - c:\nowgrep\One-Std\src\graphics_metal.h
-// - c:\nowgrep\One-Std\src\unicode.h
-// - c:\nowgrep\One-Std\src\graphics_vulkan.h
-// - c:\nowgrep\One-Std\src\base.h
-// - c:\nowgrep\One-Std\src\var_args.h
-// - c:\nowgrep\One-Std\src\system2.h
-// - c:\nowgrep\One-Std\src\print.h
-// - c:\nowgrep\One-Std\src\trig_tables.h
-// - c:\nowgrep\One-Std\src\var_args_macros.h
-// - c:\nowgrep\One-Std\src\windows_loader.h
-// - c:\nowgrep\One-Std\src\memory.h
-// - c:\nowgrep\One-Std\src\math.h
-// - c:\nowgrep\One-Std\src\ostd.h
-// - c:\nowgrep\One-Std\src\ignore_warnings.h
-// - c:\nowgrep\One-Std\src\oga_graphics.h
-// - c:\nowgrep\One-Std\src\string.h
-// - c:\nowgrep\One-Std\src\path_utils.h
-// - c:\nowgrep\One-Std\src\system1.h
-// - c:\nowgrep\One-Std\src\graphics_d3d12.h
-// - c:\nowgrep\One-Std\src\unignore_warnings.h
+// - C:\nowgrep\One-Std\src\print.h
+// - C:\nowgrep\One-Std\src\math.h
+// - C:\nowgrep\One-Std\src\var_args.h
+// - C:\nowgrep\One-Std\src\system1.h
+// - C:\nowgrep\One-Std\src\trig_tables.h
+// - C:\nowgrep\One-Std\src\unignore_warnings.h
+// - C:\nowgrep\One-Std\src\memory.h
+// - C:\nowgrep\One-Std\src\unicode.h
+// - C:\nowgrep\One-Std\src\graphics_vulkan.h
+// - C:\nowgrep\One-Std\src\osl_compiler.h
+// - C:\nowgrep\One-Std\src\path_utils.h
+// - C:\nowgrep\One-Std\src\graphics_d3d12.h
+// - C:\nowgrep\One-Std\src\windows_loader.h
+// - C:\nowgrep\One-Std\src\ignore_warnings.h
+// - C:\nowgrep\One-Std\src\system2.h
+// - C:\nowgrep\One-Std\src\graphics_metal.h
+// - C:\nowgrep\One-Std\src\string.h
+// - C:\nowgrep\One-Std\src\var_args_macros.h
+// - C:\nowgrep\One-Std\src\oga_graphics.h
+// - C:\nowgrep\One-Std\src\base.h
+// - C:\nowgrep\One-Std\src\ostd.h
 // I try to compile with -pedantic and -Weverything, but get really dumb warnings like these,
 // so I have to ignore them.
 #if defined(__GNUC__) || defined(__GNUG__)
@@ -6511,6 +6511,12 @@ WINDOWS_IMPORT DWORD WINAPI GetKerningPairsW( HDC hdc, DWORD nPairs, LPKERNINGPA
 
 #define GGI_MARK_NONEXISTING_GLYPHS  0X0001
 
+WINDOWS_IMPORT BOOL WINAPI GetOverlappedResult( HANDLE hFile, LPOVERLAPPED lpOverlapped, LPDWORD lpNumberOfBytesTransferred, BOOL bWait);
+
+WINDOWS_IMPORT HANDLE WINAPI CreateEventA( LPSECURITY_ATTRIBUTES lpEventAttributes, BOOL bManualReset, BOOL bInitialState, LPCSTR lpName
+);
+
+WINDOWS_IMPORT BOOL WINAPI ResetEvent(HANDLE hEvent);
 
 /* End include: windows_loader.h */
     #endif // _WINDOWS_
@@ -8229,6 +8235,7 @@ bool sys_thread_init(Thread *thread, Thread_Proc proc, void *userdata) {
     return thread->handle != 0;
 }
 void sys_thread_start(Thread *thread) {
+    (void)_ostd_get_thread_storage();
     thread->is_suspended = false;
     ResumeThread(thread->handle);
 }
