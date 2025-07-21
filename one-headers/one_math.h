@@ -1,15 +1,15 @@
 // This file was generated from One-Std/src/math.h
 // The following files were included & concatenated:
-// - C:\nowgrep\One-Std\src\memory.h
+// - C:\nowgrep\One-Std\src\trig_tables.h
 // - C:\nowgrep\One-Std\src\windows_loader.h
-// - C:\nowgrep\One-Std\src\var_args_macros.h
-// - C:\nowgrep\One-Std\src\system1.h
+// - C:\nowgrep\One-Std\src\memory.h
 // - C:\nowgrep\One-Std\src\string.h
+// - C:\nowgrep\One-Std\src\system1.h
 // - C:\nowgrep\One-Std\src\base.h
 // - C:\nowgrep\One-Std\src\print.h
 // - C:\nowgrep\One-Std\src\var_args.h
+// - C:\nowgrep\One-Std\src\var_args_macros.h
 // - C:\nowgrep\One-Std\src\math.h
-// - C:\nowgrep\One-Std\src\trig_tables.h
 // I try to compile with -pedantic and -Weverything, but get really dumb warnings like these,
 // so I have to ignore them.
 #if defined(__GNUC__) || defined(__GNUG__)
@@ -2159,6 +2159,9 @@ typedef HANDLE HMENU;
 typedef HANDLE HBITMAP;
 typedef HANDLE HGDIOBJ;
 typedef HANDLE HFONT;
+typedef HANDLE HPEN;
+typedef HANDLE HGLOBAL;
+typedef HANDLE HRGN;
 
 typedef unsigned long ULONG;
 typedef ULONG *PULONG;
@@ -2963,9 +2966,6 @@ typedef void* DPI_AWARENESS_CONTEXT;
 #define WS_EX_PALETTEWINDOW     (WS_EX_WINDOWEDGE | WS_EX_TOOLWINDOW | WS_EX_TOPMOST)
 
 #endif /* WINVER >= 0x0400 */
-
-#define GWL_STYLE -16
-#define GWL_EXSTYLE -20
 
 #if(_WIN32_WINNT >= 0x0500)
 #define WS_EX_LAYERED           0x00080000
@@ -6277,6 +6277,16 @@ typedef struct _MAT2 {
 #define  GGO_GLYPH_INDEX    0x0080
 #endif /* WINVER >= 0x0400 */
 
+typedef struct tagBITMAP {
+  LONG   bmType;
+  LONG   bmWidth;
+  LONG   bmHeight;
+  LONG   bmWidthBytes;
+  WORD   bmPlanes;
+  WORD   bmBitsPixel;
+  LPVOID bmBits;
+} BITMAP, *PBITMAP, *NPBITMAP, *LPBITMAP;
+
 #if (_WIN32_WINNT >= _WIN32_WINNT_WIN2K)
 #define  GGO_UNHINTED       0x0100
 #endif // (_WIN32_WINNT >= _WIN32_WINNT_WIN2K)
@@ -6466,6 +6476,541 @@ WINDOWS_IMPORT HANDLE WINAPI CreateEventA( LPSECURITY_ATTRIBUTES lpEventAttribut
 );
 
 WINDOWS_IMPORT BOOL WINAPI ResetEvent(HANDLE hEvent);
+
+
+WINDOWS_IMPORT LPVOID WINAPI HeapAlloc(HANDLE hHeap,DWORD  dwFlags,u64 dwBytes);
+
+WINDOWS_IMPORT HANDLE WINAPI GetProcessHeap(void);
+
+
+WINDOWS_IMPORT BOOL WINAPI HeapFree(HANDLE hHeap,DWORD dwFlags,LPVOID lpMem);
+
+WINDOWS_IMPORT HPEN WINAPI CreatePen( int iStyle, int cWidth, COLORREF color);
+
+/* Pen Styles */
+#define PS_SOLID            0
+#define PS_DASH             1       /* -------  */
+#define PS_DOT              2       /* .......  */
+#define PS_DASHDOT          3       /* _._._._  */
+#define PS_DASHDOTDOT       4       /* _.._.._  */
+#define PS_NULL             5
+#define PS_INSIDEFRAME      6
+#define PS_USERSTYLE        7
+#define PS_ALTERNATE        8
+#define PS_STYLE_MASK       0x0000000F
+
+#define DC_BRUSH            18
+#define DC_PEN              19
+
+#define NULL_BRUSH          5
+#define ETO_OPAQUE                   0x0002
+#define ETO_CLIPPED                  0x0004
+#if(WINVER >= 0x0400)
+#define ETO_GLYPH_INDEX              0x0010
+#define ETO_RTLREADING               0x0080
+#define ETO_NUMERICSLOCAL            0x0400
+#define ETO_NUMERICSLATIN            0x0800
+#define ETO_IGNORELANGUAGE           0x1000
+#endif /* WINVER >= 0x0400 */
+#if (_WIN32_WINNT >= _WIN32_WINNT_WIN2K)
+#define ETO_PDY                      0x2000
+#endif // (_WIN32_WINNT >= _WIN32_WINNT_WIN2K)
+#if (_WIN32_WINNT >= _WIN32_WINNT_LONGHORN)
+#define ETO_REVERSE_INDEX_MAP        0x10000
+#endif
+
+typedef USHORT COLOR16;
+
+typedef struct _TRIVERTEX
+{
+    LONG    x;
+    LONG    y;
+    COLOR16 Red;
+    COLOR16 Green;
+    COLOR16 Blue;
+    COLOR16 Alpha;
+}TRIVERTEX,*PTRIVERTEX,*LPTRIVERTEX;
+
+typedef struct _BLENDFUNCTION
+{
+    BYTE   BlendOp;
+    BYTE   BlendFlags;
+    BYTE   SourceConstantAlpha;
+    BYTE   AlphaFormat;
+}BLENDFUNCTION,*PBLENDFUNCTION;
+
+typedef struct _GRADIENT_TRIANGLE
+{
+    ULONG Vertex1;
+    ULONG Vertex2;
+    ULONG Vertex3;
+} GRADIENT_TRIANGLE,*PGRADIENT_TRIANGLE,*LPGRADIENT_TRIANGLE;
+
+
+#define AC_SRC_OVER                 0x00
+
+//
+// alpha format flags
+//
+
+#define AC_SRC_ALPHA                0x01
+
+#define GRADIENT_FILL_RECT_H    0x00000000
+#define GRADIENT_FILL_RECT_V    0x00000001
+#define GRADIENT_FILL_TRIANGLE  0x00000002
+#define GRADIENT_FILL_OP_FLAG   0x000000ff
+
+#define TRUE 1
+#define FALSE 0
+
+typedef struct tagTEXTMETRICW
+{
+    LONG        tmHeight;
+    LONG        tmAscent;
+    LONG        tmDescent;
+    LONG        tmInternalLeading;
+    LONG        tmExternalLeading;
+    LONG        tmAveCharWidth;
+    LONG        tmMaxCharWidth;
+    LONG        tmWeight;
+    LONG        tmOverhang;
+    LONG        tmDigitizedAspectX;
+    LONG        tmDigitizedAspectY;
+    WCHAR       tmFirstChar;
+    WCHAR       tmLastChar;
+    WCHAR       tmDefaultChar;
+    WCHAR       tmBreakChar;
+    BYTE        tmItalic;
+    BYTE        tmUnderlined;
+    BYTE        tmStruckOut;
+    BYTE        tmPitchAndFamily;
+    BYTE        tmCharSet;
+} TEXTMETRICW, *PTEXTMETRICW, *NPTEXTMETRICW, *LPTEXTMETRICW;
+
+#define CF_TEXT               1
+#define CF_BITMAP             2
+#define CF_METAFILEPICT       3
+#define CF_SYLK               4
+#define CF_DIF                5
+#define CF_TIFF               6
+#define CF_OEMTEXT            7
+#define CF_DIB                8
+#define CF_PALETTE            9
+#define CF_PENDATA            10
+#define CF_RIFF               11
+#define CF_WAVE               12
+#define CF_UNICODETEXT        13
+#define CF_ENHMETAFILE        14
+#define CF_HDROP              15
+#define CF_LOCALE             16
+#define CF_DIBV5              17
+
+#define CF_OWNERDISPLAY       0x0080
+#define CF_DSPTEXT            0x0081
+#define CF_DSPBITMAP          0x0082
+#define CF_DSPMETAFILEPICT    0x0083
+#define CF_DSPENHMETAFILE     0x008E
+
+#define CF_PRIVATEFIRST       0x0200
+#define CF_PRIVATELAST        0x02FF
+
+#define CF_GDIOBJFIRST        0x0300
+#define CF_GDIOBJLAST         0x03FF
+
+#define VK_LBUTTON             0x01
+#define VK_RBUTTON             0x02
+#define VK_CANCEL              0x03
+#define VK_MBUTTON             0x04
+#define VK_XBUTTON1            0x05
+#define VK_XBUTTON2            0x06
+#define VK_BACK                0x08
+#define VK_TAB                 0x09
+#define VK_CLEAR               0x0C
+#define VK_RETURN              0x0D
+#define VK_SHIFT               0x10
+#define VK_CONTROL             0x11
+#define VK_MENU                0x12
+#define VK_PAUSE               0x13
+#define VK_CAPITAL             0x14
+#define VK_KANA                0x15
+#define VK_HANGUL              0x15
+#define VK_IME_ON              0x16
+#define VK_JUNJA               0x17
+#define VK_FINAL               0x18
+#define VK_HANJA               0x19
+#define VK_KANJI               0x19
+#define VK_IME_OFF             0x1A
+#define VK_ESCAPE              0x1B
+#define VK_CONVERT             0x1C
+#define VK_NONCONVERT          0x1D
+#define VK_ACCEPT              0x1E
+#define VK_MODECHANGE          0x1F
+#define VK_SPACE               0x20
+#define VK_PRIOR               0x21
+#define VK_NEXT                0x22
+#define VK_END                 0x23
+#define VK_HOME                0x24
+#define VK_LEFT                0x25
+#define VK_UP                  0x26
+#define VK_RIGHT               0x27
+#define VK_DOWN                0x28
+#define VK_SELECT              0x29
+#define VK_PRINT               0x2A
+#define VK_EXECUTE             0x2B
+#define VK_SNAPSHOT            0x2C
+#define VK_INSERT              0x2D
+#define VK_DELETE              0x2E
+#define VK_HELP                0x2F
+
+#define VK_0                   0x30
+#define VK_1                   0x31
+#define VK_2                   0x32
+#define VK_3                   0x33
+#define VK_4                   0x34
+#define VK_5                   0x35
+#define VK_6                   0x36
+#define VK_7                   0x37
+#define VK_8                   0x38
+#define VK_9                   0x39
+
+#define VK_A                   0x41
+#define VK_B                   0x42
+#define VK_C                   0x43
+#define VK_D                   0x44
+#define VK_E                   0x45
+#define VK_F                   0x46
+#define VK_G                   0x47
+#define VK_H                   0x48
+#define VK_I                   0x49
+#define VK_J                   0x4A
+#define VK_K                   0x4B
+#define VK_L                   0x4C
+#define VK_M                   0x4D
+#define VK_N                   0x4E
+#define VK_O                   0x4F
+#define VK_P                   0x50
+#define VK_Q                   0x51
+#define VK_R                   0x52
+#define VK_S                   0x53
+#define VK_T                   0x54
+#define VK_U                   0x55
+#define VK_V                   0x56
+#define VK_W                   0x57
+#define VK_X                   0x58
+#define VK_Y                   0x59
+#define VK_Z                   0x5A
+
+#define VK_LWIN                0x5B
+#define VK_RWIN                0x5C
+#define VK_APPS                0x5D
+#define VK_SLEEP               0x5F
+
+#define VK_NUMPAD0             0x60
+#define VK_NUMPAD1             0x61
+#define VK_NUMPAD2             0x62
+#define VK_NUMPAD3             0x63
+#define VK_NUMPAD4             0x64
+#define VK_NUMPAD5             0x65
+#define VK_NUMPAD6             0x66
+#define VK_NUMPAD7             0x67
+#define VK_NUMPAD8             0x68
+#define VK_NUMPAD9             0x69
+#define VK_MULTIPLY            0x6A
+#define VK_ADD                 0x6B
+#define VK_SEPARATOR           0x6C
+#define VK_SUBTRACT            0x6D
+#define VK_DECIMAL             0x6E
+#define VK_DIVIDE              0x6F
+
+#define VK_F1                  0x70
+#define VK_F2                  0x71
+#define VK_F3                  0x72
+#define VK_F4                  0x73
+#define VK_F5                  0x74
+#define VK_F6                  0x75
+#define VK_F7                  0x76
+#define VK_F8                  0x77
+#define VK_F9                  0x78
+#define VK_F10                 0x79
+#define VK_F11                 0x7A
+#define VK_F12                 0x7B
+#define VK_F13                 0x7C
+#define VK_F14                 0x7D
+#define VK_F15                 0x7E
+#define VK_F16                 0x7F
+#define VK_F17                 0x80
+#define VK_F18                 0x81
+#define VK_F19                 0x82
+#define VK_F20                 0x83
+#define VK_F21                 0x84
+#define VK_F22                 0x85
+#define VK_F23                 0x86
+#define VK_F24                 0x87
+
+#define VK_NUMLOCK             0x90
+#define VK_SCROLL              0x91
+
+#define VK_LSHIFT              0xA0
+#define VK_RSHIFT              0xA1
+#define VK_LCONTROL            0xA2
+#define VK_RCONTROL            0xA3
+#define VK_LMENU               0xA4
+#define VK_RMENU               0xA5
+
+#define VK_BROWSER_BACK        0xA6
+#define VK_BROWSER_FORWARD     0xA7
+#define VK_BROWSER_REFRESH     0xA8
+#define VK_BROWSER_STOP        0xA9
+#define VK_BROWSER_SEARCH      0xAA
+#define VK_BROWSER_FAVORITES   0xAB
+#define VK_BROWSER_HOME        0xAC
+
+#define VK_VOLUME_MUTE         0xAD
+#define VK_VOLUME_DOWN         0xAE
+#define VK_VOLUME_UP           0xAF
+
+#define VK_MEDIA_NEXT_TRACK    0xB0
+#define VK_MEDIA_PREV_TRACK    0xB1
+#define VK_MEDIA_STOP          0xB2
+#define VK_MEDIA_PLAY_PAUSE    0xB3
+
+#define VK_LAUNCH_MAIL         0xB4
+#define VK_LAUNCH_MEDIA_SELECT 0xB5
+#define VK_LAUNCH_APP1         0xB6
+#define VK_LAUNCH_APP2         0xB7
+
+#define VK_OEM_1               0xBA
+#define VK_OEM_PLUS            0xBB
+#define VK_OEM_COMMA           0xBC
+#define VK_OEM_MINUS           0xBD
+#define VK_OEM_PERIOD          0xBE
+#define VK_OEM_2               0xBF
+#define VK_OEM_3               0xC0
+#define VK_OEM_4               0xDB
+#define VK_OEM_5               0xDC
+#define VK_OEM_6               0xDD
+#define VK_OEM_7               0xDE
+#define VK_OEM_8               0xDF
+#define VK_OEM_102             0xE2
+
+#define VK_PROCESSKEY          0xE5
+#define VK_PACKET              0xE7
+
+#define VK_ATTN                0xF6
+#define VK_CRSEL               0xF7
+#define VK_EXSEL               0xF8
+#define VK_EREOF               0xF9
+#define VK_PLAY                0xFA
+#define VK_ZOOM                0xFB
+#define VK_NONAME              0xFC
+#define VK_PA1                 0xFD
+#define VK_OEM_CLEAR           0xFE
+
+typedef struct tagSIZE {
+  LONG cx;
+  LONG cy;
+} SIZE, *PSIZE, *LPSIZE;
+
+typedef struct tagPAINTSTRUCT {
+  HDC  hdc;
+  BOOL fErase;
+  RECT rcPaint;
+  BOOL fRestore;
+  BOOL fIncUpdate;
+  BYTE rgbReserved[32];
+} PAINTSTRUCT, *PPAINTSTRUCT, *NPPAINTSTRUCT, *LPPAINTSTRUCT;
+
+#define GMEM_FIXED          0x0000
+#define GMEM_MOVEABLE       0x0002
+#define GMEM_NOCOMPACT      0x0010
+#define GMEM_NODISCARD      0x0020
+#define GMEM_ZEROINIT       0x0040
+#define GMEM_MODIFY         0x0080
+#define GMEM_DISCARDABLE    0x0100
+#define GMEM_NOT_BANKED     0x1000
+#define GMEM_SHARE          0x2000
+#define GMEM_DDESHARE       0x2000
+#define GMEM_NOTIFY         0x4000
+#define GMEM_LOWER          GMEM_NOT_BANKED
+#define GMEM_VALID_FLAGS    0x7F72
+#define GMEM_INVALID_HANDLE 0x8000
+
+WINDOWS_IMPORT int WINAPI GetDIBits(HDC hdc, HBITMAP hbm, UINT start, UINT cLines, LPVOID lpvBits, LPBITMAPINFO lpbmi, UINT usage);
+
+WINDOWS_IMPORT int WINAPI SetDIBits(HDC hdc, HBITMAP hbm, UINT start, UINT cLines, const LPVOID lpBits, const BITMAPINFO *lpbmi, UINT ColorUse);
+
+WINDOWS_IMPORT HDC WINAPI CreateCompatibleDC(HDC hdc);
+
+#define GetObject GetObjectA
+
+#ifndef LOWORD
+#define LOWORD(l) ((WORD)((l) & 0xFFFF))
+#endif
+
+#ifndef HIWORD
+#define HIWORD(l) ((WORD)(((l) >> 16) & 0xFFFF))
+#endif
+
+
+WINDOWS_IMPORT BOOL WINAPI StretchBlt(HDC hdcDest, int xDest, int yDest, int wDest, int hDest, HDC hdcSrc, int xSrc, int ySrc, int wSrc, int hSrc, DWORD rop);
+
+WINDOWS_IMPORT BOOL WINAPI DeleteDC(HDC hdc);
+
+WINDOWS_IMPORT int WINAPI SelectClipRgn(HDC hdc, HRGN hrgn);
+
+WINDOWS_IMPORT int WINAPI IntersectClipRect(HDC hdc, int left, int top, int right, int bottom);
+
+WINDOWS_IMPORT COLORREF WINAPI SetDCPenColor(HDC hdc, COLORREF color);
+
+WINDOWS_IMPORT BOOL WINAPI MoveToEx(HDC hdc, int x, int y, LPPOINT lppt);
+
+WINDOWS_IMPORT BOOL WINAPI LineTo(HDC hdc, int x, int y);
+
+WINDOWS_IMPORT HGDIOBJ WINAPI GetStockObject(int i);
+
+WINDOWS_IMPORT BOOL WINAPI Rectangle(HDC hdc, int left, int top, int right, int bottom);
+
+WINDOWS_IMPORT BOOL WINAPI RoundRect(HDC hdc, int left, int top, int right, int bottom, int width, int height);
+
+WINDOWS_IMPORT BOOL WINAPI SetRect(LPRECT lprc, int xLeft, int yTop, int xRight, int yBottom);
+
+WINDOWS_IMPORT COLORREF WINAPI SetBkColor(HDC hdc, COLORREF color);
+
+WINDOWS_IMPORT COLORREF WINAPI SetDCBrushColor(HDC hdc, COLORREF color);
+
+WINDOWS_IMPORT BOOL WINAPI GdiGradientFill(HDC hdc, PTRIVERTEX pVertex, ULONG nVertex, PVOID pMesh, ULONG nMesh, ULONG dwMode);
+
+WINDOWS_IMPORT BOOL WINAPI AlphaBlend(HDC hdcDest, int xDest, int yDest, int wDest, int hDest,
+                                      HDC hdcSrc, int xSrc, int ySrc, int wSrc, int hSrc, BLENDFUNCTION blend);
+
+WINDOWS_IMPORT BOOL WINAPI Polygon(HDC hdc, const POINT *apt, int cpt);
+
+WINDOWS_IMPORT BOOL WINAPI Polyline(HDC hdc, const POINT *apt, int cpt);
+
+WINDOWS_IMPORT BOOL WINAPI Ellipse(HDC hdc, int left, int top, int right, int bottom);
+
+WINDOWS_IMPORT BOOL WINAPI PolyBezier(HDC hdc, const POINT *apt, DWORD cpt);
+
+WINDOWS_IMPORT BOOL WINAPI BitBlt(HDC hdcDest, int xDest, int yDest, int w, int h,
+                                   HDC hdcSrc, int xSrc, int ySrc, DWORD rop);
+
+WINDOWS_IMPORT BOOL WINAPI GetTextMetricsW(HDC hdc, LPTEXTMETRICW lptm);
+
+WINDOWS_IMPORT BOOL WINAPI GetTextExtentPoint32W(HDC hdc, LPCWSTR lpStr, int c, LPSIZE lpSize);
+
+WINDOWS_IMPORT BOOL WINAPI IsClipboardFormatAvailable(UINT format);
+
+WINDOWS_IMPORT BOOL WINAPI OpenClipboard(HWND hWndNewOwner);
+
+WINDOWS_IMPORT HANDLE WINAPI GetClipboardData(UINT uFormat);
+
+WINDOWS_IMPORT u64 WINAPI GlobalSize(HGLOBAL hMem);
+
+WINDOWS_IMPORT LPVOID WINAPI GlobalLock(HGLOBAL hMem);
+
+WINDOWS_IMPORT BOOL WINAPI GlobalUnlock(HGLOBAL hMem);
+
+WINDOWS_IMPORT BOOL WINAPI CloseClipboard(void);
+
+WINDOWS_IMPORT HGLOBAL WINAPI GlobalAlloc(UINT uFlags, u64 dwBytes);
+
+WINDOWS_IMPORT HANDLE WINAPI SetClipboardData(UINT uFormat, HANDLE hMem);
+
+WINDOWS_IMPORT HBITMAP WINAPI CreateCompatibleBitmap(HDC hdc, int cx, int cy);
+
+WINDOWS_IMPORT HDC WINAPI BeginPaint(HWND hWnd, LPPAINTSTRUCT lpPaint);
+
+WINDOWS_IMPORT BOOL WINAPI EndPaint(HWND hWnd, const PAINTSTRUCT *lpPaint);
+
+WINDOWS_IMPORT short WINAPI GetKeyState(int nVirtKey);
+
+WINDOWS_IMPORT HWND WINAPI SetCapture(HWND hWnd);
+
+WINDOWS_IMPORT BOOL WINAPI ReleaseCapture(void);
+
+WINDOWS_IMPORT HMODULE WINAPI GetModuleHandleA(LPCSTR lpModuleName);
+#define GetModuleHandle GetModuleHandleA
+
+WINDOWS_IMPORT HICON WINAPI LoadIconA(HINSTANCE hInstance, LPCSTR lpIconName);
+
+#define IDI_APPLICATION 32512
+
+#define LoadIcon LoadIconW
+
+WINDOWS_IMPORT HCURSOR WINAPI LoadCursorA(HINSTANCE hInstance, LPCSTR lpCursorName);
+
+#define IDC_ARROW 32512
+
+#define LoadCursor LoadCursorW
+
+WINDOWS_IMPORT BOOL WINAPI UnregisterClassW(LPCWSTR lpClassName, HINSTANCE hInstance);
+
+WINDOWS_IMPORT BOOL WINAPI SetWindowTextA(HWND hWnd, LPCSTR lpString);
+
+WINDOWS_IMPORT HDC WINAPI GetWindowDC(HWND hWnd);
+
+WINDOWS_IMPORT int WINAPI ReleaseDC(HWND hWnd, HDC hDC);
+
+WINDOWS_IMPORT BOOL WINAPI CloseWindow(HWND hWnd);
+
+WINDOWS_IMPORT BOOL WINAPI PeekMessageA(LPMSG lpMsg, HWND hWnd, UINT wMsgFilterMin, UINT wMsgFilterMax, UINT wRemoveMsg);
+#define PeekMessage PeekMessageW
+
+WINDOWS_IMPORT int WINAPI GetWindowTextA(HWND hWnd, LPSTR lpString, int nMaxCount);
+
+WINDOWS_IMPORT LONG_PTR WINAPI SetWindowLongPtrA(HWND hWnd,int nIndex,LONG_PTR dwNewLong);
+
+WINDOWS_IMPORT LONG_PTR WINAPI SetWindowLongPtrW(HWND hWnd, int nIndex, LONG_PTR dwNewLong);
+
+#define SetWindowLongPtr SetWindowLongPtrW
+
+typedef struct tagCREATESTRUCTA {
+  LPVOID    lpCreateParams;
+  HINSTANCE hInstance;
+  HMENU     hMenu;
+  HWND      hwndParent;
+  int       cy;
+  int       cx;
+  int       y;
+  int       x;
+  LONG      style;
+  LPCSTR    lpszName;
+  LPCSTR    lpszClass;
+  DWORD     dwExStyle;
+} CREATESTRUCTA, *LPCREATESTRUCTA;
+#define CREATESTRUCT CREATESTRUCTA
+
+#define GWL_WNDPROC         (-4)
+#define GWL_HINSTANCE       (-6)
+#define GWL_HWNDPARENT      (-8)
+#define GWL_STYLE           (-16)
+#define GWL_EXSTYLE         (-20)
+#define GWL_USERDATA        (-21)
+#define GWL_ID              (-12)
+
+
+#define DefWindowProc DefWindowProcW
+
+WINDOWS_IMPORT HICON WINAPI LoadIconW(HINSTANCE hInstance, LPCWSTR lpIconName);
+
+WINDOWS_IMPORT HCURSOR WINAPI LoadCursorW(HINSTANCE hInstance, LPCWSTR lpCursorName);
+
+WINDOWS_IMPORT BOOL WINAPI PeekMessageW(LPMSG lpMsg, HWND hWnd, UINT wMsgFilterMin, UINT wMsgFilterMax, UINT wRemoveMsg);
+
+WINDOWS_IMPORT LONG_PTR WINAPI SetWindowLongPtrW(HWND hWnd, int nIndex, LONG_PTR dwNewLong);
+
+WINDOWS_IMPORT LONG_PTR WINAPI GetWindowLongPtrW(HWND hWnd, int nIndex);
+
+WINDOWS_IMPORT BOOL WINAPI GetCursorPos(LPPOINT lpPoint);
+
+
+#define GWLP_WNDPROC        (-4)
+#define GWLP_HINSTANCE      (-6)
+#define GWLP_HWNDPARENT     (-8)
+#define GWLP_USERDATA       (-21)
+#define GWLP_ID             (-12)
+
+WINDOWS_IMPORT DWORD WINAPI GetLogicalDriveStringsA(DWORD nBufferLength,LPSTR lpBuffer);
 
 /* End include: windows_loader.h */
     #endif // _WINDOWS_
@@ -7185,6 +7730,7 @@ Thread_Handle sys_get_current_thread(void) {
     #pragma comment(lib, "winmm")
     #pragma comment(lib, "ws2_32.lib")
     #pragma comment(lib, "shell32")
+    #pragma comment(lib, "Msimg32.lib")
 #ifndef OSTD_HEADLESS
     #pragma comment(lib, "gdi32")
     #pragma comment(lib, "dxgi")

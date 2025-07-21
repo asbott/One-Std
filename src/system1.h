@@ -1195,6 +1195,7 @@ Thread_Handle sys_get_current_thread(void) {
     #pragma comment(lib, "winmm")
     #pragma comment(lib, "ws2_32.lib")
     #pragma comment(lib, "shell32")
+    #pragma comment(lib, "Msimg32.lib")
 #ifndef OSTD_HEADLESS
     #pragma comment(lib, "gdi32")
     #pragma comment(lib, "dxgi")
