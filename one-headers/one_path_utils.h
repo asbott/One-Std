@@ -1,8 +1,8 @@
 // This file was generated from One-Std/src/path_utils.h
 // The following files were included & concatenated:
-// - C:\nowgrep\One-Std\src\base.h
 // - C:\nowgrep\One-Std\src\string.h
 // - C:\nowgrep\One-Std\src\path_utils.h
+// - C:\nowgrep\One-Std\src\base.h
 // I try to compile with -pedantic and -Weverything, but get really dumb warnings like these,
 // so I have to ignore them.
 #if defined(__GNUC__) || defined(__GNUG__)
@@ -392,33 +392,39 @@ typedef u32 sys_uint;
 
 #define STRINGIFY(x) #x
 #define TOSTRING(x) STRINGIFY(x)
-#define assertmsg(x, msg) assertmsgs(x, STR(msg))
-#define assertmsgs(x, msg)  do { \
-        if (!(x)) {\
-            sys_write_string(sys_get_stderr(), STR("\n========================================================\n"));\
-            sys_write_string(sys_get_stderr(), STR("==========!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!==========\n"));\
-            sys_write_string(sys_get_stderr(), STR("========================================================\n"));\
-            sys_write_string(sys_get_stderr(), STR("\nAssertion failed for expression: '"));\
-            sys_write_string(sys_get_stderr(), STR(#x));\
-            sys_write_string(sys_get_stderr(), STR("'.\n"));\
-            if (msg.data && msg.count) {\
-                sys_write_string(sys_get_stderr(), STR("\n\""));\
-                sys_write_string(sys_get_stderr(), msg);\
-                sys_write_string(sys_get_stderr(), STR("\"\n"));\
-            }\
-            sys_write_string(sys_get_stderr(), STR("\nIn File '"));\
-            sys_write_string(sys_get_stderr(), STR(__FILE__));\
-            sys_write_string(sys_get_stderr(), STR("' on line "));\
-            sys_write_string(sys_get_stderr(), STR(TOSTRING(__LINE__)));\
-            sys_write_string(sys_get_stderr(), STR("\n\nPrinting stack trace:\n"));\
-            sys_print_stack_trace(sys_get_stderr());\
-            sys_write_string(sys_get_stderr(), STR("\n\n========================================================\n"));\
-            sys_write_string(sys_get_stderr(), STR("==========!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!==========\n"));\
-            sys_write_string(sys_get_stderr(), STR("========================================================\n"));\
-            debug_break();\
-        } \
-    } while(0)
-#define assert(x) assertmsg(x, "")
+#ifndef DISABLE_ASSERT
+    #define assertmsg(x, msg) assertmsgs(x, STR(msg))
+    #define assertmsgs(x, msg)  do { \
+            if (!(x)) {\
+                sys_write_string(sys_get_stderr(), STR("\n========================================================\n"));\
+                sys_write_string(sys_get_stderr(), STR("==========!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!==========\n"));\
+                sys_write_string(sys_get_stderr(), STR("========================================================\n"));\
+                sys_write_string(sys_get_stderr(), STR("\nAssertion failed for expression: '"));\
+                sys_write_string(sys_get_stderr(), STR(#x));\
+                sys_write_string(sys_get_stderr(), STR("'.\n"));\
+                if (msg.data && msg.count) {\
+                    sys_write_string(sys_get_stderr(), STR("\n\""));\
+                    sys_write_string(sys_get_stderr(), msg);\
+                    sys_write_string(sys_get_stderr(), STR("\"\n"));\
+                }\
+                sys_write_string(sys_get_stderr(), STR("\nIn File '"));\
+                sys_write_string(sys_get_stderr(), STR(__FILE__));\
+                sys_write_string(sys_get_stderr(), STR("' on line "));\
+                sys_write_string(sys_get_stderr(), STR(TOSTRING(__LINE__)));\
+                sys_write_string(sys_get_stderr(), STR("\n\nPrinting stack trace:\n"));\
+                sys_print_stack_trace(sys_get_stderr());\
+                sys_write_string(sys_get_stderr(), STR("\n\n========================================================\n"));\
+                sys_write_string(sys_get_stderr(), STR("==========!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!==========\n"));\
+                sys_write_string(sys_get_stderr(), STR("========================================================\n"));\
+                debug_break();\
+            } \
+        } while(0)
+    #define assert(x) assertmsg(x, "")
+#else
+    #define assertmsg(x, msg) (void)(x)
+    #define assertmsgs(x, msg) (void)(x)
+    #define assert(x) (void)(x)
+#endif
 
 #ifndef OSTD_LIB
     #define OSTD_LIB
