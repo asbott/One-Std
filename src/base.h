@@ -346,7 +346,7 @@ typedef u32 sys_uint;
 #define STRINGIFY(x) #x
 #define TOSTRING(x) STRINGIFY(x)
 #ifndef DISABLE_ASSERT
-    #define assertmsg(x, msg) assertmsgs(x, STR(msg))
+    #define assertmsg(x, msg) assertmsgs(x, (STR(msg)))
     #define assertmsgs(x, msg)  do { \
             if (!(x)) {\
                 sys_write_string(sys_get_stderr(), STR("\n========================================================\n"));\

@@ -312,22 +312,17 @@ void print_args(string fmt, u64 arg_count, Var_Arg *args) {
 }
 void fprint_args(File_Handle f, string fmt, u64 arg_count, Var_Arg *args) {
 
-    u64 n = format_string_args(0, 0, fmt, arg_count, args, 0);
-
-    u8 buffer[4096];
-    u64 written = 0;
-
-    while (written < n) {
-        u64 to_write = min(n, 4096);
-        u64 consumed_args;
-        format_string_args(buffer, to_write, fmt, arg_count, args, &consumed_args);
-        args += consumed_args;
-        arg_count -= consumed_args;
-
-        sys_write(f, buffer, to_write);
-
-        written += to_write;
-    }
+    u64 full_size = format_string_args(0, 0, fmt, arg_count, args, 0);
+    
+    u8 small_buffer[KiB(16)];
+    
+    u8 *buffer = small_buffer;
+    if (full_size > KiB(16))
+        buffer = PushTempBuffer(u8, full_size);
+    
+    u64 written = format_string_args(buffer, full_size, fmt, arg_count, args, 0);
+    
+    sys_write(f, buffer, written);
 }
 void log_args(u64 flags, Source_Location location, string fmt, u64 arg_count, Var_Arg *args) {
 

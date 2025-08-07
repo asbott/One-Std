@@ -14,7 +14,7 @@ OSTD_LIB u64 c_style_strlen(const char *s);
 OSTD_LIB u64 c_style_strcmp(const char *a, const char *b);
 
 
-#define STR(c) ((string){ c_style_strlen((const char*)c), (u8*)(uintptr)(const void*)(c) })
+#define STR(c) ((string){ c_style_strlen((const char*)(c)), (u8*)(uintptr)(const void*)(c) })
 #define STRN(n, c) ((string){ n, (u8*)(uintptr)(const void*)(c) })
 #define RSTR(...) STR(#__VA_ARGS__)
 
