@@ -1,26 +1,26 @@
 // This file was generated from One-Std/src/ostd.h
 // The following files were included & concatenated:
-// - C:\nowgrep\One-Std\src\system2.h
-// - C:\nowgrep\One-Std\src\unicode.h
-// - C:\nowgrep\One-Std\src\string.h
-// - C:\nowgrep\One-Std\src\print.h
-// - C:\nowgrep\One-Std\src\osl_compiler.h
 // - C:\nowgrep\One-Std\src\windows_loader.h
-// - C:\nowgrep\One-Std\src\graphics_metal.h
-// - C:\nowgrep\One-Std\src\memory.h
-// - C:\nowgrep\One-Std\src\system1.h
-// - C:\nowgrep\One-Std\src\graphics_d3d12.h
-// - C:\nowgrep\One-Std\src\base.h
-// - C:\nowgrep\One-Std\src\ostd.h
-// - C:\nowgrep\One-Std\src\var_args_macros.h
-// - C:\nowgrep\One-Std\src\var_args.h
-// - C:\nowgrep\One-Std\src\graphics_vulkan.h
+// - C:\nowgrep\One-Std\src\system2.h
 // - C:\nowgrep\One-Std\src\path_utils.h
-// - C:\nowgrep\One-Std\src\trig_tables.h
+// - C:\nowgrep\One-Std\src\base.h
+// - C:\nowgrep\One-Std\src\print.h
 // - C:\nowgrep\One-Std\src\oga_graphics.h
 // - C:\nowgrep\One-Std\src\unignore_warnings.h
+// - C:\nowgrep\One-Std\src\unicode.h
+// - C:\nowgrep\One-Std\src\graphics_d3d12.h
+// - C:\nowgrep\One-Std\src\memory.h
+// - C:\nowgrep\One-Std\src\graphics_metal.h
 // - C:\nowgrep\One-Std\src\ignore_warnings.h
+// - C:\nowgrep\One-Std\src\osl_compiler.h
+// - C:\nowgrep\One-Std\src\system1.h
+// - C:\nowgrep\One-Std\src\var_args.h
 // - C:\nowgrep\One-Std\src\math.h
+// - C:\nowgrep\One-Std\src\var_args_macros.h
+// - C:\nowgrep\One-Std\src\trig_tables.h
+// - C:\nowgrep\One-Std\src\ostd.h
+// - C:\nowgrep\One-Std\src\string.h
+// - C:\nowgrep\One-Std\src\graphics_vulkan.h
 // I try to compile with -pedantic and -Weverything, but get really dumb warnings like these,
 // so I have to ignore them.
 #if defined(__GNUC__) || defined(__GNUG__)
@@ -1623,7 +1623,7 @@ unit_local inline bool string_ends_with(string s, string sub) {
 unit_local s64 string_find_index_from_left(string s, string sub) {
     if (sub.count > s.count) return -1;
     
-    for (u64 i = 0; i < s.count-sub.count; i += 1) {
+    for (u64 i = 0; i <= s.count-sub.count; i += 1) {
         
         if (strings_match((string){sub.count, s.data+i}, sub)) {
             return (s64)i;
@@ -1806,7 +1806,7 @@ typedef struct Easy_Command_Result {
     s64 exit_code;
     bool process_start_success;
 } Easy_Command_Result;
-OSTD_LIB Easy_Command_Result sys_run_command_easy(string command_line, File_Handle stdout, File_Handle stderr, string workspace_dir);
+OSTD_LIB Easy_Command_Result sys_run_command_easy(string command_line, File_Handle stdout, File_Handle stderr, string workspace_dir, bool wait_for_exit);
 
 OSTD_LIB void sys_exit(s64 code);
 OSTD_LIB void sys_exit_current_thread(s64 code);
@@ -7069,6 +7069,8 @@ WINDOWS_IMPORT BOOL WINAPI GetCursorPos(LPPOINT lpPoint);
 
 WINDOWS_IMPORT DWORD WINAPI GetLogicalDriveStringsA(DWORD nBufferLength,LPSTR lpBuffer);
 
+WINDOWS_IMPORT DWORD WINAPI SearchPathA(LPCSTR lpPath,LPCSTR lpFileName,LPCSTR lpExtension,DWORD  nBufferLength,LPSTR  lpBuffer,LPSTR  *lpFilePart);
+
 /* End include: windows_loader.h */
     #endif // _WINDOWS_
 
@@ -8458,7 +8460,7 @@ void sys_walk_directory(string path, bool recursive, bool walk_directories, Walk
     FindClose(hFind);
 }
 
-Easy_Command_Result sys_run_command_easy(string command_line, File_Handle stdout, File_Handle stderr, string workspace_dir) {
+Easy_Command_Result sys_run_command_easy(string command_line, File_Handle stdout, File_Handle stderr, string workspace_dir, bool wait_for_exit) {
     Easy_Command_Result res = (Easy_Command_Result){0};
 
     STARTUPINFOA si = {0};
@@ -8484,14 +8486,16 @@ Easy_Command_Result sys_run_command_easy(string command_line, File_Handle stdout
         res.process_start_success = false;
         return res;
     }
-
-    WaitForSingleObject(pi.hProcess, S32_MAX);
-
-    DWORD exit_code;
-    GetExitCodeProcess(pi.hProcess, &exit_code);
-
-    res.exit_code = (s64)exit_code;
-    res.process_start_success = true;
+    
+    if (wait_for_exit) {
+        WaitForSingleObject(pi.hProcess, S32_MAX);
+    
+        DWORD exit_code;
+        GetExitCodeProcess(pi.hProcess, &exit_code);
+    
+        res.exit_code = (s64)exit_code;
+        res.process_start_success = true;
+    }
 
     return res;
 }

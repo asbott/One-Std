@@ -98,7 +98,7 @@ typedef struct Easy_Command_Result {
     s64 exit_code;
     bool process_start_success;
 } Easy_Command_Result;
-OSTD_LIB Easy_Command_Result sys_run_command_easy(string command_line, File_Handle stdout, File_Handle stderr, string workspace_dir);
+OSTD_LIB Easy_Command_Result sys_run_command_easy(string command_line, File_Handle stdout, File_Handle stderr, string workspace_dir, bool wait_for_exit);
 
 OSTD_LIB void sys_exit(s64 code);
 OSTD_LIB void sys_exit_current_thread(s64 code);
@@ -1866,7 +1866,7 @@ void sys_walk_directory(string path, bool recursive, bool walk_directories, Walk
     FindClose(hFind);
 }
 
-Easy_Command_Result sys_run_command_easy(string command_line, File_Handle stdout, File_Handle stderr, string workspace_dir) {
+Easy_Command_Result sys_run_command_easy(string command_line, File_Handle stdout, File_Handle stderr, string workspace_dir, bool wait_for_exit) {
     Easy_Command_Result res = (Easy_Command_Result){0};
 
     STARTUPINFOA si = {0};
@@ -1892,14 +1892,16 @@ Easy_Command_Result sys_run_command_easy(string command_line, File_Handle stdout
         res.process_start_success = false;
         return res;
     }
-
-    WaitForSingleObject(pi.hProcess, S32_MAX);
-
-    DWORD exit_code;
-    GetExitCodeProcess(pi.hProcess, &exit_code);
-
-    res.exit_code = (s64)exit_code;
-    res.process_start_success = true;
+    
+    if (wait_for_exit) {
+        WaitForSingleObject(pi.hProcess, S32_MAX);
+    
+        DWORD exit_code;
+        GetExitCodeProcess(pi.hProcess, &exit_code);
+    
+        res.exit_code = (s64)exit_code;
+        res.process_start_success = true;
+    }
 
     return res;
 }

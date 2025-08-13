@@ -4880,3 +4880,5 @@ WINDOWS_IMPORT BOOL WINAPI GetCursorPos(LPPOINT lpPoint);
 #define GWLP_ID             (-12)
 
 WINDOWS_IMPORT DWORD WINAPI GetLogicalDriveStringsA(DWORD nBufferLength,LPSTR lpBuffer);
+
+WINDOWS_IMPORT DWORD WINAPI SearchPathA(LPCSTR lpPath,LPCSTR lpFileName,LPCSTR lpExtension,DWORD  nBufferLength,LPSTR  lpBuffer,LPSTR  *lpFilePart);

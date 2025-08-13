@@ -58,7 +58,7 @@ unit_local inline bool string_ends_with(string s, string sub) {
 unit_local s64 string_find_index_from_left(string s, string sub) {
     if (sub.count > s.count) return -1;
     
-    for (u64 i = 0; i < s.count-sub.count; i += 1) {
+    for (u64 i = 0; i <= s.count-sub.count; i += 1) {
         
         if (strings_match((string){sub.count, s.data+i}, sub)) {
             return (s64)i;

@@ -1,7 +1,7 @@
 // This file was generated from One-Std/src/string.h
 // The following files were included & concatenated:
-// - C:\nowgrep\One-Std\src\base.h
 // - C:\nowgrep\One-Std\src\string.h
+// - C:\nowgrep\One-Std\src\base.h
 // I try to compile with -pedantic and -Weverything, but get really dumb warnings like these,
 // so I have to ignore them.
 #if defined(__GNUC__) || defined(__GNUG__)
@@ -576,7 +576,7 @@ unit_local inline bool string_ends_with(string s, string sub) {
 unit_local s64 string_find_index_from_left(string s, string sub) {
     if (sub.count > s.count) return -1;
     
-    for (u64 i = 0; i < s.count-sub.count; i += 1) {
+    for (u64 i = 0; i <= s.count-sub.count; i += 1) {
         
         if (strings_match((string){sub.count, s.data+i}, sub)) {
             return (s64)i;

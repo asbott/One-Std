@@ -78,7 +78,7 @@ unit_local s64 file_thread(Thread *t) {
 		fprint(log_file, "\n");
 		fprint(log_file, "======================================");
 		fprint(log_file, "\n");
-		Easy_Command_Result res = sys_run_command_easy(compile_cmd, log_file, log_file, STR("./"));
+		Easy_Command_Result res = sys_run_command_easy(compile_cmd, log_file, log_file, STR("./"), true);
 		
 		if (res.exit_code != 0) {
 			data->ok = false;
@@ -111,7 +111,7 @@ unit_local s64 file_thread(Thread *t) {
 		fprint(log_file, "\n");
 		fprint(log_file, "======================================");
 		fprint(log_file, "\n");
-		Easy_Command_Result res = sys_run_command_easy(run_cmd, log_file, log_file, STR("../"));
+		Easy_Command_Result res = sys_run_command_easy(run_cmd, log_file, log_file, STR("../"), true);
 		
 		if (res.exit_code != 0) {
 			data->ok = false;
@@ -219,7 +219,7 @@ int main(void) {
 		
 		string concat_cmd = tprint("python ../scripts/concat-header.py \"%s\" \"%s\"", source_path, out_path);
 		
-		Easy_Command_Result res = sys_run_command_easy(concat_cmd, sys_get_stdout(), sys_get_stdout(), STR("."));
+		Easy_Command_Result res = sys_run_command_easy(concat_cmd, sys_get_stdout(), sys_get_stdout(), STR("."), true);
 		if (res.exit_code != 0) {
 			print("Failed concatenating header %s\n", header);
 			return (int)res.exit_code;
@@ -237,7 +237,7 @@ int main(void) {
 		
 		string compile_cmd = tprint("clang test_result/test.c -o \"test_result/%s.obj\" -Wall -Weverything -Werror -pedantic -std=c99", header);
 		
-		res = sys_run_command_easy(compile_cmd, sys_get_stdout(), sys_get_stdout(), STR("."));
+		res = sys_run_command_easy(compile_cmd, sys_get_stdout(), sys_get_stdout(), STR("."), true);
 		if (res.exit_code != 0) {
 			print("Failed compiling header %s\n", header);
 			return (int)res.exit_code;
