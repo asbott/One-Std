@@ -182,6 +182,7 @@ OSTD_LIB void* sys_thread_key_read(Thread_Key key);
 struct Thread;
 typedef s64 (*Thread_Proc)(struct Thread*);
 typedef struct Thread {
+    u8 handle_backing[64];
     void *handle;
     u64 id;
     void *userdata;
@@ -190,13 +191,13 @@ typedef struct Thread {
 } Thread;
 
 OSTD_LIB bool sys_thread_init(Thread *thread, Thread_Proc proc, void *userdata);
-OSTD_LIB void sys_thread_start(Thread *thread);
+OSTD_LIB bool sys_thread_start(Thread *thread);
 OSTD_LIB s64 sys_thread_join(Thread *thread);
 OSTD_LIB void sys_thread_close(Thread *thread);
 
 typedef struct Mutex {
+    u8 handle_backing[64];
     void *handle;
-    u8 handle_backing[40]; // This is for windows critical section;
 } Mutex;
 
 OSTD_LIB bool sys_mutex_init(Mutex *mutex);
@@ -204,11 +205,14 @@ OSTD_LIB bool sys_mutex_uninit(Mutex *mutex);
 OSTD_LIB void sys_mutex_acquire(Mutex mutex);
 OSTD_LIB void sys_mutex_release(Mutex mutex);
 
-typedef void *Semaphore;
+typedef struct Semaphore {
+    u8 handle_backing[64];
+    void *handle;
+} Semaphore;
 OSTD_LIB bool sys_semaphore_init(Semaphore *sem);
 OSTD_LIB void sys_semaphore_signal(Semaphore *sem);
-OSTD_LIB void sys_semaphore_wait(Semaphore sem);
-OSTD_LIB void sys_semaphore_release(Semaphore sem);
+OSTD_LIB void sys_semaphore_wait(Semaphore *sem);
+OSTD_LIB void sys_semaphore_uninit(Semaphore *sem);
 
 ////////
 // Atomics
@@ -1136,6 +1140,109 @@ Socket_Result sys_set_socket_blocking_timeout(Socket socket, u64 ms) {
 
 u64 sys_get_current_thread_id(void) {
     return (u64)pthread_self();
+}
+
+bool sys_thread_key_init(Thread_Key *key) {
+    pthread_key_t tmp;
+    if (pthread_key_create(&tmp, NULL) != 0) return false;
+    *key = (void*)(uintptr_t)tmp;  // store key value in pointer-sized slot
+    return true;
+}
+
+bool sys_thread_key_write(Thread_Key key, void* value) {
+    return pthread_setspecific((pthread_key_t)(uintptr_t)key, value) == 0;
+}
+
+void* sys_thread_key_read(Thread_Key key) {
+    return pthread_getspecific((pthread_key_t)(uintptr_t)key);
+}
+
+unit_local void* _unix_thread_proc(void *arg) {
+    Thread *t = (Thread*)arg;
+    
+    t->id = (u64)(uintptr_t)pthread_self();
+    
+    _ostd_register_thread_storage(t->id);
+    
+    s64 ret = t->proc(t);
+    
+    _ostd_get_thread_storage()->taken = false;
+    
+    return (void*)(u64)ret;
+}
+
+bool sys_thread_init(Thread *thread, Thread_Proc proc, void *userdata) {
+    thread->handle = thread->handle_backing;
+    thread->userdata = userdata;
+    thread->id = 0;
+    thread->is_suspended = true;
+    thread->proc = proc;
+    return true;
+}
+bool sys_thread_start(Thread *thread) {
+    thread->is_suspended = false;
+    return pthread_create((pthread_t*)thread->handle, 0, _unix_thread_proc, thread) == 0;
+}
+s64 sys_thread_join(Thread *thread) {
+    void *ret = 0;
+    pthread_join(*(pthread_t*)thread->handle, &ret);
+    return (s64)(u64)ret;
+}
+void sys_thread_close(Thread *thread) {
+    (void)thread;
+}
+
+bool sys_mutex_init(Mutex *mutex) {
+    if (!mutex) return false;
+    mutex->handle = mutex->handle_backing;
+
+    pthread_mutexattr_t attr;
+    if (pthread_mutexattr_init(&attr) != 0) return false;
+    pthread_mutexattr_settype(&attr, PTHREAD_MUTEX_RECURSIVE);
+
+    int rc = pthread_mutex_init((pthread_mutex_t*)mutex->handle, &attr);
+    pthread_mutexattr_destroy(&attr);
+    return rc == 0;
+}
+
+bool sys_mutex_uninit(Mutex *mutex) {
+    if (!mutex || !mutex->handle) return false;
+    int rc = pthread_mutex_destroy((pthread_mutex_t*)mutex->handle);
+    mutex->handle = 0;
+    return rc == 0;
+}
+
+void sys_mutex_acquire(Mutex mutex) {
+    pthread_mutex_lock((pthread_mutex_t*)mutex.handle);
+}
+
+void sys_mutex_release(Mutex mutex) {
+    pthread_mutex_unlock((pthread_mutex_t*)mutex.handle);
+}
+
+OSTD_LIB bool sys_semaphore_init(Semaphore *sem) {
+    sem->handle = sem->handle_backing;
+    return sem_init((sem_t*)sem->handle, 0, 0) == 0;
+}
+
+OSTD_LIB void sys_semaphore_signal(Semaphore *sem) {
+    sem_post((sem_t*)sem->handle);
+}
+
+OSTD_LIB void sys_semaphore_wait(Semaphore* sem) {
+    while (sem_wait((sem_t*)sem->handle) == -1 && errno == EINTR) { }
+}
+
+OSTD_LIB void sys_semaphore_uninit(Semaphore *sem) {
+    sem_destroy((sem_t*)sem.handle);
+}
+
+inline unit_local u32 sys_atomic_add_32(volatile u32 *addend, u32 value) {
+    return __atomic_fetch_add(addend, value, __ATOMIC_SEQ_CST);
+}
+
+inline unit_local u64 sys_atomic_add_64(volatile u64 *addend, u64 value) {
+    return __atomic_fetch_add(addend, value, __ATOMIC_SEQ_CST);
 }
 
 float64 sys_get_seconds_monotonic(void) {
@@ -2196,10 +2303,10 @@ bool sys_thread_init(Thread *thread, Thread_Proc proc, void *userdata) {
     thread->proc = proc;
     return thread->handle != 0;
 }
-void sys_thread_start(Thread *thread) {
+bool sys_thread_start(Thread *thread) {
     (void)_ostd_get_thread_storage();
     thread->is_suspended = false;
-    ResumeThread(thread->handle);
+    return ResumeThread(thread->handle) != (DWORD)-1;
 }
 s64 sys_thread_join(Thread *thread) {
     assert(!thread->is_suspended);
@@ -2236,26 +2343,20 @@ void sys_mutex_release(Mutex mutex) {
 }
 
 OSTD_LIB bool sys_semaphore_init(Semaphore *sem) {
-    if (!sem) return false;
-    HANDLE handle = CreateSemaphoreA(0, 0, S32_MAX, 0);
-    if (!handle) return false;
-    *sem = handle;
-    return true;
+    sem->handle = CreateSemaphoreA(0, 0, S32_MAX, 0);
+    return sem->handle != 0;
 }
 
 OSTD_LIB void sys_semaphore_signal(Semaphore *sem) {
-    if (!sem || !*sem) return;
-    ReleaseSemaphore((HANDLE)*sem, 1, 0);
+    ReleaseSemaphore(sem->handle, 1, 0);
 }
 
-OSTD_LIB void sys_semaphore_wait(Semaphore sem) {
-    if (!sem) return;
-    WaitForSingleObject((HANDLE)sem, 0xFFFFFFFF);
+OSTD_LIB void sys_semaphore_wait(Semaphore *sem) {
+    WaitForSingleObject((HANDLE)sem->handle, 0xFFFFFFFF);
 }
 
-OSTD_LIB void sys_semaphore_release(Semaphore sem) {
-    if (!sem) return;
-    CloseHandle((HANDLE)sem);
+OSTD_LIB void sys_semaphore_uninit(Semaphore *sem) {
+    CloseHandle((HANDLE)sem->handle);
 }
 
 inline unit_local u32 sys_atomic_add_32(volatile u32 *addend, u32 value) {
