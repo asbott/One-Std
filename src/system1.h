@@ -437,13 +437,13 @@ unit_local void _ostd_register_thread_storage(u64 thread_id) {
     if (!_ostd_thread_storage) {
         _ostd_thread_storage = sys_map_pages(SYS_MEMORY_RESERVE, 0, 100000, false);
         assert(_ostd_thread_storage);
-        void *allocated = sys_map_pages(SYS_MEMORY_ALLOCATE, _ostd_thread_storage, 1, false);
+        void *allocated = sys_map_pages(SYS_MEMORY_ALLOCATE, _ostd_thread_storage, 1, true);
         assert(allocated == _ostd_thread_storage);
         memset(allocated, 0, page_size);
         _ostd_thread_storage_allocated_count = page_size/sizeof(_Ostd_Thread_Storage);
     } else {
         void *next_alloc = (void*)(uintptr)align_next((u64)(_ostd_thread_storage+_ostd_thread_storage_allocated_count), page_size);
-        void *allocated = sys_map_pages(SYS_MEMORY_ALLOCATE, next_alloc, 1, false);
+        void *allocated = sys_map_pages(SYS_MEMORY_ALLOCATE, next_alloc, 1, true);
         assert(allocated == next_alloc);
         memset(allocated, 0, page_size);
 

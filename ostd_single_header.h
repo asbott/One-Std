@@ -1,26 +1,26 @@
 // This file was generated from One-Std/src/ostd.h
 // The following files were included & concatenated:
-// - C:\One-Std\src\path_utils.h
 // - C:\One-Std\src\graphics_vulkan.h
-// - C:\One-Std\src\print.h
-// - C:\One-Std\src\ignore_warnings.h
-// - C:\One-Std\src\system1.h
-// - C:\One-Std\src\trig_tables.h
-// - C:\One-Std\src\base.h
-// - C:\One-Std\src\string.h
-// - C:\One-Std\src\oga_graphics.h
-// - C:\One-Std\src\memory.h
-// - C:\One-Std\src\graphics_metal.h
-// - C:\One-Std\src\unignore_warnings.h
-// - C:\One-Std\src\unicode.h
-// - C:\One-Std\src\var_args.h
-// - C:\One-Std\src\var_args_macros.h
-// - C:\One-Std\src\osl_compiler.h
-// - C:\One-Std\src\graphics_d3d12.h
-// - C:\One-Std\src\math.h
 // - C:\One-Std\src\ostd.h
-// - C:\One-Std\src\system2.h
+// - C:\One-Std\src\path_utils.h
+// - C:\One-Std\src\math.h
 // - C:\One-Std\src\windows_loader.h
+// - C:\One-Std\src\var_args_macros.h
+// - C:\One-Std\src\system2.h
+// - C:\One-Std\src\memory.h
+// - C:\One-Std\src\unignore_warnings.h
+// - C:\One-Std\src\oga_graphics.h
+// - C:\One-Std\src\osl_compiler.h
+// - C:\One-Std\src\trig_tables.h
+// - C:\One-Std\src\graphics_metal.h
+// - C:\One-Std\src\ignore_warnings.h
+// - C:\One-Std\src\graphics_d3d12.h
+// - C:\One-Std\src\print.h
+// - C:\One-Std\src\base.h
+// - C:\One-Std\src\system1.h
+// - C:\One-Std\src\var_args.h
+// - C:\One-Std\src\string.h
+// - C:\One-Std\src\unicode.h
 // I try to compile with -pedantic and -Weverything, but get really dumb warnings like these,
 // so I have to ignore them.
 #if defined(__GNUC__) || defined(__GNUG__)
@@ -2145,13 +2145,13 @@ unit_local void _ostd_register_thread_storage(u64 thread_id) {
     if (!_ostd_thread_storage) {
         _ostd_thread_storage = sys_map_pages(SYS_MEMORY_RESERVE, 0, 100000, false);
         assert(_ostd_thread_storage);
-        void *allocated = sys_map_pages(SYS_MEMORY_ALLOCATE, _ostd_thread_storage, 1, false);
+        void *allocated = sys_map_pages(SYS_MEMORY_ALLOCATE, _ostd_thread_storage, 1, true);
         assert(allocated == _ostd_thread_storage);
         memset(allocated, 0, page_size);
         _ostd_thread_storage_allocated_count = page_size/sizeof(_Ostd_Thread_Storage);
     } else {
         void *next_alloc = (void*)(uintptr)align_next((u64)(_ostd_thread_storage+_ostd_thread_storage_allocated_count), page_size);
-        void *allocated = sys_map_pages(SYS_MEMORY_ALLOCATE, next_alloc, 1, false);
+        void *allocated = sys_map_pages(SYS_MEMORY_ALLOCATE, next_alloc, 1, true);
         assert(allocated == next_alloc);
         memset(allocated, 0, page_size);
 
