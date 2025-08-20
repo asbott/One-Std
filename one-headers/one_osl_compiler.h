@@ -1,14 +1,14 @@
 // This file was generated from One-Std/src/osl_compiler.h
 // The following files were included & concatenated:
-// - C:\One-Std\src\windows_loader.h
+// - C:\One-Std\src\memory.h
 // - C:\One-Std\src\osl_compiler.h
+// - C:\One-Std\src\windows_loader.h
+// - C:\One-Std\src\var_args.h
 // - C:\One-Std\src\string.h
 // - C:\One-Std\src\var_args_macros.h
 // - C:\One-Std\src\print.h
-// - C:\One-Std\src\base.h
-// - C:\One-Std\src\var_args.h
-// - C:\One-Std\src\memory.h
 // - C:\One-Std\src\system1.h
+// - C:\One-Std\src\base.h
 // I try to compile with -pedantic and -Weverything, but get really dumb warnings like these,
 // so I have to ignore them.
 #if defined(__GNUC__) || defined(__GNUG__)
@@ -6127,6 +6127,7 @@ unit_local _Surface_State *_get_surface_state(Surface_Handle h) {
 #include <unistd.h>
 #include <sched.h>
 #include <pthread.h>
+#include <semaphore.h>
 #include <sys/mman.h>
 #include <sys/types.h>
 #include <sys/stat.h>
@@ -6707,7 +6708,7 @@ u64 sys_get_current_thread_id(void) {
 
 bool sys_thread_key_init(Thread_Key *key) {
     pthread_key_t tmp;
-    if (pthread_key_create(&tmp, NULL) != 0) return false;
+    if (pthread_key_create(&tmp, 0) != 0) return false;
     *key = (void*)(uintptr_t)tmp;  // store key value in pointer-sized slot
     return true;
 }

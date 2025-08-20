@@ -564,6 +564,7 @@ unit_local _Surface_State *_get_surface_state(Surface_Handle h) {
 #include <unistd.h>
 #include <sched.h>
 #include <pthread.h>
+#include <semaphore.h>
 #include <sys/mman.h>
 #include <sys/types.h>
 #include <sys/stat.h>
@@ -1144,7 +1145,7 @@ u64 sys_get_current_thread_id(void) {
 
 bool sys_thread_key_init(Thread_Key *key) {
     pthread_key_t tmp;
-    if (pthread_key_create(&tmp, NULL) != 0) return false;
+    if (pthread_key_create(&tmp, 0) != 0) return false;
     *key = (void*)(uintptr_t)tmp;  // store key value in pointer-sized slot
     return true;
 }
