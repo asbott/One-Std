@@ -1,14 +1,14 @@
 // This file was generated from One-Std/src/system.h
 // The following files were included & concatenated:
 // - C:\One-Std\src\string.h
-// - C:\One-Std\src\base.h
-// - C:\One-Std\src\var_args.h
-// - C:\One-Std\src\print.h
-// - C:\One-Std\src\system1.h
-// - C:\One-Std\src\windows_loader.h
-// - C:\One-Std\src\var_args_macros.h
-// - C:\One-Std\src\system.h
 // - C:\One-Std\src\system2.h
+// - C:\One-Std\src\system.h
+// - C:\One-Std\src\var_args_macros.h
+// - C:\One-Std\src\system1.h
+// - C:\One-Std\src\var_args.h
+// - C:\One-Std\src\base.h
+// - C:\One-Std\src\windows_loader.h
+// - C:\One-Std\src\print.h
 // - C:\One-Std\src\memory.h
 // I try to compile with -pedantic and -Weverything, but get really dumb warnings like these,
 // so I have to ignore them.
@@ -10767,7 +10767,7 @@ bool sys_read_entire_file(Allocator a, string path, string *result) {
     const int MAX_ATTEMPTS = 100;
     int attempts = MAX_ATTEMPTS;
     File_Handle f = 0;
-    while (attempts--) {
+    while (f == 0 || attempts--) {
         f = sys_open_file(path, FILE_OPEN_READ);
     }
     if (!f) return false;

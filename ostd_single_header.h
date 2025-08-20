@@ -1,26 +1,26 @@
 // This file was generated from One-Std/src/ostd.h
 // The following files were included & concatenated:
-// - C:\One-Std\src\var_args.h
-// - C:\One-Std\src\graphics_metal.h
-// - C:\One-Std\src\base.h
-// - C:\One-Std\src\trig_tables.h
-// - C:\One-Std\src\memory.h
 // - C:\One-Std\src\unignore_warnings.h
-// - C:\One-Std\src\path_utils.h
-// - C:\One-Std\src\unicode.h
 // - C:\One-Std\src\string.h
-// - C:\One-Std\src\ostd.h
-// - C:\One-Std\src\oga_graphics.h
+// - C:\One-Std\src\system1.h
+// - C:\One-Std\src\trig_tables.h
+// - C:\One-Std\src\system2.h
+// - C:\One-Std\src\unicode.h
+// - C:\One-Std\src\graphics_vulkan.h
+// - C:\One-Std\src\var_args_macros.h
+// - C:\One-Std\src\graphics_metal.h
+// - C:\One-Std\src\graphics_d3d12.h
 // - C:\One-Std\src\ignore_warnings.h
 // - C:\One-Std\src\math.h
-// - C:\One-Std\src\system1.h
+// - C:\One-Std\src\var_args.h
+// - C:\One-Std\src\path_utils.h
+// - C:\One-Std\src\base.h
 // - C:\One-Std\src\print.h
-// - C:\One-Std\src\system2.h
-// - C:\One-Std\src\windows_loader.h
-// - C:\One-Std\src\graphics_d3d12.h
-// - C:\One-Std\src\var_args_macros.h
-// - C:\One-Std\src\graphics_vulkan.h
+// - C:\One-Std\src\oga_graphics.h
 // - C:\One-Std\src\osl_compiler.h
+// - C:\One-Std\src\memory.h
+// - C:\One-Std\src\windows_loader.h
+// - C:\One-Std\src\ostd.h
 // I try to compile with -pedantic and -Weverything, but get really dumb warnings like these,
 // so I have to ignore them.
 #if defined(__GNUC__) || defined(__GNUG__)
@@ -12192,7 +12192,7 @@ bool sys_read_entire_file(Allocator a, string path, string *result) {
     const int MAX_ATTEMPTS = 100;
     int attempts = MAX_ATTEMPTS;
     File_Handle f = 0;
-    while (attempts--) {
+    while (f == 0 || attempts--) {
         f = sys_open_file(path, FILE_OPEN_READ);
     }
     if (!f) return false;
