@@ -29,8 +29,9 @@ bool sys_read_entire_file(Allocator a, string path, string *result) {
     const int MAX_ATTEMPTS = 100;
     int attempts = MAX_ATTEMPTS;
     File_Handle f = 0;
-    while (f == 0 || attempts--) {
+    while (f == 0 && attempts > 0) {
         f = sys_open_file(path, FILE_OPEN_READ);
+        attempts -= 1;
     }
     if (!f) return false;
     
