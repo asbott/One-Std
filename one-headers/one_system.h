@@ -1,15 +1,15 @@
 // This file was generated from One-Std/src/system.h
 // The following files were included & concatenated:
+// - C:\One-Std\src\var_args_macros.h
 // - C:\One-Std\src\windows_loader.h
-// - C:\One-Std\src\system.h
 // - C:\One-Std\src\var_args.h
-// - C:\One-Std\src\system1.h
+// - C:\One-Std\src\system.h
 // - C:\One-Std\src\base.h
+// - C:\One-Std\src\print.h
 // - C:\One-Std\src\string.h
+// - C:\One-Std\src\system1.h
 // - C:\One-Std\src\system2.h
 // - C:\One-Std\src\memory.h
-// - C:\One-Std\src\var_args_macros.h
-// - C:\One-Std\src\print.h
 // I try to compile with -pedantic and -Weverything, but get really dumb warnings like these,
 // so I have to ignore them.
 #if defined(__GNUC__) || defined(__GNUG__)
@@ -6779,7 +6779,7 @@ OSTD_LIB void sys_semaphore_wait(Semaphore* sem) {
 }
 
 OSTD_LIB void sys_semaphore_uninit(Semaphore *sem) {
-    sem_destroy((sem_t*)sem.handle);
+    sem_destroy((sem_t*)sem->handle);
 }
 
 inline unit_local u32 sys_atomic_add_32(volatile u32 *addend, u32 value) {

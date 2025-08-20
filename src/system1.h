@@ -1235,7 +1235,7 @@ OSTD_LIB void sys_semaphore_wait(Semaphore* sem) {
 }
 
 OSTD_LIB void sys_semaphore_uninit(Semaphore *sem) {
-    sem_destroy((sem_t*)sem.handle);
+    sem_destroy((sem_t*)sem->handle);
 }
 
 inline unit_local u32 sys_atomic_add_32(volatile u32 *addend, u32 value) {
