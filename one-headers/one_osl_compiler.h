@@ -1,14 +1,14 @@
 // This file was generated from One-Std/src/osl_compiler.h
 // The following files were included & concatenated:
-// - C:\nowgrep\One-Std\src\print.h
-// - C:\nowgrep\One-Std\src\var_args.h
-// - C:\nowgrep\One-Std\src\var_args_macros.h
-// - C:\nowgrep\One-Std\src\system1.h
-// - C:\nowgrep\One-Std\src\windows_loader.h
-// - C:\nowgrep\One-Std\src\string.h
-// - C:\nowgrep\One-Std\src\memory.h
-// - C:\nowgrep\One-Std\src\osl_compiler.h
-// - C:\nowgrep\One-Std\src\base.h
+// - C:\One-Std\src\system1.h
+// - C:\One-Std\src\base.h
+// - C:\One-Std\src\osl_compiler.h
+// - C:\One-Std\src\print.h
+// - C:\One-Std\src\windows_loader.h
+// - C:\One-Std\src\var_args_macros.h
+// - C:\One-Std\src\memory.h
+// - C:\One-Std\src\string.h
+// - C:\One-Std\src\var_args.h
 // I try to compile with -pedantic and -Weverything, but get really dumb warnings like these,
 // so I have to ignore them.
 #if defined(__GNUC__) || defined(__GNUG__)

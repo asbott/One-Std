@@ -35,24 +35,34 @@ bool sys_read_entire_file(Allocator a, string path, string *result) {
     if (!f) return false;
     
     u64 size = sys_get_file_size(f);
-    if (size == 0) return false;
+    if (size == 0) {
+        sys_close(f);
+        return false;
+    }
     
     *result = string_allocate(a, size);
     s64 readeded =  sys_read(f, result->data, result->count);
     
     if (readeded != (s64)size) {
         deallocate(a, result->data);
+        sys_close(f);
         return false;
     }
+    
+    sys_close(f);
     
     return true;
 }
 bool sys_write_entire_file(string path, string data) {
     File_Handle f = sys_open_file(path, FILE_OPEN_WRITE | FILE_OPEN_CREATE | FILE_OPEN_RESET);
-    if (!f) return false;
+    if (!f) {
+        sys_close(f);
+        return false;
+    }
     
     s64 written = sys_write_string(f, data);
     
+    sys_close(f);
     return written == (s64)data.count;
 }
 

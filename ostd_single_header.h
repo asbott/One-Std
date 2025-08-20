@@ -1,26 +1,26 @@
 // This file was generated from One-Std/src/ostd.h
 // The following files were included & concatenated:
-// - C:\nowgrep\One-Std\src\windows_loader.h
-// - C:\nowgrep\One-Std\src\system2.h
-// - C:\nowgrep\One-Std\src\path_utils.h
-// - C:\nowgrep\One-Std\src\base.h
-// - C:\nowgrep\One-Std\src\print.h
-// - C:\nowgrep\One-Std\src\oga_graphics.h
-// - C:\nowgrep\One-Std\src\unignore_warnings.h
-// - C:\nowgrep\One-Std\src\unicode.h
-// - C:\nowgrep\One-Std\src\graphics_d3d12.h
-// - C:\nowgrep\One-Std\src\memory.h
-// - C:\nowgrep\One-Std\src\graphics_metal.h
-// - C:\nowgrep\One-Std\src\ignore_warnings.h
-// - C:\nowgrep\One-Std\src\osl_compiler.h
-// - C:\nowgrep\One-Std\src\system1.h
-// - C:\nowgrep\One-Std\src\var_args.h
-// - C:\nowgrep\One-Std\src\math.h
-// - C:\nowgrep\One-Std\src\var_args_macros.h
-// - C:\nowgrep\One-Std\src\trig_tables.h
-// - C:\nowgrep\One-Std\src\ostd.h
-// - C:\nowgrep\One-Std\src\string.h
-// - C:\nowgrep\One-Std\src\graphics_vulkan.h
+// - C:\One-Std\src\var_args.h
+// - C:\One-Std\src\graphics_metal.h
+// - C:\One-Std\src\base.h
+// - C:\One-Std\src\trig_tables.h
+// - C:\One-Std\src\memory.h
+// - C:\One-Std\src\unignore_warnings.h
+// - C:\One-Std\src\path_utils.h
+// - C:\One-Std\src\unicode.h
+// - C:\One-Std\src\string.h
+// - C:\One-Std\src\ostd.h
+// - C:\One-Std\src\oga_graphics.h
+// - C:\One-Std\src\ignore_warnings.h
+// - C:\One-Std\src\math.h
+// - C:\One-Std\src\system1.h
+// - C:\One-Std\src\print.h
+// - C:\One-Std\src\system2.h
+// - C:\One-Std\src\windows_loader.h
+// - C:\One-Std\src\graphics_d3d12.h
+// - C:\One-Std\src\var_args_macros.h
+// - C:\One-Std\src\graphics_vulkan.h
+// - C:\One-Std\src\osl_compiler.h
 // I try to compile with -pedantic and -Weverything, but get really dumb warnings like these,
 // so I have to ignore them.
 #if defined(__GNUC__) || defined(__GNUG__)
@@ -12198,24 +12198,34 @@ bool sys_read_entire_file(Allocator a, string path, string *result) {
     if (!f) return false;
     
     u64 size = sys_get_file_size(f);
-    if (size == 0) return false;
+    if (size == 0) {
+        sys_close(f);
+        return false;
+    }
     
     *result = string_allocate(a, size);
     s64 readeded =  sys_read(f, result->data, result->count);
     
     if (readeded != (s64)size) {
         deallocate(a, result->data);
+        sys_close(f);
         return false;
     }
+    
+    sys_close(f);
     
     return true;
 }
 bool sys_write_entire_file(string path, string data) {
     File_Handle f = sys_open_file(path, FILE_OPEN_WRITE | FILE_OPEN_CREATE | FILE_OPEN_RESET);
-    if (!f) return false;
+    if (!f) {
+        sys_close(f);
+        return false;
+    }
     
     s64 written = sys_write_string(f, data);
     
+    sys_close(f);
     return written == (s64)data.count;
 }
 
