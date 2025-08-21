@@ -9,7 +9,6 @@ A C99 standard library to replace the mess which is the C standard library can b
 The idea is to target all modern platforms:
  - Android
  - iOS
- - Consoles (Once I manage to get licensed. Would be closed-source and only given to licensed entities.)
  - Web
  - Windows
  - MacOS
