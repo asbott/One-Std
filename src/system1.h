@@ -906,6 +906,141 @@ bool sys_set_file_position(File_Handle f, u64 position) {
     return lseek((int)(u64)f, (off_t)position, SEEK_SET) != (off_t)-1;
 }
 
+bool sys_make_directory(string path, bool recursive) {
+    if (path.len == 0) return false;
+
+    char cpath[2048];
+    size_t n = (path.len < sizeof(cpath) - 1) ? (size_t)path.len : (sizeof(cpath) - 1);
+    memcpy(cpath, path.data, n);
+    cpath[n] = 0;
+
+    if (!recursive) {
+        if (mkdir(cpath, 0777) == 0) return true;
+        if (errno == EEXIST) {
+            struct stat st;
+            if (stat(cpath, &st) == 0 && S_ISDIR(st.st_mode)) return true;
+        }
+        return false;
+    }
+
+    // recursive: create each component if missing (like `mkdir -p`)
+    char buffer[2048];
+    size_t len = strlen(cpath);
+    if (len >= sizeof(buffer)) return false;
+    memcpy(buffer, cpath, len + 1); // include NUL
+
+    // Walk over buffer; temporarily NUL-terminate at each separator and mkdir
+    // Treat both '/' and '\\' as separators to be forgiving.
+    for (size_t i = 0; i < len; ++i) {
+        if (buffer[i] == '/' || buffer[i] == '\\') {
+            if (i == 0) continue; // skip root "/"
+            // On Windows you'd also skip "C:\", but here it's harmless.
+            char saved = buffer[i];
+            buffer[i] = 0;
+            if (mkdir(buffer, 0777) != 0) {
+                if (errno != EEXIST) return false;
+            }
+            buffer[i] = saved;
+        }
+    }
+
+    // Make the final directory itself
+    if (mkdir(buffer, 0777) != 0) {
+        if (errno != EEXIST) return false;
+    }
+    return true;
+}
+
+bool sys_remove_directory(string path, bool recursive) {
+    if (path.len == 0) return false;
+
+    char cpath[2048];
+    size_t n = (path.len < sizeof(cpath) - 1) ? (size_t)path.len : (sizeof(cpath) - 1);
+    memcpy(cpath, path.data, n);
+    cpath[n] = 0;
+
+    if (!recursive) {
+        return rmdir(cpath) == 0;
+    }
+
+    DIR *dir = opendir(cpath);
+    if (!dir) return false;
+
+    size_t base_len = strlen(cpath);
+    int has_slash = (base_len > 0 && (cpath[base_len - 1] == '/' || cpath[base_len - 1] == '\\'));
+
+    struct dirent *ent;
+    while ((ent = readdir(dir)) != NULL) {
+        if (ent->d_name[0] == '.' && (ent->d_name[1] == 0 ||
+                                      (ent->d_name[1] == '.' && ent->d_name[2] == 0))) {
+            continue; // skip "." and ".."
+        }
+
+        char entry_path[2048];
+        if (has_slash) {
+            if (snprintf(entry_path, sizeof(entry_path), "%s%s", cpath, ent->d_name) >= (int)sizeof(entry_path)) {
+                closedir(dir);
+                return false;
+            }
+        } else {
+            if (snprintf(entry_path, sizeof(entry_path), "%s/%s", cpath, ent->d_name) >= (int)sizeof(entry_path)) {
+                closedir(dir);
+                return false;
+            }
+        }
+
+        struct stat st;
+        if (lstat(entry_path, &st) != 0) {
+            closedir(dir);
+            return false;
+        }
+
+        if (S_ISDIR(st.st_mode)) {
+            string child;
+            child.data  = (u8*)entry_path;
+            child.count = (u64)strlen(entry_path);
+            if (!sys_remove_directory(child, true)) {
+                closedir(dir);
+                return false;
+            }
+        } else {
+            if (unlink(entry_path) != 0) {
+                closedir(dir);
+                return false;
+            }
+        }
+    }
+
+    closedir(dir);
+
+    return rmdir(cpath) == 0;
+}
+
+bool sys_is_file(string path) {
+    if (path.len == 0) return false;
+
+    char cpath[2048];
+    size_t n = (path.len < sizeof(cpath) - 1) ? (size_t)path.len : (sizeof(cpath) - 1);
+    memcpy(cpath, path.data, n);
+    cpath[n] = 0;
+
+    struct stat st;
+    if (stat(cpath, &st) != 0) return false;
+    return S_ISREG(st.st_mode);
+}
+
+bool sys_is_directory(string path) {
+    if (path.len == 0) return false;
+
+    char cpath[2048];
+    size_t n = (path.len < sizeof(cpath) - 1) ? (size_t)path.len : (sizeof(cpath) - 1);
+    memcpy(cpath, path.data, n);
+    cpath[n] = 0;
+
+    struct stat st;
+    if (stat(cpath, &st) != 0) return false;
+    return S_ISDIR(st.st_mode);
+}
 
 
 unit_local int _to_win_sock_err(Socket_Result r) {
