@@ -925,7 +925,7 @@ bool sys_make_directory(string path, bool recursive) {
     }
 
     char buffer[2048];
-    size_t len = strlen(cpath);
+    size_t len = c_style_strlen(cpath);
     if (len >= sizeof(buffer)) return false;
     memcpy(buffer, cpath, len + 1);
 
@@ -962,7 +962,7 @@ bool sys_remove_directory(string path, bool recursive) {
     DIR *dir = opendir(cpath);
     if (!dir) return false;
 
-    size_t base_len = strlen(cpath);
+    size_t base_len = c_style_strlen(cpath);
     int has_slash = (base_len > 0 && (cpath[base_len - 1] == '/' || cpath[base_len - 1] == '\\'));
 
     struct dirent *ent;
@@ -994,7 +994,7 @@ bool sys_remove_directory(string path, bool recursive) {
         if (S_ISDIR(st.st_mode)) {
             string child;
             child.data  = (u8*)entry_path;
-            child.count = (u64)strlen(entry_path);
+            child.count = (u64)c_style_strlen(entry_path);
             if (!sys_remove_directory(child, true)) {
                 closedir(dir);
                 return false;

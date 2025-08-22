@@ -1,19 +1,19 @@
 // This file was generated from One-Std/src/oga_graphics.h
 // The following files were included & concatenated:
-// - C:\One-Std\src\base.h
-// - C:\One-Std\src\trig_tables.h
-// - C:\One-Std\src\var_args_macros.h
-// - C:\One-Std\src\windows_loader.h
-// - C:\One-Std\src\system1.h
 // - C:\One-Std\src\graphics_metal.h
 // - C:\One-Std\src\string.h
-// - C:\One-Std\src\print.h
 // - C:\One-Std\src\memory.h
-// - C:\One-Std\src\oga_graphics.h
+// - C:\One-Std\src\system1.h
+// - C:\One-Std\src\base.h
+// - C:\One-Std\src\windows_loader.h
+// - C:\One-Std\src\trig_tables.h
+// - C:\One-Std\src\var_args.h
 // - C:\One-Std\src\math.h
+// - C:\One-Std\src\var_args_macros.h
 // - C:\One-Std\src\graphics_d3d12.h
 // - C:\One-Std\src\graphics_vulkan.h
-// - C:\One-Std\src\var_args.h
+// - C:\One-Std\src\print.h
+// - C:\One-Std\src\oga_graphics.h
 // I try to compile with -pedantic and -Weverything, but get really dumb warnings like these,
 // so I have to ignore them.
 #if defined(__GNUC__) || defined(__GNUG__)
@@ -6138,6 +6138,7 @@ unit_local _Surface_State *_get_surface_state(Surface_Handle h) {
 #include <sys/mman.h>
 #include <sys/types.h>
 #include <sys/stat.h>
+#include <dirent.h>
 #include <errno.h>
 //#include <execinfo.h>
 #include <fcntl.h>
@@ -6492,7 +6493,7 @@ bool sys_make_directory(string path, bool recursive) {
     }
 
     char buffer[2048];
-    size_t len = strlen(cpath);
+    size_t len = c_style_strlen(cpath);
     if (len >= sizeof(buffer)) return false;
     memcpy(buffer, cpath, len + 1);
 
@@ -6529,7 +6530,7 @@ bool sys_remove_directory(string path, bool recursive) {
     DIR *dir = opendir(cpath);
     if (!dir) return false;
 
-    size_t base_len = strlen(cpath);
+    size_t base_len = c_style_strlen(cpath);
     int has_slash = (base_len > 0 && (cpath[base_len - 1] == '/' || cpath[base_len - 1] == '\\'));
 
     struct dirent *ent;
@@ -6561,7 +6562,7 @@ bool sys_remove_directory(string path, bool recursive) {
         if (S_ISDIR(st.st_mode)) {
             string child;
             child.data  = (u8*)entry_path;
-            child.count = (u64)strlen(entry_path);
+            child.count = (u64)c_style_strlen(entry_path);
             if (!sys_remove_directory(child, true)) {
                 closedir(dir);
                 return false;
