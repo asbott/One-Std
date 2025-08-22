@@ -570,6 +570,7 @@ unit_local _Surface_State *_get_surface_state(Surface_Handle h) {
 #include <sys/mman.h>
 #include <sys/types.h>
 #include <sys/stat.h>
+#include <dirent.h>
 #include <errno.h>
 //#include <execinfo.h>
 #include <fcntl.h>
@@ -907,10 +908,10 @@ bool sys_set_file_position(File_Handle f, u64 position) {
 }
 
 bool sys_make_directory(string path, bool recursive) {
-    if (path.length == 0) return false;
+    if (path.count == 0) return false;
 
     char cpath[2048];
-    size_t n = (path.length < sizeof(cpath) - 1) ? (size_t)path.length : (sizeof(cpath) - 1);
+    size_t n = (path.count < sizeof(cpath) - 1) ? (size_t)path.count : (sizeof(cpath) - 1);
     memcpy(cpath, path.data, n);
     cpath[n] = 0;
 
@@ -947,10 +948,10 @@ bool sys_make_directory(string path, bool recursive) {
 }
 
 bool sys_remove_directory(string path, bool recursive) {
-    if (path.length == 0) return false;
+    if (path.count == 0) return false;
 
     char cpath[2048];
-    size_t n = (path.length < sizeof(cpath) - 1) ? (size_t)path.length : (sizeof(cpath) - 1);
+    size_t n = (path.count < sizeof(cpath) - 1) ? (size_t)path.count : (sizeof(cpath) - 1);
     memcpy(cpath, path.data, n);
     cpath[n] = 0;
 
@@ -1012,10 +1013,10 @@ bool sys_remove_directory(string path, bool recursive) {
 }
 
 bool sys_is_file(string path) {
-    if (path.length == 0) return false;
+    if (path.count == 0) return false;
 
     char cpath[2048];
-    size_t n = (path.length < sizeof(cpath) - 1) ? (size_t)path.length : (sizeof(cpath) - 1);
+    size_t n = (path.count < sizeof(cpath) - 1) ? (size_t)path.count : (sizeof(cpath) - 1);
     memcpy(cpath, path.data, n);
     cpath[n] = 0;
 
@@ -1025,10 +1026,10 @@ bool sys_is_file(string path) {
 }
 
 bool sys_is_directory(string path) {
-    if (path.length == 0) return false;
+    if (path.count == 0) return false;
 
     char cpath[2048];
-    size_t n = (path.length < sizeof(cpath) - 1) ? (size_t)path.length : (sizeof(cpath) - 1);
+    size_t n = (path.count < sizeof(cpath) - 1) ? (size_t)path.count : (sizeof(cpath) - 1);
     memcpy(cpath, path.data, n);
     cpath[n] = 0;
 

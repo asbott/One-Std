@@ -1,15 +1,15 @@
 // This file was generated from One-Std/src/math.h
 // The following files were included & concatenated:
+// - C:\One-Std\src\var_args_macros.h
+// - C:\One-Std\src\print.h
+// - C:\One-Std\src\windows_loader.h
+// - C:\One-Std\src\base.h
 // - C:\One-Std\src\string.h
+// - C:\One-Std\src\trig_tables.h
 // - C:\One-Std\src\system1.h
 // - C:\One-Std\src\math.h
 // - C:\One-Std\src\var_args.h
-// - C:\One-Std\src\var_args_macros.h
-// - C:\One-Std\src\windows_loader.h
-// - C:\One-Std\src\print.h
-// - C:\One-Std\src\base.h
 // - C:\One-Std\src\memory.h
-// - C:\One-Std\src\trig_tables.h
 // I try to compile with -pedantic and -Weverything, but get really dumb warnings like these,
 // so I have to ignore them.
 #if defined(__GNUC__) || defined(__GNUG__)
@@ -7450,10 +7450,10 @@ bool sys_set_file_position(File_Handle f, u64 position) {
 }
 
 bool sys_make_directory(string path, bool recursive) {
-    if (path.length == 0) return false;
+    if (path.count == 0) return false;
 
     char cpath[2048];
-    size_t n = (path.length < sizeof(cpath) - 1) ? (size_t)path.length : (sizeof(cpath) - 1);
+    size_t n = (path.count < sizeof(cpath) - 1) ? (size_t)path.count : (sizeof(cpath) - 1);
     memcpy(cpath, path.data, n);
     cpath[n] = 0;
 
@@ -7490,10 +7490,10 @@ bool sys_make_directory(string path, bool recursive) {
 }
 
 bool sys_remove_directory(string path, bool recursive) {
-    if (path.length == 0) return false;
+    if (path.count == 0) return false;
 
     char cpath[2048];
-    size_t n = (path.length < sizeof(cpath) - 1) ? (size_t)path.length : (sizeof(cpath) - 1);
+    size_t n = (path.count < sizeof(cpath) - 1) ? (size_t)path.count : (sizeof(cpath) - 1);
     memcpy(cpath, path.data, n);
     cpath[n] = 0;
 
@@ -7555,10 +7555,10 @@ bool sys_remove_directory(string path, bool recursive) {
 }
 
 bool sys_is_file(string path) {
-    if (path.length == 0) return false;
+    if (path.count == 0) return false;
 
     char cpath[2048];
-    size_t n = (path.length < sizeof(cpath) - 1) ? (size_t)path.length : (sizeof(cpath) - 1);
+    size_t n = (path.count < sizeof(cpath) - 1) ? (size_t)path.count : (sizeof(cpath) - 1);
     memcpy(cpath, path.data, n);
     cpath[n] = 0;
 
@@ -7568,10 +7568,10 @@ bool sys_is_file(string path) {
 }
 
 bool sys_is_directory(string path) {
-    if (path.length == 0) return false;
+    if (path.count == 0) return false;
 
     char cpath[2048];
-    size_t n = (path.length < sizeof(cpath) - 1) ? (size_t)path.length : (sizeof(cpath) - 1);
+    size_t n = (path.count < sizeof(cpath) - 1) ? (size_t)path.count : (sizeof(cpath) - 1);
     memcpy(cpath, path.data, n);
     cpath[n] = 0;
 
