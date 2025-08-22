@@ -603,7 +603,7 @@ extern int pthread_setaffinity_np (pthread_t __th, size_t __cpusetsize,
 
 #endif
 
-#undef 0
+#undef NULL
 
 #undef bool
 
@@ -974,12 +974,15 @@ bool sys_remove_directory(string path, bool recursive) {
 
         char entry_path[2048];
         if (has_slash) {
-            if (snprintf(entry_path, sizeof(entry_path), "%s%s", cpath, ent->d_name) >= (int)sizeof(entry_path)) {
+            
+            string d_name_str = STR(ent->d_name);
+            string cpath_str = STR(cpath);
+            if (format_string(entry_path, sizeof(entry_path), "%s%s", cpath_str, d_name_str) >= (int)sizeof(entry_path)) {
                 closedir(dir);
                 return false;
             }
         } else {
-            if (snprintf(entry_path, sizeof(entry_path), "%s/%s", cpath, ent->d_name) >= (int)sizeof(entry_path)) {
+            if (format_string(entry_path, sizeof(entry_path), "%s/%s", cpath_str, d_name_str) >= (int)sizeof(entry_path)) {
                 closedir(dir);
                 return false;
             }
@@ -3848,11 +3851,9 @@ void surface_blit_pixels(Surface_Handle h) {
     int w = (int)width;
     int h_int = (int)height;
 
-    #pragma clang diagnostic ignored "-Wformat-nonliteral"
-    extern int snprintf(char*restrict, unsigned long, const char*restrict, ...);
-    int script_len = snprintf(0, 0, format, w, h_int, w, h_int, (int)_em_pixel_buffer) + 1;
+    u64 script_len = format_string(0, 0, STR(format), w, h_int, w, h_int, _em_pixel_buffer) + 1;
     assert(script_len < (int)sizeof(_em_surface_blit_pixels_script));
-    snprintf(_em_surface_blit_pixels_script, (unsigned long)script_len, format, w, h_int, w, h_int, (int)_em_pixel_buffer);
+    format_string(_em_surface_blit_pixels_script, script_len, format, w, h_int, w, h_int, _em_pixel_buffer);
 
     emscripten_sync_run_in_main_runtime_thread(EM_FUNC_SIG_V, main_thread_surface_blit_pixels, _em_surface_blit_pixels_script);
 }

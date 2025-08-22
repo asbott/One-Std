@@ -1,15 +1,15 @@
 // This file was generated from One-Std/src/system.h
 // The following files were included & concatenated:
-// - C:\One-Std\src\string.h
-// - C:\One-Std\src\windows_loader.h
-// - C:\One-Std\src\var_args_macros.h
-// - C:\One-Std\src\system.h
-// - C:\One-Std\src\var_args.h
-// - C:\One-Std\src\system1.h
-// - C:\One-Std\src\system2.h
-// - C:\One-Std\src\base.h
 // - C:\One-Std\src\print.h
 // - C:\One-Std\src\memory.h
+// - C:\One-Std\src\string.h
+// - C:\One-Std\src\windows_loader.h
+// - C:\One-Std\src\system2.h
+// - C:\One-Std\src\var_args.h
+// - C:\One-Std\src\system1.h
+// - C:\One-Std\src\system.h
+// - C:\One-Std\src\base.h
+// - C:\One-Std\src\var_args_macros.h
 // I try to compile with -pedantic and -Weverything, but get really dumb warnings like these,
 // so I have to ignore them.
 #if defined(__GNUC__) || defined(__GNUG__)
@@ -6147,7 +6147,7 @@ extern int pthread_setaffinity_np (pthread_t __th, size_t __cpusetsize,
 
 #endif
 
-#undef 0
+#undef NULL
 
 #undef bool
 
@@ -6518,12 +6518,15 @@ bool sys_remove_directory(string path, bool recursive) {
 
         char entry_path[2048];
         if (has_slash) {
-            if (snprintf(entry_path, sizeof(entry_path), "%s%s", cpath, ent->d_name) >= (int)sizeof(entry_path)) {
+            
+            string d_name_str = STR(ent->d_name);
+            string cpath_str = STR(cpath);
+            if (format_string(entry_path, sizeof(entry_path), "%s%s", cpath_str, d_name_str) >= (int)sizeof(entry_path)) {
                 closedir(dir);
                 return false;
             }
         } else {
-            if (snprintf(entry_path, sizeof(entry_path), "%s/%s", cpath, ent->d_name) >= (int)sizeof(entry_path)) {
+            if (format_string(entry_path, sizeof(entry_path), "%s/%s", cpath_str, d_name_str) >= (int)sizeof(entry_path)) {
                 closedir(dir);
                 return false;
             }
@@ -9392,11 +9395,9 @@ void surface_blit_pixels(Surface_Handle h) {
     int w = (int)width;
     int h_int = (int)height;
 
-    #pragma clang diagnostic ignored "-Wformat-nonliteral"
-    extern int snprintf(char*restrict, unsigned long, const char*restrict, ...);
-    int script_len = snprintf(0, 0, format, w, h_int, w, h_int, (int)_em_pixel_buffer) + 1;
+    u64 script_len = format_string(0, 0, STR(format), w, h_int, w, h_int, _em_pixel_buffer) + 1;
     assert(script_len < (int)sizeof(_em_surface_blit_pixels_script));
-    snprintf(_em_surface_blit_pixels_script, (unsigned long)script_len, format, w, h_int, w, h_int, (int)_em_pixel_buffer);
+    format_string(_em_surface_blit_pixels_script, script_len, format, w, h_int, w, h_int, _em_pixel_buffer);
 
     emscripten_sync_run_in_main_runtime_thread(EM_FUNC_SIG_V, main_thread_surface_blit_pixels, _em_surface_blit_pixels_script);
 }
