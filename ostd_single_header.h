@@ -1,26 +1,26 @@
 // This file was generated from One-Std/src/ostd.h
 // The following files were included & concatenated:
-// - C:\One-Std\src\osl_compiler.h
-// - C:\One-Std\src\string.h
-// - C:\One-Std\src\base.h
-// - C:\One-Std\src\ignore_warnings.h
-// - C:\One-Std\src\path_utils.h
-// - C:\One-Std\src\windows_loader.h
-// - C:\One-Std\src\graphics_vulkan.h
-// - C:\One-Std\src\system1.h
-// - C:\One-Std\src\ostd.h
-// - C:\One-Std\src\unignore_warnings.h
-// - C:\One-Std\src\print.h
-// - C:\One-Std\src\oga_graphics.h
 // - C:\One-Std\src\trig_tables.h
-// - C:\One-Std\src\math.h
-// - C:\One-Std\src\unicode.h
-// - C:\One-Std\src\graphics_metal.h
-// - C:\One-Std\src\system2.h
-// - C:\One-Std\src\var_args_macros.h
+// - C:\One-Std\src\path_utils.h
+// - C:\One-Std\src\unignore_warnings.h
+// - C:\One-Std\src\graphics_vulkan.h
 // - C:\One-Std\src\var_args.h
 // - C:\One-Std\src\memory.h
+// - C:\One-Std\src\ostd.h
+// - C:\One-Std\src\ignore_warnings.h
+// - C:\One-Std\src\graphics_metal.h
+// - C:\One-Std\src\unicode.h
+// - C:\One-Std\src\var_args_macros.h
 // - C:\One-Std\src\graphics_d3d12.h
+// - C:\One-Std\src\math.h
+// - C:\One-Std\src\system2.h
+// - C:\One-Std\src\oga_graphics.h
+// - C:\One-Std\src\base.h
+// - C:\One-Std\src\string.h
+// - C:\One-Std\src\windows_loader.h
+// - C:\One-Std\src\print.h
+// - C:\One-Std\src\osl_compiler.h
+// - C:\One-Std\src\system1.h
 // I try to compile with -pedantic and -Weverything, but get really dumb warnings like these,
 // so I have to ignore them.
 #if defined(__GNUC__) || defined(__GNUG__)
@@ -7545,9 +7545,13 @@ bool sys_remove_directory(string path, bool recursive) {
     if (path.count == 0) return false;
 
     char cpath[2048];
-    size_t n = (path.count < sizeof(cpath) - 1) ? (size_t)path.count : (sizeof(cpath) - 1);
-    memcpy(cpath, path.data, n);
-    cpath[n] = 0;
+    // Copy path into cpath with NUL-termination, no libc
+    {
+        u64 limit = (u64)(sizeof(cpath) - 1);
+        u64 n = (path.count < limit) ? path.count : limit;
+        for (u64 i = 0; i < n; ++i) cpath[i] = (char)path.data[i];
+        cpath[n] = 0;
+    }
 
     if (!recursive) {
         return rmdir(cpath) == 0;
@@ -7556,30 +7560,33 @@ bool sys_remove_directory(string path, bool recursive) {
     DIR *dir = opendir(cpath);
     if (!dir) return false;
 
-    size_t base_len = c_style_strlen(cpath);
+    size_t base_len = (size_t)c_style_strlen(cpath);
     int has_slash = (base_len > 0 && (cpath[base_len - 1] == '/' || cpath[base_len - 1] == '\\'));
 
     struct dirent *ent;
     while ((ent = readdir(dir)) != 0) {
         if (ent->d_name[0] == '.' && (ent->d_name[1] == 0 ||
                                       (ent->d_name[1] == '.' && ent->d_name[2] == 0))) {
-            continue; // skip "." and ".."
+            continue;
         }
 
         char entry_path[2048];
-        if (has_slash) {
-            
-            string d_name_str = STR(ent->d_name);
-            string cpath_str = STR(cpath);
-            if (format_string(entry_path, sizeof(entry_path), "%s%s", cpath_str, d_name_str) >= (int)sizeof(entry_path)) {
-                closedir(dir);
-                return false;
+        {
+            size_t write = 0;
+            size_t maxw = sizeof(entry_path) - 1;
+
+            for (size_t i = 0; i < base_len && write < maxw; ++i) entry_path[write++] = cpath[i];
+
+            if (!has_slash) {
+                if (write >= maxw) { closedir(dir); return false; }
+                entry_path[write++] = '/';
             }
-        } else {
-            if (format_string(entry_path, sizeof(entry_path), "%s/%s", cpath_str, d_name_str) >= (int)sizeof(entry_path)) {
-                closedir(dir);
-                return false;
-            }
+
+            size_t name_len = (size_t)c_style_strlen(ent->d_name);
+            for (size_t i = 0; i < name_len && write < maxw; ++i) entry_path[write++] = ent->d_name[i];
+
+            if (write >= maxw) { closedir(dir); return false; }
+            entry_path[write] = 0;
         }
 
         struct stat st;
@@ -7605,7 +7612,6 @@ bool sys_remove_directory(string path, bool recursive) {
     }
 
     closedir(dir);
-
     return rmdir(cpath) == 0;
 }
 
@@ -10445,9 +10451,10 @@ void surface_blit_pixels(Surface_Handle h) {
     int w = (int)width;
     int h_int = (int)height;
 
-    u64 script_len = format_string(0, 0, STR(format), w, h_int, w, h_int, _em_pixel_buffer) + 1;
+    extern int snprintf(char*restrict, unsigned long, const char*restrict, ...);
+    int script_len = snprintf(0, 0, format, w, h_int, w, h_int, (int)_em_pixel_buffer) + 1;
     assert(script_len < (int)sizeof(_em_surface_blit_pixels_script));
-    format_string(_em_surface_blit_pixels_script, script_len, format, w, h_int, w, h_int, _em_pixel_buffer);
+    snprintf(_em_surface_blit_pixels_script, (unsigned long)script_len, format, w, h_int, w, h_int, (int)_em_pixel_buffer);
 
     emscripten_sync_run_in_main_runtime_thread(EM_FUNC_SIG_V, main_thread_surface_blit_pixels, _em_surface_blit_pixels_script);
 }
