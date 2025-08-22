@@ -1,19 +1,19 @@
 // This file was generated from One-Std/src/oga_graphics.h
 // The following files were included & concatenated:
-// - C:\One-Std\src\var_args_macros.h
-// - C:\One-Std\src\graphics_d3d12.h
-// - C:\One-Std\src\oga_graphics.h
-// - C:\One-Std\src\windows_loader.h
-// - C:\One-Std\src\graphics_metal.h
-// - C:\One-Std\src\print.h
-// - C:\One-Std\src\graphics_vulkan.h
-// - C:\One-Std\src\base.h
-// - C:\One-Std\src\system1.h
 // - C:\One-Std\src\math.h
 // - C:\One-Std\src\var_args.h
-// - C:\One-Std\src\memory.h
-// - C:\One-Std\src\string.h
+// - C:\One-Std\src\var_args_macros.h
+// - C:\One-Std\src\graphics_vulkan.h
+// - C:\One-Std\src\windows_loader.h
 // - C:\One-Std\src\trig_tables.h
+// - C:\One-Std\src\graphics_metal.h
+// - C:\One-Std\src\memory.h
+// - C:\One-Std\src\oga_graphics.h
+// - C:\One-Std\src\graphics_d3d12.h
+// - C:\One-Std\src\base.h
+// - C:\One-Std\src\print.h
+// - C:\One-Std\src\string.h
+// - C:\One-Std\src\system1.h
 // I try to compile with -pedantic and -Weverything, but get really dumb warnings like these,
 // so I have to ignore them.
 #if defined(__GNUC__) || defined(__GNUG__)
@@ -6065,7 +6065,7 @@ WINDOWS_IMPORT DWORD WINAPI SearchPathA(LPCSTR lpPath,LPCSTR lpFileName,LPCSTR l
     #include <X11/Xlib.h>
     #include <X11/Xutil.h>
     #include <X11/extensions/Xrandr.h>
-    #undef NULL
+    #undef 0
 
     struct _XDisplay;
     typedef struct _XDisplay Display;
@@ -6170,7 +6170,7 @@ extern int pthread_setaffinity_np (pthread_t __th, size_t __cpusetsize,
 
 #endif
 
-#undef NULL
+#undef 0
 
 #undef bool
 
@@ -6475,10 +6475,10 @@ bool sys_set_file_position(File_Handle f, u64 position) {
 }
 
 bool sys_make_directory(string path, bool recursive) {
-    if (path.len == 0) return false;
+    if (path.length == 0) return false;
 
     char cpath[2048];
-    size_t n = (path.len < sizeof(cpath) - 1) ? (size_t)path.len : (sizeof(cpath) - 1);
+    size_t n = (path.length < sizeof(cpath) - 1) ? (size_t)path.length : (sizeof(cpath) - 1);
     memcpy(cpath, path.data, n);
     cpath[n] = 0;
 
@@ -6491,18 +6491,14 @@ bool sys_make_directory(string path, bool recursive) {
         return false;
     }
 
-    // recursive: create each component if missing (like `mkdir -p`)
     char buffer[2048];
     size_t len = strlen(cpath);
     if (len >= sizeof(buffer)) return false;
-    memcpy(buffer, cpath, len + 1); // include NUL
+    memcpy(buffer, cpath, len + 1);
 
-    // Walk over buffer; temporarily NUL-terminate at each separator and mkdir
-    // Treat both '/' and '\\' as separators to be forgiving.
     for (size_t i = 0; i < len; ++i) {
         if (buffer[i] == '/' || buffer[i] == '\\') {
-            if (i == 0) continue; // skip root "/"
-            // On Windows you'd also skip "C:\", but here it's harmless.
+            if (i == 0) continue; 
             char saved = buffer[i];
             buffer[i] = 0;
             if (mkdir(buffer, 0777) != 0) {
@@ -6512,7 +6508,6 @@ bool sys_make_directory(string path, bool recursive) {
         }
     }
 
-    // Make the final directory itself
     if (mkdir(buffer, 0777) != 0) {
         if (errno != EEXIST) return false;
     }
@@ -6520,10 +6515,10 @@ bool sys_make_directory(string path, bool recursive) {
 }
 
 bool sys_remove_directory(string path, bool recursive) {
-    if (path.len == 0) return false;
+    if (path.length == 0) return false;
 
     char cpath[2048];
-    size_t n = (path.len < sizeof(cpath) - 1) ? (size_t)path.len : (sizeof(cpath) - 1);
+    size_t n = (path.length < sizeof(cpath) - 1) ? (size_t)path.length : (sizeof(cpath) - 1);
     memcpy(cpath, path.data, n);
     cpath[n] = 0;
 
@@ -6538,7 +6533,7 @@ bool sys_remove_directory(string path, bool recursive) {
     int has_slash = (base_len > 0 && (cpath[base_len - 1] == '/' || cpath[base_len - 1] == '\\'));
 
     struct dirent *ent;
-    while ((ent = readdir(dir)) != NULL) {
+    while ((ent = readdir(dir)) != 0) {
         if (ent->d_name[0] == '.' && (ent->d_name[1] == 0 ||
                                       (ent->d_name[1] == '.' && ent->d_name[2] == 0))) {
             continue; // skip "." and ".."
@@ -6585,10 +6580,10 @@ bool sys_remove_directory(string path, bool recursive) {
 }
 
 bool sys_is_file(string path) {
-    if (path.len == 0) return false;
+    if (path.length == 0) return false;
 
     char cpath[2048];
-    size_t n = (path.len < sizeof(cpath) - 1) ? (size_t)path.len : (sizeof(cpath) - 1);
+    size_t n = (path.length < sizeof(cpath) - 1) ? (size_t)path.length : (sizeof(cpath) - 1);
     memcpy(cpath, path.data, n);
     cpath[n] = 0;
 
@@ -6598,10 +6593,10 @@ bool sys_is_file(string path) {
 }
 
 bool sys_is_directory(string path) {
-    if (path.len == 0) return false;
+    if (path.length == 0) return false;
 
     char cpath[2048];
-    size_t n = (path.len < sizeof(cpath) - 1) ? (size_t)path.len : (sizeof(cpath) - 1);
+    size_t n = (path.length < sizeof(cpath) - 1) ? (size_t)path.length : (sizeof(cpath) - 1);
     memcpy(cpath, path.data, n);
     cpath[n] = 0;
 
