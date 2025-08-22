@@ -86,6 +86,8 @@ OSTD_LIB void sys_close(File_Handle h);
 OSTD_LIB File_Handle sys_open_file(string path, File_Open_Flags flags);
 OSTD_LIB u64 sys_get_file_size(File_Handle f);
 
+OSTD_LIB bool sys_set_file_position(File_Handle f, u64 position);
+
 OSTD_LIB bool sys_make_directory(string path, bool recursive);
 OSTD_LIB bool sys_remove_directory(string path, bool recursive);
 OSTD_LIB bool sys_is_file(string path);
@@ -898,6 +900,10 @@ u64 sys_get_file_size(File_Handle f) {
         return 0;
     }
     return (u64)file_stat.st_size;
+}
+
+bool sys_set_file_position(File_Handle f, u64 position) {
+    return lseek((int)(u64)f, (off_t)position, SEEK_SET) != (off_t)-1;
 }
 
 
@@ -1743,6 +1749,12 @@ u64 sys_get_file_size(File_Handle f) {
         return 0; // Indicate failure
     }
     return (u64)size.QuadPart;
+}
+
+bool sys_set_file_position(File_Handle f, u64 position) {
+    LARGE_INTEGER li;
+    li.QuadPart = (LONGLONG)position;
+    return SetFilePointerEx((HANDLE)f, li, 0, 0) != 0;
 }
 
 bool sys_make_directory(string path, bool recursive) {

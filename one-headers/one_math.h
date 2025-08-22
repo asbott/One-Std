@@ -1,15 +1,15 @@
 // This file was generated from One-Std/src/math.h
 // The following files were included & concatenated:
-// - C:\One-Std\src\string.h
+// - C:\One-Std\src\memory.h
+// - C:\One-Std\src\trig_tables.h
 // - C:\One-Std\src\print.h
 // - C:\One-Std\src\var_args.h
-// - C:\One-Std\src\base.h
-// - C:\One-Std\src\var_args_macros.h
-// - C:\One-Std\src\memory.h
-// - C:\One-Std\src\math.h
-// - C:\One-Std\src\system1.h
-// - C:\One-Std\src\trig_tables.h
 // - C:\One-Std\src\windows_loader.h
+// - C:\One-Std\src\math.h
+// - C:\One-Std\src\string.h
+// - C:\One-Std\src\system1.h
+// - C:\One-Std\src\var_args_macros.h
+// - C:\One-Std\src\base.h
 // I try to compile with -pedantic and -Weverything, but get really dumb warnings like these,
 // so I have to ignore them.
 #if defined(__GNUC__) || defined(__GNUG__)
@@ -1742,6 +1742,8 @@ OSTD_LIB void sys_close(File_Handle h);
 // Returns 0 on failure
 OSTD_LIB File_Handle sys_open_file(string path, File_Open_Flags flags);
 OSTD_LIB u64 sys_get_file_size(File_Handle f);
+
+OSTD_LIB bool sys_set_file_position(File_Handle f, u64 position);
 
 OSTD_LIB bool sys_make_directory(string path, bool recursive);
 OSTD_LIB bool sys_remove_directory(string path, bool recursive);
@@ -7443,6 +7445,10 @@ u64 sys_get_file_size(File_Handle f) {
     return (u64)file_stat.st_size;
 }
 
+bool sys_set_file_position(File_Handle f, u64 position) {
+    return lseek((int)(u64)f, (off_t)position, SEEK_SET) != (off_t)-1;
+}
+
 
 
 unit_local int _to_win_sock_err(Socket_Result r) {
@@ -8286,6 +8292,12 @@ u64 sys_get_file_size(File_Handle f) {
         return 0; // Indicate failure
     }
     return (u64)size.QuadPart;
+}
+
+bool sys_set_file_position(File_Handle f, u64 position) {
+    LARGE_INTEGER li;
+    li.QuadPart = (LONGLONG)position;
+    return SetFilePointerEx((HANDLE)f, li, 0, 0) != 0;
 }
 
 bool sys_make_directory(string path, bool recursive) {
