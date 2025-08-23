@@ -3,7 +3,7 @@
 
 # One Standard Library
 
-A C99 standard library to replace the mess which is the C standard library can be included with a single header. Focus on simplicity, speed, self-containedness and reasonableness. Also contains a graphics API that currently has vulkan backend implemented. Can be compiled freestanding, only linking to necessary system libraries. No CRT needed.
+A C99 standard library to replace the mess which is the C standard library can be included with a single header. Focus on simplicity, speed, self-containedness and reasonableness. Also contains a graphics API that currently has vulkan backend implemented, and a shader compiler for a custom shading language. Can be compiled freestanding, only linking to necessary system libraries. No CRT needed.
 
 
 The idea is to target all modern platforms:
