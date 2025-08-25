@@ -36,10 +36,6 @@ bool sys_read_entire_file(Allocator a, string path, string *result) {
     if (!f) return false;
     
     u64 size = sys_get_file_size(f);
-    if (size == 0) {
-        sys_close(f);
-        return false;
-    }
     
     *result = string_allocate(a, size);
     s64 readeded =  sys_read(f, result->data, result->count);
