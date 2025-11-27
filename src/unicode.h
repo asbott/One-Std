@@ -117,6 +117,7 @@ Utf8_To_Utf16_Result one_utf8_to_utf16(u8 *s, s64 source_length, bool strict) {
 }
 
 u32 next_utf8(string *s) {
+    if (s->count == 0) return 0;
     Utf8_To_Utf32_Result res = one_utf8_to_utf32(s->data, (s64)s->count, false);
 
     s->data  += (u64)res.continuation_bytes;

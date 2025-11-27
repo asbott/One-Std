@@ -5,22 +5,20 @@
 #include "base.h"
 #endif // _BASE_H
 
-typedef struct string { 
-    u64 count;
-    u8 *data;
-} string;
-
 OSTD_LIB u64 c_style_strlen(const char *s);
 OSTD_LIB u64 c_style_strcmp(const char *a, const char *b);
 
 
 #define STR(c) ((string){ c_style_strlen((const char*)(c)), (u8*)(uintptr)(const void*)(c) })
+#define STR_LIT(c) ((string){ sizeof(c)-1, (u8*)(uintptr)(const void*)(c) })
 #define STRN(n, c) ((string){ n, (u8*)(uintptr)(const void*)(c) })
 #define RSTR(...) STR(#__VA_ARGS__)
 
 inline int memcmp(const void* a, const void* b, sys_uint n);
 unit_local inline bool strings_match(string a, string b) {
     if (a.count != b.count) return false;
+    
+    if (a.count == 0) return true;
 
     if (a.data == b.data) return true; // Pointers and counts match
 

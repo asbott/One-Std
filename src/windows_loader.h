@@ -4168,6 +4168,9 @@ typedef struct tagBITMAP {
 
 WINDOWS_IMPORT HFONT WINAPI CreateFontA( int cHeight, int cWidth, int cEscapement, int cOrientation, int cWeight, DWORD bItalic, DWORD bUnderline, DWORD bStrikeOut, DWORD iCharSet, DWORD iOutPrecision, DWORD iClipPrecision, DWORD iQuality, DWORD iPitchAndFamily, LPCSTR pszFaceName);
 
+WINDOWS_IMPORT HFONT WINAPI CreateFontW( int cHeight, int cWidth, int cEscapement, int cOrientation, int cWeight, DWORD bItalic, DWORD bUnderline, DWORD bStrikeOut, DWORD iCharSet, DWORD iOutPrecision, DWORD iClipPrecision, DWORD iQuality, DWORD iPitchAndFamily, LPCWSTR pszFaceName
+);
+
 WINDOWS_IMPORT DWORD WINAPI GetGlyphOutlineA( HDC hdc, UINT uChar, UINT fuFormat, LPGLYPHMETRICS lpgm, DWORD cjBuffer, LPVOID pvBuffer, const MAT2 *lpmat2);
 
 WINDOWS_IMPORT HGDIOBJ WINAPI SelectObject(HDC hdc,HGDIOBJ h);
@@ -4882,3 +4885,194 @@ WINDOWS_IMPORT BOOL WINAPI GetCursorPos(LPPOINT lpPoint);
 WINDOWS_IMPORT DWORD WINAPI GetLogicalDriveStringsA(DWORD nBufferLength,LPSTR lpBuffer);
 
 WINDOWS_IMPORT DWORD WINAPI SearchPathA(LPCSTR lpPath,LPCSTR lpFileName,LPCSTR lpExtension,DWORD  nBufferLength,LPSTR  lpBuffer,LPSTR  *lpFilePart);
+
+#define MM_TEXT             1
+#define MM_LOMETRIC         2
+#define MM_HIMETRIC         3
+#define MM_LOENGLISH        4
+#define MM_HIENGLISH        5
+#define MM_TWIPS            6
+#define MM_ISOTROPIC        7
+#define MM_ANISOTROPIC      8
+WINDOWS_IMPORT int WINAPI SetMapMode(HDC hdc,int iMode);
+
+
+WINDOWS_IMPORT DWORD WINAPI GetGlyphOutlineW( HDC hdc, UINT uChar, UINT fuFormat, GLYPHMETRICS *lpgm, DWORD cjBuffer, LPVOID pvBuffer, const MAT2 *lpmat2);
+
+WINDOWS_IMPORT HRESULT WINAPI DwmSetWindowAttribute( HWND    hwnd, DWORD   dwAttribute, LPCVOID pvAttribute, DWORD   cbAttribute);
+
+#define GET_X_LPARAM(lp) ((int)(short)LOWORD(lp))
+#define GET_Y_LPARAM(lp) ((int)(short)HIWORD(lp))
+
+WINDOWS_IMPORT BOOL WINAPI ScreenToClient(HWND hWnd,POINT* lpPoint);
+
+#define SM_CXSIZEFRAME 32
+#define SM_CXPADDEDBORDER 92
+
+WINDOWS_IMPORT int WINAPI GetSystemMetrics(int nIndex);
+
+#define SC_RESTORE 0xF120
+#define SC_MAXIMIZE 0xF030
+#define SC_MINIMIZE 0xF020
+#define SC_CLOSE 0xF060
+#define SC_MOVE 0xF010
+
+WINDOWS_IMPORT LRESULT WINAPI SendMessageW(HWND hWnd,UINT Msg,WPARAM wParam,LPARAM lParam);
+
+WINDOWS_IMPORT BOOL WINAPI PostMessageW( HWND hWnd, UINT Msg, WPARAM wParam, LPARAM lParam);
+
+WINDOWS_IMPORT BOOL WINAPI ReleaseCapture(void);
+
+typedef struct tagWINDOWPLACEMENT {
+  UINT  length;
+  UINT  flags;
+  UINT  showCmd;
+  POINT ptMinPosition;
+  POINT ptMaxPosition;
+  RECT  rcNormalPosition;
+  RECT  rcDevice;
+} WINDOWPLACEMENT;
+
+WINDOWS_IMPORT BOOL WINAPI GetWindowPlacement(HWND hWnd, WINDOWPLACEMENT *lpwndpl);
+
+#define RDW_INVALIDATE         0x0001
+#define RDW_INTERNALPAINT      0x0002
+#define RDW_ERASE              0x0004
+
+#define RDW_VALIDATE           0x0008
+#define RDW_NOINTERNALPAINT    0x0010
+#define RDW_NOERASE            0x0020
+
+#define RDW_NOCHILDREN         0x0040
+#define RDW_ALLCHILDREN        0x0080
+
+#define RDW_UPDATENOW          0x0100
+#define RDW_ERASENOW           0x0200
+
+#define RDW_FRAME              0x0400
+#define RDW_NOFRAME            0x0800
+WINDOWS_IMPORT BOOL WINAPI RedrawWindow(HWND       hWnd,const RECT *lprcUpdate,HRGN       hrgnUpdate,UINT       flags);
+
+WINDOWS_IMPORT BOOL WINAPI IsZoomed(HWND hWnd);
+
+WINDOWS_IMPORT BOOL WINAPI GetWindowRect(HWND   hWnd,LPRECT lpRect);
+
+WINDOWS_IMPORT BOOL WINAPI ScreenToClient(HWND    hWnd, POINT* lpPoint);
+
+WINDOWS_IMPORT BOOL WINAPI ClientToScreen( HWND hWnd, POINT* lpPoint);
+
+WINDOWS_IMPORT HWND WINAPI GetForegroundWindow(void);
+
+WINDOWS_IMPORT short WINAPI GetAsyncKeyState(int vKey);
+
+WINDOWS_IMPORT BOOL WINAPI ScreenToClient(HWND hWnd, LPPOINT lpPoint);
+
+WINDOWS_IMPORT BOOL WINAPI PtInRect(const RECT *lprc, POINT pt);
+
+WINDOWS_IMPORT HCURSOR WINAPI SetCursor(HCURSOR hCursor);
+
+
+
+#pragma comment(lib, "avrt")
+WINDOWS_IMPORT HANDLE WINAPI AvSetMmThreadCharacteristicsW(LPCWSTR TaskName,LPDWORD TaskIndex);
+WINDOWS_IMPORT BOOL WINAPI SetThreadPriorityBoost(HANDLE hThread,BOOL   bDisablePriorityBoost);
+typedef enum AVRT_PRIORITY {
+	AVRT_PRIORITY_CRITICAL = (2),
+	AVRT_PRIORITY_HIGH = (1),
+	AVRT_PRIORITY_LOW = (-1),
+	AVRT_PRIORITY_NORMAL = (0),
+} AVRT_PRIORITY;
+
+WINDOWS_IMPORT BOOL WINAPI AvSetMmThreadPriority(HANDLE AvrtHandle,AVRT_PRIORITY Priority);
+
+WINDOWS_IMPORT UINT WINAPI GetDoubleClickTime(void);
+
+#define SPI_GETKEYBOARDDELAY 0x0016
+#define SPI_GETKEYBOARDSPEED 0x000A
+WINDOWS_IMPORT BOOL WINAPI SystemParametersInfoA( UINT  uiAction, UINT  uiParam, PVOID pvParam, UINT  fWinIni);
+
+#if defined(INITGUID) || defined(INITKNOWNFOLDERS)
+#define DEFINE_KNOWN_FOLDER(name, l, w1, w2, b1, b2, b3, b4, b5, b6, b7, b8) \
+        extern const GUID  name \
+                = { l, w1, w2, { b1, b2,  b3,  b4,  b5,  b6,  b7,  b8 } }
+#else
+#define DEFINE_KNOWN_FOLDER(name, l, w1, w2, b1, b2, b3, b4, b5, b6, b7, b8) \
+        extern const GUID name
+#endif // INITGUID || INITKNOWNFOLDERS
+
+// {3EB685DB-65F9-4CF6-A03A-E3EF65729F3D}
+DEFINE_KNOWN_FOLDER(FOLDERID_RoamingAppData,      0x3EB685DB, 0x65F9, 0x4CF6, 0xA0, 0x3A, 0xE3, 0xEF, 0x65, 0x72, 0x9F, 0x3D);
+
+typedef GUID KNOWNFOLDERID;
+#define REFKNOWNFOLDERID const KNOWNFOLDERID *
+
+WINDOWS_IMPORT HRESULT WINAPI SHGetKnownFolderPath(REFKNOWNFOLDERID rfid, DWORD dwFlags,HANDLE hToken,PWSTR *ppszPath);
+
+WINDOWS_IMPORT void WINAPI GetSystemTimeAsFileTime(FILETIME *lpSystemTimeAsFileTime);
+
+WINDOWS_IMPORT UINT WINAPI GetDpiForSystem(void);
+
+
+typedef void (WINAPI *LPOVERLAPPED_COMPLETION_ROUTINE)( DWORD dwErrorCode, DWORD dwNumberOfBytesTransfered, LPOVERLAPPED lpOverlapped);
+BOOL ReadDirectoryChangesW(HANDLE hDirectory,LPVOID lpBuffer,DWORD nBufferLength,BOOL bWatchSubtree,DWORD dwNotifyFilter,LPDWORD lpBytesReturned,LPOVERLAPPED lpOverlapped,LPOVERLAPPED_COMPLETION_ROUTINE lpCompletionRoutine);
+
+typedef enum _READ_DIRECTORY_NOTIFY_INFORMATION_CLASS {
+  ReadDirectoryNotifyInformation = 1,
+  ReadDirectoryNotifyExtendedInformation,
+  ReadDirectoryNotifyFullInformation,
+  ReadDirectoryNotifyMaximumInformation
+} READ_DIRECTORY_NOTIFY_INFORMATION_CLASS, *PREAD_DIRECTORY_NOTIFY_INFORMATION_CLASS;
+
+BOOL ReadDirectoryChangesExW(HANDLE hDirectory, LPVOID lpBuffer, DWORD nBufferLength, BOOL bWatchSubtree, DWORD dwNotifyFilter, LPDWORD lpBytesReturned, LPOVERLAPPED lpOverlapped, LPOVERLAPPED_COMPLETION_ROUTINE lpCompletionRoutine, READ_DIRECTORY_NOTIFY_INFORMATION_CLASS ReadDirectoryNotifyInformationClass);
+
+typedef struct _FILE_NOTIFY_INFORMATION {
+    DWORD NextEntryOffset;
+    DWORD Action;
+    DWORD FileNameLength;
+    WCHAR FileName[1];
+} FILE_NOTIFY_INFORMATION, *PFILE_NOTIFY_INFORMATION;
+
+typedef struct _FILE_NOTIFY_EXTENDED_INFORMATION {
+    DWORD NextEntryOffset;
+    DWORD Action;
+    LARGE_INTEGER CreationTime;
+    LARGE_INTEGER LastModificationTime;
+    LARGE_INTEGER LastChangeTime;
+    LARGE_INTEGER LastAccessTime;
+    LARGE_INTEGER AllocatedLength;
+    LARGE_INTEGER FileSize;
+    DWORD FileAttributes;
+    union {
+        DWORD ReparsePointTag;
+        DWORD EaSize;
+    } DUMMYUNIONNAME;
+    LARGE_INTEGER FileId;
+    LARGE_INTEGER ParentFileId;
+    DWORD FileNameLength;
+    WCHAR FileName[1];
+} FILE_NOTIFY_EXTENDED_INFORMATION, *PFILE_NOTIFY_EXTENDED_INFORMATION;
+
+
+WINDOWS_IMPORT BOOL WINAPI FlushFileBuffers(HANDLE hFile);
+
+typedef struct {
+  USN       StartUsn;
+  DWORD     ReasonMask;
+  DWORD     ReturnOnlyOnClose;
+  DWORDLONG Timeout;
+  DWORDLONG BytesToWaitFor;
+  DWORDLONG UsnJournalID;
+} READ_USN_JOURNAL_DATA_V0, *PREAD_USN_JOURNAL_DATA_V0;
+
+typedef struct {
+  DWORDLONG UsnJournalID;
+  USN       FirstUsn;
+  USN       NextUsn;
+  USN       LowestValidUsn;
+  USN       MaxUsn;
+  DWORDLONG MaximumSize;
+  DWORDLONG AllocationDelta;
+} USN_JOURNAL_DATA_V0, *PUSN_JOURNAL_DATA_V0;
+
+WINDOWS_IMPORT BOOL WINAPI FileTimeToLocalFileTime(const FILETIME *lpFileTime, LPFILETIME lpLocalFileTime);
+

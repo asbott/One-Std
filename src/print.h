@@ -81,16 +81,17 @@ typedef struct Source_Location {
 #define fprint(file, /*fmt, */...)       _fprint_ugly(file, __VA_ARGS__)
 #define fprints(file, /*fmt, */...)      _fprints_ugly(file, __VA_ARGS__)
 
-string sprint_args(Allocator a, string fmt, u64 arg_count, Var_Arg *args);
-string tprint_args(string fmt, u64 arg_count, Var_Arg *args);
-void   print_args(string fmt, u64 arg_count, Var_Arg *args);
-void   fprint_args(File_Handle f, string fmt, u64 arg_count, Var_Arg *args);
-void   log_args(u64 flags, Source_Location location, string fmt, u64 arg_count, Var_Arg *args);
+OSTD_LIB string sprint_args(Allocator a, string fmt, u64 arg_count, Var_Arg *args);
+OSTD_LIB string tprint_args(string fmt, u64 arg_count, Var_Arg *args);
+OSTD_LIB void   print_args(string fmt, u64 arg_count, Var_Arg *args);
+OSTD_LIB void   fprint_args(File_Handle f, string fmt, u64 arg_count, Var_Arg *args);
+OSTD_LIB void   log_args(u64 flags, Source_Location location, string fmt, u64 arg_count, Var_Arg *args);
 
-typedef void (*Logger_Proc)(string message, u64 flags, Source_Location location);
-extern Logger_Proc logger;
+typedef void (*Logger_Proc)(string message, u64 flags, Source_Location location, void *ud);
 
-void default_logger(string message, u64 flags, Source_Location location);
+void default_logger(string message, u64 flags, Source_Location location, void *ud);
+
+OSTD_LIB void set_logger(Logger_Proc proc, void *ud);
 
 #define log(flags, /*fmt, */...)              _log_ugly(flags, __VA_ARGS__)
 #define logs(flags, /*fmt, */ ...)             _logs_ugly(flags, __VA_ARGS__)
@@ -202,8 +203,11 @@ u64 format_string_args(void *buffer, u64 buffer_size, string fmt, u64 arg_count,
 
             u8 small_str[64];
             string str = (string) { 0, small_str };
-
-            if (fmt.data[i+1] == 'u') {
+            
+            if (fmt.data[i+1] == '%') {
+                str = STR("%");
+                i += 1;
+            } else if (fmt.data[i+1] == 'u') {
                 str.count = format_unsigned_int(arg.int_val, base, str.data, 32);
                 i += 1;
             } else if (fmt.data[i+1] == 'i') {
@@ -255,9 +259,9 @@ u64 format_string_args(void *buffer, u64 buffer_size, string fmt, u64 arg_count,
                 }
             }
 
-            if (consumed_args) (*consumed_args) += 1;
+            if (fmt.data[i] != '%' && consumed_args) (*consumed_args) += 1;
 
-            next_arg_index += 1;
+            if (fmt.data[i] != '%') next_arg_index += 1;
         } else {
             if (written + 1 <= buffer_size) {
                 if (buffer) *((u8*)buffer + written) = fmt.data[i];
@@ -327,17 +331,25 @@ void fprint_args(File_Handle f, string fmt, u64 arg_count, Var_Arg *args) {
 void log_args(u64 flags, Source_Location location, string fmt, u64 arg_count, Var_Arg *args) {
 
     string s = tprint_args(fmt, arg_count, args);
+    
+    Logger_Proc logger = (Logger_Proc)_ostd_get_thread_storage()->logger;
+    void *ud = _ostd_get_thread_storage()->logger_ud;
 
     if (!logger) {
-        default_logger(s, flags, location);
+        default_logger(s, flags, location, ud);
     } else {
-        logger(s, flags, location);
+        logger(s, flags, location, ud);
     }
 }
 
-void default_logger(string message, u64 flags, Source_Location location) {
-    (void)flags;
+void default_logger(string message, u64 flags, Source_Location location, void *ud) {
+    (void)flags; (void)ud;
     print("%s:%u: %s\n", location.file, location.line, message);
+}
+
+OSTD_LIB void set_logger(Logger_Proc proc, void *ud) {
+    _ostd_get_thread_storage()->logger = (void*)proc;
+    _ostd_get_thread_storage()->logger_ud = ud;
 }
 
 // Keeping this here so we dont need to include entire math module for this
@@ -593,8 +605,6 @@ float64 string_to_float(string str, bool *success)
     if (success) *success = true;
     return value;
 }
-
-Logger_Proc logger = 0;
 
 // todo(charlie) move to appropriate file
 // There probably needs to be a string_utilities file or something because this function needs

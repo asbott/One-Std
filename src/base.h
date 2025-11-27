@@ -343,6 +343,17 @@ typedef u32 sys_uint;
 #define debug_break(...) *(volatile int*)0 = 1
 #endif
 
+typedef struct string { 
+    u64 count;
+    u8 *data;
+} string;
+
+typedef void(*Assert_Fail_Callback)(string expr, string msg, string file, string function, u64 line);
+extern Assert_Fail_Callback assert_fail_callback;
+#ifdef OSTD_IMPL
+Assert_Fail_Callback assert_fail_callback;
+#endif
+
 #define STRINGIFY(x) #x
 #define TOSTRING(x) STRINGIFY(x)
 #ifndef DISABLE_ASSERT
@@ -369,6 +380,7 @@ typedef u32 sys_uint;
                 sys_write_string(sys_get_stderr(), STR("\n\n========================================================\n"));\
                 sys_write_string(sys_get_stderr(), STR("==========!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!==========\n"));\
                 sys_write_string(sys_get_stderr(), STR("========================================================\n"));\
+                if (assert_fail_callback) assert_fail_callback(STR(#x), msg, STR(__FILE__), STR(__func__), __LINE__);\
                 debug_break();\
             } \
         } while(0)

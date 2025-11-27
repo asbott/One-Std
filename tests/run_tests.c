@@ -26,8 +26,8 @@ typedef struct Thread_Task_Data {
 } Thread_Task_Data;
 
 unit_local Mutex log_mutex;
-unit_local void mutexed_logger(string message, u64 flags, Source_Location location) {
-	(void)flags; (void)location;
+unit_local void mutexed_logger(string message, u64 flags, Source_Location location, void *ud) {
+	(void)flags; (void)location; (void)ud;
 	sys_mutex_acquire(log_mutex);
 	
     prints(message);
@@ -44,6 +44,7 @@ unit_local u64 thread_count = 0;
 unit_local u64 file_count = 0;
 
 unit_local s64 file_thread(Thread *t) {
+	set_logger(mutexed_logger, 0);
 	f64 total_t0 = sys_get_seconds_monotonic();
 	u64 index = (u64)t->userdata;
 	Thread_Task_Data *data = &datas[index];
@@ -171,10 +172,62 @@ unit_local bool walk_file(string path) {
 	return true;
 }
 
-int main(void) {
+typedef struct Concat_Header_Context {
+	bool error_flag;
+	string header;
+} Concat_Header_Context;
+s64 concat_header(Thread *t) {
+	set_logger(mutexed_logger, 0);
+	Concat_Header_Context *ctx = (Concat_Header_Context*)t->userdata;
+	string header = ctx->header;
+	
+	string source_path = tprint("../src/%s", header);
+	string out_path = tprint("../one-headers/one_%s", header);
+	
+	if (strings_match(header, STR("ostd.h"))) {
+		out_path = tprint("../ostd_single_header.h");
+	}
+	
+	string concat_cmd = tprint("python ../scripts/concat-header.py \"%s\" \"%s\"", source_path, out_path);
+	
+	Easy_Command_Result res = sys_run_command_easy(concat_cmd, sys_get_stdout(), sys_get_stdout(), STR("."), true);
+	if (res.exit_code != 0) {
+		print("Failed concatenating header %s\n", header);
+		return (int)res.exit_code;
+	}
+	
+	string test_path = tprint(
+		"#define OSTD_IMPL\n"
+		"#ifndef  OSTD_IMPL\n"
+		"#endif\n"
+		"#include \"../%s\"\n"
+		"int main(void) {return 0;}\n"
+	, out_path);
+	
+	sys_write_entire_file(STR("test_result/test.c"), test_path);
+	
+	string compile_cmd = tprint("clang test_result/test.c -o \"test_result/%s.obj\" -Wall -Weverything -Werror -pedantic -std=c99", header);
+	
+	res = sys_run_command_easy(compile_cmd, sys_get_stdout(), sys_get_stdout(), STR("."), true);
+	if (res.exit_code != 0) {
+		print("Failed compiling header %s\n", header);
+		ctx->error_flag = true;
+		return (int)res.exit_code;
+	}
+		
+	return 0;
+}
+
+int main(int argc, char **argv) {
+	
+	bool headers_only = false;
+	if (argc == 2 && strings_match(STR(argv[1]), STR("-headersonly"))) {
+		headers_only = true;
+	}
 	
 	sys_mutex_init(&log_mutex);
-	logger = mutexed_logger;
+	set_logger(mutexed_logger, 0);
+	
 	
 	string out_dir = STR("test_result");
 	
@@ -204,45 +257,34 @@ int main(void) {
 		STR("print.h"),
 		STR("path_utils.h"),
 		STR("unicode.h"),
+		STR("memory.h"),
 	};
 	
+	
+	Concat_Header_Context *ctxs = PushTempBuffer(Concat_Header_Context, sizeof(concat_headers)/sizeof(string));
+	memset(ctxs, 0, sizeof(Concat_Header_Context));
+	
+	Thread *concat_threads = PushTempBuffer(Thread, sizeof(concat_headers)/sizeof(string));
 	for (u64 i = 0; i < sizeof(concat_headers)/sizeof(string); i += 1) {
-		string header = concat_headers[i];
-		
-		
-		string source_path = tprint("../src/%s", header);
-		string out_path = tprint("../one-headers/one_%s", header);
-		
-		if (strings_match(header, STR("ostd.h"))) {
-			out_path = tprint("../ostd_single_header.h");
-		}
-		
-		string concat_cmd = tprint("python ../scripts/concat-header.py \"%s\" \"%s\"", source_path, out_path);
-		
-		Easy_Command_Result res = sys_run_command_easy(concat_cmd, sys_get_stdout(), sys_get_stdout(), STR("."), true);
-		if (res.exit_code != 0) {
-			print("Failed concatenating header %s\n", header);
-			return (int)res.exit_code;
-		}
-		
-		string test_path = tprint(
-			"#define OSTD_IMPL\n"
-			"#ifndef  OSTD_IMPL\n"
-			"#endif\n"
-			"#include \"../%s\"\n"
-			"int main(void) {return 0;}\n"
-		, out_path);
-		
-		sys_write_entire_file(STR("test_result/test.c"), test_path);
-		
-		string compile_cmd = tprint("clang test_result/test.c -o \"test_result/%s.obj\" -Wall -Weverything -Werror -pedantic -std=c99", header);
-		
-		res = sys_run_command_easy(compile_cmd, sys_get_stdout(), sys_get_stdout(), STR("."), true);
-		if (res.exit_code != 0) {
-			print("Failed compiling header %s\n", header);
-			return (int)res.exit_code;
+		Thread *t = concat_threads + i;
+		Concat_Header_Context *ctx = ctxs + i;
+		ctx->header = concat_headers[i];
+		sys_thread_init(t, concat_header, ctx);
+		sys_thread_start(t);
+	}
+	
+	for (u64 i = 0; i < sizeof(concat_headers)/sizeof(string); i += 1) {
+		Thread *t = concat_threads + i;
+		sys_thread_join(t);
+		sys_thread_close(t);
+	}
+	for (u64 i = 0; i < sizeof(concat_headers)/sizeof(string); i += 1) {
+		Concat_Header_Context *ctx = ctxs + i;
+		if (ctx->error_flag) {
+			return 1;
 		}
 	}
+	
 	
 	f64 headers_t1 = sys_get_seconds_monotonic();
 	
@@ -250,30 +292,32 @@ int main(void) {
 	
 	print("Resolved and compiled headers in %f seconds.\n", headers_seconds);
 	
-	sys_walk_directory(STR("./"), false, false, walk_file);
-	
-	f64 t0 = sys_get_seconds_monotonic();
-	
-	print("Running tests...\n");
-	for (u64 i = 0; i < thread_count; i += 1) {
-		sys_thread_start(&datas[i].thread);
-	}
-	for (u64 i = 0; i < thread_count; i += 1) {
-		sys_thread_join(&datas[i].thread);
-	}
-	
-	f64 max_duration = 0.0;
-	for (u64 i = 0; i < thread_count; i += 1) {
-		if (datas[i].total_duration_seconds > max_duration) {
-			max_duration = datas[i].total_duration_seconds;
+	if (!headers_only) {
+		sys_walk_directory(STR("./"), false, false, walk_file);
+		
+		f64 t0 = sys_get_seconds_monotonic();
+		
+		print("Running tests...\n");
+		for (u64 i = 0; i < thread_count; i += 1) {
+			sys_thread_start(&datas[i].thread);
 		}
+		for (u64 i = 0; i < thread_count; i += 1) {
+			sys_thread_join(&datas[i].thread);
+		}
+		
+		f64 max_duration = 0.0;
+		for (u64 i = 0; i < thread_count; i += 1) {
+			if (datas[i].total_duration_seconds > max_duration) {
+				max_duration = datas[i].total_duration_seconds;
+			}
+		}
+		f64 t1 = sys_get_seconds_monotonic();
+		
+		
+		f64 t = t1-t0;
+		
+		log(0, "Running all tests took %f seconds\n", t);
 	}
-	f64 t1 = sys_get_seconds_monotonic();
-	
-	
-	f64 t = t1-t0;
-	
-	log(0, "Running all tests took %f seconds\n", t);
 	
 	log(0, "Goodbye\n");
 }

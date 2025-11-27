@@ -346,6 +346,7 @@ void string_deallocate(Allocator a, string s) {
 }
 
 string string_copy(Allocator a, string s) {
+    if (s.count == 0) return STR("");
     string new_s = string_allocate(a, s.count);
     memcpy(new_s.data, s.data, (sys_uint)s.count);
     return new_s;
@@ -407,13 +408,19 @@ void persistent_array_reserve(void *parray, u64 reserve_count) {
 void persistent_array_shift_left(void *parray, u64 start_index, u64 shift_amount) {
     Arena_Backed_Array_Header *h = _persistent_header(parray);
     assertmsg(start_index < h->count, "Index out of range");
-    u64 left_count = h->count-start_index-1;
-    assert(shift_amount <= left_count);
-    
-    memcpy(
-        (u8*)parray+(start_index-shift_amount)*h->elem_size, 
-        (u8*)parray+(h->count-start_index)*h->elem_size, 
-        shift_amount*h->elem_size
+    assert(shift_amount <= start_index);
+
+    u64 elem_size = h->elem_size;
+
+    u64 move_count = h->count - start_index;
+    if (move_count == 0) return;
+
+    // dst begins shift_amount slots before start_index
+    // src begins at start_index
+    memmove(
+        (u8*)parray+(start_index-shift_amount)*elem_size,
+        (u8*)parray+start_index* elem_size,
+        move_count*elem_size
     );
 }
 void *persistent_array_shift_right(void *parray, u64 start_index, u64 shift_amount) {

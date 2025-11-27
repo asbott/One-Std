@@ -1,14 +1,14 @@
 // This file was generated from One-Std/src/osl_compiler.h
 // The following files were included & concatenated:
-// - C:\One-Std\src\memory.h
 // - C:\One-Std\src\base.h
-// - C:\One-Std\src\osl_compiler.h
-// - C:\One-Std\src\print.h
 // - C:\One-Std\src\var_args.h
-// - C:\One-Std\src\string.h
-// - C:\One-Std\src\var_args_macros.h
+// - C:\One-Std\src\memory.h
 // - C:\One-Std\src\windows_loader.h
 // - C:\One-Std\src\system1.h
+// - C:\One-Std\src\var_args_macros.h
+// - C:\One-Std\src\osl_compiler.h
+// - C:\One-Std\src\string.h
+// - C:\One-Std\src\print.h
 // I try to compile with -pedantic and -Weverything, but get really dumb warnings like these,
 // so I have to ignore them.
 #if defined(__GNUC__) || defined(__GNUG__)
@@ -393,6 +393,17 @@ typedef u32 sys_uint;
 #define debug_break(...) *(volatile int*)0 = 1
 #endif
 
+typedef struct string { 
+    u64 count;
+    u8 *data;
+} string;
+
+typedef void(*Assert_Fail_Callback)(string expr, string msg, string file, string function, u64 line);
+extern Assert_Fail_Callback assert_fail_callback;
+#ifdef OSTD_IMPL
+Assert_Fail_Callback assert_fail_callback;
+#endif
+
 #define STRINGIFY(x) #x
 #define TOSTRING(x) STRINGIFY(x)
 #ifndef DISABLE_ASSERT
@@ -419,6 +430,7 @@ typedef u32 sys_uint;
                 sys_write_string(sys_get_stderr(), STR("\n\n========================================================\n"));\
                 sys_write_string(sys_get_stderr(), STR("==========!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!==========\n"));\
                 sys_write_string(sys_get_stderr(), STR("========================================================\n"));\
+                if (assert_fail_callback) assert_fail_callback(STR(#x), msg, STR(__FILE__), STR(__func__), __LINE__);\
                 debug_break();\
             } \
         } while(0)
@@ -539,22 +551,20 @@ unit_local inline u64 align_next(u64 n, u64 align) {
 #ifndef _BASE_H
 #endif // _BASE_H
 
-typedef struct string { 
-    u64 count;
-    u8 *data;
-} string;
-
 OSTD_LIB u64 c_style_strlen(const char *s);
 OSTD_LIB u64 c_style_strcmp(const char *a, const char *b);
 
 
 #define STR(c) ((string){ c_style_strlen((const char*)(c)), (u8*)(uintptr)(const void*)(c) })
+#define STR_LIT(c) ((string){ sizeof(c)-1, (u8*)(uintptr)(const void*)(c) })
 #define STRN(n, c) ((string){ n, (u8*)(uintptr)(const void*)(c) })
 #define RSTR(...) STR(#__VA_ARGS__)
 
 inline int memcmp(const void* a, const void* b, sys_uint n);
 unit_local inline bool strings_match(string a, string b) {
     if (a.count != b.count) return false;
+    
+    if (a.count == 0) return true;
 
     if (a.data == b.data) return true; // Pointers and counts match
 
@@ -725,6 +735,8 @@ typedef struct Physical_Monitor {
 	int64 pos_y;
 
 	void *handle;
+	
+	void *_handle_for_vsync; // Only used on windows IDXGIOutput
 } Physical_Monitor;
 
 u64 sys_query_monitors(Physical_Monitor *buffer, u64 max_count);
@@ -781,6 +793,9 @@ OSTD_LIB Easy_Command_Result sys_run_command_easy(string command_line, File_Hand
 
 OSTD_LIB void sys_exit(s64 code);
 OSTD_LIB void sys_exit_current_thread(s64 code);
+
+OSTD_LIB void sys_set_clipboard_text(string text);
+OSTD_LIB u64 sys_get_clipboard_text(u8 *out, u64 out_max);
 
 //////
 // Sockets
@@ -979,10 +994,23 @@ OSTD_LIB bool surface_should_close(Surface_Handle s);
 OSTD_LIB bool surface_set_flags(Surface_Handle h, Surface_Flags flags);
 OSTD_LIB bool surface_unset_flags(Surface_Handle h, Surface_Flags flags);
 
-OSTD_LIB bool surface_get_framebuffer_size(Surface_Handle h, s64 *width, s64 *height);
+OSTD_LIB bool surface_get_framebuffer_size(Surface_Handle h, u16 *width, u16 *height);
+
+// I really dont like making API's like this, but I don't see another way to make
+// window resize look reasonable on windows, without complications.
+typedef void (*Window_Resize_Proc)(Surface_Handle h, u16 new_width, u16 new_height);
+OSTD_LIB void surface_set_resize_callback(Surface_Handle h, Window_Resize_Proc proc);
+
+OSTD_LIB u64 surface_get_char_events(Surface_Handle h, u8 *char_bytes, u64 max_char_bytes);
+OSTD_LIB u32 surface_get_vscroll_ticks(Surface_Handle h);
+
+OSTD_LIB void surface_set_minimum_size(Surface_Handle h, u16 width, u16 height);
 
 OSTD_LIB void* surface_map_pixels(Surface_Handle h);
 OSTD_LIB void surface_blit_pixels(Surface_Handle h);
+OSTD_LIB void surface_blit_pixels_partial(Surface_Handle h, u16 x, u16 y, u16 width, u16 height);
+OSTD_LIB void surface_blit_my_pixels(Surface_Handle h, void *pixels);
+OSTD_LIB void surface_blit_my_pixels_partial(Surface_Handle h, u16 x, u16 y, u16 width, u16 height, void *pixels);
 
 OSTD_LIB bool surface_get_monitor(Surface_Handle h, Physical_Monitor *monitor);
 
@@ -1039,6 +1067,8 @@ struct _Per_Thread_Temporary_Storage;
 typedef struct _Ostd_Thread_Storage {
     u64 thread_id;
     u8 temporary_storage_struct_backing[128];
+    void *logger;
+    void *logger_ud;
     struct _Per_Thread_Temporary_Storage *temp;
     bool taken;
 } _Ostd_Thread_Storage;
@@ -5331,6 +5361,9 @@ typedef struct tagBITMAP {
 
 WINDOWS_IMPORT HFONT WINAPI CreateFontA( int cHeight, int cWidth, int cEscapement, int cOrientation, int cWeight, DWORD bItalic, DWORD bUnderline, DWORD bStrikeOut, DWORD iCharSet, DWORD iOutPrecision, DWORD iClipPrecision, DWORD iQuality, DWORD iPitchAndFamily, LPCSTR pszFaceName);
 
+WINDOWS_IMPORT HFONT WINAPI CreateFontW( int cHeight, int cWidth, int cEscapement, int cOrientation, int cWeight, DWORD bItalic, DWORD bUnderline, DWORD bStrikeOut, DWORD iCharSet, DWORD iOutPrecision, DWORD iClipPrecision, DWORD iQuality, DWORD iPitchAndFamily, LPCWSTR pszFaceName
+);
+
 WINDOWS_IMPORT DWORD WINAPI GetGlyphOutlineA( HDC hdc, UINT uChar, UINT fuFormat, LPGLYPHMETRICS lpgm, DWORD cjBuffer, LPVOID pvBuffer, const MAT2 *lpmat2);
 
 WINDOWS_IMPORT HGDIOBJ WINAPI SelectObject(HDC hdc,HGDIOBJ h);
@@ -6046,6 +6079,197 @@ WINDOWS_IMPORT DWORD WINAPI GetLogicalDriveStringsA(DWORD nBufferLength,LPSTR lp
 
 WINDOWS_IMPORT DWORD WINAPI SearchPathA(LPCSTR lpPath,LPCSTR lpFileName,LPCSTR lpExtension,DWORD  nBufferLength,LPSTR  lpBuffer,LPSTR  *lpFilePart);
 
+#define MM_TEXT             1
+#define MM_LOMETRIC         2
+#define MM_HIMETRIC         3
+#define MM_LOENGLISH        4
+#define MM_HIENGLISH        5
+#define MM_TWIPS            6
+#define MM_ISOTROPIC        7
+#define MM_ANISOTROPIC      8
+WINDOWS_IMPORT int WINAPI SetMapMode(HDC hdc,int iMode);
+
+
+WINDOWS_IMPORT DWORD WINAPI GetGlyphOutlineW( HDC hdc, UINT uChar, UINT fuFormat, GLYPHMETRICS *lpgm, DWORD cjBuffer, LPVOID pvBuffer, const MAT2 *lpmat2);
+
+WINDOWS_IMPORT HRESULT WINAPI DwmSetWindowAttribute( HWND    hwnd, DWORD   dwAttribute, LPCVOID pvAttribute, DWORD   cbAttribute);
+
+#define GET_X_LPARAM(lp) ((int)(short)LOWORD(lp))
+#define GET_Y_LPARAM(lp) ((int)(short)HIWORD(lp))
+
+WINDOWS_IMPORT BOOL WINAPI ScreenToClient(HWND hWnd,POINT* lpPoint);
+
+#define SM_CXSIZEFRAME 32
+#define SM_CXPADDEDBORDER 92
+
+WINDOWS_IMPORT int WINAPI GetSystemMetrics(int nIndex);
+
+#define SC_RESTORE 0xF120
+#define SC_MAXIMIZE 0xF030
+#define SC_MINIMIZE 0xF020
+#define SC_CLOSE 0xF060
+#define SC_MOVE 0xF010
+
+WINDOWS_IMPORT LRESULT WINAPI SendMessageW(HWND hWnd,UINT Msg,WPARAM wParam,LPARAM lParam);
+
+WINDOWS_IMPORT BOOL WINAPI PostMessageW( HWND hWnd, UINT Msg, WPARAM wParam, LPARAM lParam);
+
+WINDOWS_IMPORT BOOL WINAPI ReleaseCapture(void);
+
+typedef struct tagWINDOWPLACEMENT {
+  UINT  length;
+  UINT  flags;
+  UINT  showCmd;
+  POINT ptMinPosition;
+  POINT ptMaxPosition;
+  RECT  rcNormalPosition;
+  RECT  rcDevice;
+} WINDOWPLACEMENT;
+
+WINDOWS_IMPORT BOOL WINAPI GetWindowPlacement(HWND hWnd, WINDOWPLACEMENT *lpwndpl);
+
+#define RDW_INVALIDATE         0x0001
+#define RDW_INTERNALPAINT      0x0002
+#define RDW_ERASE              0x0004
+
+#define RDW_VALIDATE           0x0008
+#define RDW_NOINTERNALPAINT    0x0010
+#define RDW_NOERASE            0x0020
+
+#define RDW_NOCHILDREN         0x0040
+#define RDW_ALLCHILDREN        0x0080
+
+#define RDW_UPDATENOW          0x0100
+#define RDW_ERASENOW           0x0200
+
+#define RDW_FRAME              0x0400
+#define RDW_NOFRAME            0x0800
+WINDOWS_IMPORT BOOL WINAPI RedrawWindow(HWND       hWnd,const RECT *lprcUpdate,HRGN       hrgnUpdate,UINT       flags);
+
+WINDOWS_IMPORT BOOL WINAPI IsZoomed(HWND hWnd);
+
+WINDOWS_IMPORT BOOL WINAPI GetWindowRect(HWND   hWnd,LPRECT lpRect);
+
+WINDOWS_IMPORT BOOL WINAPI ScreenToClient(HWND    hWnd, POINT* lpPoint);
+
+WINDOWS_IMPORT BOOL WINAPI ClientToScreen( HWND hWnd, POINT* lpPoint);
+
+WINDOWS_IMPORT HWND WINAPI GetForegroundWindow(void);
+
+WINDOWS_IMPORT short WINAPI GetAsyncKeyState(int vKey);
+
+WINDOWS_IMPORT BOOL WINAPI ScreenToClient(HWND hWnd, LPPOINT lpPoint);
+
+WINDOWS_IMPORT BOOL WINAPI PtInRect(const RECT *lprc, POINT pt);
+
+WINDOWS_IMPORT HCURSOR WINAPI SetCursor(HCURSOR hCursor);
+
+
+
+#pragma comment(lib, "avrt")
+WINDOWS_IMPORT HANDLE WINAPI AvSetMmThreadCharacteristicsW(LPCWSTR TaskName,LPDWORD TaskIndex);
+WINDOWS_IMPORT BOOL WINAPI SetThreadPriorityBoost(HANDLE hThread,BOOL   bDisablePriorityBoost);
+typedef enum AVRT_PRIORITY {
+	AVRT_PRIORITY_CRITICAL = (2),
+	AVRT_PRIORITY_HIGH = (1),
+	AVRT_PRIORITY_LOW = (-1),
+	AVRT_PRIORITY_NORMAL = (0),
+} AVRT_PRIORITY;
+
+WINDOWS_IMPORT BOOL WINAPI AvSetMmThreadPriority(HANDLE AvrtHandle,AVRT_PRIORITY Priority);
+
+WINDOWS_IMPORT UINT WINAPI GetDoubleClickTime(void);
+
+#define SPI_GETKEYBOARDDELAY 0x0016
+#define SPI_GETKEYBOARDSPEED 0x000A
+WINDOWS_IMPORT BOOL WINAPI SystemParametersInfoA( UINT  uiAction, UINT  uiParam, PVOID pvParam, UINT  fWinIni);
+
+#if defined(INITGUID) || defined(INITKNOWNFOLDERS)
+#define DEFINE_KNOWN_FOLDER(name, l, w1, w2, b1, b2, b3, b4, b5, b6, b7, b8) \
+        extern const GUID  name \
+                = { l, w1, w2, { b1, b2,  b3,  b4,  b5,  b6,  b7,  b8 } }
+#else
+#define DEFINE_KNOWN_FOLDER(name, l, w1, w2, b1, b2, b3, b4, b5, b6, b7, b8) \
+        extern const GUID name
+#endif // INITGUID || INITKNOWNFOLDERS
+
+// {3EB685DB-65F9-4CF6-A03A-E3EF65729F3D}
+DEFINE_KNOWN_FOLDER(FOLDERID_RoamingAppData,      0x3EB685DB, 0x65F9, 0x4CF6, 0xA0, 0x3A, 0xE3, 0xEF, 0x65, 0x72, 0x9F, 0x3D);
+
+typedef GUID KNOWNFOLDERID;
+#define REFKNOWNFOLDERID const KNOWNFOLDERID *
+
+WINDOWS_IMPORT HRESULT WINAPI SHGetKnownFolderPath(REFKNOWNFOLDERID rfid, DWORD dwFlags,HANDLE hToken,PWSTR *ppszPath);
+
+WINDOWS_IMPORT void WINAPI GetSystemTimeAsFileTime(FILETIME *lpSystemTimeAsFileTime);
+
+WINDOWS_IMPORT UINT WINAPI GetDpiForSystem(void);
+
+
+typedef void (WINAPI *LPOVERLAPPED_COMPLETION_ROUTINE)( DWORD dwErrorCode, DWORD dwNumberOfBytesTransfered, LPOVERLAPPED lpOverlapped);
+BOOL ReadDirectoryChangesW(HANDLE hDirectory,LPVOID lpBuffer,DWORD nBufferLength,BOOL bWatchSubtree,DWORD dwNotifyFilter,LPDWORD lpBytesReturned,LPOVERLAPPED lpOverlapped,LPOVERLAPPED_COMPLETION_ROUTINE lpCompletionRoutine);
+
+typedef enum _READ_DIRECTORY_NOTIFY_INFORMATION_CLASS {
+  ReadDirectoryNotifyInformation = 1,
+  ReadDirectoryNotifyExtendedInformation,
+  ReadDirectoryNotifyFullInformation,
+  ReadDirectoryNotifyMaximumInformation
+} READ_DIRECTORY_NOTIFY_INFORMATION_CLASS, *PREAD_DIRECTORY_NOTIFY_INFORMATION_CLASS;
+
+BOOL ReadDirectoryChangesExW(HANDLE hDirectory, LPVOID lpBuffer, DWORD nBufferLength, BOOL bWatchSubtree, DWORD dwNotifyFilter, LPDWORD lpBytesReturned, LPOVERLAPPED lpOverlapped, LPOVERLAPPED_COMPLETION_ROUTINE lpCompletionRoutine, READ_DIRECTORY_NOTIFY_INFORMATION_CLASS ReadDirectoryNotifyInformationClass);
+
+typedef struct _FILE_NOTIFY_INFORMATION {
+    DWORD NextEntryOffset;
+    DWORD Action;
+    DWORD FileNameLength;
+    WCHAR FileName[1];
+} FILE_NOTIFY_INFORMATION, *PFILE_NOTIFY_INFORMATION;
+
+typedef struct _FILE_NOTIFY_EXTENDED_INFORMATION {
+    DWORD NextEntryOffset;
+    DWORD Action;
+    LARGE_INTEGER CreationTime;
+    LARGE_INTEGER LastModificationTime;
+    LARGE_INTEGER LastChangeTime;
+    LARGE_INTEGER LastAccessTime;
+    LARGE_INTEGER AllocatedLength;
+    LARGE_INTEGER FileSize;
+    DWORD FileAttributes;
+    union {
+        DWORD ReparsePointTag;
+        DWORD EaSize;
+    } DUMMYUNIONNAME;
+    LARGE_INTEGER FileId;
+    LARGE_INTEGER ParentFileId;
+    DWORD FileNameLength;
+    WCHAR FileName[1];
+} FILE_NOTIFY_EXTENDED_INFORMATION, *PFILE_NOTIFY_EXTENDED_INFORMATION;
+
+
+WINDOWS_IMPORT BOOL WINAPI FlushFileBuffers(HANDLE hFile);
+
+typedef struct {
+  USN       StartUsn;
+  DWORD     ReasonMask;
+  DWORD     ReturnOnlyOnClose;
+  DWORDLONG Timeout;
+  DWORDLONG BytesToWaitFor;
+  DWORDLONG UsnJournalID;
+} READ_USN_JOURNAL_DATA_V0, *PREAD_USN_JOURNAL_DATA_V0;
+
+typedef struct {
+  DWORDLONG UsnJournalID;
+  USN       FirstUsn;
+  USN       NextUsn;
+  USN       LowestValidUsn;
+  USN       MaxUsn;
+  DWORDLONG MaximumSize;
+  DWORDLONG AllocationDelta;
+} USN_JOURNAL_DATA_V0, *PUSN_JOURNAL_DATA_V0;
+
+WINDOWS_IMPORT BOOL WINAPI FileTimeToLocalFileTime(const FILETIME *lpFileTime, LPFILETIME lpLocalFileTime);
+
+
 /* End include: windows_loader.h */
     #endif // _WINDOWS_
 
@@ -6084,7 +6308,14 @@ typedef struct _Surface_State {
     XImage*  ximage;
     Display *xlib_display;
 #endif
+    Window_Resize_Proc resize_callback;
+    u8 char_bytes[256];
+    u64 char_byte_count;
+    u32 vscroll_ticks;
+    u16 minimum_w;
+    u16 minimum_h;
     void *pixels;
+    bool pixels_dirty;
     bool allocated;
     bool should_close;
 } _Surface_State;
@@ -7016,6 +7247,7 @@ Thread_Handle sys_get_current_thread(void) {
 #ifndef OSTD_HEADLESS
     #pragma comment(lib, "gdi32")
     #pragma comment(lib, "dxgi")
+    #pragma comment(lib, "dwmapi")
 #endif // !OSTD_HEADLESS
 
 #endif // COMPILER_FLAGS & COMPILER_FLAG_MSC
@@ -7091,17 +7323,85 @@ unit_local LRESULT window_proc ( HWND hwnd,  u32 message,  WPARAM wparam,  LPARA
     if (!state) return DefWindowProcW(hwnd, message, wparam, lparam);
 
     switch (message) {
+        case WM_CREATE: {
+            const DWORD DWMWA_WINDOW_CORNER_PREFERENCE = 33;
+            const int   DWMWCP_DONOTROUND = 1;
+            DwmSetWindowAttribute(hwnd, DWMWA_WINDOW_CORNER_PREFERENCE, &DWMWCP_DONOTROUND, sizeof(DWMWCP_DONOTROUND));
+            return 0;
+        }
         case WM_QUIT:
         case WM_CLOSE:
             state->should_close = true;
-            break;
-        case WM_SIZE:
-            state->pixels = 0;
-            if (state->bmp) DeleteObject(state->bmp);
-            break;
-        default: {
             return DefWindowProcW(hwnd, message, wparam, lparam);
+        case WM_SIZE:
+            state->pixels_dirty = true;
+            if (state->resize_callback)
+                state->resize_callback(hwnd, (u16)LOWORD(lparam), (u16)HIWORD(lparam));
+            break;
+        case WM_MOUSEMOVE:
+            SetCursor(LoadCursor(0, (u16*)32512));
+            return DefWindowProcW(hwnd, message, wparam, lparam);
+        case WM_MOUSEWHEEL:
+            int delta = GET_WHEEL_DELTA_WPARAM(wparam);
+            state->vscroll_ticks = (u32)(delta/120);
+            break;
+        case WM_CHAR:
+            
+            u8 bytes[32];
+            u64 byte_count = (u64)WideCharToMultiByte(CP_UTF8, 0, (LPCWCH)&wparam, 1, (LPSTR)bytes, 4, 0, 0);
+            if (state->char_byte_count + byte_count <= 256) {
+                memcpy(&state->char_bytes[state->char_byte_count], bytes, byte_count);
+                state->char_byte_count += byte_count;
+            }
+            
+            return DefWindowProcW(hwnd, message, wparam, lparam);
+        case WM_NCHITTEST: {
+            // Provide resize borders so the window still resizes/snaps like normal
+            POINT pt = { GET_X_LPARAM(lparam), GET_Y_LPARAM(lparam) };
+            ScreenToClient(hwnd, &pt);
+            RECT rc; GetClientRect(hwnd, &rc);
+            int frame = GetSystemMetrics(SM_CXSIZEFRAME);
+            int pad   = GetSystemMetrics(SM_CXPADDEDBORDER);
+            int sz = frame + pad; if (sz < 4) sz = 4;
+            BOOL left = pt.x < sz;
+            BOOL right = pt.x >= rc.right - sz;
+            BOOL top = pt.y < sz;
+            BOOL bottom = pt.y >= rc.bottom - sz;
+            if (top && left) return HTTOPLEFT;
+            if (top && right) return HTTOPRIGHT;
+            if (bottom && left) return HTBOTTOMLEFT;
+            if (bottom && right) return HTBOTTOMRIGHT;
+            if (left) return HTLEFT;
+            if (right) return HTRIGHT;
+            if (top) return HTTOP;
+            if (bottom) return HTBOTTOM;
+            return HTCLIENT; // caption handled by loop, not here
         }
+        case WM_NCACTIVATE:
+            return TRUE;
+        case WM_GETMINMAXINFO: {
+            MINMAXINFO *mm = (MINMAXINFO *)lparam;
+
+            HMONITOR mon = MonitorFromWindow(hwnd, MONITOR_DEFAULTTONEAREST);
+            MONITORINFO mi; mi.cbSize = sizeof(mi);
+            GetMonitorInfoW(mon, &mi);
+            
+            RECT wa = mi.rcWork;
+            mm->ptMaxPosition.x = (LONG)wa.left;
+            mm->ptMaxPosition.y = (LONG)wa.top;
+            mm->ptMaxSize.x     = (LONG)(wa.right  - wa.left);
+            mm->ptMaxSize.y     = (LONG)(wa.bottom - wa.top);
+            
+            mm->ptMinTrackSize.x = (LONG)state->minimum_w;
+            mm->ptMinTrackSize.y = (LONG)state->minimum_h;
+            
+            return 1;
+        }
+        case WM_NCCALCSIZE:
+            if (wparam) return 0;
+            return DefWindowProcW(hwnd, message, wparam, lparam);
+        
+        default: return DefWindowProcW(hwnd, message, wparam, lparam);
     }
 
     return 0;
@@ -7320,8 +7620,17 @@ u64 sys_query_monitors(Physical_Monitor *buffer, u64 max_count) {
     return ctx.count;
 }
 
-unit_local IDXGIOutput* _win_get_output_for_monitor(HMONITOR hMonitor)
+unit_local IDXGIOutput* _win_get_output_for_monitor(HMONITOR hmon)
 {
+    static struct { HMONITOR hmon; IDXGIOutput *output; } table[64] = {0}; // If you have more than 64 monitors, you deserve the crash
+    
+    for (u64 i = 0; i < 64; i += 1) {
+        if (!table[i].hmon)  break;
+        if (table[i].hmon == hmon) {
+            return table[i].output;
+        }
+    }
+    
     IDXGIFactory* factory = 0;
     if (CreateDXGIFactory(&IID_IDXGIFactory, (void**)&factory) != 0)
     {
@@ -7338,10 +7647,19 @@ unit_local IDXGIOutput* _win_get_output_for_monitor(HMONITOR hMonitor)
             DXGI_OUTPUT_DESC desc;
             output->lpVtbl->GetDesc(output, &desc);
 
-            if (desc.Monitor == hMonitor)
+            if (desc.Monitor == hmon)
             {
                 adapter->lpVtbl->parent.Release(adapter);
                 factory->lpVtbl->parent.Release(factory);
+                
+                for (u64 k = 0; k < 64; k += 1) {
+                    if (!table[k].hmon) {
+                        table[k].hmon = hmon;
+                        table[k].output = output;
+                        break;
+                    }
+                }
+                
                 return output;
             }
 
@@ -7737,6 +8055,35 @@ OSTD_LIB void sys_exit_current_thread(s64 code) {
     ExitThread((DWORD)code);
 }
 
+OSTD_LIB void sys_set_clipboard_text(string text) {
+	if (OpenClipboard(0)) {
+		HGLOBAL cringe = (HGLOBAL)GlobalAlloc(GMEM_MOVEABLE, sizeof(u16) * text.count*2);
+		u16 *wide = (u16*)GlobalLock(cringe);
+		_win_utf8_to_wide(text, wide, text.count*2*sizeof(u16));
+		GlobalUnlock(cringe);
+		SetClipboardData(CF_UNICODETEXT, cringe);
+		CloseClipboard();
+	}
+}
+
+OSTD_LIB u64 sys_get_clipboard_text(u8 *out, u64 out_max) {
+	u64 n = 0;
+	if (OpenClipboard(0)) {
+		HANDLE h = GetClipboardData(CF_UNICODETEXT);
+		if (h) {
+			u16 *wide = (u16*)GlobalLock(h);
+			if (wide) {
+				n = (u64)WideCharToMultiByte(CP_UTF8, 0, (LPCWCH)wide, -1, (LPSTR)out, (int)out_max, 0, 0);
+				if (n > 0 && out[n-1] == 0) n--; // exclude trailing '\0'
+				GlobalUnlock(h);
+			}
+		}
+		CloseClipboard();
+	}
+	return n;
+}
+
+
 inline unit_local int _to_winsock_err(Socket_Result r) {
     switch(r) {
         case SOCKET_OK: return 0;
@@ -8075,6 +8422,16 @@ OSTD_LIB void sys_semaphore_uninit(Semaphore *sem) {
     CloseHandle((HANDLE)sem->handle);
 }
 
+inline unit_local u16 sys_atomic_add_16(volatile u16 *addend, u16 value) {
+    short old;
+
+    do {
+        old = (short)*addend;
+    } while (_InterlockedCompareExchange16((volatile short*)addend, old + (short)value, (short)old) != (short)old);
+
+    return (u16)old;
+}
+
 inline unit_local u32 sys_atomic_add_32(volatile u32 *addend, u32 value) {
     return (u32)_InterlockedExchangeAdd((volatile long*)addend, (long)value);
 }
@@ -8122,10 +8479,10 @@ Surface_Handle sys_make_surface(Surface_Desc desc) {
 	RECT rect = (RECT){0, 0, (LONG)desc.width, (LONG)desc.height};
 
 
-	DWORD style = WS_OVERLAPPEDWINDOW;
-	DWORD style_ex = WS_EX_CLIENTEDGE;
+	DWORD style = WS_POPUP | WS_THICKFRAME | WS_MINIMIZEBOX | WS_MAXIMIZEBOX | WS_SYSMENU;
+	DWORD style_ex = 0;
 
-	AdjustWindowRectEx(&rect, style, 0, style_ex);
+	//AdjustWindowRectEx(&rect, style, 0, style_ex);
 
 	u16 title[256];
 	u64 title_length = _win_utf8_to_wide(desc.title, title, 256);
@@ -8137,7 +8494,8 @@ Surface_Handle sys_make_surface(Surface_Desc desc) {
         L"abc123",
         title,
         style,
-        CW_USEDEFAULT, CW_USEDEFAULT, rect.right-rect.left, rect.bottom-rect.top,
+        (int)desc.x_pos, (int)desc.y_pos, 
+        rect.right-rect.left, rect.bottom-rect.top,
         0, 0, instance, 0
     );
 
@@ -8150,7 +8508,8 @@ Surface_Handle sys_make_surface(Surface_Desc desc) {
     surface_unset_flags(hwnd, ~desc.flags);
     surface_set_flags(hwnd, desc.flags);
 
-
+    s->minimum_w = 200;
+    s->minimum_h = 200;
 
     return hwnd;
 }
@@ -8165,10 +8524,15 @@ void surface_close(Surface_Handle s) {
 
 
 void surface_poll_events(Surface_Handle surface) {
+    _Surface_State *state = _get_surface_state(surface);
+    state->char_byte_count = 0;
+    state->vscroll_ticks = 0;
     MSG msg;
     BOOL result = PeekMessageW(&msg, (HWND)surface, 0, 0, PM_REMOVE);
 	while (result) {
-    	TranslateMessage(&msg);
+        if (msg.message == WM_KEYDOWN || msg.message == WM_SYSKEYDOWN) {
+         TranslateMessage(&msg);
+        }
     	DispatchMessageW(&msg);
     	result = PeekMessageW(&msg, (HWND)surface, 0, 0, PM_REMOVE);
     }
@@ -8229,27 +8593,56 @@ bool surface_unset_flags(Surface_Handle h, Surface_Flags flags) {
     return true;
 }
 
-bool surface_get_framebuffer_size(Surface_Handle h, s64 *width, s64 *height) {
+bool surface_get_framebuffer_size(Surface_Handle h, u16 *width, u16 *height) {
     RECT r;
     if (GetClientRect((HWND)h, &r)) {
-        *width = r.right - r.left;
-        *height = r.bottom - r.top;
+        *width = (u16)(r.right - r.left);
+        *height = (u16)(r.bottom - r.top);
         return true;
     } else {
         return false;
     }
 }
 
+void surface_set_resize_callback(Surface_Handle h, Window_Resize_Proc proc) {
+    _Surface_State *state = _get_surface_state(h);
+    if (!state) return;
+    
+    state->resize_callback = proc;
+}
+
+u64 surface_get_char_events(Surface_Handle h, u8 *char_bytes, u64 max_char_bytes) {
+    _Surface_State *state = _get_surface_state(h);
+    if (char_bytes && max_char_bytes) {
+        memcpy(char_bytes, state->char_bytes, min(state->char_byte_count, max_char_bytes));
+    }
+    return max_char_bytes ? min(state->char_byte_count, max_char_bytes) : state->char_byte_count;
+}
+
+u32 surface_get_vscroll_ticks(Surface_Handle h) {
+    _Surface_State *state = _get_surface_state(h);
+    return state->vscroll_ticks;
+}
+void surface_set_minimum_size(Surface_Handle h, u16 width, u16 height) {
+    _Surface_State *state = _get_surface_state(h);
+    state->minimum_w = width;
+    state->minimum_h = height;
+}
+
 void* surface_map_pixels(Surface_Handle h) {
     _Surface_State *state = _get_surface_state(h);
     if (!state) return 0;
 
-    s64 width, height;
+    u16 width, height;
     if (!surface_get_framebuffer_size(h, &width, &height)) {
         return 0;
     }
 
-    if (!state->pixels) {
+    if (!state->pixels || state->pixels_dirty) {
+        if (state->pixels) {
+          state->pixels = 0;
+          if (state->bmp) DeleteObject(state->bmp);
+        }
         state->bmp_info.bmiHeader.biSize        = sizeof(state->bmp_info.bmiHeader);
         state->bmp_info.bmiHeader.biWidth       = (LONG)width;
         state->bmp_info.bmiHeader.biHeight      = (LONG)-height;
@@ -8267,7 +8660,7 @@ void surface_blit_pixels(Surface_Handle h) {
     _Surface_State *state = _get_surface_state(h);
     if (!state) return;
 
-    s64 width, height;
+    u16 width, height;
     if (!surface_get_framebuffer_size(h, &width, &height)) return;
 
     HDC hdc = GetDC((HWND)h);
@@ -8277,6 +8670,63 @@ void surface_blit_pixels(Surface_Handle h) {
         0, 0, (LONG)width, (LONG)height,
         0, 0, (LONG)width, (LONG)height,
         state->pixels,
+        &state->bmp_info,
+        DIB_RGB_COLORS,
+        SRCCOPY
+    );
+}
+void surface_blit_my_pixels(Surface_Handle h, void *pixels) {
+    _Surface_State *state = _get_surface_state(h);
+    if (!state) return;
+
+    u16 width, height;
+    if (!surface_get_framebuffer_size(h, &width, &height)) return;
+
+    HDC hdc = GetDC((HWND)h);
+
+    StretchDIBits(
+        hdc,
+        0, 0, (LONG)width, (LONG)height,
+        0, 0, (LONG)width, (LONG)height,
+        pixels,
+        &state->bmp_info,
+        DIB_RGB_COLORS,
+        SRCCOPY
+    );
+}
+void surface_blit_pixels_partial(Surface_Handle h, u16 x, u16 y, u16 width, u16 height) {
+    _Surface_State *state = _get_surface_state(h);
+    if (!state) return;
+
+    u16 full_width, full_height;
+    if (!surface_get_framebuffer_size(h, &full_width, &full_height)) return;
+
+    HDC hdc = GetDC((HWND)h);
+
+    StretchDIBits(
+        hdc,
+        (int)x, (int)y, (LONG)width, (LONG)height,
+        0, 0, (LONG)width, (LONG)height,
+        (u32*)state->pixels + (y*full_width+x),
+        &state->bmp_info,
+        DIB_RGB_COLORS,
+        SRCCOPY
+    );
+}
+void surface_blit_my_pixels_partial(Surface_Handle h, u16 x, u16 y, u16 width, u16 height, void *pixels) {
+    _Surface_State *state = _get_surface_state(h);
+    if (!state) return;
+
+    u16 full_width, full_height;
+    if (!surface_get_framebuffer_size(h, &full_width, &full_height)) return;
+
+    HDC hdc = GetDC((HWND)h);
+
+    StretchDIBits(
+        hdc,
+        (int)x, (int)y, (LONG)width, (LONG)height,
+        0, 0, (LONG)width, (LONG)height,
+        (u32*)pixels + (y*full_width+x),
         &state->bmp_info,
         DIB_RGB_COLORS,
         SRCCOPY
@@ -9906,6 +10356,7 @@ void string_deallocate(Allocator a, string s) {
 }
 
 string string_copy(Allocator a, string s) {
+    if (s.count == 0) return STR("");
     string new_s = string_allocate(a, s.count);
     memcpy(new_s.data, s.data, (sys_uint)s.count);
     return new_s;
@@ -9967,13 +10418,19 @@ void persistent_array_reserve(void *parray, u64 reserve_count) {
 void persistent_array_shift_left(void *parray, u64 start_index, u64 shift_amount) {
     Arena_Backed_Array_Header *h = _persistent_header(parray);
     assertmsg(start_index < h->count, "Index out of range");
-    u64 left_count = h->count-start_index-1;
-    assert(shift_amount <= left_count);
-    
-    memcpy(
-        (u8*)parray+(start_index-shift_amount)*h->elem_size, 
-        (u8*)parray+(h->count-start_index)*h->elem_size, 
-        shift_amount*h->elem_size
+    assert(shift_amount <= start_index);
+
+    u64 elem_size = h->elem_size;
+
+    u64 move_count = h->count - start_index;
+    if (move_count == 0) return;
+
+    // dst begins shift_amount slots before start_index
+    // src begins at start_index
+    memmove(
+        (u8*)parray+(start_index-shift_amount)*elem_size,
+        (u8*)parray+start_index* elem_size,
+        move_count*elem_size
     );
 }
 void *persistent_array_shift_right(void *parray, u64 start_index, u64 shift_amount) {
@@ -10438,16 +10895,17 @@ typedef struct Source_Location {
 #define fprint(file, /*fmt, */...)       _fprint_ugly(file, __VA_ARGS__)
 #define fprints(file, /*fmt, */...)      _fprints_ugly(file, __VA_ARGS__)
 
-string sprint_args(Allocator a, string fmt, u64 arg_count, Var_Arg *args);
-string tprint_args(string fmt, u64 arg_count, Var_Arg *args);
-void   print_args(string fmt, u64 arg_count, Var_Arg *args);
-void   fprint_args(File_Handle f, string fmt, u64 arg_count, Var_Arg *args);
-void   log_args(u64 flags, Source_Location location, string fmt, u64 arg_count, Var_Arg *args);
+OSTD_LIB string sprint_args(Allocator a, string fmt, u64 arg_count, Var_Arg *args);
+OSTD_LIB string tprint_args(string fmt, u64 arg_count, Var_Arg *args);
+OSTD_LIB void   print_args(string fmt, u64 arg_count, Var_Arg *args);
+OSTD_LIB void   fprint_args(File_Handle f, string fmt, u64 arg_count, Var_Arg *args);
+OSTD_LIB void   log_args(u64 flags, Source_Location location, string fmt, u64 arg_count, Var_Arg *args);
 
-typedef void (*Logger_Proc)(string message, u64 flags, Source_Location location);
-extern Logger_Proc logger;
+typedef void (*Logger_Proc)(string message, u64 flags, Source_Location location, void *ud);
 
-void default_logger(string message, u64 flags, Source_Location location);
+void default_logger(string message, u64 flags, Source_Location location, void *ud);
+
+OSTD_LIB void set_logger(Logger_Proc proc, void *ud);
 
 #define log(flags, /*fmt, */...)              _log_ugly(flags, __VA_ARGS__)
 #define logs(flags, /*fmt, */ ...)             _logs_ugly(flags, __VA_ARGS__)
@@ -10559,8 +11017,11 @@ u64 format_string_args(void *buffer, u64 buffer_size, string fmt, u64 arg_count,
 
             u8 small_str[64];
             string str = (string) { 0, small_str };
-
-            if (fmt.data[i+1] == 'u') {
+            
+            if (fmt.data[i+1] == '%') {
+                str = STR("%");
+                i += 1;
+            } else if (fmt.data[i+1] == 'u') {
                 str.count = format_unsigned_int(arg.int_val, base, str.data, 32);
                 i += 1;
             } else if (fmt.data[i+1] == 'i') {
@@ -10612,9 +11073,9 @@ u64 format_string_args(void *buffer, u64 buffer_size, string fmt, u64 arg_count,
                 }
             }
 
-            if (consumed_args) (*consumed_args) += 1;
+            if (fmt.data[i] != '%' && consumed_args) (*consumed_args) += 1;
 
-            next_arg_index += 1;
+            if (fmt.data[i] != '%') next_arg_index += 1;
         } else {
             if (written + 1 <= buffer_size) {
                 if (buffer) *((u8*)buffer + written) = fmt.data[i];
@@ -10684,17 +11145,25 @@ void fprint_args(File_Handle f, string fmt, u64 arg_count, Var_Arg *args) {
 void log_args(u64 flags, Source_Location location, string fmt, u64 arg_count, Var_Arg *args) {
 
     string s = tprint_args(fmt, arg_count, args);
+    
+    Logger_Proc logger = (Logger_Proc)_ostd_get_thread_storage()->logger;
+    void *ud = _ostd_get_thread_storage()->logger_ud;
 
     if (!logger) {
-        default_logger(s, flags, location);
+        default_logger(s, flags, location, ud);
     } else {
-        logger(s, flags, location);
+        logger(s, flags, location, ud);
     }
 }
 
-void default_logger(string message, u64 flags, Source_Location location) {
-    (void)flags;
+void default_logger(string message, u64 flags, Source_Location location, void *ud) {
+    (void)flags; (void)ud;
     print("%s:%u: %s\n", location.file, location.line, message);
+}
+
+OSTD_LIB void set_logger(Logger_Proc proc, void *ud) {
+    _ostd_get_thread_storage()->logger = (void*)proc;
+    _ostd_get_thread_storage()->logger_ud = ud;
 }
 
 // Keeping this here so we dont need to include entire math module for this
@@ -10950,8 +11419,6 @@ float64 string_to_float(string str, bool *success)
     if (success) *success = true;
     return value;
 }
-
-Logger_Proc logger = 0;
 
 // todo(charlie) move to appropriate file
 // There probably needs to be a string_utilities file or something because this function needs

@@ -1,8 +1,8 @@
 // This file was generated from One-Std/src/path_utils.h
 // The following files were included & concatenated:
-// - C:\One-Std\src\string.h
 // - C:\One-Std\src\path_utils.h
 // - C:\One-Std\src\base.h
+// - C:\One-Std\src\string.h
 // I try to compile with -pedantic and -Weverything, but get really dumb warnings like these,
 // so I have to ignore them.
 #if defined(__GNUC__) || defined(__GNUG__)
@@ -390,6 +390,17 @@ typedef u32 sys_uint;
 #define debug_break(...) *(volatile int*)0 = 1
 #endif
 
+typedef struct string { 
+    u64 count;
+    u8 *data;
+} string;
+
+typedef void(*Assert_Fail_Callback)(string expr, string msg, string file, string function, u64 line);
+extern Assert_Fail_Callback assert_fail_callback;
+#ifdef OSTD_IMPL
+Assert_Fail_Callback assert_fail_callback;
+#endif
+
 #define STRINGIFY(x) #x
 #define TOSTRING(x) STRINGIFY(x)
 #ifndef DISABLE_ASSERT
@@ -416,6 +427,7 @@ typedef u32 sys_uint;
                 sys_write_string(sys_get_stderr(), STR("\n\n========================================================\n"));\
                 sys_write_string(sys_get_stderr(), STR("==========!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!==========\n"));\
                 sys_write_string(sys_get_stderr(), STR("========================================================\n"));\
+                if (assert_fail_callback) assert_fail_callback(STR(#x), msg, STR(__FILE__), STR(__func__), __LINE__);\
                 debug_break();\
             } \
         } while(0)
@@ -528,22 +540,20 @@ unit_local inline u64 align_next(u64 n, u64 align) {
 /* End include: base.h */
 #endif // _BASE_H
 
-typedef struct string { 
-    u64 count;
-    u8 *data;
-} string;
-
 OSTD_LIB u64 c_style_strlen(const char *s);
 OSTD_LIB u64 c_style_strcmp(const char *a, const char *b);
 
 
 #define STR(c) ((string){ c_style_strlen((const char*)(c)), (u8*)(uintptr)(const void*)(c) })
+#define STR_LIT(c) ((string){ sizeof(c)-1, (u8*)(uintptr)(const void*)(c) })
 #define STRN(n, c) ((string){ n, (u8*)(uintptr)(const void*)(c) })
 #define RSTR(...) STR(#__VA_ARGS__)
 
 inline int memcmp(const void* a, const void* b, sys_uint n);
 unit_local inline bool strings_match(string a, string b) {
     if (a.count != b.count) return false;
+    
+    if (a.count == 0) return true;
 
     if (a.data == b.data) return true; // Pointers and counts match
 

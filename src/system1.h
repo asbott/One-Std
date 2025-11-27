@@ -48,6 +48,8 @@ typedef struct Physical_Monitor {
 	int64 pos_y;
 
 	void *handle;
+	
+	void *_handle_for_vsync; // Only used on windows IDXGIOutput
 } Physical_Monitor;
 
 u64 sys_query_monitors(Physical_Monitor *buffer, u64 max_count);
@@ -104,6 +106,9 @@ OSTD_LIB Easy_Command_Result sys_run_command_easy(string command_line, File_Hand
 
 OSTD_LIB void sys_exit(s64 code);
 OSTD_LIB void sys_exit_current_thread(s64 code);
+
+OSTD_LIB void sys_set_clipboard_text(string text);
+OSTD_LIB u64 sys_get_clipboard_text(u8 *out, u64 out_max);
 
 //////
 // Sockets
@@ -302,10 +307,23 @@ OSTD_LIB bool surface_should_close(Surface_Handle s);
 OSTD_LIB bool surface_set_flags(Surface_Handle h, Surface_Flags flags);
 OSTD_LIB bool surface_unset_flags(Surface_Handle h, Surface_Flags flags);
 
-OSTD_LIB bool surface_get_framebuffer_size(Surface_Handle h, s64 *width, s64 *height);
+OSTD_LIB bool surface_get_framebuffer_size(Surface_Handle h, u16 *width, u16 *height);
+
+// I really dont like making API's like this, but I don't see another way to make
+// window resize look reasonable on windows, without complications.
+typedef void (*Window_Resize_Proc)(Surface_Handle h, u16 new_width, u16 new_height);
+OSTD_LIB void surface_set_resize_callback(Surface_Handle h, Window_Resize_Proc proc);
+
+OSTD_LIB u64 surface_get_char_events(Surface_Handle h, u8 *char_bytes, u64 max_char_bytes);
+OSTD_LIB u32 surface_get_vscroll_ticks(Surface_Handle h);
+
+OSTD_LIB void surface_set_minimum_size(Surface_Handle h, u16 width, u16 height);
 
 OSTD_LIB void* surface_map_pixels(Surface_Handle h);
 OSTD_LIB void surface_blit_pixels(Surface_Handle h);
+OSTD_LIB void surface_blit_pixels_partial(Surface_Handle h, u16 x, u16 y, u16 width, u16 height);
+OSTD_LIB void surface_blit_my_pixels(Surface_Handle h, void *pixels);
+OSTD_LIB void surface_blit_my_pixels_partial(Surface_Handle h, u16 x, u16 y, u16 width, u16 height, void *pixels);
 
 OSTD_LIB bool surface_get_monitor(Surface_Handle h, Physical_Monitor *monitor);
 
@@ -362,6 +380,8 @@ struct _Per_Thread_Temporary_Storage;
 typedef struct _Ostd_Thread_Storage {
     u64 thread_id;
     u8 temporary_storage_struct_backing[128];
+    void *logger;
+    void *logger_ud;
     struct _Per_Thread_Temporary_Storage *temp;
     bool taken;
 } _Ostd_Thread_Storage;
@@ -521,7 +541,14 @@ typedef struct _Surface_State {
     XImage*  ximage;
     Display *xlib_display;
 #endif
+    Window_Resize_Proc resize_callback;
+    u8 char_bytes[256];
+    u64 char_byte_count;
+    u32 vscroll_ticks;
+    u16 minimum_w;
+    u16 minimum_h;
     void *pixels;
+    bool pixels_dirty;
     bool allocated;
     bool should_close;
 } _Surface_State;
@@ -1453,6 +1480,7 @@ Thread_Handle sys_get_current_thread(void) {
 #ifndef OSTD_HEADLESS
     #pragma comment(lib, "gdi32")
     #pragma comment(lib, "dxgi")
+    #pragma comment(lib, "dwmapi")
 #endif // !OSTD_HEADLESS
 
 #endif // COMPILER_FLAGS & COMPILER_FLAG_MSC
@@ -1528,17 +1556,85 @@ unit_local LRESULT window_proc ( HWND hwnd,  u32 message,  WPARAM wparam,  LPARA
     if (!state) return DefWindowProcW(hwnd, message, wparam, lparam);
 
     switch (message) {
+        case WM_CREATE: {
+            const DWORD DWMWA_WINDOW_CORNER_PREFERENCE = 33;
+            const int   DWMWCP_DONOTROUND = 1;
+            DwmSetWindowAttribute(hwnd, DWMWA_WINDOW_CORNER_PREFERENCE, &DWMWCP_DONOTROUND, sizeof(DWMWCP_DONOTROUND));
+            return 0;
+        }
         case WM_QUIT:
         case WM_CLOSE:
             state->should_close = true;
-            break;
-        case WM_SIZE:
-            state->pixels = 0;
-            if (state->bmp) DeleteObject(state->bmp);
-            break;
-        default: {
             return DefWindowProcW(hwnd, message, wparam, lparam);
+        case WM_SIZE:
+            state->pixels_dirty = true;
+            if (state->resize_callback)
+                state->resize_callback(hwnd, (u16)LOWORD(lparam), (u16)HIWORD(lparam));
+            break;
+        case WM_MOUSEMOVE:
+            SetCursor(LoadCursor(0, (u16*)32512));
+            return DefWindowProcW(hwnd, message, wparam, lparam);
+        case WM_MOUSEWHEEL:
+            int delta = GET_WHEEL_DELTA_WPARAM(wparam);
+            state->vscroll_ticks = (u32)(delta/120);
+            break;
+        case WM_CHAR:
+            
+            u8 bytes[32];
+            u64 byte_count = (u64)WideCharToMultiByte(CP_UTF8, 0, (LPCWCH)&wparam, 1, (LPSTR)bytes, 4, 0, 0);
+            if (state->char_byte_count + byte_count <= 256) {
+                memcpy(&state->char_bytes[state->char_byte_count], bytes, byte_count);
+                state->char_byte_count += byte_count;
+            }
+            
+            return DefWindowProcW(hwnd, message, wparam, lparam);
+        case WM_NCHITTEST: {
+            // Provide resize borders so the window still resizes/snaps like normal
+            POINT pt = { GET_X_LPARAM(lparam), GET_Y_LPARAM(lparam) };
+            ScreenToClient(hwnd, &pt);
+            RECT rc; GetClientRect(hwnd, &rc);
+            int frame = GetSystemMetrics(SM_CXSIZEFRAME);
+            int pad   = GetSystemMetrics(SM_CXPADDEDBORDER);
+            int sz = frame + pad; if (sz < 4) sz = 4;
+            BOOL left = pt.x < sz;
+            BOOL right = pt.x >= rc.right - sz;
+            BOOL top = pt.y < sz;
+            BOOL bottom = pt.y >= rc.bottom - sz;
+            if (top && left) return HTTOPLEFT;
+            if (top && right) return HTTOPRIGHT;
+            if (bottom && left) return HTBOTTOMLEFT;
+            if (bottom && right) return HTBOTTOMRIGHT;
+            if (left) return HTLEFT;
+            if (right) return HTRIGHT;
+            if (top) return HTTOP;
+            if (bottom) return HTBOTTOM;
+            return HTCLIENT; // caption handled by loop, not here
         }
+        case WM_NCACTIVATE:
+            return TRUE;
+        case WM_GETMINMAXINFO: {
+            MINMAXINFO *mm = (MINMAXINFO *)lparam;
+
+            HMONITOR mon = MonitorFromWindow(hwnd, MONITOR_DEFAULTTONEAREST);
+            MONITORINFO mi; mi.cbSize = sizeof(mi);
+            GetMonitorInfoW(mon, &mi);
+            
+            RECT wa = mi.rcWork;
+            mm->ptMaxPosition.x = (LONG)wa.left;
+            mm->ptMaxPosition.y = (LONG)wa.top;
+            mm->ptMaxSize.x     = (LONG)(wa.right  - wa.left);
+            mm->ptMaxSize.y     = (LONG)(wa.bottom - wa.top);
+            
+            mm->ptMinTrackSize.x = (LONG)state->minimum_w;
+            mm->ptMinTrackSize.y = (LONG)state->minimum_h;
+            
+            return 1;
+        }
+        case WM_NCCALCSIZE:
+            if (wparam) return 0;
+            return DefWindowProcW(hwnd, message, wparam, lparam);
+        
+        default: return DefWindowProcW(hwnd, message, wparam, lparam);
     }
 
     return 0;
@@ -1757,8 +1853,17 @@ u64 sys_query_monitors(Physical_Monitor *buffer, u64 max_count) {
     return ctx.count;
 }
 
-unit_local IDXGIOutput* _win_get_output_for_monitor(HMONITOR hMonitor)
+unit_local IDXGIOutput* _win_get_output_for_monitor(HMONITOR hmon)
 {
+    static struct { HMONITOR hmon; IDXGIOutput *output; } table[64] = {0}; // If you have more than 64 monitors, you deserve the crash
+    
+    for (u64 i = 0; i < 64; i += 1) {
+        if (!table[i].hmon)  break;
+        if (table[i].hmon == hmon) {
+            return table[i].output;
+        }
+    }
+    
     IDXGIFactory* factory = 0;
     if (CreateDXGIFactory(&IID_IDXGIFactory, (void**)&factory) != 0)
     {
@@ -1775,10 +1880,19 @@ unit_local IDXGIOutput* _win_get_output_for_monitor(HMONITOR hMonitor)
             DXGI_OUTPUT_DESC desc;
             output->lpVtbl->GetDesc(output, &desc);
 
-            if (desc.Monitor == hMonitor)
+            if (desc.Monitor == hmon)
             {
                 adapter->lpVtbl->parent.Release(adapter);
                 factory->lpVtbl->parent.Release(factory);
+                
+                for (u64 k = 0; k < 64; k += 1) {
+                    if (!table[k].hmon) {
+                        table[k].hmon = hmon;
+                        table[k].output = output;
+                        break;
+                    }
+                }
+                
                 return output;
             }
 
@@ -2174,6 +2288,35 @@ OSTD_LIB void sys_exit_current_thread(s64 code) {
     ExitThread((DWORD)code);
 }
 
+OSTD_LIB void sys_set_clipboard_text(string text) {
+	if (OpenClipboard(0)) {
+		HGLOBAL cringe = (HGLOBAL)GlobalAlloc(GMEM_MOVEABLE, sizeof(u16) * text.count*2);
+		u16 *wide = (u16*)GlobalLock(cringe);
+		_win_utf8_to_wide(text, wide, text.count*2*sizeof(u16));
+		GlobalUnlock(cringe);
+		SetClipboardData(CF_UNICODETEXT, cringe);
+		CloseClipboard();
+	}
+}
+
+OSTD_LIB u64 sys_get_clipboard_text(u8 *out, u64 out_max) {
+	u64 n = 0;
+	if (OpenClipboard(0)) {
+		HANDLE h = GetClipboardData(CF_UNICODETEXT);
+		if (h) {
+			u16 *wide = (u16*)GlobalLock(h);
+			if (wide) {
+				n = (u64)WideCharToMultiByte(CP_UTF8, 0, (LPCWCH)wide, -1, (LPSTR)out, (int)out_max, 0, 0);
+				if (n > 0 && out[n-1] == 0) n--; // exclude trailing '\0'
+				GlobalUnlock(h);
+			}
+		}
+		CloseClipboard();
+	}
+	return n;
+}
+
+
 inline unit_local int _to_winsock_err(Socket_Result r) {
     switch(r) {
         case SOCKET_OK: return 0;
@@ -2512,6 +2655,16 @@ OSTD_LIB void sys_semaphore_uninit(Semaphore *sem) {
     CloseHandle((HANDLE)sem->handle);
 }
 
+inline unit_local u16 sys_atomic_add_16(volatile u16 *addend, u16 value) {
+    short old;
+
+    do {
+        old = (short)*addend;
+    } while (_InterlockedCompareExchange16((volatile short*)addend, old + (short)value, (short)old) != (short)old);
+
+    return (u16)old;
+}
+
 inline unit_local u32 sys_atomic_add_32(volatile u32 *addend, u32 value) {
     return (u32)_InterlockedExchangeAdd((volatile long*)addend, (long)value);
 }
@@ -2559,10 +2712,10 @@ Surface_Handle sys_make_surface(Surface_Desc desc) {
 	RECT rect = (RECT){0, 0, (LONG)desc.width, (LONG)desc.height};
 
 
-	DWORD style = WS_OVERLAPPEDWINDOW;
-	DWORD style_ex = WS_EX_CLIENTEDGE;
+	DWORD style = WS_POPUP | WS_THICKFRAME | WS_MINIMIZEBOX | WS_MAXIMIZEBOX | WS_SYSMENU;
+	DWORD style_ex = 0;
 
-	AdjustWindowRectEx(&rect, style, 0, style_ex);
+	//AdjustWindowRectEx(&rect, style, 0, style_ex);
 
 	u16 title[256];
 	u64 title_length = _win_utf8_to_wide(desc.title, title, 256);
@@ -2574,7 +2727,8 @@ Surface_Handle sys_make_surface(Surface_Desc desc) {
         L"abc123",
         title,
         style,
-        CW_USEDEFAULT, CW_USEDEFAULT, rect.right-rect.left, rect.bottom-rect.top,
+        (int)desc.x_pos, (int)desc.y_pos, 
+        rect.right-rect.left, rect.bottom-rect.top,
         0, 0, instance, 0
     );
 
@@ -2587,7 +2741,8 @@ Surface_Handle sys_make_surface(Surface_Desc desc) {
     surface_unset_flags(hwnd, ~desc.flags);
     surface_set_flags(hwnd, desc.flags);
 
-
+    s->minimum_w = 200;
+    s->minimum_h = 200;
 
     return hwnd;
 }
@@ -2602,10 +2757,15 @@ void surface_close(Surface_Handle s) {
 
 
 void surface_poll_events(Surface_Handle surface) {
+    _Surface_State *state = _get_surface_state(surface);
+    state->char_byte_count = 0;
+    state->vscroll_ticks = 0;
     MSG msg;
     BOOL result = PeekMessageW(&msg, (HWND)surface, 0, 0, PM_REMOVE);
 	while (result) {
-    	TranslateMessage(&msg);
+        if (msg.message == WM_KEYDOWN || msg.message == WM_SYSKEYDOWN) {
+         TranslateMessage(&msg);
+        }
     	DispatchMessageW(&msg);
     	result = PeekMessageW(&msg, (HWND)surface, 0, 0, PM_REMOVE);
     }
@@ -2666,27 +2826,56 @@ bool surface_unset_flags(Surface_Handle h, Surface_Flags flags) {
     return true;
 }
 
-bool surface_get_framebuffer_size(Surface_Handle h, s64 *width, s64 *height) {
+bool surface_get_framebuffer_size(Surface_Handle h, u16 *width, u16 *height) {
     RECT r;
     if (GetClientRect((HWND)h, &r)) {
-        *width = r.right - r.left;
-        *height = r.bottom - r.top;
+        *width = (u16)(r.right - r.left);
+        *height = (u16)(r.bottom - r.top);
         return true;
     } else {
         return false;
     }
 }
 
+void surface_set_resize_callback(Surface_Handle h, Window_Resize_Proc proc) {
+    _Surface_State *state = _get_surface_state(h);
+    if (!state) return;
+    
+    state->resize_callback = proc;
+}
+
+u64 surface_get_char_events(Surface_Handle h, u8 *char_bytes, u64 max_char_bytes) {
+    _Surface_State *state = _get_surface_state(h);
+    if (char_bytes && max_char_bytes) {
+        memcpy(char_bytes, state->char_bytes, min(state->char_byte_count, max_char_bytes));
+    }
+    return max_char_bytes ? min(state->char_byte_count, max_char_bytes) : state->char_byte_count;
+}
+
+u32 surface_get_vscroll_ticks(Surface_Handle h) {
+    _Surface_State *state = _get_surface_state(h);
+    return state->vscroll_ticks;
+}
+void surface_set_minimum_size(Surface_Handle h, u16 width, u16 height) {
+    _Surface_State *state = _get_surface_state(h);
+    state->minimum_w = width;
+    state->minimum_h = height;
+}
+
 void* surface_map_pixels(Surface_Handle h) {
     _Surface_State *state = _get_surface_state(h);
     if (!state) return 0;
 
-    s64 width, height;
+    u16 width, height;
     if (!surface_get_framebuffer_size(h, &width, &height)) {
         return 0;
     }
 
-    if (!state->pixels) {
+    if (!state->pixels || state->pixels_dirty) {
+        if (state->pixels) {
+          state->pixels = 0;
+          if (state->bmp) DeleteObject(state->bmp);
+        }
         state->bmp_info.bmiHeader.biSize        = sizeof(state->bmp_info.bmiHeader);
         state->bmp_info.bmiHeader.biWidth       = (LONG)width;
         state->bmp_info.bmiHeader.biHeight      = (LONG)-height;
@@ -2704,7 +2893,7 @@ void surface_blit_pixels(Surface_Handle h) {
     _Surface_State *state = _get_surface_state(h);
     if (!state) return;
 
-    s64 width, height;
+    u16 width, height;
     if (!surface_get_framebuffer_size(h, &width, &height)) return;
 
     HDC hdc = GetDC((HWND)h);
@@ -2714,6 +2903,63 @@ void surface_blit_pixels(Surface_Handle h) {
         0, 0, (LONG)width, (LONG)height,
         0, 0, (LONG)width, (LONG)height,
         state->pixels,
+        &state->bmp_info,
+        DIB_RGB_COLORS,
+        SRCCOPY
+    );
+}
+void surface_blit_my_pixels(Surface_Handle h, void *pixels) {
+    _Surface_State *state = _get_surface_state(h);
+    if (!state) return;
+
+    u16 width, height;
+    if (!surface_get_framebuffer_size(h, &width, &height)) return;
+
+    HDC hdc = GetDC((HWND)h);
+
+    StretchDIBits(
+        hdc,
+        0, 0, (LONG)width, (LONG)height,
+        0, 0, (LONG)width, (LONG)height,
+        pixels,
+        &state->bmp_info,
+        DIB_RGB_COLORS,
+        SRCCOPY
+    );
+}
+void surface_blit_pixels_partial(Surface_Handle h, u16 x, u16 y, u16 width, u16 height) {
+    _Surface_State *state = _get_surface_state(h);
+    if (!state) return;
+
+    u16 full_width, full_height;
+    if (!surface_get_framebuffer_size(h, &full_width, &full_height)) return;
+
+    HDC hdc = GetDC((HWND)h);
+
+    StretchDIBits(
+        hdc,
+        (int)x, (int)y, (LONG)width, (LONG)height,
+        0, 0, (LONG)width, (LONG)height,
+        (u32*)state->pixels + (y*full_width+x),
+        &state->bmp_info,
+        DIB_RGB_COLORS,
+        SRCCOPY
+    );
+}
+void surface_blit_my_pixels_partial(Surface_Handle h, u16 x, u16 y, u16 width, u16 height, void *pixels) {
+    _Surface_State *state = _get_surface_state(h);
+    if (!state) return;
+
+    u16 full_width, full_height;
+    if (!surface_get_framebuffer_size(h, &full_width, &full_height)) return;
+
+    HDC hdc = GetDC((HWND)h);
+
+    StretchDIBits(
+        hdc,
+        (int)x, (int)y, (LONG)width, (LONG)height,
+        0, 0, (LONG)width, (LONG)height,
+        (u32*)pixels + (y*full_width+x),
         &state->bmp_info,
         DIB_RGB_COLORS,
         SRCCOPY
