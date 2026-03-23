@@ -398,9 +398,7 @@ unit_local u64 _ostd_main_thread_id;
 unit_local bool _ostd_main_thread_is_unknown = true;
 unit_local _Ostd_Thread_Storage _ostd_main_thread_storage;
 
-_Ostd_Thread_Storage *_ostd_get_thread_storage(void) {
-    u64 thread_id = sys_get_current_thread_id();
-
+unit_local _Ostd_Thread_Storage *_ostd_get_thread_storage_for(u64 thread_id) {
     if (!_ostd_main_thread_is_unknown && _ostd_main_thread_id == thread_id) {
         return &_ostd_main_thread_storage;
     }
@@ -426,6 +424,10 @@ _Ostd_Thread_Storage *_ostd_get_thread_storage(void) {
     return 0;
 }
 
+_Ostd_Thread_Storage *_ostd_get_thread_storage(void) {
+    return _ostd_get_thread_storage_for(sys_get_current_thread_id());
+}
+
 unit_local void _ostd_register_thread_storage(u64 thread_id) {
 
     static u64 crazy_counter = 0;
@@ -443,10 +445,12 @@ unit_local void _ostd_register_thread_storage(u64 thread_id) {
     for (u64 i = 0; i < _ostd_thread_storage_allocated_count; i += 1) {
         _Ostd_Thread_Storage *s = &_ostd_thread_storage[i];
         if (!s->taken) {
-            *s = (_Ostd_Thread_Storage) {0};
+            //*s = (_Ostd_Thread_Storage) {0};
             s->taken = true;
             s->thread_id = thread_id;
             s->temp = (struct _Per_Thread_Temporary_Storage*)s->temporary_storage_struct_backing;
+            s->logger = 0;
+            s->logger_ud = 0;
             sys_mutex_release(_ostd_thread_storage_register_mutex);
             return;
         }
@@ -536,6 +540,7 @@ typedef struct _Surface_State {
 #if OS_FLAGS & OS_FLAG_WINDOWS
     BITMAPINFO bmp_info;
     HBITMAP bmp;
+    HDC memdc;
 #elif OS_FLAGS & OS_FLAG_LINUX
     GC       gc;
     XImage*  ximage;
@@ -1613,22 +1618,25 @@ unit_local LRESULT window_proc ( HWND hwnd,  u32 message,  WPARAM wparam,  LPARA
         case WM_NCACTIVATE:
             return TRUE;
         case WM_GETMINMAXINFO: {
-            MINMAXINFO *mm = (MINMAXINFO *)lparam;
-
-            HMONITOR mon = MonitorFromWindow(hwnd, MONITOR_DEFAULTTONEAREST);
-            MONITORINFO mi; mi.cbSize = sizeof(mi);
-            GetMonitorInfoW(mon, &mi);
-            
-            RECT wa = mi.rcWork;
-            mm->ptMaxPosition.x = (LONG)wa.left;
-            mm->ptMaxPosition.y = (LONG)wa.top;
-            mm->ptMaxSize.x     = (LONG)(wa.right  - wa.left);
-            mm->ptMaxSize.y     = (LONG)(wa.bottom - wa.top);
-            
-            mm->ptMinTrackSize.x = (LONG)state->minimum_w;
-            mm->ptMinTrackSize.y = (LONG)state->minimum_h;
-            
-            return 1;
+           MINMAXINFO *mm = (MINMAXINFO *)lparam;
+        
+           HMONITOR mon = MonitorFromWindow(hwnd, MONITOR_DEFAULTTONEAREST);
+           MONITORINFO mi = {0};
+           mi.cbSize = sizeof(mi);
+           GetMonitorInfoW(mon, &mi);
+        
+           RECT wa = mi.rcWork;
+           RECT mr = mi.rcMonitor;
+        
+           mm->ptMaxPosition.x = wa.left - mr.left;
+           mm->ptMaxPosition.y = wa.top  - mr.top;
+           mm->ptMaxSize.x     = wa.right  - wa.left;
+           mm->ptMaxSize.y     = wa.bottom - wa.top;
+        
+           mm->ptMinTrackSize.x = (LONG)state->minimum_w;
+           mm->ptMinTrackSize.y = (LONG)state->minimum_h;
+        
+           return 1;
         }
         case WM_NCCALCSIZE:
             if (wparam) return 0;
@@ -2701,12 +2709,18 @@ Surface_Handle sys_make_surface(Surface_Desc desc) {
         wc.cbClsExtra = 0;
         wc.cbWndExtra = 0;
         wc.hCursor = 0;
-        wc.hIcon = 0;
         wc.lpszMenuName = 0;
         wc.hbrBackground = 0;
-
-    	ATOM res = RegisterClassExW(&wc);
-    	assert(res);
+        wc.hIcon = (HICON)LoadImageA(
+            wc.hInstance,
+            MAKEINTRESOURCEA(IDI_MAINICON),
+            IMAGE_ICON,
+            0, 0,
+            LR_DEFAULTSIZE
+        );
+        
+        ATOM res = RegisterClassExW(&wc);
+        assert(res);
     }
 
 	RECT rect = (RECT){0, 0, (LONG)desc.width, (LONG)desc.height};
@@ -2863,31 +2877,45 @@ void surface_set_minimum_size(Surface_Handle h, u16 width, u16 height) {
 }
 
 void* surface_map_pixels(Surface_Handle h) {
-    _Surface_State *state = _get_surface_state(h);
-    if (!state) return 0;
+   _Surface_State *state = _get_surface_state(h);
+   if (!state) return 0;
 
-    u16 width, height;
-    if (!surface_get_framebuffer_size(h, &width, &height)) {
-        return 0;
-    }
+   u16 width, height;
+   if (!surface_get_framebuffer_size(h, &width, &height)) {
+      return 0;
+   }
 
-    if (!state->pixels || state->pixels_dirty) {
-        if (state->pixels) {
-          state->pixels = 0;
-          if (state->bmp) DeleteObject(state->bmp);
-        }
-        state->bmp_info.bmiHeader.biSize        = sizeof(state->bmp_info.bmiHeader);
-        state->bmp_info.bmiHeader.biWidth       = (LONG)width;
-        state->bmp_info.bmiHeader.biHeight      = (LONG)-height;
-        state->bmp_info.bmiHeader.biPlanes      = 1;
-        state->bmp_info.bmiHeader.biBitCount    = 32;
-        state->bmp_info.bmiHeader.biCompression = BI_RGB;
-        state->bmp_info.bmiHeader.biSizeImage   = 0;
+   if (!state->pixels || state->pixels_dirty) {
+      if (state->pixels) {
+         state->pixels = 0;
+         if (state->bmp) DeleteObject(state->bmp);
+         if (state->memdc) {
+            DeleteDC(state->memdc);
+            state->memdc = 0;
+         }
+      }
 
-        state->bmp = CreateDIBSection(GetDC((HWND)h), &state->bmp_info, DIB_RGB_COLORS, &state->pixels, 0, 0);
-    }
+      state->bmp_info.bmiHeader.biSize        = sizeof(state->bmp_info.bmiHeader);
+      state->bmp_info.bmiHeader.biWidth       = (LONG)width;
+      state->bmp_info.bmiHeader.biHeight      = (LONG)-height;
+      state->bmp_info.bmiHeader.biPlanes      = 1;
+      state->bmp_info.bmiHeader.biBitCount    = 32;
+      state->bmp_info.bmiHeader.biCompression = BI_RGB;
+      state->bmp_info.bmiHeader.biSizeImage   = 0;
 
-    return state->pixels;
+      HDC hdc = GetDC((HWND)h);
+
+      state->bmp = CreateDIBSection(hdc, &state->bmp_info, DIB_RGB_COLORS, &state->pixels, 0, 0);
+
+      state->memdc = CreateCompatibleDC(hdc);
+      SelectObject(state->memdc, state->bmp);
+
+      ReleaseDC((HWND)h, hdc);
+
+      state->pixels_dirty = false;
+   }
+
+   return state->pixels;
 }
 void surface_blit_pixels(Surface_Handle h) {
     _Surface_State *state = _get_surface_state(h);
@@ -2907,6 +2935,9 @@ void surface_blit_pixels(Surface_Handle h) {
         DIB_RGB_COLORS,
         SRCCOPY
     );
+    
+    GdiFlush();
+    ReleaseDC((HWND)h, hdc);
 }
 void surface_blit_my_pixels(Surface_Handle h, void *pixels) {
     _Surface_State *state = _get_surface_state(h);
@@ -2926,25 +2957,26 @@ void surface_blit_my_pixels(Surface_Handle h, void *pixels) {
         DIB_RGB_COLORS,
         SRCCOPY
     );
+    
+    GdiFlush();
+    ReleaseDC((HWND)h, hdc);
 }
 void surface_blit_pixels_partial(Surface_Handle h, u16 x, u16 y, u16 width, u16 height) {
-    _Surface_State *state = _get_surface_state(h);
-    if (!state) return;
+   _Surface_State *state = _get_surface_state(h);
+   if (!state) return;
 
-    u16 full_width, full_height;
-    if (!surface_get_framebuffer_size(h, &full_width, &full_height)) return;
+   HDC hdc = GetDC((HWND)h);
 
-    HDC hdc = GetDC((HWND)h);
+   BitBlt(
+      hdc,
+      (int)x, (int)y, (int)width, (int)height,
+      state->memdc,
+      (int)x, (int)y,
+      SRCCOPY
+   );
 
-    StretchDIBits(
-        hdc,
-        (int)x, (int)y, (LONG)width, (LONG)height,
-        0, 0, (LONG)width, (LONG)height,
-        (u32*)state->pixels + (y*full_width+x),
-        &state->bmp_info,
-        DIB_RGB_COLORS,
-        SRCCOPY
-    );
+   GdiFlush();
+   ReleaseDC((HWND)h, hdc);
 }
 void surface_blit_my_pixels_partial(Surface_Handle h, u16 x, u16 y, u16 width, u16 height, void *pixels) {
     _Surface_State *state = _get_surface_state(h);
@@ -2964,6 +2996,9 @@ void surface_blit_my_pixels_partial(Surface_Handle h, u16 x, u16 y, u16 width, u
         DIB_RGB_COLORS,
         SRCCOPY
     );
+    
+    GdiFlush();
+    ReleaseDC((HWND)h, hdc);
 }
 
 bool surface_get_monitor(Surface_Handle h, Physical_Monitor *monitor) {

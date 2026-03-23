@@ -1,19 +1,19 @@
 // This file was generated from One-Std/src/oga_graphics.h
 // The following files were included & concatenated:
 // - C:\One-Std\src\memory.h
+// - C:\One-Std\src\string.h
+// - C:\One-Std\src\graphics_vulkan.h
+// - C:\One-Std\src\oga_graphics.h
 // - C:\One-Std\src\graphics_metal.h
 // - C:\One-Std\src\windows_loader.h
-// - C:\One-Std\src\trig_tables.h
 // - C:\One-Std\src\var_args.h
-// - C:\One-Std\src\system1.h
-// - C:\One-Std\src\base.h
-// - C:\One-Std\src\string.h
+// - C:\One-Std\src\trig_tables.h
 // - C:\One-Std\src\var_args_macros.h
-// - C:\One-Std\src\print.h
-// - C:\One-Std\src\math.h
-// - C:\One-Std\src\oga_graphics.h
-// - C:\One-Std\src\graphics_vulkan.h
+// - C:\One-Std\src\base.h
 // - C:\One-Std\src\graphics_d3d12.h
+// - C:\One-Std\src\math.h
+// - C:\One-Std\src\print.h
+// - C:\One-Std\src\system1.h
 // I try to compile with -pedantic and -Weverything, but get really dumb warnings like these,
 // so I have to ignore them.
 #if defined(__GNUC__) || defined(__GNUG__)
@@ -411,34 +411,39 @@ Assert_Fail_Callback assert_fail_callback;
 
 #define STRINGIFY(x) #x
 #define TOSTRING(x) STRINGIFY(x)
+
+#define assertmsg_always(x, msg) assertmsgs_always(x, (STR(msg)))
+#define assertmsgs_always(x, msg)  do { \
+    if (!(x)) {\
+        sys_write_string(sys_get_stderr(), STR("\n========================================================\n"));\
+        sys_write_string(sys_get_stderr(), STR("==========!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!==========\n"));\
+        sys_write_string(sys_get_stderr(), STR("========================================================\n"));\
+        sys_write_string(sys_get_stderr(), STR("\nAssertion failed for expression: '"));\
+        sys_write_string(sys_get_stderr(), STR(#x));\
+        sys_write_string(sys_get_stderr(), STR("'.\n"));\
+        if (msg.data && msg.count) {\
+            sys_write_string(sys_get_stderr(), STR("\n\""));\
+            sys_write_string(sys_get_stderr(), msg);\
+            sys_write_string(sys_get_stderr(), STR("\"\n"));\
+        }\
+        sys_write_string(sys_get_stderr(), STR("\nIn File '"));\
+        sys_write_string(sys_get_stderr(), STR(__FILE__));\
+        sys_write_string(sys_get_stderr(), STR("' on line "));\
+        sys_write_string(sys_get_stderr(), STR(TOSTRING(__LINE__)));\
+        sys_write_string(sys_get_stderr(), STR("\n\nPrinting stack trace:\n"));\
+        sys_print_stack_trace(sys_get_stderr());\
+        sys_write_string(sys_get_stderr(), STR("\n\n========================================================\n"));\
+        sys_write_string(sys_get_stderr(), STR("==========!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!==========\n"));\
+        sys_write_string(sys_get_stderr(), STR("========================================================\n"));\
+        if (assert_fail_callback) assert_fail_callback(STR(#x), msg, STR(__FILE__), STR(__func__), __LINE__);\
+        debug_break();\
+    } \
+    } while(0)
+#define assert_always(x) assertmsg_always(x, "")
+
 #ifndef DISABLE_ASSERT
     #define assertmsg(x, msg) assertmsgs(x, (STR(msg)))
-    #define assertmsgs(x, msg)  do { \
-            if (!(x)) {\
-                sys_write_string(sys_get_stderr(), STR("\n========================================================\n"));\
-                sys_write_string(sys_get_stderr(), STR("==========!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!==========\n"));\
-                sys_write_string(sys_get_stderr(), STR("========================================================\n"));\
-                sys_write_string(sys_get_stderr(), STR("\nAssertion failed for expression: '"));\
-                sys_write_string(sys_get_stderr(), STR(#x));\
-                sys_write_string(sys_get_stderr(), STR("'.\n"));\
-                if (msg.data && msg.count) {\
-                    sys_write_string(sys_get_stderr(), STR("\n\""));\
-                    sys_write_string(sys_get_stderr(), msg);\
-                    sys_write_string(sys_get_stderr(), STR("\"\n"));\
-                }\
-                sys_write_string(sys_get_stderr(), STR("\nIn File '"));\
-                sys_write_string(sys_get_stderr(), STR(__FILE__));\
-                sys_write_string(sys_get_stderr(), STR("' on line "));\
-                sys_write_string(sys_get_stderr(), STR(TOSTRING(__LINE__)));\
-                sys_write_string(sys_get_stderr(), STR("\n\nPrinting stack trace:\n"));\
-                sys_print_stack_trace(sys_get_stderr());\
-                sys_write_string(sys_get_stderr(), STR("\n\n========================================================\n"));\
-                sys_write_string(sys_get_stderr(), STR("==========!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!==========\n"));\
-                sys_write_string(sys_get_stderr(), STR("========================================================\n"));\
-                if (assert_fail_callback) assert_fail_callback(STR(#x), msg, STR(__FILE__), STR(__func__), __LINE__);\
-                debug_break();\
-            } \
-        } while(0)
+    #define assertmsgs(x, msg) assertmsgs_always(x, msg)
     #define assert(x) assertmsg(x, "")
 #else
     #define assertmsg(x, msg) (void)(x)
@@ -459,18 +464,26 @@ Assert_Fail_Callback assert_fail_callback;
 #endif
 
 // todo(charlie) inline asm / dynamically load crt's if msvc
+// --- Actually I tried vectorized versions, but a) it seems slower than what -O3 compiles 
+// these basic versions to and b) it's much slower in debug. 
+// There does not seem to be any gain from manually writing vectorized versions.
 
+#ifndef OSTD_NO_MEMCPY
 void *memcpy(void *dst, const void * src, sys_uint n) {
     for (sys_uint i = 0; i < n; i += 1)  *((u8*)dst + i) = *((const u8*)src + i);
     return dst;
 }
+#endif
 
+#ifndef OSTD_NO_MEMSET
 void *memset(void *dst, s32 c, sys_uint n) {
     u8 *p = (u8*)dst;
     while (n--) *p++ = (u8)c;
     return dst;
 }
+#endif
 
+#ifndef OSTD_NO_MEMMOVE
 void *memmove(void *dst, const void *src, sys_uint n) {
     if (!n) return dst;
     if ((sys_uint)dst > (sys_uint)src)
@@ -479,6 +492,7 @@ void *memmove(void *dst, const void *src, sys_uint n) {
         for (sys_uint i = 0; i < n; i += 1)  *((u8*)dst + i) = *((const u8*)src + i);
     return dst;
 }
+#endif
 
 
 int memcmp(const void* a, const void* b, sys_uint n) {
@@ -1090,9 +1104,7 @@ unit_local u64 _ostd_main_thread_id;
 unit_local bool _ostd_main_thread_is_unknown = true;
 unit_local _Ostd_Thread_Storage _ostd_main_thread_storage;
 
-_Ostd_Thread_Storage *_ostd_get_thread_storage(void) {
-    u64 thread_id = sys_get_current_thread_id();
-
+unit_local _Ostd_Thread_Storage *_ostd_get_thread_storage_for(u64 thread_id) {
     if (!_ostd_main_thread_is_unknown && _ostd_main_thread_id == thread_id) {
         return &_ostd_main_thread_storage;
     }
@@ -1118,6 +1130,10 @@ _Ostd_Thread_Storage *_ostd_get_thread_storage(void) {
     return 0;
 }
 
+_Ostd_Thread_Storage *_ostd_get_thread_storage(void) {
+    return _ostd_get_thread_storage_for(sys_get_current_thread_id());
+}
+
 unit_local void _ostd_register_thread_storage(u64 thread_id) {
 
     static u64 crazy_counter = 0;
@@ -1135,10 +1151,12 @@ unit_local void _ostd_register_thread_storage(u64 thread_id) {
     for (u64 i = 0; i < _ostd_thread_storage_allocated_count; i += 1) {
         _Ostd_Thread_Storage *s = &_ostd_thread_storage[i];
         if (!s->taken) {
-            *s = (_Ostd_Thread_Storage) {0};
+            //*s = (_Ostd_Thread_Storage) {0};
             s->taken = true;
             s->thread_id = thread_id;
             s->temp = (struct _Per_Thread_Temporary_Storage*)s->temporary_storage_struct_backing;
+            s->logger = 0;
+            s->logger_ud = 0;
             sys_mutex_release(_ostd_thread_storage_register_mutex);
             return;
         }
@@ -6274,6 +6292,205 @@ typedef struct {
 
 WINDOWS_IMPORT BOOL WINAPI FileTimeToLocalFileTime(const FILETIME *lpFileTime, LPFILETIME lpLocalFileTime);
 
+#define STATUS_WAIT_0                           ((DWORD   )0x00000000L) 
+#define STATUS_ABANDONED_WAIT_0          ((DWORD   )0x00000080L)    
+#define STATUS_USER_APC                  ((DWORD   )0x000000C0L)    
+#define STATUS_TIMEOUT                   ((DWORD   )0x00000102L)    
+#define STATUS_PENDING                   ((DWORD   )0x00000103L)    
+#define DBG_EXCEPTION_HANDLED            ((DWORD   )0x00010001L)    
+#define DBG_CONTINUE                     ((DWORD   )0x00010002L)    
+#define STATUS_SEGMENT_NOTIFICATION      ((DWORD   )0x40000005L)    
+#define STATUS_FATAL_APP_EXIT            ((DWORD   )0x40000015L)    
+#define DBG_REPLY_LATER                  ((DWORD   )0x40010001L)    
+#define DBG_TERMINATE_THREAD             ((DWORD   )0x40010003L)    
+#define DBG_TERMINATE_PROCESS            ((DWORD   )0x40010004L)    
+#define DBG_CONTROL_C                    ((DWORD   )0x40010005L)    
+#define DBG_PRINTEXCEPTION_C             ((DWORD   )0x40010006L)    
+#define DBG_RIPEXCEPTION                 ((DWORD   )0x40010007L)    
+#define DBG_CONTROL_BREAK                ((DWORD   )0x40010008L)    
+#define DBG_COMMAND_EXCEPTION            ((DWORD   )0x40010009L)    
+#define DBG_PRINTEXCEPTION_WIDE_C        ((DWORD   )0x4001000AL)    
+#define STATUS_GUARD_PAGE_VIOLATION      ((DWORD   )0x80000001L)    
+#define STATUS_DATATYPE_MISALIGNMENT     ((DWORD   )0x80000002L)    
+#define STATUS_BREAKPOINT                ((DWORD   )0x80000003L)    
+#define STATUS_SINGLE_STEP               ((DWORD   )0x80000004L)    
+#define STATUS_LONGJUMP                  ((DWORD   )0x80000026L)    
+#define STATUS_UNWIND_CONSOLIDATE        ((DWORD   )0x80000029L)    
+#define DBG_EXCEPTION_NOT_HANDLED        ((DWORD   )0x80010001L)    
+#define STATUS_ACCESS_VIOLATION          ((DWORD   )0xC0000005L)    
+#define STATUS_IN_PAGE_ERROR             ((DWORD   )0xC0000006L)    
+#define STATUS_INVALID_HANDLE            ((DWORD   )0xC0000008L)    
+#define STATUS_INVALID_PARAMETER         ((DWORD   )0xC000000DL)    
+#define STATUS_NO_MEMORY                 ((DWORD   )0xC0000017L)    
+#define STATUS_ILLEGAL_INSTRUCTION       ((DWORD   )0xC000001DL)    
+#define STATUS_NONCONTINUABLE_EXCEPTION  ((DWORD   )0xC0000025L)    
+#define STATUS_INVALID_DISPOSITION       ((DWORD   )0xC0000026L)    
+#define STATUS_ARRAY_BOUNDS_EXCEEDED     ((DWORD   )0xC000008CL)    
+#define STATUS_FLOAT_DENORMAL_OPERAND    ((DWORD   )0xC000008DL)    
+#define STATUS_FLOAT_DIVIDE_BY_ZERO      ((DWORD   )0xC000008EL)    
+#define STATUS_FLOAT_INEXACT_RESULT      ((DWORD   )0xC000008FL)    
+#define STATUS_FLOAT_INVALID_OPERATION   ((DWORD   )0xC0000090L)    
+#define STATUS_FLOAT_OVERFLOW            ((DWORD   )0xC0000091L)    
+#define STATUS_FLOAT_STACK_CHECK         ((DWORD   )0xC0000092L)    
+#define STATUS_FLOAT_UNDERFLOW           ((DWORD   )0xC0000093L)    
+#define STATUS_INTEGER_DIVIDE_BY_ZERO    ((DWORD   )0xC0000094L)    
+#define STATUS_INTEGER_OVERFLOW          ((DWORD   )0xC0000095L)    
+#define STATUS_PRIVILEGED_INSTRUCTION    ((DWORD   )0xC0000096L)    
+#define STATUS_STACK_OVERFLOW            ((DWORD   )0xC00000FDL)    
+#define STATUS_DLL_NOT_FOUND             ((DWORD   )0xC0000135L)    
+#define STATUS_ORDINAL_NOT_FOUND         ((DWORD   )0xC0000138L)    
+#define STATUS_ENTRYPOINT_NOT_FOUND      ((DWORD   )0xC0000139L)    
+#define STATUS_CONTROL_C_EXIT            ((DWORD   )0xC000013AL)    
+#define STATUS_DLL_INIT_FAILED           ((DWORD   )0xC0000142L)    
+#define STATUS_CONTROL_STACK_VIOLATION   ((DWORD   )0xC00001B2L)    
+#define STATUS_FLOAT_MULTIPLE_FAULTS     ((DWORD   )0xC00002B4L)    
+#define STATUS_FLOAT_MULTIPLE_TRAPS      ((DWORD   )0xC00002B5L)    
+#define STATUS_REG_NAT_CONSUMPTION       ((DWORD   )0xC00002C9L)    
+#define STATUS_HEAP_CORRUPTION           ((DWORD   )0xC0000374L)    
+#define STATUS_STACK_BUFFER_OVERRUN      ((DWORD   )0xC0000409L)    
+#define STATUS_INVALID_CRUNTIME_PARAMETER ((DWORD   )0xC0000417L)    
+#define STATUS_ASSERTION_FAILURE         ((DWORD   )0xC0000420L)    
+#define STATUS_ENCLAVE_VIOLATION         ((DWORD   )0xC00004A2L)    
+#define STATUS_INTERRUPTED               ((DWORD   )0xC0000515L)    
+#define STATUS_THREAD_NOT_RUNNING        ((DWORD   )0xC0000516L)    
+#define STATUS_ALREADY_REGISTERED        ((DWORD   )0xC0000718L) 
+
+#define STILL_ACTIVE                        STATUS_PENDING
+#define EXCEPTION_ACCESS_VIOLATION          STATUS_ACCESS_VIOLATION
+#define EXCEPTION_DATATYPE_MISALIGNMENT     STATUS_DATATYPE_MISALIGNMENT
+#define EXCEPTION_BREAKPOINT                STATUS_BREAKPOINT
+#define EXCEPTION_SINGLE_STEP               STATUS_SINGLE_STEP
+#define EXCEPTION_ARRAY_BOUNDS_EXCEEDED     STATUS_ARRAY_BOUNDS_EXCEEDED
+#define EXCEPTION_FLT_DENORMAL_OPERAND      STATUS_FLOAT_DENORMAL_OPERAND
+#define EXCEPTION_FLT_DIVIDE_BY_ZERO        STATUS_FLOAT_DIVIDE_BY_ZERO
+#define EXCEPTION_FLT_INEXACT_RESULT        STATUS_FLOAT_INEXACT_RESULT
+#define EXCEPTION_FLT_INVALID_OPERATION     STATUS_FLOAT_INVALID_OPERATION
+#define EXCEPTION_FLT_OVERFLOW              STATUS_FLOAT_OVERFLOW
+#define EXCEPTION_FLT_STACK_CHECK           STATUS_FLOAT_STACK_CHECK
+#define EXCEPTION_FLT_UNDERFLOW             STATUS_FLOAT_UNDERFLOW
+#define EXCEPTION_INT_DIVIDE_BY_ZERO        STATUS_INTEGER_DIVIDE_BY_ZERO
+#define EXCEPTION_INT_OVERFLOW              STATUS_INTEGER_OVERFLOW
+#define EXCEPTION_PRIV_INSTRUCTION          STATUS_PRIVILEGED_INSTRUCTION
+#define EXCEPTION_IN_PAGE_ERROR             STATUS_IN_PAGE_ERROR
+#define EXCEPTION_ILLEGAL_INSTRUCTION       STATUS_ILLEGAL_INSTRUCTION
+#define EXCEPTION_NONCONTINUABLE_EXCEPTION  STATUS_NONCONTINUABLE_EXCEPTION
+#define EXCEPTION_STACK_OVERFLOW            STATUS_STACK_OVERFLOW
+#define EXCEPTION_INVALID_DISPOSITION       STATUS_INVALID_DISPOSITION
+#define EXCEPTION_GUARD_PAGE                STATUS_GUARD_PAGE_VIOLATION
+#define EXCEPTION_INVALID_HANDLE            STATUS_INVALID_HANDLE
+#define EXCEPTION_POSSIBLE_DEADLOCK         STATUS_POSSIBLE_DEADLOCK
+#define CONTROL_C_EXIT                      STATUS_CONTROL_C_EXIT
+
+typedef struct _EXCEPTION_RECORD {
+  DWORD                    ExceptionCode;
+  DWORD                    ExceptionFlags;
+  struct _EXCEPTION_RECORD *ExceptionRecord;
+  PVOID                    ExceptionAddress;
+  DWORD                    NumberParameters;
+  ULONG_PTR                ExceptionInformation[15];
+} EXCEPTION_RECORD;
+
+typedef struct _EXCEPTION_POINTERS {
+  EXCEPTION_RECORD *ExceptionRecord;
+  PCONTEXT          ContextRecord;
+} EXCEPTION_POINTERS, *PEXCEPTION_POINTERS;
+typedef LONG (*PVECTORED_EXCEPTION_HANDLER)(EXCEPTION_POINTERS *ExceptionInfo);
+
+WINDOWS_IMPORT void WINAPI *AddVectoredExceptionHandler(ULONG First, PVECTORED_EXCEPTION_HANDLER Handle);
+
+#define MB_ABORTRETRYIGNORE 0x00000002L
+#define MB_CANCELTRYCONTINUE 0x00000006L
+#define MB_HELP 0x00004000L
+#define MB_OK 0x00000000L
+#define MB_OKCANCEL 0x00000001L
+#define MB_RETRYCANCEL 0x00000005L
+#define MB_YESNO 0x00000004L
+#define MB_YESNOCANCEL 0x00000003L
+
+#define MB_ICONEXCLAMATION 0x00000030L
+#define MB_ICONWARNING 0x00000030L
+#define MB_ICONINFORMATION 0x00000040L
+#define MB_ICONASTERISK 0x00000040L
+#define MB_ICONQUESTION 0x00000020L
+#define MB_ICONSTOP 0x00000010L
+#define MB_ICONERROR 0x00000010L
+#define MB_ICONHAND 0x00000010L
+
+WINDOWS_IMPORT int WINAPI MessageBoxA(HWND hWnd,LPCSTR lpText,LPCSTR lpCaption,UINT uType);
+
+WINDOWS_IMPORT DWORD WINAPI CharLowerBuffW(LPWSTR lpsz, DWORD cchLength);
+
+#define MAKEINTRESOURCEA(i) ((LPSTR)((ULONG_PTR)((WORD)(i))))
+#define IDI_MAINICON 101
+#define IMAGE_ICON 1
+#define LR_DEFAULTSIZE 0x00000040
+#define ICON_BIG 1
+#define ICON_SMALL 0
+#define WM_SETICON 0x0080
+
+WINDOWS_IMPORT HANDLE WINAPI LoadImageA( HINSTANCE hInst, LPCSTR name, UINT type, int cx, int cy, UINT fuLoad);
+
+WINDOWS_IMPORT HRESULT WINAPI SetThreadDescription(HANDLE hThread, LPCWSTR lpThreadDescription);
+
+WINDOWS_IMPORT BOOL WINAPI GdiFlush(void);
+
+#define STD_INPUT_HANDLE  ((DWORD)-10)
+#define STD_OUTPUT_HANDLE ((DWORD)-11)
+#define STD_ERROR_HANDLE  ((DWORD)-12)
+
+WINDOWS_IMPORT BOOL WINAPI AllocConsole(void);
+
+#define BIF_RETURNONLYFSDIRS 0x00000001
+#define BIF_DONTGOBELOWDOMAIN 0x00000002
+#define BIF_STATUSTEXT 0x00000004
+
+#define BIF_RETURNFSANCESTORS 0x00000008
+#define BIF_EDITBOX 0x00000010
+#define BIF_VALIDATE 0x00000020
+
+#define BIF_NEWDIALOGSTYLE 0x00000040
+
+#define BIF_USENEWUI (BIF_NEWDIALOGSTYLE | BIF_EDITBOX)
+
+#define BIF_BROWSEINCLUDEURLS 0x00000080
+#define BIF_UAHINT 0x00000100
+#define BIF_NONEWFOLDERBUTTON 0x00000200
+#define BIF_NOTRANSLATETARGETS 0x00000400
+
+#define BIF_BROWSEFORCOMPUTER 0x00001000
+#define BIF_BROWSEFORPRINTER 0x00002000
+#define BIF_BROWSEINCLUDEFILES 0x00004000
+#define BIF_SHAREABLE 0x00008000
+#define BIF_BROWSEFILEJUNCTIONS 0x00010000
+
+typedef struct _SHITEMID {
+    USHORT cb;
+    BYTE abID[1];
+} SHITEMID;
+typedef struct _ITEMIDLIST {
+    SHITEMID mkid;
+} ITEMIDLIST;
+typedef ITEMIDLIST *LPITEMIDLIST;
+typedef const ITEMIDLIST *LPCITEMIDLIST;
+#define PIDLIST_ABSOLUTE LPITEMIDLIST
+#define PCIDLIST_ABSOLUTE LPCITEMIDLIST
+
+typedef int (__stdcall *BFFCALLBACK) (HWND hwnd, UINT uMsg, LPARAM lParam, LPARAM lpData);
+
+typedef struct _browseinfoW {
+    HWND hwndOwner;
+    PCIDLIST_ABSOLUTE pidlRoot;
+    LPWSTR pszDisplayName;
+    LPCWSTR lpszTitle;
+    UINT ulFlags;
+    BFFCALLBACK lpfn;
+    LPARAM lParam;
+    int iImage;
+} BROWSEINFOW,*PBROWSEINFOW,*LPBROWSEINFOW;
+
+WINDOWS_IMPORT PIDLIST_ABSOLUTE WINAPI SHBrowseForFolderW(LPBROWSEINFOW lpbi);
+
+WINDOWS_IMPORT BOOL WINAPI SHGetPathFromIDListW( PCIDLIST_ABSOLUTE pidl, LPWSTR pszPath);
 
 /* End include: windows_loader.h */
     #endif // _WINDOWS_
@@ -6308,6 +6525,7 @@ typedef struct _Surface_State {
 #if OS_FLAGS & OS_FLAG_WINDOWS
     BITMAPINFO bmp_info;
     HBITMAP bmp;
+    HDC memdc;
 #elif OS_FLAGS & OS_FLAG_LINUX
     GC       gc;
     XImage*  ximage;
@@ -7385,22 +7603,25 @@ unit_local LRESULT window_proc ( HWND hwnd,  u32 message,  WPARAM wparam,  LPARA
         case WM_NCACTIVATE:
             return TRUE;
         case WM_GETMINMAXINFO: {
-            MINMAXINFO *mm = (MINMAXINFO *)lparam;
-
-            HMONITOR mon = MonitorFromWindow(hwnd, MONITOR_DEFAULTTONEAREST);
-            MONITORINFO mi; mi.cbSize = sizeof(mi);
-            GetMonitorInfoW(mon, &mi);
-            
-            RECT wa = mi.rcWork;
-            mm->ptMaxPosition.x = (LONG)wa.left;
-            mm->ptMaxPosition.y = (LONG)wa.top;
-            mm->ptMaxSize.x     = (LONG)(wa.right  - wa.left);
-            mm->ptMaxSize.y     = (LONG)(wa.bottom - wa.top);
-            
-            mm->ptMinTrackSize.x = (LONG)state->minimum_w;
-            mm->ptMinTrackSize.y = (LONG)state->minimum_h;
-            
-            return 1;
+           MINMAXINFO *mm = (MINMAXINFO *)lparam;
+        
+           HMONITOR mon = MonitorFromWindow(hwnd, MONITOR_DEFAULTTONEAREST);
+           MONITORINFO mi = {0};
+           mi.cbSize = sizeof(mi);
+           GetMonitorInfoW(mon, &mi);
+        
+           RECT wa = mi.rcWork;
+           RECT mr = mi.rcMonitor;
+        
+           mm->ptMaxPosition.x = wa.left - mr.left;
+           mm->ptMaxPosition.y = wa.top  - mr.top;
+           mm->ptMaxSize.x     = wa.right  - wa.left;
+           mm->ptMaxSize.y     = wa.bottom - wa.top;
+        
+           mm->ptMinTrackSize.x = (LONG)state->minimum_w;
+           mm->ptMinTrackSize.y = (LONG)state->minimum_h;
+        
+           return 1;
         }
         case WM_NCCALCSIZE:
             if (wparam) return 0;
@@ -8473,12 +8694,18 @@ Surface_Handle sys_make_surface(Surface_Desc desc) {
         wc.cbClsExtra = 0;
         wc.cbWndExtra = 0;
         wc.hCursor = 0;
-        wc.hIcon = 0;
         wc.lpszMenuName = 0;
         wc.hbrBackground = 0;
-
-    	ATOM res = RegisterClassExW(&wc);
-    	assert(res);
+        wc.hIcon = (HICON)LoadImageA(
+            wc.hInstance,
+            MAKEINTRESOURCEA(IDI_MAINICON),
+            IMAGE_ICON,
+            0, 0,
+            LR_DEFAULTSIZE
+        );
+        
+        ATOM res = RegisterClassExW(&wc);
+        assert(res);
     }
 
 	RECT rect = (RECT){0, 0, (LONG)desc.width, (LONG)desc.height};
@@ -8635,31 +8862,45 @@ void surface_set_minimum_size(Surface_Handle h, u16 width, u16 height) {
 }
 
 void* surface_map_pixels(Surface_Handle h) {
-    _Surface_State *state = _get_surface_state(h);
-    if (!state) return 0;
+   _Surface_State *state = _get_surface_state(h);
+   if (!state) return 0;
 
-    u16 width, height;
-    if (!surface_get_framebuffer_size(h, &width, &height)) {
-        return 0;
-    }
+   u16 width, height;
+   if (!surface_get_framebuffer_size(h, &width, &height)) {
+      return 0;
+   }
 
-    if (!state->pixels || state->pixels_dirty) {
-        if (state->pixels) {
-          state->pixels = 0;
-          if (state->bmp) DeleteObject(state->bmp);
-        }
-        state->bmp_info.bmiHeader.biSize        = sizeof(state->bmp_info.bmiHeader);
-        state->bmp_info.bmiHeader.biWidth       = (LONG)width;
-        state->bmp_info.bmiHeader.biHeight      = (LONG)-height;
-        state->bmp_info.bmiHeader.biPlanes      = 1;
-        state->bmp_info.bmiHeader.biBitCount    = 32;
-        state->bmp_info.bmiHeader.biCompression = BI_RGB;
-        state->bmp_info.bmiHeader.biSizeImage   = 0;
+   if (!state->pixels || state->pixels_dirty) {
+      if (state->pixels) {
+         state->pixels = 0;
+         if (state->bmp) DeleteObject(state->bmp);
+         if (state->memdc) {
+            DeleteDC(state->memdc);
+            state->memdc = 0;
+         }
+      }
 
-        state->bmp = CreateDIBSection(GetDC((HWND)h), &state->bmp_info, DIB_RGB_COLORS, &state->pixels, 0, 0);
-    }
+      state->bmp_info.bmiHeader.biSize        = sizeof(state->bmp_info.bmiHeader);
+      state->bmp_info.bmiHeader.biWidth       = (LONG)width;
+      state->bmp_info.bmiHeader.biHeight      = (LONG)-height;
+      state->bmp_info.bmiHeader.biPlanes      = 1;
+      state->bmp_info.bmiHeader.biBitCount    = 32;
+      state->bmp_info.bmiHeader.biCompression = BI_RGB;
+      state->bmp_info.bmiHeader.biSizeImage   = 0;
 
-    return state->pixels;
+      HDC hdc = GetDC((HWND)h);
+
+      state->bmp = CreateDIBSection(hdc, &state->bmp_info, DIB_RGB_COLORS, &state->pixels, 0, 0);
+
+      state->memdc = CreateCompatibleDC(hdc);
+      SelectObject(state->memdc, state->bmp);
+
+      ReleaseDC((HWND)h, hdc);
+
+      state->pixels_dirty = false;
+   }
+
+   return state->pixels;
 }
 void surface_blit_pixels(Surface_Handle h) {
     _Surface_State *state = _get_surface_state(h);
@@ -8679,6 +8920,9 @@ void surface_blit_pixels(Surface_Handle h) {
         DIB_RGB_COLORS,
         SRCCOPY
     );
+    
+    GdiFlush();
+    ReleaseDC((HWND)h, hdc);
 }
 void surface_blit_my_pixels(Surface_Handle h, void *pixels) {
     _Surface_State *state = _get_surface_state(h);
@@ -8698,25 +8942,26 @@ void surface_blit_my_pixels(Surface_Handle h, void *pixels) {
         DIB_RGB_COLORS,
         SRCCOPY
     );
+    
+    GdiFlush();
+    ReleaseDC((HWND)h, hdc);
 }
 void surface_blit_pixels_partial(Surface_Handle h, u16 x, u16 y, u16 width, u16 height) {
-    _Surface_State *state = _get_surface_state(h);
-    if (!state) return;
+   _Surface_State *state = _get_surface_state(h);
+   if (!state) return;
 
-    u16 full_width, full_height;
-    if (!surface_get_framebuffer_size(h, &full_width, &full_height)) return;
+   HDC hdc = GetDC((HWND)h);
 
-    HDC hdc = GetDC((HWND)h);
+   BitBlt(
+      hdc,
+      (int)x, (int)y, (int)width, (int)height,
+      state->memdc,
+      (int)x, (int)y,
+      SRCCOPY
+   );
 
-    StretchDIBits(
-        hdc,
-        (int)x, (int)y, (LONG)width, (LONG)height,
-        0, 0, (LONG)width, (LONG)height,
-        (u32*)state->pixels + (y*full_width+x),
-        &state->bmp_info,
-        DIB_RGB_COLORS,
-        SRCCOPY
-    );
+   GdiFlush();
+   ReleaseDC((HWND)h, hdc);
 }
 void surface_blit_my_pixels_partial(Surface_Handle h, u16 x, u16 y, u16 width, u16 height, void *pixels) {
     _Surface_State *state = _get_surface_state(h);
@@ -8736,6 +8981,9 @@ void surface_blit_my_pixels_partial(Surface_Handle h, u16 x, u16 y, u16 width, u
         DIB_RGB_COLORS,
         SRCCOPY
     );
+    
+    GdiFlush();
+    ReleaseDC((HWND)h, hdc);
 }
 
 bool surface_get_monitor(Surface_Handle h, Physical_Monitor *monitor) {
@@ -10095,6 +10343,8 @@ OSTD_LIB Allocator get_temp(void);
 OSTD_LIB void reset_temporary_storage(void);
 OSTD_LIB void *tallocate(size_t n);
 
+OSTD_LIB u64 get_temp_position(void);
+OSTD_LIB void set_temp_position(u64 pos);
 
 /////
 // Allocation interface
@@ -10193,6 +10443,23 @@ void *tallocate(size_t n) {
     return allocate(_lazy_init_temporary_storage()->a, n);
 }
 
+u64 get_temp_position(void) {
+    Arena *arena = &_lazy_init_temporary_storage()->arena;
+    
+    return (u64)arena->position - (u64)arena->start;
+}
+void set_temp_position(u64 pos) {
+    Arena *arena = &_lazy_init_temporary_storage()->arena;
+    
+    u64 current_pos = (u64)arena->position - (u64)arena->start;
+    
+    if (pos >= current_pos) return;
+    
+    u64 diff = current_pos - pos;
+    
+    arena_pop(arena, diff);
+}
+
 Arena make_arena(u64 reserved_size, u64 initial_allocated_size) {
     assert(reserved_size >= initial_allocated_size);
 
@@ -10233,6 +10500,10 @@ void arena_reset(Arena *arena) {
     arena->position = arena->start;
 }
 void free_arena(Arena arena) {
+    if (!arena.allocated_size) {
+        sys_unmap_pages(arena.start);
+        return;
+    }
     void *start = arena.start;
     void *end = (u8*)arena.start + arena.reserved_size;
 
@@ -12114,18 +12385,29 @@ void print_args(string fmt, u64 arg_count, Var_Arg *args) {
     fprint_args(sys_get_stdout(), fmt, arg_count, args);
 }
 void fprint_args(File_Handle f, string fmt, u64 arg_count, Var_Arg *args) {
-
+    
+    
     u64 full_size = format_string_args(0, 0, fmt, arg_count, args, 0);
     
     u8 small_buffer[KiB(16)];
-    
     u8 *buffer = small_buffer;
-    if (full_size > KiB(16))
+    
+    bool use_temp = full_size > KiB(16);
+    
+    u64 temp_pos = 0;
+    
+    if (use_temp) {
+        temp_pos = get_temp_position();
         buffer = PushTempBuffer(u8, full_size);
+    }
     
     u64 written = format_string_args(buffer, full_size, fmt, arg_count, args, 0);
     
     sys_write(f, buffer, written);
+    
+    if (use_temp) {
+        set_temp_position(temp_pos);
+    }
 }
 void log_args(u64 flags, Source_Location location, string fmt, u64 arg_count, Var_Arg *args) {
 

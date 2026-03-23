@@ -356,34 +356,39 @@ Assert_Fail_Callback assert_fail_callback;
 
 #define STRINGIFY(x) #x
 #define TOSTRING(x) STRINGIFY(x)
+
+#define assertmsg_always(x, msg) assertmsgs_always(x, (STR(msg)))
+#define assertmsgs_always(x, msg)  do { \
+    if (!(x)) {\
+        sys_write_string(sys_get_stderr(), STR("\n========================================================\n"));\
+        sys_write_string(sys_get_stderr(), STR("==========!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!==========\n"));\
+        sys_write_string(sys_get_stderr(), STR("========================================================\n"));\
+        sys_write_string(sys_get_stderr(), STR("\nAssertion failed for expression: '"));\
+        sys_write_string(sys_get_stderr(), STR(#x));\
+        sys_write_string(sys_get_stderr(), STR("'.\n"));\
+        if (msg.data && msg.count) {\
+            sys_write_string(sys_get_stderr(), STR("\n\""));\
+            sys_write_string(sys_get_stderr(), msg);\
+            sys_write_string(sys_get_stderr(), STR("\"\n"));\
+        }\
+        sys_write_string(sys_get_stderr(), STR("\nIn File '"));\
+        sys_write_string(sys_get_stderr(), STR(__FILE__));\
+        sys_write_string(sys_get_stderr(), STR("' on line "));\
+        sys_write_string(sys_get_stderr(), STR(TOSTRING(__LINE__)));\
+        sys_write_string(sys_get_stderr(), STR("\n\nPrinting stack trace:\n"));\
+        sys_print_stack_trace(sys_get_stderr());\
+        sys_write_string(sys_get_stderr(), STR("\n\n========================================================\n"));\
+        sys_write_string(sys_get_stderr(), STR("==========!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!==========\n"));\
+        sys_write_string(sys_get_stderr(), STR("========================================================\n"));\
+        if (assert_fail_callback) assert_fail_callback(STR(#x), msg, STR(__FILE__), STR(__func__), __LINE__);\
+        debug_break();\
+    } \
+    } while(0)
+#define assert_always(x) assertmsg_always(x, "")
+
 #ifndef DISABLE_ASSERT
     #define assertmsg(x, msg) assertmsgs(x, (STR(msg)))
-    #define assertmsgs(x, msg)  do { \
-            if (!(x)) {\
-                sys_write_string(sys_get_stderr(), STR("\n========================================================\n"));\
-                sys_write_string(sys_get_stderr(), STR("==========!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!==========\n"));\
-                sys_write_string(sys_get_stderr(), STR("========================================================\n"));\
-                sys_write_string(sys_get_stderr(), STR("\nAssertion failed for expression: '"));\
-                sys_write_string(sys_get_stderr(), STR(#x));\
-                sys_write_string(sys_get_stderr(), STR("'.\n"));\
-                if (msg.data && msg.count) {\
-                    sys_write_string(sys_get_stderr(), STR("\n\""));\
-                    sys_write_string(sys_get_stderr(), msg);\
-                    sys_write_string(sys_get_stderr(), STR("\"\n"));\
-                }\
-                sys_write_string(sys_get_stderr(), STR("\nIn File '"));\
-                sys_write_string(sys_get_stderr(), STR(__FILE__));\
-                sys_write_string(sys_get_stderr(), STR("' on line "));\
-                sys_write_string(sys_get_stderr(), STR(TOSTRING(__LINE__)));\
-                sys_write_string(sys_get_stderr(), STR("\n\nPrinting stack trace:\n"));\
-                sys_print_stack_trace(sys_get_stderr());\
-                sys_write_string(sys_get_stderr(), STR("\n\n========================================================\n"));\
-                sys_write_string(sys_get_stderr(), STR("==========!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!==========\n"));\
-                sys_write_string(sys_get_stderr(), STR("========================================================\n"));\
-                if (assert_fail_callback) assert_fail_callback(STR(#x), msg, STR(__FILE__), STR(__func__), __LINE__);\
-                debug_break();\
-            } \
-        } while(0)
+    #define assertmsgs(x, msg) assertmsgs_always(x, msg)
     #define assert(x) assertmsg(x, "")
 #else
     #define assertmsg(x, msg) (void)(x)
@@ -404,18 +409,26 @@ Assert_Fail_Callback assert_fail_callback;
 #endif
 
 // todo(charlie) inline asm / dynamically load crt's if msvc
+// --- Actually I tried vectorized versions, but a) it seems slower than what -O3 compiles 
+// these basic versions to and b) it's much slower in debug. 
+// There does not seem to be any gain from manually writing vectorized versions.
 
+#ifndef OSTD_NO_MEMCPY
 void *memcpy(void *dst, const void * src, sys_uint n) {
     for (sys_uint i = 0; i < n; i += 1)  *((u8*)dst + i) = *((const u8*)src + i);
     return dst;
 }
+#endif
 
+#ifndef OSTD_NO_MEMSET
 void *memset(void *dst, s32 c, sys_uint n) {
     u8 *p = (u8*)dst;
     while (n--) *p++ = (u8)c;
     return dst;
 }
+#endif
 
+#ifndef OSTD_NO_MEMMOVE
 void *memmove(void *dst, const void *src, sys_uint n) {
     if (!n) return dst;
     if ((sys_uint)dst > (sys_uint)src)
@@ -424,6 +437,7 @@ void *memmove(void *dst, const void *src, sys_uint n) {
         for (sys_uint i = 0; i < n; i += 1)  *((u8*)dst + i) = *((const u8*)src + i);
     return dst;
 }
+#endif
 
 
 int memcmp(const void* a, const void* b, sys_uint n) {

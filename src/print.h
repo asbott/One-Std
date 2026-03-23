@@ -315,18 +315,29 @@ void print_args(string fmt, u64 arg_count, Var_Arg *args) {
     fprint_args(sys_get_stdout(), fmt, arg_count, args);
 }
 void fprint_args(File_Handle f, string fmt, u64 arg_count, Var_Arg *args) {
-
+    
+    
     u64 full_size = format_string_args(0, 0, fmt, arg_count, args, 0);
     
     u8 small_buffer[KiB(16)];
-    
     u8 *buffer = small_buffer;
-    if (full_size > KiB(16))
+    
+    bool use_temp = full_size > KiB(16);
+    
+    u64 temp_pos = 0;
+    
+    if (use_temp) {
+        temp_pos = get_temp_position();
         buffer = PushTempBuffer(u8, full_size);
+    }
     
     u64 written = format_string_args(buffer, full_size, fmt, arg_count, args, 0);
     
     sys_write(f, buffer, written);
+    
+    if (use_temp) {
+        set_temp_position(temp_pos);
+    }
 }
 void log_args(u64 flags, Source_Location location, string fmt, u64 arg_count, Var_Arg *args) {
 

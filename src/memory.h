@@ -80,6 +80,8 @@ OSTD_LIB Allocator get_temp(void);
 OSTD_LIB void reset_temporary_storage(void);
 OSTD_LIB void *tallocate(size_t n);
 
+OSTD_LIB u64 get_temp_position(void);
+OSTD_LIB void set_temp_position(u64 pos);
 
 /////
 // Allocation interface
@@ -178,6 +180,23 @@ void *tallocate(size_t n) {
     return allocate(_lazy_init_temporary_storage()->a, n);
 }
 
+u64 get_temp_position(void) {
+    Arena *arena = &_lazy_init_temporary_storage()->arena;
+    
+    return (u64)arena->position - (u64)arena->start;
+}
+void set_temp_position(u64 pos) {
+    Arena *arena = &_lazy_init_temporary_storage()->arena;
+    
+    u64 current_pos = (u64)arena->position - (u64)arena->start;
+    
+    if (pos >= current_pos) return;
+    
+    u64 diff = current_pos - pos;
+    
+    arena_pop(arena, diff);
+}
+
 Arena make_arena(u64 reserved_size, u64 initial_allocated_size) {
     assert(reserved_size >= initial_allocated_size);
 
@@ -218,6 +237,10 @@ void arena_reset(Arena *arena) {
     arena->position = arena->start;
 }
 void free_arena(Arena arena) {
+    if (!arena.allocated_size) {
+        sys_unmap_pages(arena.start);
+        return;
+    }
     void *start = arena.start;
     void *end = (u8*)arena.start + arena.reserved_size;
 
