@@ -1,14 +1,14 @@
 // This file was generated from One-Std/src/osl_compiler.h
 // The following files were included & concatenated:
-// - C:\One-Std\src\string.h
 // - C:\One-Std\src\memory.h
-// - C:\One-Std\src\var_args_macros.h
-// - C:\One-Std\src\var_args.h
-// - C:\One-Std\src\base.h
-// - C:\One-Std\src\osl_compiler.h
 // - C:\One-Std\src\windows_loader.h
-// - C:\One-Std\src\system1.h
 // - C:\One-Std\src\print.h
+// - C:\One-Std\src\string.h
+// - C:\One-Std\src\osl_compiler.h
+// - C:\One-Std\src\var_args.h
+// - C:\One-Std\src\var_args_macros.h
+// - C:\One-Std\src\system1.h
+// - C:\One-Std\src\base.h
 // I try to compile with -pedantic and -Weverything, but get really dumb warnings like these,
 // so I have to ignore them.
 #if defined(__GNUC__) || defined(__GNUG__)
@@ -810,6 +810,9 @@ OSTD_LIB void sys_exit_current_thread(s64 code);
 
 OSTD_LIB void sys_set_clipboard_text(string text);
 OSTD_LIB u64 sys_get_clipboard_text(u8 *out, u64 out_max);
+
+// returns length, u8 *out is the string
+OSTD_LIB u64 sys_get_environment_variable(string name, u8 *out);
 
 //////
 // Sockets
@@ -6487,6 +6490,241 @@ WINDOWS_IMPORT PIDLIST_ABSOLUTE WINAPI SHBrowseForFolderW(LPBROWSEINFOW lpbi);
 
 WINDOWS_IMPORT BOOL WINAPI SHGetPathFromIDListW( PCIDLIST_ABSOLUTE pidl, LPWSTR pszPath);
 
+typedef void* HINTERNET;
+typedef HINTERNET *LPHINTERNET;
+
+typedef WORD INTERNET_PORT;
+typedef INTERNET_PORT *LPINTERNET_PORT;
+  
+  
+WINDOWS_IMPORT HINTERNET WINAPI InternetOpenA(LPCSTR lpszAgent,DWORD dwAccessType,LPCSTR lpszProxy,LPCSTR lpszProxyBypass,DWORD dwFlags);
+
+#define INTERNET_OPEN_TYPE_PRECONFIG 0
+#define INTERNET_OPEN_TYPE_DIRECT 1
+#define INTERNET_OPEN_TYPE_PROXY 3
+#define INTERNET_OPEN_TYPE_PRECONFIG_WITH_NO_AUTOPROXY 4
+
+#define PRE_CONFIG_INTERNET_ACCESS INTERNET_OPEN_TYPE_PRECONFIG
+#define LOCAL_INTERNET_ACCESS INTERNET_OPEN_TYPE_DIRECT
+#define CERN_PROXY_INTERNET_ACCESS INTERNET_OPEN_TYPE_PROXY
+
+WINDOWS_IMPORT HINTERNET WINAPI InternetConnectA(HINTERNET hInternet,LPCSTR lpszServerName,INTERNET_PORT nServerPort,LPCSTR lpszUserName,LPCSTR lpszPassword,DWORD dwService,DWORD dwFlags,DWORD_PTR dwContext);
+
+#define INTERNET_SERVICE_FTP 1
+#define INTERNET_SERVICE_GOPHER 2
+#define INTERNET_SERVICE_HTTP 3
+
+WINDOWS_IMPORT HINTERNET WINAPI HttpOpenRequestA(HINTERNET hConnect,LPCSTR lpszVerb,LPCSTR lpszObjectName,LPCSTR lpszVersion,LPCSTR lpszReferrer,LPCSTR *lplpszAcceptTypes,DWORD dwFlags,DWORD_PTR dwContext);
+
+#define INTERNET_INVALID_PORT_NUMBER 0
+
+#define INTERNET_DEFAULT_FTP_PORT 21
+#define INTERNET_DEFAULT_GOPHER_PORT 70
+#define INTERNET_DEFAULT_HTTP_PORT 80
+#define INTERNET_DEFAULT_HTTPS_PORT 443
+#define INTERNET_DEFAULT_SOCKS_PORT 1080
+
+#define INTERNET_MAX_HOST_NAME_LENGTH 256
+#define INTERNET_MAX_USER_NAME_LENGTH 128
+#define INTERNET_MAX_PASSWORD_LENGTH 128
+#define INTERNET_MAX_PORT_NUMBER_LENGTH 5
+#define INTERNET_MAX_PORT_NUMBER_VALUE 65535
+#define INTERNET_MAX_PATH_LENGTH 2048
+#define INTERNET_MAX_SCHEME_LENGTH 32
+#define INTERNET_MAX_URL_LENGTH (INTERNET_MAX_SCHEME_LENGTH + sizeof("://") + INTERNET_MAX_PATH_LENGTH)
+
+#define INTERNET_KEEP_ALIVE_UNKNOWN ((DWORD)-1)
+#define INTERNET_KEEP_ALIVE_ENABLED 1
+#define INTERNET_KEEP_ALIVE_DISABLED 0
+
+#define INTERNET_REQFLAG_FROM_CACHE 0x00000001
+#define INTERNET_REQFLAG_ASYNC 0x00000002
+#define INTERNET_REQFLAG_VIA_PROXY 0x00000004
+#define INTERNET_REQFLAG_NO_HEADERS 0x00000008
+#define INTERNET_REQFLAG_PASSIVE 0x00000010
+#define INTERNET_REQFLAG_CACHE_WRITE_DISABLED 0x00000040
+#define INTERNET_REQFLAG_NET_TIMEOUT 0x00000080
+
+#define INTERNET_FLAG_IDN_DIRECT 0x00000001
+#define INTERNET_FLAG_IDN_PROXY 0x00000002
+
+#define INTERNET_FLAG_RELOAD 0x80000000
+
+#define INTERNET_FLAG_RAW_DATA 0x40000000
+#define INTERNET_FLAG_EXISTING_CONNECT 0x20000000
+
+#define INTERNET_FLAG_ASYNC 0x10000000
+
+#define INTERNET_FLAG_PASSIVE 0x08000000
+
+#define INTERNET_FLAG_NO_CACHE_WRITE 0x04000000
+#define INTERNET_FLAG_DONT_CACHE INTERNET_FLAG_NO_CACHE_WRITE
+#define INTERNET_FLAG_MAKE_PERSISTENT 0x02000000
+#define INTERNET_FLAG_FROM_CACHE 0x01000000
+#define INTERNET_FLAG_OFFLINE INTERNET_FLAG_FROM_CACHE
+
+#define INTERNET_FLAG_SECURE 0x00800000
+#define INTERNET_FLAG_KEEP_CONNECTION 0x00400000
+#define INTERNET_FLAG_NO_AUTO_REDIRECT 0x00200000
+#define INTERNET_FLAG_READ_PREFETCH 0x00100000
+#define INTERNET_FLAG_NO_COOKIES 0x00080000
+#define INTERNET_FLAG_NO_AUTH 0x00040000
+#define INTERNET_FLAG_RESTRICTED_ZONE 0x00020000
+#define INTERNET_FLAG_CACHE_IF_NET_FAIL 0x00010000
+
+#define INTERNET_FLAG_IGNORE_REDIRECT_TO_HTTP 0x00008000
+#define INTERNET_FLAG_IGNORE_REDIRECT_TO_HTTPS 0x00004000
+#define INTERNET_FLAG_IGNORE_CERT_DATE_INVALID 0x00002000
+#define INTERNET_FLAG_IGNORE_CERT_CN_INVALID 0x00001000
+
+#define INTERNET_FLAG_RESYNCHRONIZE 0x00000800
+#define INTERNET_FLAG_HYPERLINK 0x00000400
+#define INTERNET_FLAG_NO_UI 0x00000200
+#define INTERNET_FLAG_PRAGMA_NOCACHE 0x00000100
+#define INTERNET_FLAG_CACHE_ASYNC 0x00000080
+#define INTERNET_FLAG_FORMS_SUBMIT 0x00000040
+#define INTERNET_FLAG_FWD_BACK 0x00000020
+#define INTERNET_FLAG_NEED_FILE 0x00000010
+#define INTERNET_FLAG_MUST_CACHE_REQUEST INTERNET_FLAG_NEED_FILE
+
+#define INTERNET_FLAG_TRANSFER_ASCII FTP_TRANSFER_TYPE_ASCII
+#define INTERNET_FLAG_TRANSFER_BINARY FTP_TRANSFER_TYPE_BINARY
+
+#define SECURITY_INTERNET_MASK (INTERNET_FLAG_IGNORE_CERT_CN_INVALID | INTERNET_FLAG_IGNORE_CERT_DATE_INVALID | INTERNET_FLAG_IGNORE_REDIRECT_TO_HTTPS | INTERNET_FLAG_IGNORE_REDIRECT_TO_HTTP)
+#define SECURITY_IGNORE_ERROR_MASK (INTERNET_FLAG_IGNORE_CERT_CN_INVALID | INTERNET_FLAG_IGNORE_CERT_DATE_INVALID | SECURITY_FLAG_IGNORE_UNKNOWN_CA | SECURITY_FLAG_IGNORE_REVOCATION | SECURITY_FLAG_IGNORE_WEAK_SIGNATURE)
+#define INTERNET_FLAGS_MASK (INTERNET_FLAG_RELOAD | INTERNET_FLAG_RAW_DATA | INTERNET_FLAG_EXISTING_CONNECT | INTERNET_FLAG_ASYNC | INTERNET_FLAG_PASSIVE | INTERNET_FLAG_NO_CACHE_WRITE | INTERNET_FLAG_MAKE_PERSISTENT | INTERNET_FLAG_FROM_CACHE | INTERNET_FLAG_SECURE | INTERNET_FLAG_KEEP_CONNECTION | INTERNET_FLAG_NO_AUTO_REDIRECT | INTERNET_FLAG_READ_PREFETCH | INTERNET_FLAG_NO_COOKIES | INTERNET_FLAG_NO_AUTH | INTERNET_FLAG_CACHE_IF_NET_FAIL | SECURITY_INTERNET_MASK | INTERNET_FLAG_RESYNCHRONIZE | INTERNET_FLAG_HYPERLINK | INTERNET_FLAG_NO_UI | INTERNET_FLAG_PRAGMA_NOCACHE | INTERNET_FLAG_CACHE_ASYNC | INTERNET_FLAG_FORMS_SUBMIT | INTERNET_FLAG_NEED_FILE | INTERNET_FLAG_RESTRICTED_ZONE | INTERNET_FLAG_TRANSFER_BINARY | INTERNET_FLAG_TRANSFER_ASCII | INTERNET_FLAG_FWD_BACK | INTERNET_FLAG_BGUPDATE)
+
+WINDOWS_IMPORT int WINAPI HttpSendRequestA(HINTERNET hRequest,LPCSTR lpszHeaders,DWORD dwHeadersLength,LPVOID lpOptional,DWORD dwOptionalLength);
+
+WINDOWS_IMPORT int WINAPI HttpQueryInfoA(HINTERNET hRequest,DWORD dwInfoLevel,LPVOID lpBuffer,LPDWORD lpdwBufferLength,LPDWORD lpdwIndex);
+
+#define HTTP_QUERY_MIME_VERSION 0
+#define HTTP_QUERY_CONTENT_TYPE 1
+#define HTTP_QUERY_CONTENT_TRANSFER_ENCODING 2
+#define HTTP_QUERY_CONTENT_ID 3
+#define HTTP_QUERY_CONTENT_DESCRIPTION 4
+#define HTTP_QUERY_CONTENT_LENGTH 5
+#define HTTP_QUERY_CONTENT_LANGUAGE 6
+#define HTTP_QUERY_ALLOW 7
+#define HTTP_QUERY_PUBLIC 8
+#define HTTP_QUERY_DATE 9
+#define HTTP_QUERY_EXPIRES 10
+#define HTTP_QUERY_LAST_MODIFIED 11
+#define HTTP_QUERY_MESSAGE_ID 12
+#define HTTP_QUERY_URI 13
+#define HTTP_QUERY_DERIVED_FROM 14
+#define HTTP_QUERY_COST 15
+#define HTTP_QUERY_LINK 16
+#define HTTP_QUERY_PRAGMA 17
+#define HTTP_QUERY_VERSION 18
+#define HTTP_QUERY_STATUS_CODE 19
+#define HTTP_QUERY_STATUS_TEXT 20
+#define HTTP_QUERY_RAW_HEADERS 21
+#define HTTP_QUERY_RAW_HEADERS_CRLF 22
+#define HTTP_QUERY_CONNECTION 23
+#define HTTP_QUERY_ACCEPT 24
+#define HTTP_QUERY_ACCEPT_CHARSET 25
+#define HTTP_QUERY_ACCEPT_ENCODING 26
+#define HTTP_QUERY_ACCEPT_LANGUAGE 27
+#define HTTP_QUERY_AUTHORIZATION 28
+#define HTTP_QUERY_CONTENT_ENCODING 29
+#define HTTP_QUERY_FORWARDED 30
+#define HTTP_QUERY_FROM 31
+#define HTTP_QUERY_IF_MODIFIED_SINCE 32
+#define HTTP_QUERY_LOCATION 33
+#define HTTP_QUERY_ORIG_URI 34
+#define HTTP_QUERY_REFERER 35
+#define HTTP_QUERY_RETRY_AFTER 36
+#define HTTP_QUERY_SERVER 37
+#define HTTP_QUERY_TITLE 38
+#define HTTP_QUERY_USER_AGENT 39
+#define HTTP_QUERY_WWW_AUTHENTICATE 40
+#define HTTP_QUERY_PROXY_AUTHENTICATE 41
+#define HTTP_QUERY_ACCEPT_RANGES 42
+#define HTTP_QUERY_SET_COOKIE 43
+#define HTTP_QUERY_COOKIE 44
+#define HTTP_QUERY_REQUEST_METHOD 45
+#define HTTP_QUERY_REFRESH 46
+#define HTTP_QUERY_CONTENT_DISPOSITION 47
+
+#define HTTP_QUERY_AGE 48
+#define HTTP_QUERY_CACHE_CONTROL 49
+#define HTTP_QUERY_CONTENT_BASE 50
+#define HTTP_QUERY_CONTENT_LOCATION 51
+#define HTTP_QUERY_CONTENT_MD5 52
+#define HTTP_QUERY_CONTENT_RANGE 53
+#define HTTP_QUERY_ETAG 54
+#define HTTP_QUERY_HOST 55
+#define HTTP_QUERY_IF_MATCH 56
+#define HTTP_QUERY_IF_NONE_MATCH 57
+#define HTTP_QUERY_IF_RANGE 58
+#define HTTP_QUERY_IF_UNMODIFIED_SINCE 59
+#define HTTP_QUERY_MAX_FORWARDS 60
+#define HTTP_QUERY_PROXY_AUTHORIZATION 61
+#define HTTP_QUERY_RANGE 62
+#define HTTP_QUERY_TRANSFER_ENCODING 63
+#define HTTP_QUERY_UPGRADE 64
+#define HTTP_QUERY_VARY 65
+#define HTTP_QUERY_VIA 66
+#define HTTP_QUERY_WARNING 67
+#define HTTP_QUERY_EXPECT 68
+#define HTTP_QUERY_PROXY_CONNECTION 69
+#define HTTP_QUERY_UNLESS_MODIFIED_SINCE 70
+
+#define HTTP_QUERY_ECHO_REQUEST 71
+#define HTTP_QUERY_ECHO_REPLY 72
+
+#define HTTP_QUERY_ECHO_HEADERS 73
+#define HTTP_QUERY_ECHO_HEADERS_CRLF 74
+
+#define HTTP_QUERY_PROXY_SUPPORT 75
+#define HTTP_QUERY_AUTHENTICATION_INFO 76
+#define HTTP_QUERY_PASSPORT_URLS 77
+#define HTTP_QUERY_PASSPORT_CONFIG 78
+
+#define HTTP_QUERY_X_CONTENT_TYPE_OPTIONS 79
+#define HTTP_QUERY_P3P 80
+#define HTTP_QUERY_X_P2P_PEERDIST 81
+#define HTTP_QUERY_TRANSLATE 82
+#define HTTP_QUERY_X_UA_COMPATIBLE 83
+#define HTTP_QUERY_DEFAULT_STYLE 84
+#define HTTP_QUERY_X_FRAME_OPTIONS 85
+#define HTTP_QUERY_X_XSS_PROTECTION 86
+
+#define HTTP_QUERY_SET_COOKIE2 87
+
+#define HTTP_QUERY_DO_NOT_TRACK 88
+
+#define HTTP_QUERY_KEEP_ALIVE 89
+
+#define HTTP_QUERY_HTTP2_SETTINGS 90
+
+#define HTTP_QUERY_STRICT_TRANSPORT_SECURITY 91
+
+#define HTTP_QUERY_TOKEN_BINDING 92
+
+#define HTTP_QUERY_INCLUDE_REFERRED_TOKEN_BINDING_ID 93
+#define HTTP_QUERY_INCLUDE_REFERER_TOKEN_BINDING_ID HTTP_QUERY_INCLUDE_REFERRED_TOKEN_BINDING_ID
+
+#define HTTP_QUERY_PUBLIC_KEY_PINS 94
+#define HTTP_QUERY_PUBLIC_KEY_PINS_REPORT_ONLY 95
+
+#define HTTP_QUERY_FLAG_REQUEST_HEADERS 0x80000000
+#define HTTP_QUERY_FLAG_SYSTEMTIME 0x40000000
+#define HTTP_QUERY_FLAG_NUMBER 0x20000000
+#define HTTP_QUERY_FLAG_COALESCE 0x10000000
+#define HTTP_QUERY_FLAG_NUMBER64 0x08000000
+#define HTTP_QUERY_FLAG_COALESCE_WITH_COMMA 0x04000000
+#define HTTP_QUERY_MODIFIER_FLAGS_MASK (HTTP_QUERY_FLAG_REQUEST_HEADERS | HTTP_QUERY_FLAG_SYSTEMTIME | HTTP_QUERY_FLAG_NUMBER | HTTP_QUERY_FLAG_COALESCE | HTTP_QUERY_FLAG_NUMBER64 | HTTP_QUERY_FLAG_COALESCE_WITH_COMMA)
+#define HTTP_QUERY_HEADER_MASK (~HTTP_QUERY_MODIFIER_FLAGS_MASK)
+
+WINDOWS_IMPORT int WINAPI InternetReadFile(HINTERNET hFile,LPVOID lpBuffer,DWORD dwNumberOfBytesToRead,LPDWORD lpdwNumberOfBytesRead);
+
+WINDOWS_IMPORT int WINAPI InternetCloseHandle(HINTERNET hInternet);
+
+WINDOWS_IMPORT DWORD WINAPI GetEnvironmentVariableW(LPCWSTR lpName,LPWSTR  lpBuffer,DWORD   nSize);
+
+
 /* End include: windows_loader.h */
     #endif // _WINDOWS_
 
@@ -7059,6 +7297,39 @@ bool sys_is_directory(string path) {
     return S_ISDIR(st.st_mode);
 }
 
+extern char **environ;
+
+OSTD_LIB u64 sys_get_environment_variable(string name, u8 *out) {
+   if (!name.data || !name.count) return 0;
+
+   char **env = environ;
+
+   for (; *env; env++) {
+      char *entry = *env;
+
+      u64 i = 0;
+      while (entry[i] && entry[i] != '=') i++;
+
+      if (i != name.count) continue;
+
+      if (memcmp(entry, name.data, name.count) != 0) continue;
+
+      char *value = entry + i + 1;
+
+      u64 len = 0;
+      while (value[len]) len++;
+
+      if (len) {
+         if (out) memcpy(out, value, len);
+         return len;
+      }
+
+      return 0;
+   }
+
+   return 0;
+}
+
 
 unit_local int _to_win_sock_err(Socket_Result r) {
     switch(r) {
@@ -7462,6 +7733,7 @@ Thread_Handle sys_get_current_thread(void) {
     #pragma comment(lib, "ws2_32.lib")
     #pragma comment(lib, "shell32")
     #pragma comment(lib, "Msimg32.lib")
+    #pragma comment(lib, "wininet.lib")
 #ifndef OSTD_HEADLESS
     #pragma comment(lib, "gdi32")
     #pragma comment(lib, "dxgi")
@@ -7472,9 +7744,15 @@ Thread_Handle sys_get_current_thread(void) {
 
 
 unit_local u64 _win_utf8_to_wide(string utf8, u16 *result, u64 result_max) {
-    u64 n = (u64)MultiByteToWideChar(CP_UTF8, 0, (LPCCH)utf8.data, (int)utf8.count, (LPWSTR)result, (int)result_max);
-    if (n < result_max) result[n] = 0;
-    return n;
+   u64 n = (u64)MultiByteToWideChar(CP_UTF8, 0, (LPCCH)utf8.data, (int)utf8.count, (LPWSTR)result, (int)result_max);
+
+   if (!n) return 0;
+
+   if (n >= result_max) n = result_max - 1;
+
+   result[n] = 0;
+
+   return n;
 }
 
 
@@ -8302,6 +8580,26 @@ OSTD_LIB u64 sys_get_clipboard_text(u8 *out, u64 out_max) {
 		CloseClipboard();
 	}
 	return n;
+}
+
+OSTD_LIB u64 sys_get_environment_variable(string name, u8 *out) {
+    u16 wide_in[1024];
+    if (_win_utf8_to_wide(name, wide_in, 1024)) {
+        u16 wide_out[1024];
+        u64 n = GetEnvironmentVariableW(wide_in, wide_out, 1024);
+        DWORD err = GetLastError(); (void)err;
+        if (!n) return 0;
+        
+        u8 utf8_backing[1024];
+        string utf8 = (string) {0, utf8_backing};
+        _win_wide_to_utf8(wide_out, &utf8);
+        
+        if (utf8.count) {
+            if (out) memcpy(out, utf8.data, utf8.count);
+            return utf8.count;
+        }
+    }
+    return 0;
 }
 
 
@@ -11654,52 +11952,98 @@ s64 string_to_signed_int(string str, int base, bool *success)
 
 float64 string_to_float(string str, bool *success)
 {
-    u8 *p = str.data;
+   u8 *p = str.data;
+   u8 *end = str.data + str.count;
 
-    while (*p == ' ' || *p == '\t' || *p == '\n' ||
-           *p == '\r' || *p == '\f' || *p == '\v') {
-        p++;
-    }
+   while (p < end && (*p == ' ' || *p == '\t' || *p == '\n' ||
+          *p == '\r' || *p == '\f' || *p == '\v')) {
+      p++;
+   }
 
-    int sign = 1;
-    if (*p == '-') {
-        sign = -1;
-        p++;
-    } else if (*p == '+') {
-        p++;
-    }
+   int sign = 1;
+   if (p < end && *p == '-') {
+      sign = -1;
+      p++;
+   } else if (p < end && *p == '+') {
+      p++;
+   }
 
-    float64 value = 0.0;
-    float64 fraction = 0.0;
-    float64 divisor = 1.0;
+   float64 value = 0.0;
+   float64 fraction = 0.0;
+   float64 divisor = 1.0;
+   bool got_any_digits = false;
 
-    while (*p >= '0' && *p <= '9') {
-        value = (value * 10.0) + (float64)(*p - '0');
-        p++;
-    }
+   while (p < end && *p >= '0' && *p <= '9') {
+      value = (value * 10.0) + (float64)(*p - '0');
+      p++;
+      got_any_digits = true;
+   }
 
-    if (*p == '.') {
-        p++;
-        while (*p >= '0' && *p <= '9') {
-            fraction = (fraction * 10.0) + (float64)(*p - '0');
-            divisor *= 10.0;
-            p++;
-        }
-    }
-    
-    if (p != str.data+str.count) {
-        if (success) *success = false;
-        return 0;
-    }
+   if (p < end && *p == '.') {
+      p++;
+      while (p < end && *p >= '0' && *p <= '9') {
+         fraction = (fraction * 10.0) + (float64)(*p - '0');
+         divisor *= 10.0;
+         p++;
+         got_any_digits = true;
+      }
+   }
 
-    value = value + (fraction / divisor);
+   if (!got_any_digits) {
+      if (success) *success = false;
+      return 0;
+   }
 
-    if (sign < 0) {
-        value = -value;
-    }
+   value = value + (fraction / divisor);
 
-    if (success) *success = true;
-    return value;
+   if (p < end && (*p == 'e' || *p == 'E')) {
+      p++;
+
+      int exponent_sign = 1;
+      if (p < end && *p == '-') {
+         exponent_sign = -1;
+         p++;
+      } else if (p < end && *p == '+') {
+         p++;
+      }
+
+      int exponent = 0;
+      bool got_exponent_digits = false;
+      while (p < end && *p >= '0' && *p <= '9') {
+         exponent = (exponent * 10) + (int)(*p - '0');
+         p++;
+         got_exponent_digits = true;
+      }
+
+      if (!got_exponent_digits) {
+         if (success) *success = false;
+         return 0;
+      }
+
+      if (exponent_sign > 0) {
+         while (exponent > 0) {
+            value *= 10.0;
+            exponent--;
+         }
+      } else {
+         while (exponent > 0) {
+            value /= 10.0;
+            exponent--;
+         }
+      }
+   }
+   
+   if (p != end) {
+      if (success) *success = false;
+      return 0;
+   }
+
+   if (sign < 0) {
+      value = -value;
+   }
+
+   if (success) *success = true;
+   return value;
 }
 
 // todo(charlie) move to appropriate file

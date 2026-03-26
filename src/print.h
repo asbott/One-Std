@@ -569,52 +569,98 @@ s64 string_to_signed_int(string str, int base, bool *success)
 
 float64 string_to_float(string str, bool *success)
 {
-    u8 *p = str.data;
+   u8 *p = str.data;
+   u8 *end = str.data + str.count;
 
-    while (*p == ' ' || *p == '\t' || *p == '\n' ||
-           *p == '\r' || *p == '\f' || *p == '\v') {
-        p++;
-    }
+   while (p < end && (*p == ' ' || *p == '\t' || *p == '\n' ||
+          *p == '\r' || *p == '\f' || *p == '\v')) {
+      p++;
+   }
 
-    int sign = 1;
-    if (*p == '-') {
-        sign = -1;
-        p++;
-    } else if (*p == '+') {
-        p++;
-    }
+   int sign = 1;
+   if (p < end && *p == '-') {
+      sign = -1;
+      p++;
+   } else if (p < end && *p == '+') {
+      p++;
+   }
 
-    float64 value = 0.0;
-    float64 fraction = 0.0;
-    float64 divisor = 1.0;
+   float64 value = 0.0;
+   float64 fraction = 0.0;
+   float64 divisor = 1.0;
+   bool got_any_digits = false;
 
-    while (*p >= '0' && *p <= '9') {
-        value = (value * 10.0) + (float64)(*p - '0');
-        p++;
-    }
+   while (p < end && *p >= '0' && *p <= '9') {
+      value = (value * 10.0) + (float64)(*p - '0');
+      p++;
+      got_any_digits = true;
+   }
 
-    if (*p == '.') {
-        p++;
-        while (*p >= '0' && *p <= '9') {
-            fraction = (fraction * 10.0) + (float64)(*p - '0');
-            divisor *= 10.0;
-            p++;
-        }
-    }
-    
-    if (p != str.data+str.count) {
-        if (success) *success = false;
-        return 0;
-    }
+   if (p < end && *p == '.') {
+      p++;
+      while (p < end && *p >= '0' && *p <= '9') {
+         fraction = (fraction * 10.0) + (float64)(*p - '0');
+         divisor *= 10.0;
+         p++;
+         got_any_digits = true;
+      }
+   }
 
-    value = value + (fraction / divisor);
+   if (!got_any_digits) {
+      if (success) *success = false;
+      return 0;
+   }
 
-    if (sign < 0) {
-        value = -value;
-    }
+   value = value + (fraction / divisor);
 
-    if (success) *success = true;
-    return value;
+   if (p < end && (*p == 'e' || *p == 'E')) {
+      p++;
+
+      int exponent_sign = 1;
+      if (p < end && *p == '-') {
+         exponent_sign = -1;
+         p++;
+      } else if (p < end && *p == '+') {
+         p++;
+      }
+
+      int exponent = 0;
+      bool got_exponent_digits = false;
+      while (p < end && *p >= '0' && *p <= '9') {
+         exponent = (exponent * 10) + (int)(*p - '0');
+         p++;
+         got_exponent_digits = true;
+      }
+
+      if (!got_exponent_digits) {
+         if (success) *success = false;
+         return 0;
+      }
+
+      if (exponent_sign > 0) {
+         while (exponent > 0) {
+            value *= 10.0;
+            exponent--;
+         }
+      } else {
+         while (exponent > 0) {
+            value /= 10.0;
+            exponent--;
+         }
+      }
+   }
+   
+   if (p != end) {
+      if (success) *success = false;
+      return 0;
+   }
+
+   if (sign < 0) {
+      value = -value;
+   }
+
+   if (success) *success = true;
+   return value;
 }
 
 // todo(charlie) move to appropriate file

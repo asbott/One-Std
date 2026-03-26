@@ -110,6 +110,9 @@ OSTD_LIB void sys_exit_current_thread(s64 code);
 OSTD_LIB void sys_set_clipboard_text(string text);
 OSTD_LIB u64 sys_get_clipboard_text(u8 *out, u64 out_max);
 
+// returns length, u8 *out is the string
+OSTD_LIB u64 sys_get_environment_variable(string name, u8 *out);
+
 //////
 // Sockets
 //////
@@ -1079,6 +1082,39 @@ bool sys_is_directory(string path) {
     return S_ISDIR(st.st_mode);
 }
 
+extern char **environ;
+
+OSTD_LIB u64 sys_get_environment_variable(string name, u8 *out) {
+   if (!name.data || !name.count) return 0;
+
+   char **env = environ;
+
+   for (; *env; env++) {
+      char *entry = *env;
+
+      u64 i = 0;
+      while (entry[i] && entry[i] != '=') i++;
+
+      if (i != name.count) continue;
+
+      if (memcmp(entry, name.data, name.count) != 0) continue;
+
+      char *value = entry + i + 1;
+
+      u64 len = 0;
+      while (value[len]) len++;
+
+      if (len) {
+         if (out) memcpy(out, value, len);
+         return len;
+      }
+
+      return 0;
+   }
+
+   return 0;
+}
+
 
 unit_local int _to_win_sock_err(Socket_Result r) {
     switch(r) {
@@ -1482,6 +1518,7 @@ Thread_Handle sys_get_current_thread(void) {
     #pragma comment(lib, "ws2_32.lib")
     #pragma comment(lib, "shell32")
     #pragma comment(lib, "Msimg32.lib")
+    #pragma comment(lib, "wininet.lib")
 #ifndef OSTD_HEADLESS
     #pragma comment(lib, "gdi32")
     #pragma comment(lib, "dxgi")
@@ -1492,9 +1529,15 @@ Thread_Handle sys_get_current_thread(void) {
 
 
 unit_local u64 _win_utf8_to_wide(string utf8, u16 *result, u64 result_max) {
-    u64 n = (u64)MultiByteToWideChar(CP_UTF8, 0, (LPCCH)utf8.data, (int)utf8.count, (LPWSTR)result, (int)result_max);
-    if (n < result_max) result[n] = 0;
-    return n;
+   u64 n = (u64)MultiByteToWideChar(CP_UTF8, 0, (LPCCH)utf8.data, (int)utf8.count, (LPWSTR)result, (int)result_max);
+
+   if (!n) return 0;
+
+   if (n >= result_max) n = result_max - 1;
+
+   result[n] = 0;
+
+   return n;
 }
 
 
@@ -2322,6 +2365,26 @@ OSTD_LIB u64 sys_get_clipboard_text(u8 *out, u64 out_max) {
 		CloseClipboard();
 	}
 	return n;
+}
+
+OSTD_LIB u64 sys_get_environment_variable(string name, u8 *out) {
+    u16 wide_in[1024];
+    if (_win_utf8_to_wide(name, wide_in, 1024)) {
+        u16 wide_out[1024];
+        u64 n = GetEnvironmentVariableW(wide_in, wide_out, 1024);
+        DWORD err = GetLastError(); (void)err;
+        if (!n) return 0;
+        
+        u8 utf8_backing[1024];
+        string utf8 = (string) {0, utf8_backing};
+        _win_wide_to_utf8(wide_out, &utf8);
+        
+        if (utf8.count) {
+            if (out) memcpy(out, utf8.data, utf8.count);
+            return utf8.count;
+        }
+    }
+    return 0;
 }
 
 
