@@ -5510,3 +5510,222 @@ WINDOWS_IMPORT int WINAPI InternetCloseHandle(HINTERNET hInternet);
 
 WINDOWS_IMPORT DWORD WINAPI GetEnvironmentVariableW(LPCWSTR lpName,LPWSTR  lpBuffer,DWORD   nSize);
 
+#define NIM_ADD 0x00000000
+#define NIM_MODIFY 0x00000001
+#define NIM_DELETE 0x00000002
+#define NIM_SETFOCUS 0x00000003
+#define NIM_SETVERSION 0x00000004
+
+#define NTDDI_VERSION_FROM_WIN32_WINNT2(ver)    ver##0000
+#define NTDDI_VERSION_FROM_WIN32_WINNT(ver)     NTDDI_VERSION_FROM_WIN32_WINNT2(ver)
+
+#if !defined(_WIN32_WINNT) && !defined(_CHICAGO_)
+#define  _WIN32_WINNT   0x0A00
+#endif
+
+#ifndef NTDDI_VERSION
+#ifdef _WIN32_WINNT
+#if (_WIN32_WINNT <= _WIN32_WINNT_WINBLUE)
+// set NTDDI_VERSION based on _WIN32_WINNT
+#define NTDDI_VERSION   NTDDI_VERSION_FROM_WIN32_WINNT(_WIN32_WINNT)
+#elif (_WIN32_WINNT >= _WIN32_WINNT_WIN10)
+// set NTDDI_VERSION to default to WDK_NTDDI_VERSION
+#define NTDDI_VERSION   WDK_NTDDI_VERSION
+#endif // (_WIN32_WINNT <= _WIN32_WINNT_WINBLUE)
+#else
+// set NTDDI_VERSION to default to latest if _WIN32_WINNT isn't set
+#define NTDDI_VERSION   0x0A00000C
+#endif // _WIN32_WINNT
+#endif // NTDDI_VERSION
+
+typedef struct _NOTIFYICONDATAA {
+    DWORD cbSize;
+    HWND hWnd;
+    UINT uID;
+    UINT uFlags;
+    UINT uCallbackMessage;
+    HICON hIcon;
+#if (NTDDI_VERSION < NTDDI_WIN2K)
+    CHAR   szTip[64];
+#endif
+#if (NTDDI_VERSION >= NTDDI_WIN2K)
+    CHAR   szTip[128];
+    DWORD dwState;
+    DWORD dwStateMask;
+    CHAR   szInfo[256];
+#ifndef _SHELL_EXPORTS_INTERNALAPI_H_
+    union {
+        UINT  uTimeout;
+        UINT  uVersion;  // used with NIM_SETVERSION, values 0, 3 and 4
+    } DUMMYUNIONNAME;
+#endif
+    CHAR   szInfoTitle[64];
+    DWORD dwInfoFlags;
+#endif
+#if (NTDDI_VERSION >= NTDDI_WINXP)
+    GUID guidItem;
+#endif
+#if (NTDDI_VERSION >= NTDDI_VISTA)
+    HICON hBalloonIcon;
+#endif
+} NOTIFYICONDATAA, *PNOTIFYICONDATAA;
+typedef struct _NOTIFYICONDATAW {
+    DWORD cbSize;
+    HWND hWnd;
+    UINT uID;
+    UINT uFlags;
+    UINT uCallbackMessage;
+    HICON hIcon;
+#if (NTDDI_VERSION < NTDDI_WIN2K)
+    WCHAR  szTip[64];
+#endif
+#if (NTDDI_VERSION >= NTDDI_WIN2K)
+    WCHAR  szTip[128];
+    DWORD dwState;
+    DWORD dwStateMask;
+    WCHAR  szInfo[256];
+#ifndef _SHELL_EXPORTS_INTERNALAPI_H_
+    union {
+        UINT  uTimeout;
+        UINT  uVersion;  // used with NIM_SETVERSION, values 0, 3 and 4
+    } DUMMYUNIONNAME;
+#endif
+    WCHAR  szInfoTitle[64];
+    DWORD dwInfoFlags;
+#endif
+#if (NTDDI_VERSION >= NTDDI_WINXP)
+    GUID guidItem;
+#endif
+#if (NTDDI_VERSION >= NTDDI_VISTA)
+    HICON hBalloonIcon;
+#endif
+} NOTIFYICONDATAW, *PNOTIFYICONDATAW;
+
+WINDOWS_IMPORT BOOL WINAPI Shell_NotifyIconW( DWORD dwMessage, PNOTIFYICONDATAW lpData);
+
+#define NIF_MESSAGE     0x00000001
+#define NIF_ICON        0x00000002
+#define NIF_TIP         0x00000004
+#define NIF_STATE       0x00000008
+#define NIF_INFO        0x00000010
+
+#define NOTIFYICON_VERSION 3
+#if NTDDI_VERSION >= 0x06000000
+#define NOTIFYICON_VERSION_4 4
+#endif
+
+WINDOWS_IMPORT HMENU WINAPI CreatePopupMenu(void);
+
+WINDOWS_IMPORT BOOL WINAPI AppendMenuW( HMENU hMenu, UINT uFlags, UINT_PTR uIDNewItem, LPCWSTR lpNewItem);
+
+#define MF_INSERT 0x00000000L
+#define MF_CHANGE 0x00000080L
+#define MF_APPEND 0x00000100L
+#define MF_DELETE 0x00000200L
+#define MF_REMOVE 0x00001000L
+#define MF_BYCOMMAND 0x00000000L
+#define MF_BYPOSITION 0x00000400L
+#define MF_SEPARATOR 0x00000800L
+#define MF_ENABLED 0x00000000L
+#define MF_GRAYED 0x00000001L
+#define MF_DISABLED 0x00000002L
+#define MF_UNCHECKED 0x00000000L
+#define MF_CHECKED 0x00000008L
+#define MF_USECHECKBITMAPS 0x00000200L
+#define MF_STRING 0x00000000L
+#define MF_BITMAP 0x00000004L
+#define MF_OWNERDRAW 0x00000100L
+#define MF_POPUP 0x00000010L
+#define MF_MENUBARBREAK 0x00000020L
+#define MF_MENUBREAK 0x00000040L
+#define MF_UNHILITE 0x00000000L
+#define MF_HILITE 0x00000080L
+#define MF_DEFAULT 0x00001000L
+#define MF_SYSMENU 0x00002000L
+#define MF_HELP 0x00004000L
+#define MF_RIGHTJUSTIFY 0x00004000L
+#define MF_MOUSESELECT 0x00008000L
+#define MF_END 0x00000080L
+
+WINDOWS_IMPORT BOOL WINAPI SetForegroundWindow(HWND hWnd);
+
+WINDOWS_IMPORT BOOL WINAPI TrackPopupMenu( HMENU hMenu, UINT uFlags, int x, int y, int nReserved, HWND hWnd, const RECT *prcRect);
+
+#define TPM_LEFTBUTTON 0x0000L
+#define TPM_RIGHTBUTTON 0x0002L
+#define TPM_LEFTALIGN 0x0000L
+#define TPM_CENTERALIGN 0x0004L
+#define TPM_RIGHTALIGN 0x0008L
+#define TPM_TOPALIGN 0x0000L
+#define TPM_VCENTERALIGN 0x0010L
+#define TPM_BOTTOMALIGN 0x0020L
+
+#define TPM_HORIZONTAL 0x0000L
+#define TPM_VERTICAL 0x0040L
+#define TPM_NONOTIFY 0x0080L
+#define TPM_RETURNCMD 0x0100L
+#define TPM_RECURSE 0x0001L
+#define TPM_HORPOSANIMATION 0x0400L
+#define TPM_HORNEGANIMATION 0x0800L
+#define TPM_VERPOSANIMATION 0x1000L
+#define TPM_VERNEGANIMATION 0x2000L
+#define TPM_NOANIMATION 0x4000L
+#define TPM_LAYOUTRTL 0x8000L
+
+WINDOWS_IMPORT BOOL WINAPI DestroyMenu(HMENU hMenu);
+
+typedef struct _MEM_ADDRESS_REQUIREMENTS {
+    PVOID LowestStartingAddress;
+    PVOID HighestEndingAddress;
+    size_t Alignment;
+  } MEM_ADDRESS_REQUIREMENTS, *PMEM_ADDRESS_REQUIREMENTS;
+
+#define MEM_EXTENDED_PARAMETER_GRAPHICS 0x01
+#define MEM_EXTENDED_PARAMETER_NONPAGED 0x02
+#define MEM_EXTENDED_PARAMETER_ZERO_PAGES_OPTIONAL 0x04
+#define MEM_EXTENDED_PARAMETER_NONPAGED_LARGE 0x08
+#define MEM_EXTENDED_PARAMETER_NONPAGED_HUGE 0x10
+#define MEM_EXTENDED_PARAMETER_SOFT_FAULT_PAGES 0x20
+#define MEM_EXTENDED_PARAMETER_EC_CODE 0x40
+#define MEM_EXTENDED_PARAMETER_IMAGE_NO_HPAT 0x80
+
+typedef enum MEM_EXTENDED_PARAMETER_TYPE {
+  MemExtendedParameterInvalidType = 0,
+  MemExtendedParameterAddressRequirements,
+  MemExtendedParameterNumaNode,
+  MemExtendedParameterPartitionHandle,
+  MemExtendedParameterUserPhysicalHandle,
+  MemExtendedParameterAttributeFlags,
+  MemExtendedParameterImageMachine,
+  MemExtendedParameterMax
+} MEM_EXTENDED_PARAMETER_TYPE, *PMEM_EXTENDED_PARAMETER_TYPE;
+
+#define MEM_EXTENDED_PARAMETER_TYPE_BITS 8
+
+typedef struct DECLSPEC_ALIGN(8) MEM_EXTENDED_PARAMETER {
+  struct {
+      DWORD64 Type;
+      DWORD64 Reserved;
+  } DUMMYUNIONNAME1;
+  union {
+      DWORD64 ULong64;
+      PVOID Pointer;
+      size_t Size;
+      HANDLE Handle;
+      DWORD ULong;
+  } DUMMYUNIONNAME2;
+} MEM_EXTENDED_PARAMETER, *PMEM_EXTENDED_PARAMETER;
+
+WINDOWS_IMPORT PVOID WINAPI VirtualAlloc2( HANDLE Process, PVOID BaseAddress, size_t Size, ULONG AllocationType, ULONG PageProtection, MEM_EXTENDED_PARAMETER  *ExtendedParameters, ULONG ParameterCount);
+
+
+WINDOWS_IMPORT PVOID WINAPI MapViewOfFile3( HANDLE FileMapping, HANDLE Process, PVOID BaseAddress, ULONG64 Offset, size_t ViewSize, ULONG AllocationType, ULONG PageProtection, MEM_EXTENDED_PARAMETER  *ExtendedParameters, ULONG ParameterCount);
+
+WINDOWS_IMPORT BOOL WINAPI UnmapViewOfFile2( HANDLE Process, PVOID BaseAddress, ULONG UnmapFlags);
+
+WINDOWS_IMPORT HANDLE WINAPI CreateFileMappingW( HANDLE hFile, LPSECURITY_ATTRIBUTES lpFileMappingAttributes, DWORD flProtect, DWORD dwMaximumSizeHigh, DWORD dwMaximumSizeLow, LPCWSTR lpName);
+
+WINDOWS_IMPORT BOOL WINAPI SetEvent(HANDLE hEvent);
+
+WINDOWS_IMPORT HWND WINAPI WindowFromPoint(POINT Point);
+

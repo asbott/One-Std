@@ -56,6 +56,12 @@ typedef struct Arena {
     void *position;
     u64 reserved_size;
     u64 allocated_size;
+    
+    f64 growth_factor;
+    
+    bool swappable;
+    bool enable_coalescing;
+    bool is_swapped_to_file;
 } Arena;
 
 OSTD_LIB Arena make_arena(u64 reserved_size, u64 initial_allocated_size);
@@ -121,6 +127,9 @@ OSTD_LIB string string_copy(Allocator a, string s);
         persistent_array_uninit(my_array);
 */
 
+OSTD_LIB void persistent_array_push_hint_reserved_size(u64 reserved_size);
+OSTD_LIB void persistent_array_push_hint_swappable(bool swappable);
+
 OSTD_LIB void persistent_array_init(void **pparray, u64 element_size);
 OSTD_LIB void persistent_array_uninit(void *parray);
 OSTD_LIB void *persistent_array_push_copy(void *parray, void *item);
@@ -134,6 +143,9 @@ OSTD_LIB s64 persistent_array_find_from_left(void *parray, void *pcompare_mem);
 OSTD_LIB s64 persistent_array_find_from_right(void *parray, void *pcompare_mem);
 OSTD_LIB void persistent_array_set_count(void *parray, u64 count);
 OSTD_LIB u64 persistent_array_count(void *parray);
+
+OSTD_LIB bool persistent_array_swap_to_file(void *parray, File_Handle file);
+OSTD_LIB bool persistent_array_swap_to_memory(void *parray);
 
 typedef struct Arena_Backed_Array_Header {
     Arena arena;
@@ -212,7 +224,7 @@ Arena make_arena(u64 reserved_size, u64 initial_allocated_size) {
 
     assert(initial_allocated_size <= reserved_size);
 
-    Arena arena;
+    Arena arena = (Arena){0};
 
     if (reserved_size > initial_allocated_size) {
         arena.start = sys_map_pages(SYS_MEMORY_RESERVE, 0, reserved_size/info.page_size, false);
@@ -230,6 +242,50 @@ Arena make_arena(u64 reserved_size, u64 initial_allocated_size) {
 
     arena.reserved_size = reserved_size;
     arena.allocated_size = initial_allocated_size;
+    
+    arena.swappable = false;
+    
+    arena.growth_factor = 2.0;
+    
+    return arena;
+}
+Arena make_swappable_arena(u64 reserved_size, u64 initial_allocated_size) {
+    assert(reserved_size >= initial_allocated_size);
+
+#if OS_FLAGS & OS_FLAG_EMSCRIPTEN
+    assertmsg(reserved_size == initial_allocated_size, "Emscripten does not support reserved-only memory allocations. Arena initial allocation size must match reserved_size");
+#endif // OS_FLAGS & OS_FLAG_EMSCRIPTEN
+
+    System_Info info = sys_get_info();
+
+    // Align to page size
+    reserved_size = (reserved_size + info.page_size - 1) & ~(info.page_size - 1);
+    initial_allocated_size = (initial_allocated_size + info.page_size - 1) & ~(info.page_size - 1);
+
+    assert(initial_allocated_size <= reserved_size);
+
+    Arena arena = (Arena){0};
+
+    if (reserved_size > initial_allocated_size) {
+        arena.start = sys_map_swappable_pages(SYS_MEMORY_RESERVE, 0, reserved_size/info.page_size, false);
+        assert(arena.start);
+        if (initial_allocated_size) {
+            void *allocate_result = sys_map_swappable_pages(SYS_MEMORY_ALLOCATE, arena.start, initial_allocated_size/info.page_size, true);
+            assert(allocate_result == arena.start);
+        }
+    } else {
+        arena.start = sys_map_swappable_pages(SYS_MEMORY_RESERVE | SYS_MEMORY_ALLOCATE, 0, reserved_size/info.page_size, false);
+    }
+
+    arena.position = arena.start;
+
+
+    arena.reserved_size = reserved_size;
+    arena.allocated_size = initial_allocated_size;
+    
+    arena.growth_factor = 2.0;
+    
+    arena.swappable = true;
 
     return arena;
 }
@@ -237,22 +293,7 @@ void arena_reset(Arena *arena) {
     arena->position = arena->start;
 }
 void free_arena(Arena arena) {
-    if (!arena.allocated_size) {
-        sys_unmap_pages(arena.start);
-        return;
-    }
-    void *start = arena.start;
-    void *end = (u8*)arena.start + arena.reserved_size;
-
-    u64 pointer_count = sys_query_mapped_regions(start, end, 0, 0);
-
-    Mapped_Memory_Info *pointers = (Mapped_Memory_Info *)arena.start;
-    sys_query_mapped_regions(start, end, pointers, pointer_count);
-
-    u32 i;
-    for (i = 0; i < pointer_count; i += 1) {
-        sys_unmap_pages(pointers[i].base);
-    }
+    sys_unmap_pages(arena.start);
 }
 
 void *arena_push(Arena *arena, u64 size) {
@@ -268,14 +309,25 @@ void *arena_push(Arena *arena, u64 size) {
 
     if ((u64)arena->position + size > (u64)allocated_tail) {
 
-        u64 amount_to_allocate = ((u64)arena->position + size) - (u64)allocated_tail;
+        //u64 amount_to_allocate = ((u64)arena->position + size) - (u64)allocated_tail;
+        u64 amount_to_allocate = (u64)((f64)arena->allocated_size * arena->growth_factor) - arena->allocated_size;
+        amount_to_allocate = max(amount_to_allocate, size);
+        amount_to_allocate = min(amount_to_allocate, arena->reserved_size - arena->allocated_size);
+        amount_to_allocate = max(amount_to_allocate, info.page_size);
 
         amount_to_allocate = (amount_to_allocate + info.page_size-1) & ~(info.page_size-1);
 
         u64 pages_to_allocate = amount_to_allocate / info.page_size;
 
-        void *allocate_result = sys_map_pages(SYS_MEMORY_ALLOCATE, allocated_tail, pages_to_allocate, true);
+        void *allocate_result = arena->swappable
+            ? sys_map_swappable_pages(SYS_MEMORY_ALLOCATE, allocated_tail, pages_to_allocate, true)
+            : sys_map_pages(SYS_MEMORY_ALLOCATE, allocated_tail, pages_to_allocate, true);
         assertmsg(allocate_result == allocated_tail, "Failed allocating pages in arena");
+        
+        if (arena->swappable && arena->enable_coalescing) {
+            bool ok = sys_coalesce_swappable_pages(arena->start, (u64)arena->position - (u64)arena->start);
+            assert(ok);
+        }
 
         arena->allocated_size += amount_to_allocate;
     }
@@ -339,6 +391,18 @@ void* arena_allocator_proc(Allocator_Message msg, void *data, void *old, u64 old
     return 0;
 }
 
+// Leave size at 0 to make a file for entire arena reserved range
+bool arena_swap_to_file(Arena *arena, File_Handle f, u64 size) {
+    bool ok = sys_swap_pages_to_file(arena->start, f, size);
+    if (ok) arena->is_swapped_to_file = true;
+    return ok;
+}
+bool arena_swap_to_memory(Arena *arena, u64 max_read) {
+    bool ok = sys_swap_pages_to_memory(arena->start, max_read);
+    if (ok) arena->is_swapped_to_file = false;
+    return ok;
+}
+
 void *allocate(Allocator a, u64 n) {
     return a.proc(ALLOCATOR_ALLOCATE, a.data, 0, 0, n, 0, 0);
 }
@@ -381,9 +445,27 @@ unit_local Arena_Backed_Array_Header *_persistent_header(void *parray) {
     return h;
 }
 
+unit_local u64 _ostd_persistent_array_next_reserved_size = 0;
+unit_local bool _ostd_persistent_array_next_swappable = false;
+
+void persistent_array_push_hint_reserved_size(u64 reserved_size) {
+    _ostd_persistent_array_next_reserved_size = reserved_size;
+}
+void persistent_array_push_hint_swappable(bool swappable) {
+    _ostd_persistent_array_next_swappable = swappable;
+}
+
 void persistent_array_init(void **pparray, u64 element_size) {
     // todo(charlie) configurable
-    Arena arena = make_arena(1024ULL*1024ULL*1024ULL*4ULL, 0);
+    Arena arena;
+    
+    u64 reserved_size = _ostd_persistent_array_next_reserved_size ? (_ostd_persistent_array_next_reserved_size + sizeof(Arena_Backed_Array_Header)) : 1024ULL*1024ULL*1024ULL*4ULL;
+    
+    if (_ostd_persistent_array_next_swappable) {
+        arena = make_swappable_arena(reserved_size, 0);
+    } else {
+        arena = make_arena(reserved_size, 0);
+    }
     
     Arena_Backed_Array_Header *header = (Arena_Backed_Array_Header*)arena_push(&arena, sizeof(Arena_Backed_Array_Header));
     *header = (Arena_Backed_Array_Header){0};
@@ -392,7 +474,11 @@ void persistent_array_init(void **pparray, u64 element_size) {
     header->elem_size = element_size;
     
     *pparray = header->arena.position;
+    
+    _ostd_persistent_array_next_reserved_size = 0;
+    _ostd_persistent_array_next_swappable = false;
 }
+
 void persistent_array_uninit(void *parray) {
     Arena_Backed_Array_Header *h = _persistent_header(parray);
     free_arena(h->arena);
@@ -495,6 +581,17 @@ void persistent_array_set_count(void *parray, u64 count) {
 
 u64 persistent_array_count(void *parray) {
     return _persistent_header(parray)->count;
+}
+
+bool persistent_array_swap_to_file(void *parray, File_Handle file) {
+    Arena_Backed_Array_Header *h = _persistent_header(parray);
+    
+    return arena_swap_to_file(&h->arena, file, 0);
+}
+bool persistent_array_swap_to_memory(void *parray) {
+    Arena_Backed_Array_Header *h = _persistent_header(parray);
+    
+    return arena_swap_to_memory(&h->arena, 0);
 }
 
 #endif // OSTD_IMPL

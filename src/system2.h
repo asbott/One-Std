@@ -11,19 +11,78 @@
 #include "print.h"
 #endif // _PRINT_H
 
+OSTD_LIB void sys_logs_enable_print(File_Handle pipe, System_Log_Kind enabled_kinds, System_Log_Category enabled_categories);
+OSTD_LIB void sys_logs_disable_print(void);
+
 OSTD_LIB bool sys_read_entire_file(Allocator a, string path, string *result);
 OSTD_LIB bool sys_write_entire_file(string path, string data);
 
 OSTD_LIB bool sys_get_absolute_path(Allocator a, string path, string *result);
 
-//typedef struct Disk_Entry {
-//    u64 parent_index;
-//    string name;
-//    bool is_directory;
-//} Disk_Entry;
-//OSTD_LIB bool sys_scrape_disk(Allocator a, string disk_id, Disk_Entry *result, u64 *count);
-
 #ifdef OSTD_IMPL
+
+unit_local File_Handle _ostd_log_print_pipe = 0;
+unit_local System_Log_Kind _ostd_enabled_log_kinds = 0;
+unit_local System_Log_Category _ostd_enabled_log_categories = 0;
+unit_local Mutex _ostd_log_mutex;
+unit_local bool _ostd_log_mutex_initted = false;
+
+void _ostd_print_log(System_Log l) {
+    if (!_ostd_log_print_pipe) return;
+    
+    if (!(_ostd_enabled_log_kinds & l.kind) || !(_ostd_enabled_log_categories & l.category)) {
+        return;
+    }
+    
+    string function = (string) { l.function_length, l.function };
+    string message = (string) { l.message_length, l.message };
+    string os_name = (string) { l.os_name_length, l.os_name };
+    
+    sys_mutex_acquire(_ostd_log_mutex);
+    
+    switch (l.kind) {
+        case SYSTEM_LOG_OK: {
+            fprint(_ostd_log_print_pipe, "Function: %s\nID: %u\nOK\nMessage: %s\n", function, l.id, message);
+            break;
+        }
+        case SYSTEM_LOG_OS_CALL: {
+            fprint(_ostd_log_print_pipe, "Function: %s\nID: %u\nOS CALL: %s\nResult: %u\nHandle: %x\nMessage: %s\n", function, l.id, os_name, l.os_number, l.os_handle, message);
+            break;
+        }
+        case SYSTEM_LOG_ERROR: {
+            fprint(_ostd_log_print_pipe, "Function: %s\nID: %u\nERROR: %u\nMessage: %s\n", function, l.id, l.error, message);
+            break;
+        }
+        case SYSTEM_LOG_ENTER_SYS_FUNCTION: {
+            fprint(_ostd_log_print_pipe, "====== SYSTEM FUNCTION: %s\nID: %u\n", function, l.id);
+            break;
+        }
+        case SYSTEM_LOG_ALL: break;
+    }
+    
+    sys_print_stack_trace(_ostd_log_print_pipe);
+    
+    fprint(_ostd_log_print_pipe, "\n\n");
+    
+    sys_mutex_release(_ostd_log_mutex);
+}
+
+void sys_logs_enable_print(File_Handle pipe, System_Log_Kind enabled_kinds, System_Log_Category enabled_categories) {
+    if (!_ostd_log_mutex_initted) {
+        sys_mutex_init(&_ostd_log_mutex);
+    }
+    
+    _ostd_log_print_pipe = pipe;
+    _ostd_print_log_fn = _ostd_print_log;
+    _ostd_enabled_log_kinds = enabled_kinds;
+    _ostd_enabled_log_categories = enabled_categories;
+    
+}
+
+void sys_logs_disable_print(void) {
+    _ostd_log_print_pipe = 0;
+    _ostd_print_log_fn = 0;
+}
 
 bool sys_read_entire_file(Allocator a, string path, string *result) {
     const int MAX_ATTEMPTS = 100;

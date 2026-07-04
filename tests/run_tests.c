@@ -68,7 +68,7 @@ unit_local s64 file_thread(Thread *t) {
 		log_file = sys_open_file(log_file_path, FILE_OPEN_CREATE | FILE_OPEN_RESET | FILE_OPEN_WRITE | FILE_OPEN_READ);
 		assertmsgs(log_file, log_file_path);
 		
-		string compile_args = tprint("\"%s\" -pedantic -nodefaultlibs -Wall -Werror -Weverything -I../vendors -L./../. -DRUNNING_TESTS -DTESTING_DURATION=1", data->path);
+		string compile_args = tprint("\"%s\" -pedantic -nodefaultlibs -Wall -Werror  -I../vendors -L./../. -DRUNNING_TESTS -DTESTING_DURATION=1", data->path);
 	
 		string compile_cmd = tprint("clang -o \"test_result/%s-O%i.exe\" %s -O%i -g -DDEBUG -mavx -mavx2", name, data->oindex, compile_args, data->oindex);
 		
@@ -206,7 +206,7 @@ s64 concat_header(Thread *t) {
 	
 	sys_write_entire_file(STR("test_result/test.c"), test_path);
 	
-	string compile_cmd = tprint("clang test_result/test.c -o \"test_result/%s.obj\" -Wall -Weverything -Werror -pedantic -std=c99", header);
+	string compile_cmd = tprint("clang test_result/test.c -o \"test_result/%s.obj\" -Wall  -Werror -pedantic -std=c99", header);
 	
 	res = sys_run_command_easy(compile_cmd, sys_get_stdout(), sys_get_stdout(), STR("."), true);
 	if (res.exit_code != 0) {

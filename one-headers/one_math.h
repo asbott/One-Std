@@ -1,15 +1,15 @@
 // This file was generated from One-Std/src/math.h
 // The following files were included & concatenated:
-// - C:\One-Std\src\print.h
-// - C:\One-Std\src\windows_loader.h
-// - C:\One-Std\src\var_args_macros.h
-// - C:\One-Std\src\math.h
-// - C:\One-Std\src\string.h
 // - C:\One-Std\src\var_args.h
-// - C:\One-Std\src\system1.h
-// - C:\One-Std\src\trig_tables.h
 // - C:\One-Std\src\base.h
+// - C:\One-Std\src\math.h
+// - C:\One-Std\src\print.h
+// - C:\One-Std\src\var_args_macros.h
+// - C:\One-Std\src\windows_loader.h
 // - C:\One-Std\src\memory.h
+// - C:\One-Std\src\trig_tables.h
+// - C:\One-Std\src\system1.h
+// - C:\One-Std\src\string.h
 // I try to compile with -pedantic and -Weverything, but get really dumb warnings like these,
 // so I have to ignore them.
 #if defined(__GNUC__) || defined(__GNUG__)
@@ -1689,21 +1689,88 @@ OSTD_LIB u64 c_style_strcmp(const char *a, const char *b) {
 #ifndef _STRING_H
 #endif // _STRING_H
 
+typedef void* File_Handle;
+
+typedef enum System_Error {
+    SYSTEM_ERROR_NONE,
+    SYSTEM_ERROR_PAGE_MAPPING_REJECTED,
+    SYSTEM_ERROR_FREE_PAGES_REJECTED,
+    SYSTEM_ERROR_INTERNAL_ERROR,
+    SYSTEM_ERROR_DECOMMIT_UNCOMMITTED_REGION,
+    SYSTEM_ERROR_BAD_PAGE_REGION,
+    SYSTEM_ERROR_REJECTED_FILE_MAPPING,
+    SYSTEM_ERROR_BAD_COALESCE,
+    SYSTEM_ERROR_OUT_OF_MEMORY,
+} System_Error;
+
+typedef enum System_Log_Kind {
+    SYSTEM_LOG_OK = 1 << 0,
+    SYSTEM_LOG_OS_CALL = 1 << 1,
+    SYSTEM_LOG_ERROR = 1 << 2,
+    SYSTEM_LOG_ENTER_SYS_FUNCTION = 1 << 3,
+    
+    SYSTEM_LOG_ALL = (int)0xffffffff,
+} System_Log_Kind;
+
+typedef enum System_Log_Category {
+    SYSTEM_LOG_CATEGORY_PAGE_MAPPING = 1 << 0,
+    SYSTEM_LOG_CATEGORY_SYNC_PRIMITIVES = 1 << 1,
+    SYSTEM_LOG_CATEGORY_THREADS = 1 << 2,
+    SYSTEM_LOG_CATEGORY_IO = 1 << 3,
+    SYSTEM_LOG_CATEGORY_NET = 1 << 4,
+    SYSTEM_LOG_CATEGORY_SURFACE = 1 << 5,
+    SYSTEM_LOG_CATEGORY_EXECUTION = 1 << 6,
+    
+    SYSTEM_LOG_CATEGORY_MISC = 1 << 31,
+    
+    SYSTEM_LOG_CATEGORY_ALL = (int)0xffffffff,
+} System_Log_Category;
+
+typedef struct System_Log {
+    System_Log_Kind kind;
+    System_Log_Category category;
+    u64 os_number;
+    void *os_handle;
+    u64 os_name_length;
+    u8 os_name[64];
+    u64 function_length;
+    u8 function[64];
+    u64 id;
+    u64 error;
+    u64 message_length;
+    u8 message[256];
+} System_Log;
+
+System_Log sys_logs_get_last(void);
+
+//////
+// Page mapping
+//////
+
 #define SYS_MEMORY_RESERVE (1 << 0)
 #define SYS_MEMORY_ALLOCATE (1 << 1)
 
-void *sys_map_pages(u64 action, void *virtual_base, u64 number_of_pages, bool strict_base_address);
-bool sys_unmap_pages(void *address);
+OSTD_LIB void *sys_map_pages(u64 action, void *virtual_base, u64 number_of_pages, bool strict_base_address);
+OSTD_LIB bool sys_unmap_pages(void *address);
 // Deallocates, but keeps pages mapped & reserved
-bool sys_deallocate_pages(void *address, u64 number_of_pages);
+OSTD_LIB bool sys_deallocate_pages(void *address, u64 number_of_pages);
+
+// Can swap to disk
+OSTD_LIB void *sys_map_swappable_pages(u64 action, void *virtual_base, u64 number_of_pages, bool strict_base_address);
+// Leave size empty to make a file for the entire reserved range
+OSTD_LIB bool sys_swap_pages_to_file(void *base, File_Handle file, u64 size); // swap to pages being on disk, synchronous
+// leave max_read at 0 to read all committed regions. Otherwise it will only read committed reagions up to max_read.
+OSTD_LIB bool sys_swap_pages_to_memory(void *base, u64 max_read); // swap to pages being in memory, synchronous
+// leave max_preserve at 0 to preserve all committed bytes. Any past base + max_preserve will not be preserved, even if committed.
+OSTD_LIB bool sys_coalesce_swappable_pages(void *base, u64 max_preserve); // Coalesce contiguous subregions of committed memory. Must be in memory, and not swapped to file.
 
 typedef struct Mapped_Memory_Info {
     void *base;
     u64 page_count;
 } Mapped_Memory_Info;
-u64 sys_query_mapped_regions(void *start, void *end, Mapped_Memory_Info *result, u64 result_size);
+OSTD_LIB u64 sys_query_mapped_regions(void *start, void *end, Mapped_Memory_Info *result, u64 result_size);
 
-void *sys_find_mappable_range(u64 page_count);
+OSTD_LIB void *sys_find_mappable_range(u64 page_count);
 
 //////
 // System info
@@ -1743,7 +1810,7 @@ bool sys_wait_vertical_blank(Physical_Monitor monitor);
 // IO
 //////
 
-typedef void* File_Handle;
+
 typedef u64 File_Open_Flags;
 #define FILE_OPEN_WRITE  (1 << 0)
 #define FILE_OPEN_READ   (1 << 1)
@@ -1905,11 +1972,27 @@ OSTD_LIB void sys_semaphore_signal(Semaphore *sem);
 OSTD_LIB void sys_semaphore_wait(Semaphore *sem);
 OSTD_LIB void sys_semaphore_uninit(Semaphore *sem);
 
+typedef struct Lock {
+    void *handle;
+} Lock;
+
+OSTD_LIB bool sys_lock_init(Lock *lock, bool locked);
+OSTD_LIB void sys_lock_unlock(Lock *lock);
+OSTD_LIB void sys_lock_lock(Lock *lock);
+OSTD_LIB void sys_lock_uninit(Lock *lock);
+OSTD_LIB void sys_lock_wait(Lock *lock);
+OSTD_LIB bool sys_lock_is_locked(Lock *lock);
+
+
 ////////
 // Atomics
 
 inline unit_local u32 sys_atomic_add_32(volatile u32 *addend, u32 value);
 inline unit_local u64 sys_atomic_add_64(volatile u64 *addend, u64 value);
+
+inline bool sys_compare_and_swap_64(volatile u64 *a, u64 b, u64 old);
+
+inline unit_local void sys_memory_barrier(void);
 
 //////
 // Surfaces (Window)
@@ -2011,6 +2094,14 @@ OSTD_LIB void surface_blit_my_pixels_partial(Surface_Handle h, u16 x, u16 y, u16
 
 OSTD_LIB bool surface_get_monitor(Surface_Handle h, Physical_Monitor *monitor);
 
+OSTD_LIB void sys_add_to_tray(void *surface);
+OSTD_LIB void sys_remove_from_tray(void *surface);
+
+typedef void (*Exit_From_Tray_Callback)(void* ud);
+typedef void (*Open_From_Tray_Callback)(void* ud);
+OSTD_LIB void sys_set_exit_from_tray_callback(void *surface, Exit_From_Tray_Callback c);
+OSTD_LIB void sys_set_open_from_tray_callback(void *surface, Open_From_Tray_Callback c);
+
 #endif // !OSTD_HEADLESS
 
 //////
@@ -2059,6 +2150,34 @@ OSTD_LIB void sys_print_stack_trace(File_Handle handle);
 // Implementations
 //////
 
+// When we need small amounts somewhat dynamic memory internally in system layer.
+typedef struct _Ostd_Internal_Block_Allocator {
+    struct _Ostd_Internal_Block_Allocator *next;
+    u64 item_size;
+    u64 count;
+    Mutex mutex;
+    u8 *state_bits;
+    u8 *mem;
+} _Ostd_Internal_Block_Allocator;
+
+typedef struct _Ostd_Swappable_Page_Sub_Region {
+    struct _Ostd_Swappable_Page_Sub_Region *next;
+    u8 *start;
+    u64 page_count;
+    
+    bool is_committed;
+} _Ostd_Swappable_Page_Sub_Region;
+
+typedef struct _Ostd_Swappable_Page_Region {
+    u8 *start;
+    u64 page_count;
+    _Ostd_Swappable_Page_Sub_Region *sub_regions; 
+    Mutex mutex;
+    
+    File_Handle f;
+    void *fmapping;
+    bool is_mapped_to_file;
+} _Ostd_Swappable_Page_Region;
 
 struct _Per_Thread_Temporary_Storage;
 typedef struct _Ostd_Thread_Storage {
@@ -2068,11 +2187,234 @@ typedef struct _Ostd_Thread_Storage {
     void *logger_ud;
     struct _Per_Thread_Temporary_Storage *temp;
     bool taken;
+    
+    
 } _Ostd_Thread_Storage;
 
 _Ostd_Thread_Storage *_ostd_get_thread_storage(void);
 
 #ifdef OSTD_IMPL
+
+unit_local File_Handle _ostd_log_pipe = 0;
+unit_local System_Log _ostd_last_log;
+unit_local void (*_ostd_print_log_fn)(System_Log) = 0;
+unit_local u64 _next_log_id = 1;
+
+System_Log sys_get_last_log(void) {
+    return _ostd_last_log;
+}
+
+void _ostd_push_log(System_Log l) {
+    _ostd_last_log = l;
+    
+    if (_ostd_log_pipe) {
+        sys_write(_ostd_log_pipe, &l, sizeof(l) + l.message_length);
+    }
+    
+    if (_ostd_print_log_fn) {
+        _ostd_print_log_fn(l);
+    }
+}
+
+void _ostd_log_ok(string function, string message, System_Log_Category category) {
+    if (!_ostd_log_pipe && !_ostd_print_log_fn) return;
+    System_Log l = (System_Log){0};
+    l.category = category;
+    l.id = _next_log_id++;
+    l.function_length = function.count;
+    l.message_length = min(message.count, sizeof(l.message));
+    l.kind = SYSTEM_LOG_OK;
+    
+    memcpy(l.function, function.data, function.count);
+    memcpy(l.message, message.data, min(message.count, sizeof(l.message)));
+    
+    _ostd_push_log(l);
+}
+void _ostd_log_os_call(string function, string message, string os_call, u64 result, void *handle, System_Log_Category category) {
+    if (!_ostd_log_pipe && !_ostd_print_log_fn) return;
+    System_Log l = (System_Log){0};
+    l.category = category;
+    l.id = _next_log_id++;
+    l.function_length = function.count;
+    l.message_length = min(message.count, sizeof(l.message));
+    l.os_name_length = os_call.count;
+    l.kind = SYSTEM_LOG_OS_CALL;
+    
+    memcpy(l.function, function.data, function.count);
+    memcpy(l.message, message.data, min(message.count, sizeof(l.message)));
+    memcpy(l.os_name, os_call.data, os_call.count);
+    
+    l.os_number = result;
+    l.os_handle = handle;
+    
+    _ostd_push_log(l);
+}
+void _ostd_log_error(string function, string message, u64 error, System_Log_Category category) {
+    if (!_ostd_log_pipe && !_ostd_print_log_fn) return;
+    System_Log l = (System_Log){0};
+    l.category = category;
+    l.id = _next_log_id++;
+    l.function_length = function.count;
+    l.message_length = min(message.count, sizeof(l.message));
+    l.kind = SYSTEM_LOG_ERROR;
+    
+    memcpy(l.function, function.data, function.count);
+    memcpy(l.message, message.data, min(message.count, sizeof(l.message)));
+    
+    l.error = error;
+    
+    _ostd_push_log(l);
+}
+void _ostd_log_call(string function, System_Log_Category category) {
+    if (!_ostd_log_pipe && !_ostd_print_log_fn) return;
+    System_Log l = (System_Log){0};
+    l.category = category;
+    l.id = _next_log_id++;
+    l.function_length = function.count;
+    l.kind = SYSTEM_LOG_ENTER_SYS_FUNCTION;
+    
+    memcpy(l.function, function.data, function.count);
+    
+    _ostd_push_log(l);
+}
+
+#define log_ok(message, category) _ostd_log_ok(STR(__func__), STR(message), category)
+#define log_os_call(message, os_call, handle, category) _ostd_log_os_call(STR(__func__), STR(message), STR(os_call), GetLastError(), handle, category)
+#define log_error(message, error, category) _ostd_log_error(STR(__func__), STR(message), error, category)
+#define log_call(category) _ostd_log_call(STR(__func__), category)
+
+unit_local _Ostd_Internal_Block_Allocator *swappable_page_region_iba;
+unit_local _Ostd_Internal_Block_Allocator *swappable_page_sub_region_iba;
+volatile unit_local bool _swappable_initted = false;
+volatile unit_local u64 _swappable_init_lock = 0;
+
+unit_local _Ostd_Internal_Block_Allocator * _ostd_iba_make(u64 item_size) {
+
+    _Ostd_Internal_Block_Allocator *iba 
+        = (_Ostd_Internal_Block_Allocator *)sys_map_pages(SYS_MEMORY_RESERVE | SYS_MEMORY_ALLOCATE, 0, 1, false);
+    
+    memset(iba, 0, sys_get_info().page_size);
+    
+    u64 offset = ((sys_uint)&(((_Ostd_Internal_Block_Allocator *)0)->mem)) + 8;
+    u64 size_after_offset = (sys_get_info().page_size - offset);
+    u64 count_before_subtracting_state_bits = size_after_offset / item_size;
+    u64 bytes_required_for_state_bits = (count_before_subtracting_state_bits + 7) / 8;
+    
+    iba->mem = (u8*)iba + offset + bytes_required_for_state_bits;
+    iba->item_size = item_size;
+    // @speed @memory may not be aligned to 8 but this will rarely be touched
+    iba->state_bits = iba->mem - bytes_required_for_state_bits;
+    
+    sys_mutex_init(&iba->mutex);
+    
+    return iba;
+}
+
+unit_local u64 _ostd_iba_max_count(_Ostd_Internal_Block_Allocator *iba) {
+    u64 offset = ((sys_uint)&(((_Ostd_Internal_Block_Allocator *)0)->mem)) + 8;
+    u64 size_after_offset = (sys_get_info().page_size - offset);
+    u64 count_before_subtracting_state_bits = size_after_offset / iba->item_size;
+    u64 bytes_required_for_state_bits = (count_before_subtracting_state_bits + 7) / 8;
+    u64 allowed_size = size_after_offset - bytes_required_for_state_bits;
+    
+    return allowed_size / iba->item_size;
+}
+
+unit_local void _ostd_iba_reset_keeping_memory(_Ostd_Internal_Block_Allocator *iba) {
+    _Ostd_Internal_Block_Allocator *next = iba;
+                
+    while (next) {
+        next->count = 0;
+        memset(next->state_bits, 0, (_ostd_iba_max_count(next) + 7) / 8);
+        next = next->next;
+    }
+}
+
+unit_local void *_ostd_iba_allocate_item(_Ostd_Internal_Block_Allocator *iba) {
+    u64 max_count = _ostd_iba_max_count(iba);
+    
+    _Ostd_Internal_Block_Allocator *next_iba = iba;
+    _Ostd_Internal_Block_Allocator *last_iba = 0;
+    void *found_item = 0;
+    while (next_iba) {
+        
+        for (u64 i = 0; i < next_iba->count; i += 1) {
+            void *item = next_iba->mem + i*next_iba->item_size;
+            
+            if (!(next_iba->state_bits[i/8] & (1 << (i%8)))) {
+                found_item = item;
+                next_iba->state_bits[i/8] |= (1 << (i%8));
+                break;
+            }
+        }
+        
+        if (!found_item && next_iba->count < max_count) {
+            void *item = next_iba->mem + next_iba->count*next_iba->item_size;
+            next_iba->state_bits[next_iba->count/8] |= (1 << (next_iba->count%8));
+            next_iba->count += 1;
+            found_item = item;
+        }
+        
+        if (found_item) break;
+    
+        last_iba = next_iba;
+        next_iba = next_iba->next;
+    }
+    
+    if (!found_item) {
+        last_iba->next = _ostd_iba_make(iba->item_size);
+        
+        last_iba->next->count = 1;
+        found_item = last_iba->next->mem;
+        last_iba->next->state_bits[0] |= 1;
+    }
+    
+    assert(found_item);
+    
+    return found_item;
+}
+unit_local void _ostd_iba_deallocate_item(_Ostd_Internal_Block_Allocator *iba, void *item_to_remove) {
+    _Ostd_Internal_Block_Allocator *next_iba = iba;
+    while (next_iba) {
+        
+        for (u64 i = 0; i < next_iba->count; i += 1) {
+            void *item = next_iba->mem + i*next_iba->item_size;
+            
+            if ((next_iba->state_bits[i/8] & (1 << (i%8))) && memcmp(item, item_to_remove, iba->item_size) == 0) {
+                next_iba->state_bits[i/8] &= ~(1 << (i%8));
+                break;
+            }
+        }
+        
+        next_iba = next_iba->next;
+    }
+}
+
+unit_local void _ostd_lazy_init_swappable(void) {
+    
+    if (!_swappable_initted) {
+        
+        volatile u64 old = sys_atomic_add_64(&_swappable_init_lock, 1);
+        if (old != 0) {
+            while (_swappable_init_lock) {
+                // spineroo
+            }
+        }
+        
+        sys_memory_barrier();
+        
+        if (!_swappable_initted) {
+            swappable_page_region_iba = _ostd_iba_make(sizeof(_Ostd_Swappable_Page_Region));
+            swappable_page_sub_region_iba = _ostd_iba_make(sizeof(_Ostd_Swappable_Page_Sub_Region));
+            _swappable_initted = true;
+        }
+        
+        sys_memory_barrier();
+        
+        _swappable_init_lock = 0;
+    }
+    
+}
 
 unit_local _Ostd_Thread_Storage *_ostd_thread_storage = 0;
 unit_local u64 _ostd_thread_storage_allocated_count = 0;
@@ -2081,6 +2423,8 @@ unit_local bool _ostd_thread_storage_register_mutex_initted;
 unit_local u64 _ostd_main_thread_id;
 unit_local bool _ostd_main_thread_is_unknown = true;
 unit_local _Ostd_Thread_Storage _ostd_main_thread_storage;
+
+
 
 unit_local _Ostd_Thread_Storage *_ostd_get_thread_storage_for(u64 thread_id) {
     if (!_ostd_main_thread_is_unknown && _ostd_main_thread_id == thread_id) {
@@ -2100,6 +2444,8 @@ unit_local _Ostd_Thread_Storage *_ostd_get_thread_storage_for(u64 thread_id) {
         _ostd_main_thread_storage.thread_id = thread_id;
         _ostd_main_thread_storage.temp
             = (struct _Per_Thread_Temporary_Storage*)_ostd_main_thread_storage.temporary_storage_struct_backing;
+        _ostd_main_thread_storage.thread_id = thread_id;
+        
         return &_ostd_main_thread_storage;
     }
     
@@ -7704,6 +8050,225 @@ WINDOWS_IMPORT int WINAPI InternetCloseHandle(HINTERNET hInternet);
 
 WINDOWS_IMPORT DWORD WINAPI GetEnvironmentVariableW(LPCWSTR lpName,LPWSTR  lpBuffer,DWORD   nSize);
 
+#define NIM_ADD 0x00000000
+#define NIM_MODIFY 0x00000001
+#define NIM_DELETE 0x00000002
+#define NIM_SETFOCUS 0x00000003
+#define NIM_SETVERSION 0x00000004
+
+#define NTDDI_VERSION_FROM_WIN32_WINNT2(ver)    ver##0000
+#define NTDDI_VERSION_FROM_WIN32_WINNT(ver)     NTDDI_VERSION_FROM_WIN32_WINNT2(ver)
+
+#if !defined(_WIN32_WINNT) && !defined(_CHICAGO_)
+#define  _WIN32_WINNT   0x0A00
+#endif
+
+#ifndef NTDDI_VERSION
+#ifdef _WIN32_WINNT
+#if (_WIN32_WINNT <= _WIN32_WINNT_WINBLUE)
+// set NTDDI_VERSION based on _WIN32_WINNT
+#define NTDDI_VERSION   NTDDI_VERSION_FROM_WIN32_WINNT(_WIN32_WINNT)
+#elif (_WIN32_WINNT >= _WIN32_WINNT_WIN10)
+// set NTDDI_VERSION to default to WDK_NTDDI_VERSION
+#define NTDDI_VERSION   WDK_NTDDI_VERSION
+#endif // (_WIN32_WINNT <= _WIN32_WINNT_WINBLUE)
+#else
+// set NTDDI_VERSION to default to latest if _WIN32_WINNT isn't set
+#define NTDDI_VERSION   0x0A00000C
+#endif // _WIN32_WINNT
+#endif // NTDDI_VERSION
+
+typedef struct _NOTIFYICONDATAA {
+    DWORD cbSize;
+    HWND hWnd;
+    UINT uID;
+    UINT uFlags;
+    UINT uCallbackMessage;
+    HICON hIcon;
+#if (NTDDI_VERSION < NTDDI_WIN2K)
+    CHAR   szTip[64];
+#endif
+#if (NTDDI_VERSION >= NTDDI_WIN2K)
+    CHAR   szTip[128];
+    DWORD dwState;
+    DWORD dwStateMask;
+    CHAR   szInfo[256];
+#ifndef _SHELL_EXPORTS_INTERNALAPI_H_
+    union {
+        UINT  uTimeout;
+        UINT  uVersion;  // used with NIM_SETVERSION, values 0, 3 and 4
+    } DUMMYUNIONNAME;
+#endif
+    CHAR   szInfoTitle[64];
+    DWORD dwInfoFlags;
+#endif
+#if (NTDDI_VERSION >= NTDDI_WINXP)
+    GUID guidItem;
+#endif
+#if (NTDDI_VERSION >= NTDDI_VISTA)
+    HICON hBalloonIcon;
+#endif
+} NOTIFYICONDATAA, *PNOTIFYICONDATAA;
+typedef struct _NOTIFYICONDATAW {
+    DWORD cbSize;
+    HWND hWnd;
+    UINT uID;
+    UINT uFlags;
+    UINT uCallbackMessage;
+    HICON hIcon;
+#if (NTDDI_VERSION < NTDDI_WIN2K)
+    WCHAR  szTip[64];
+#endif
+#if (NTDDI_VERSION >= NTDDI_WIN2K)
+    WCHAR  szTip[128];
+    DWORD dwState;
+    DWORD dwStateMask;
+    WCHAR  szInfo[256];
+#ifndef _SHELL_EXPORTS_INTERNALAPI_H_
+    union {
+        UINT  uTimeout;
+        UINT  uVersion;  // used with NIM_SETVERSION, values 0, 3 and 4
+    } DUMMYUNIONNAME;
+#endif
+    WCHAR  szInfoTitle[64];
+    DWORD dwInfoFlags;
+#endif
+#if (NTDDI_VERSION >= NTDDI_WINXP)
+    GUID guidItem;
+#endif
+#if (NTDDI_VERSION >= NTDDI_VISTA)
+    HICON hBalloonIcon;
+#endif
+} NOTIFYICONDATAW, *PNOTIFYICONDATAW;
+
+WINDOWS_IMPORT BOOL WINAPI Shell_NotifyIconW( DWORD dwMessage, PNOTIFYICONDATAW lpData);
+
+#define NIF_MESSAGE     0x00000001
+#define NIF_ICON        0x00000002
+#define NIF_TIP         0x00000004
+#define NIF_STATE       0x00000008
+#define NIF_INFO        0x00000010
+
+#define NOTIFYICON_VERSION 3
+#if NTDDI_VERSION >= 0x06000000
+#define NOTIFYICON_VERSION_4 4
+#endif
+
+WINDOWS_IMPORT HMENU WINAPI CreatePopupMenu(void);
+
+WINDOWS_IMPORT BOOL WINAPI AppendMenuW( HMENU hMenu, UINT uFlags, UINT_PTR uIDNewItem, LPCWSTR lpNewItem);
+
+#define MF_INSERT 0x00000000L
+#define MF_CHANGE 0x00000080L
+#define MF_APPEND 0x00000100L
+#define MF_DELETE 0x00000200L
+#define MF_REMOVE 0x00001000L
+#define MF_BYCOMMAND 0x00000000L
+#define MF_BYPOSITION 0x00000400L
+#define MF_SEPARATOR 0x00000800L
+#define MF_ENABLED 0x00000000L
+#define MF_GRAYED 0x00000001L
+#define MF_DISABLED 0x00000002L
+#define MF_UNCHECKED 0x00000000L
+#define MF_CHECKED 0x00000008L
+#define MF_USECHECKBITMAPS 0x00000200L
+#define MF_STRING 0x00000000L
+#define MF_BITMAP 0x00000004L
+#define MF_OWNERDRAW 0x00000100L
+#define MF_POPUP 0x00000010L
+#define MF_MENUBARBREAK 0x00000020L
+#define MF_MENUBREAK 0x00000040L
+#define MF_UNHILITE 0x00000000L
+#define MF_HILITE 0x00000080L
+#define MF_DEFAULT 0x00001000L
+#define MF_SYSMENU 0x00002000L
+#define MF_HELP 0x00004000L
+#define MF_RIGHTJUSTIFY 0x00004000L
+#define MF_MOUSESELECT 0x00008000L
+#define MF_END 0x00000080L
+
+WINDOWS_IMPORT BOOL WINAPI SetForegroundWindow(HWND hWnd);
+
+WINDOWS_IMPORT BOOL WINAPI TrackPopupMenu( HMENU hMenu, UINT uFlags, int x, int y, int nReserved, HWND hWnd, const RECT *prcRect);
+
+#define TPM_LEFTBUTTON 0x0000L
+#define TPM_RIGHTBUTTON 0x0002L
+#define TPM_LEFTALIGN 0x0000L
+#define TPM_CENTERALIGN 0x0004L
+#define TPM_RIGHTALIGN 0x0008L
+#define TPM_TOPALIGN 0x0000L
+#define TPM_VCENTERALIGN 0x0010L
+#define TPM_BOTTOMALIGN 0x0020L
+
+#define TPM_HORIZONTAL 0x0000L
+#define TPM_VERTICAL 0x0040L
+#define TPM_NONOTIFY 0x0080L
+#define TPM_RETURNCMD 0x0100L
+#define TPM_RECURSE 0x0001L
+#define TPM_HORPOSANIMATION 0x0400L
+#define TPM_HORNEGANIMATION 0x0800L
+#define TPM_VERPOSANIMATION 0x1000L
+#define TPM_VERNEGANIMATION 0x2000L
+#define TPM_NOANIMATION 0x4000L
+#define TPM_LAYOUTRTL 0x8000L
+
+WINDOWS_IMPORT BOOL WINAPI DestroyMenu(HMENU hMenu);
+
+typedef struct _MEM_ADDRESS_REQUIREMENTS {
+    PVOID LowestStartingAddress;
+    PVOID HighestEndingAddress;
+    size_t Alignment;
+  } MEM_ADDRESS_REQUIREMENTS, *PMEM_ADDRESS_REQUIREMENTS;
+
+#define MEM_EXTENDED_PARAMETER_GRAPHICS 0x01
+#define MEM_EXTENDED_PARAMETER_NONPAGED 0x02
+#define MEM_EXTENDED_PARAMETER_ZERO_PAGES_OPTIONAL 0x04
+#define MEM_EXTENDED_PARAMETER_NONPAGED_LARGE 0x08
+#define MEM_EXTENDED_PARAMETER_NONPAGED_HUGE 0x10
+#define MEM_EXTENDED_PARAMETER_SOFT_FAULT_PAGES 0x20
+#define MEM_EXTENDED_PARAMETER_EC_CODE 0x40
+#define MEM_EXTENDED_PARAMETER_IMAGE_NO_HPAT 0x80
+
+typedef enum MEM_EXTENDED_PARAMETER_TYPE {
+  MemExtendedParameterInvalidType = 0,
+  MemExtendedParameterAddressRequirements,
+  MemExtendedParameterNumaNode,
+  MemExtendedParameterPartitionHandle,
+  MemExtendedParameterUserPhysicalHandle,
+  MemExtendedParameterAttributeFlags,
+  MemExtendedParameterImageMachine,
+  MemExtendedParameterMax
+} MEM_EXTENDED_PARAMETER_TYPE, *PMEM_EXTENDED_PARAMETER_TYPE;
+
+#define MEM_EXTENDED_PARAMETER_TYPE_BITS 8
+
+typedef struct DECLSPEC_ALIGN(8) MEM_EXTENDED_PARAMETER {
+  struct {
+      DWORD64 Type;
+      DWORD64 Reserved;
+  } DUMMYUNIONNAME1;
+  union {
+      DWORD64 ULong64;
+      PVOID Pointer;
+      size_t Size;
+      HANDLE Handle;
+      DWORD ULong;
+  } DUMMYUNIONNAME2;
+} MEM_EXTENDED_PARAMETER, *PMEM_EXTENDED_PARAMETER;
+
+WINDOWS_IMPORT PVOID WINAPI VirtualAlloc2( HANDLE Process, PVOID BaseAddress, size_t Size, ULONG AllocationType, ULONG PageProtection, MEM_EXTENDED_PARAMETER  *ExtendedParameters, ULONG ParameterCount);
+
+
+WINDOWS_IMPORT PVOID WINAPI MapViewOfFile3( HANDLE FileMapping, HANDLE Process, PVOID BaseAddress, ULONG64 Offset, size_t ViewSize, ULONG AllocationType, ULONG PageProtection, MEM_EXTENDED_PARAMETER  *ExtendedParameters, ULONG ParameterCount);
+
+WINDOWS_IMPORT BOOL WINAPI UnmapViewOfFile2( HANDLE Process, PVOID BaseAddress, ULONG UnmapFlags);
+
+WINDOWS_IMPORT HANDLE WINAPI CreateFileMappingW( HANDLE hFile, LPSECURITY_ATTRIBUTES lpFileMappingAttributes, DWORD flProtect, DWORD dwMaximumSizeHigh, DWORD dwMaximumSizeLow, LPCWSTR lpName);
+
+WINDOWS_IMPORT BOOL WINAPI SetEvent(HANDLE hEvent);
+
+WINDOWS_IMPORT HWND WINAPI WindowFromPoint(POINT Point);
+
 
 /* End include: windows_loader.h */
     #endif // _WINDOWS_
@@ -7739,6 +8304,7 @@ typedef struct _Surface_State {
     BITMAPINFO bmp_info;
     HBITMAP bmp;
     HDC memdc;
+    NOTIFYICONDATAW nid;
 #elif OS_FLAGS & OS_FLAG_LINUX
     GC       gc;
     XImage*  ximage;
@@ -7754,6 +8320,9 @@ typedef struct _Surface_State {
     bool pixels_dirty;
     bool allocated;
     bool should_close;
+    
+    Exit_From_Tray_Callback exit_from_tray;
+    Open_From_Tray_Callback open_from_tray;
 } _Surface_State;
 unit_local _Surface_State _surface_states[MAX_SURFACES] = {0};
 
@@ -8311,6 +8880,7 @@ OSTD_LIB u64 sys_get_environment_variable(string name, u8 *out) {
 }
 
 
+
 unit_local int _to_win_sock_err(Socket_Result r) {
     switch(r) {
         case SOCKET_OK:                  return 0;
@@ -8714,6 +9284,7 @@ Thread_Handle sys_get_current_thread(void) {
     #pragma comment(lib, "shell32")
     #pragma comment(lib, "Msimg32.lib")
     #pragma comment(lib, "wininet.lib")
+    #pragma comment(lib, "onecore.lib")
 #ifndef OSTD_HEADLESS
     #pragma comment(lib, "gdi32")
     #pragma comment(lib, "dxgi")
@@ -8792,7 +9363,7 @@ unit_local void _win_lazy_enable_dpi_awarness(void) {
     }
 }
 
-
+#define WINDOWS_MESSAGE_TRAY_ICON 1337
 unit_local LRESULT window_proc ( HWND hwnd,  u32 message,  WPARAM wparam,  LPARAM lparam) {
 
     _Surface_State *state = _get_surface_state(hwnd);
@@ -8807,6 +9378,7 @@ unit_local LRESULT window_proc ( HWND hwnd,  u32 message,  WPARAM wparam,  LPARA
         }
         case WM_QUIT:
         case WM_CLOSE:
+        case WM_DESTROY:
             state->should_close = true;
             return DefWindowProcW(hwnd, message, wparam, lparam);
         case WM_SIZE:
@@ -8879,6 +9451,48 @@ unit_local LRESULT window_proc ( HWND hwnd,  u32 message,  WPARAM wparam,  LPARA
         case WM_NCCALCSIZE:
             if (wparam) return 0;
             return DefWindowProcW(hwnd, message, wparam, lparam);
+        case WINDOWS_MESSAGE_TRAY_ICON: {
+            if (LOWORD(lparam) == WM_LBUTTONUP) {
+                if (state->open_from_tray) {
+                    state->open_from_tray(0);
+                } else {
+                    surface_unset_flags(hwnd, SURFACE_FLAG_HIDDEN);
+                }
+            }
+            
+            if (LOWORD(lparam) == WM_RBUTTONUP) {
+                HMENU menu = CreatePopupMenu();
+                
+                AppendMenuW(menu, MF_STRING, 1, L"Open");
+                AppendMenuW(menu, MF_STRING, 2, L"Exit");
+                
+                POINT p;
+                GetCursorPos(&p);
+                
+                SetForegroundWindow(hwnd);
+                
+                int cmd = TrackPopupMenu(
+                    menu,
+                    TPM_RETURNCMD | TPM_RIGHTBUTTON,
+                    p.x,
+                    p.y,
+                    0,
+                    hwnd,
+                    0
+                );
+                
+                DestroyMenu(menu);
+                
+                if (cmd == 2) {
+                    if (state->exit_from_tray) {
+                        state->exit_from_tray(0);
+                    } else {
+                        state->should_close = true;
+                    }
+                }
+            }
+            break;
+        }
         
         default: return DefWindowProcW(hwnd, message, wparam, lparam);
     }
@@ -8890,6 +9504,7 @@ unit_local LRESULT window_proc ( HWND hwnd,  u32 message,  WPARAM wparam,  LPARA
 
 
 void *sys_map_pages(u64 action, void *virtual_base, u64 number_of_pages, bool strict_base_address) {
+    log_call(SYSTEM_LOG_CATEGORY_PAGE_MAPPING);
     (void)strict_base_address;
     // todo(charlie) attempt multiple times in case of failure.
 
@@ -8910,28 +9525,873 @@ void *sys_map_pages(u64 action, void *virtual_base, u64 number_of_pages, bool st
     }
 
     void *result = VirtualAlloc(virtual_base, amount_in_bytes, flags, protection);
+    log_os_call("Mapped pages", "VirtualAlloc", result, SYSTEM_LOG_CATEGORY_PAGE_MAPPING);
     // todo(charlie)
     // Some error reporting so user can see what went wrong if !result
-
+    
+    if (result) {
+        log_ok("Valid pointer returned", SYSTEM_LOG_CATEGORY_PAGE_MAPPING);
+    } else {
+        log_error("VirtualAlloc returned null. Check parameters.", SYSTEM_ERROR_PAGE_MAPPING_REJECTED, SYSTEM_LOG_CATEGORY_PAGE_MAPPING);
+    }
+    
     return result;
 }
 
 
 
 bool sys_unmap_pages(void *address) {
-    // todo(charlie) attempt multiple times in case of failure.
-    return VirtualFree(address, 0, MEM_RELEASE) != 0;
+    log_call(SYSTEM_LOG_CATEGORY_PAGE_MAPPING);
+    System_Info sinfo = sys_get_info();
+    
+    _ostd_lazy_init_swappable();
+    
+    // First find out if there is a swappable region for this address
+    u8 *start = (u8*)address;
+    _Ostd_Internal_Block_Allocator *iba = swappable_page_region_iba;
+    
+    _Ostd_Swappable_Page_Region *found_region = 0;
+    while (iba) {
+        sys_mutex_acquire(iba->mutex);
+        _Ostd_Swappable_Page_Region *regions = (_Ostd_Swappable_Page_Region *)iba->mem;
+        for (u64 i = 0; i < iba->count; i += 1) {
+            _Ostd_Swappable_Page_Region *region = regions + i;
+            
+            if ((iba->state_bits[i/8] & (1 << (i%8))) && start == region->start) {
+                found_region = region;
+                break;
+            }
+        }
+        
+        sys_mutex_release(iba->mutex);
+        
+        if (found_region) break;
+    
+        iba = iba->next;
+    }
+    
+    if (!found_region) {
+        // This was not a swappable page region
+        DWORD free_result = VirtualFree(address, 0, MEM_RELEASE) != 0;
+        log_os_call("Free non-swappable page region", "VirtualFree", address, SYSTEM_LOG_CATEGORY_PAGE_MAPPING);
+        
+        if (free_result == 0) {
+            log_error("VirtualFree returned 0. Check passed pointer.", SYSTEM_ERROR_FREE_PAGES_REJECTED, SYSTEM_LOG_CATEGORY_PAGE_MAPPING);
+            return false;
+        } else {
+            log_ok("Successfully freed non-swappable page region", SYSTEM_LOG_CATEGORY_PAGE_MAPPING);
+            return true;
+        }
+    }
+    
+    // @todo @speed this is dumb. Just write a free version for when its mapped to file.
+    if (found_region->is_mapped_to_file) {
+        sys_swap_pages_to_memory(found_region->start, 0);
+    }
+    
+    _Ostd_Swappable_Page_Sub_Region *next_sub = found_region->sub_regions;
+    while (next_sub) {
+        
+        if (next_sub->is_committed) {
+			DWORD free_result = VirtualFree(next_sub->start, next_sub->page_count*sinfo.page_size, MEM_RELEASE | MEM_PRESERVE_PLACEHOLDER);
+            log_os_call("Decommit subregion in swappable page region", "VirtualFree", next_sub->start, SYSTEM_LOG_CATEGORY_PAGE_MAPPING);
+			if (free_result == 0) {
+                log_error("VirtualFree returned 0.", SYSTEM_ERROR_INTERNAL_ERROR, SYSTEM_LOG_CATEGORY_PAGE_MAPPING);
+                return false;
+			}
+		}
+    
+        next_sub = next_sub->next;
+    }
+    
+    // If there are multiple regions, then coalesce
+    if (found_region->sub_regions->next) {
+        DWORD free_result = VirtualFree(found_region->start, found_region->page_count*sinfo.page_size, MEM_RELEASE | MEM_COALESCE_PLACEHOLDERS);
+        log_os_call("Coalesce subregions", "VirtualFree", found_region->start, SYSTEM_LOG_CATEGORY_PAGE_MAPPING);
+        if (free_result == 0) {
+            log_error("VirtualFree returned 0.", SYSTEM_ERROR_INTERNAL_ERROR, SYSTEM_LOG_CATEGORY_PAGE_MAPPING);
+            return false;
+		}
+    }
+    {
+        DWORD free_result = VirtualFree(found_region->start, 0, MEM_RELEASE);
+        if (free_result == 0) {
+            log_error("VirtualFree returned 0.", SYSTEM_ERROR_INTERNAL_ERROR, SYSTEM_LOG_CATEGORY_PAGE_MAPPING);
+            return false;
+		}
+    }
+    
+    sys_mutex_acquire(iba->mutex);
+    _ostd_iba_deallocate_item(iba, found_region);
+    sys_mutex_release(iba->mutex);
+    
+    log_ok("Successfully unmapped swappable page region and its subregions.", SYSTEM_LOG_CATEGORY_PAGE_MAPPING);
+    
+    return true;
 }
 
 bool sys_deallocate_pages(void *address, u64 number_of_pages) {
-    System_Info info = sys_get_info();
+    log_call(SYSTEM_LOG_CATEGORY_PAGE_MAPPING);
+    System_Info sinfo = sys_get_info();
+    u64 amount_in_bytes = sinfo.page_size*number_of_pages;
+    
+    _ostd_lazy_init_swappable();
+    
+    // First find out if there is a swappable region for this address
+    u8 *start = (u8*)address;
+    _Ostd_Internal_Block_Allocator *iba = swappable_page_region_iba;
+    
+    _Ostd_Swappable_Page_Region *found_region = 0;
+    while (iba) {
+        sys_mutex_acquire(iba->mutex);
+        _Ostd_Swappable_Page_Region *regions = (_Ostd_Swappable_Page_Region *)iba->mem;
+        for (u64 i = 0; i < iba->count; i += 1) {
+            _Ostd_Swappable_Page_Region *region = regions + i;
+            
+            if ((iba->state_bits[i/8] & (1 << (i%8))) && (u64)start >= (u64)region->start && (u64)start+amount_in_bytes <= (u64)region->start + region->page_count*sinfo.page_size) {
+                found_region = region;
+                break;
+            }
+        }
+        
+        sys_mutex_release(iba->mutex);
+        
+        if (found_region) break;
+    
+        iba = iba->next;
+    }
+    
+    if (!found_region) {
+        // This was not a swappable page region
+        DWORD free_result = VirtualFree(address, amount_in_bytes, MEM_DECOMMIT) != 0;
+        log_os_call("Decommit non-swappable page region", "VirtualFree", address, SYSTEM_LOG_CATEGORY_PAGE_MAPPING);
+        
+        if (free_result == 0) {
+            log_error("VirtualFree returned 0. Check passed pointer.", SYSTEM_ERROR_FREE_PAGES_REJECTED, SYSTEM_LOG_CATEGORY_PAGE_MAPPING);
+            return false;
+        } else {
+            log_ok("Successfully decommitted non-swappable page region", SYSTEM_LOG_CATEGORY_PAGE_MAPPING);
+            return true;
+        }
+    }
+    
+    _Ostd_Swappable_Page_Sub_Region *next_sub = found_region->sub_regions;
+    _Ostd_Swappable_Page_Sub_Region *last_sub = 0;
+    _Ostd_Swappable_Page_Sub_Region *sub = 0;
+    
+    while (next_sub) {
+        
+        if (next_sub->start == start && (u64)next_sub->start + next_sub->page_count*sinfo.page_size == (u64)start + amount_in_bytes) {
+            sub = next_sub;
+            break;
+        }
+        
+        if (next_sub->next) last_sub = next_sub;
+        next_sub = next_sub->next;
+    }
+    
+    if (!sub) {
+        log_error("The given region does not match an existing committed subregion.", SYSTEM_ERROR_BAD_PAGE_REGION, SYSTEM_LOG_CATEGORY_PAGE_MAPPING);
+        return false;
+    }
+    
+    if (!sub->is_committed) { 
+        log_error("The page region cannot be decommitted, because its already not committed", SYSTEM_ERROR_DECOMMIT_UNCOMMITTED_REGION, SYSTEM_LOG_CATEGORY_PAGE_MAPPING);
+        return false;
+    }
+    
+    {
+        DWORD free_result = VirtualFree(sub->start, sub->page_count*sinfo.page_size, MEM_RELEASE | MEM_PRESERVE_PLACEHOLDER) != 0;
+        log_os_call("Release to placeholder", "VirtualFree", sub->start, SYSTEM_LOG_CATEGORY_PAGE_MAPPING);
+        if (free_result == 0) {
+            log_error("VirtualFree returned 0.", SYSTEM_ERROR_INTERNAL_ERROR, SYSTEM_LOG_CATEGORY_PAGE_MAPPING);
+            return false;
+		}
+    }
+    
+    sub->is_committed = false;
+    
+    bool do_coalesce = false;
+    
+    if (last_sub && !last_sub->is_committed) {
+        last_sub->page_count += sub->page_count;
+        last_sub->next = sub->next;
+        
+        sub = last_sub;
+        
+        do_coalesce = true;
+    }
+    if (sub->next && !sub->next->is_committed) {
+        sub->page_count += sub->next->page_count;
+        sub->next = sub->next->next;
+        
+        do_coalesce = true;
+    }
+    
+    if (do_coalesce) {
+        DWORD free_result = VirtualFree(sub->start, sub->page_count*sinfo.page_size, MEM_RELEASE | MEM_COALESCE_PLACEHOLDERS);
+        log_os_call("Coalesce placeholders", "VirtualFree", sub->start, SYSTEM_LOG_CATEGORY_PAGE_MAPPING);
+        if (free_result == 0) {
+            log_error("VirtualFree returned 0.", SYSTEM_ERROR_INTERNAL_ERROR, SYSTEM_LOG_CATEGORY_PAGE_MAPPING);
+            return false;
+		}
+    }
+    
+    log_ok("Decommitted pages", SYSTEM_LOG_CATEGORY_PAGE_MAPPING);
+    return true;
+}
 
-    u64 amount_in_bytes = info.page_size*number_of_pages;
+void *sys_map_swappable_pages(u64 action, void *virtual_base, u64 number_of_pages, bool strict_base_address) {
+    (void)strict_base_address;
+    log_call(SYSTEM_LOG_CATEGORY_PAGE_MAPPING);
+    _ostd_lazy_init_swappable();
+    
+    
+    System_Info sinfo = sys_get_info();
 
-    return VirtualFree(address, amount_in_bytes, MEM_DECOMMIT) != 0;
+    u64 amount_in_bytes = sinfo.page_size * number_of_pages;
+    
+    bool is_new = false;
+    
+    if (virtual_base) {
+        u8 *start = (u8*)virtual_base;
+        u8 *end = start + amount_in_bytes;
+        
+        u8 *next = start;
+        
+        while (next < end) {
+            MEMORY_BASIC_INFORMATION info = (MEMORY_BASIC_INFORMATION){0};
+            
+            size_t sz = VirtualQuery(next, &info, sizeof(MEMORY_BASIC_INFORMATION));
+            log_os_call("Query existing regions", "VirtualQuery", next, SYSTEM_LOG_CATEGORY_PAGE_MAPPING);
+            
+            if (!sz || (u64)next != (u64)info.BaseAddress) {
+                
+                if (next != start) { 
+                    log_error("The passed page region overlaps an existing smaller region", SYSTEM_ERROR_BAD_PAGE_REGION, SYSTEM_LOG_CATEGORY_PAGE_MAPPING);
+                    return 0;
+                }
+                
+                is_new = true;
+                break;
+            }
+            
+            if ((u64)start + amount_in_bytes > (u64)info.BaseAddress + info.RegionSize) {
+                log_error("The passed page region overlaps an existing smaller region", SYSTEM_ERROR_BAD_PAGE_REGION, SYSTEM_LOG_CATEGORY_PAGE_MAPPING);
+                return 0;
+            }
+            
+            next = (u8*)next + info.RegionSize;
+        }
+        
+        if (!is_new) {
+            _Ostd_Internal_Block_Allocator *iba = swappable_page_region_iba;
+            _Ostd_Swappable_Page_Region *found_region = 0;
+            while (iba) {
+                sys_mutex_acquire(iba->mutex);
+                _Ostd_Swappable_Page_Region *regions = (_Ostd_Swappable_Page_Region *)iba->mem;
+                for (u64 i = 0; i < iba->count; i += 1) {
+                    _Ostd_Swappable_Page_Region *region = regions + i;
+                    
+                    if ((iba->state_bits[i/8] & (1 << (i%8))) && (u64)start >= (u64)region->start && (u64)start+amount_in_bytes <= (u64)region->start + region->page_count*sinfo.page_size) {
+                        found_region = region;
+                        break;
+                    }
+                }
+                
+                sys_mutex_release(iba->mutex);
+                
+                if (found_region) break;
+            
+                iba = iba->next;
+            }
+            
+            if (!found_region) { 
+                log_error("Could not find page region that should exist.", SYSTEM_ERROR_INTERNAL_ERROR, SYSTEM_LOG_CATEGORY_PAGE_MAPPING);
+                return 0;
+            }
+            
+            _Ostd_Swappable_Page_Sub_Region *next_sub = found_region->sub_regions;
+            _Ostd_Swappable_Page_Sub_Region *last_sub = 0;
+            _Ostd_Swappable_Page_Sub_Region *sub = 0;
+            
+            while (next_sub) {
+                
+                if (start >= next_sub->start && (u64)start + amount_in_bytes <= (u64)next_sub->start + next_sub->page_count*sinfo.page_size) {
+                    sub = next_sub;
+                    break;
+                }
+                
+                if (next_sub->next) last_sub = next_sub;
+                next_sub = next_sub->next;
+            }
+            
+            if (!sub) {
+                log_error("Could not find page subregion that should exist.", SYSTEM_ERROR_INTERNAL_ERROR, SYSTEM_LOG_CATEGORY_PAGE_MAPPING);
+                return 0;
+            }
+            
+            _Ostd_Internal_Block_Allocator *sub_iba = swappable_page_sub_region_iba;
+            sys_mutex_acquire(sub_iba->mutex);
+            
+            _Ostd_Swappable_Page_Sub_Region *left_sub = 0;
+            _Ostd_Swappable_Page_Sub_Region *right_sub = 0;
+            
+            if (start > sub->start) {
+                left_sub = (_Ostd_Swappable_Page_Sub_Region *)_ostd_iba_allocate_item(sub_iba);
+                *left_sub = *sub;
+                left_sub->start = sub->start;
+                left_sub->page_count = ((u64)start - (u64)sub->start)/sinfo.page_size;
+                left_sub->next = sub;
+            }
+            if ((u64)start + amount_in_bytes < (u64)sub->start + sub->page_count*sinfo.page_size) {
+                right_sub = (_Ostd_Swappable_Page_Sub_Region *)_ostd_iba_allocate_item(sub_iba);
+                *right_sub = *sub;
+                right_sub->start = start + amount_in_bytes;
+                right_sub->page_count = (((u64)sub->start + sub->page_count*sinfo.page_size) - ((u64)start + amount_in_bytes)) / sinfo.page_size;
+            }
+            
+            sys_mutex_release(sub_iba->mutex);
+            
+            if (found_region->is_mapped_to_file) {
+                
+                {
+                    // Unmap entire matched subregion (because we need to split it)
+                    bool free_result = (bool)UnmapViewOfFile2(GetCurrentProcess(), sub->start, MEM_PRESERVE_PLACEHOLDER);
+                    log_os_call("Unmap view of file to split it", "UnmapViewOfFile2", sub->start, SYSTEM_LOG_CATEGORY_PAGE_MAPPING);
+                    if (free_result == 0) {
+                        log_error("UnmapViewOfFile2 returned 0.", SYSTEM_ERROR_INTERNAL_ERROR, SYSTEM_LOG_CATEGORY_PAGE_MAPPING);
+                        return false;
+        			}
+                }
+                
+                {
+                    // Split into new placeholder
+                    bool free_result = VirtualFree(start, amount_in_bytes, MEM_RELEASE | MEM_PRESERVE_PLACEHOLDER);
+                    log_os_call("Split into placeholder", "VirtualFree", start, SYSTEM_LOG_CATEGORY_PAGE_MAPPING);
+                    if (free_result == 0) {
+                        log_error("VirtualFree returned 0.", SYSTEM_ERROR_INTERNAL_ERROR, SYSTEM_LOG_CATEGORY_PAGE_MAPPING);
+                        return false;
+            		}
+                }
+                
+                void *new_pointer = MapViewOfFile3(
+                    found_region->fmapping,
+                    GetCurrentProcess(),
+                    start,
+                    (u64)start-(u64)found_region->start,
+                    amount_in_bytes,
+                    MEM_REPLACE_PLACEHOLDER,
+                    (action & SYS_MEMORY_ALLOCATE) ? PAGE_READWRITE : PAGE_NOACCESS,
+                    0,
+                    0
+                );
+                log_os_call("Map region to file mapping", "MapViewOfFile3", new_pointer, SYSTEM_LOG_CATEGORY_PAGE_MAPPING);
+                
+                if (!new_pointer || ((u8*)new_pointer != (u8*)start)) {
+                    log_error("Failed mapping view of file.", SYSTEM_ERROR_INTERNAL_ERROR, SYSTEM_LOG_CATEGORY_PAGE_MAPPING);
+                    return 0;
+                }
+                
+                if (left_sub) {
+                    new_pointer = MapViewOfFile3(
+						found_region->fmapping,
+						GetCurrentProcess(),
+						left_sub->start,
+						(u64)left_sub->start - (u64)found_region->start,
+						left_sub->page_count * sinfo.page_size,
+						MEM_REPLACE_PLACEHOLDER,
+						left_sub->is_committed ? PAGE_READWRITE : PAGE_NOACCESS,
+						0,
+						0
+					);
+					log_os_call("Map left subregion", "MapViewOfFile3", new_pointer, SYSTEM_LOG_CATEGORY_PAGE_MAPPING);
+					
+                    if (!new_pointer || ((u8*)new_pointer != (u8*)left_sub->start)) {
+                        log_error("Failed mapping view of file.", SYSTEM_ERROR_INTERNAL_ERROR, SYSTEM_LOG_CATEGORY_PAGE_MAPPING);
+                        return 0;
+                    }
+                }
+                if (right_sub) {
+                    new_pointer = MapViewOfFile3(
+						found_region->fmapping,
+						GetCurrentProcess(),
+						right_sub->start,
+						(u64)right_sub->start - (u64)found_region->start,
+						right_sub->page_count * sinfo.page_size,
+						MEM_REPLACE_PLACEHOLDER,
+						right_sub->is_committed ? PAGE_READWRITE : PAGE_NOACCESS,
+						0,
+						0
+					);
+					log_os_call("Map right subregion", "MapViewOfFile3", new_pointer, SYSTEM_LOG_CATEGORY_PAGE_MAPPING);
+					
+                    if (!new_pointer || ((u8*)new_pointer != (u8*)right_sub->start)) {
+                        log_error("Failed mapping view of file.", SYSTEM_ERROR_INTERNAL_ERROR, SYSTEM_LOG_CATEGORY_PAGE_MAPPING);
+                        return 0;
+                    }
+                }
+    			
+            } else {
+                if ((left_sub && !left_sub->is_committed) || (right_sub && !right_sub->is_committed)) {
+                    bool free_result = (bool)VirtualFree(start, amount_in_bytes, MEM_RELEASE | MEM_PRESERVE_PLACEHOLDER);
+                    log_os_call("VirtualFree", "VirtualFree", start, SYSTEM_LOG_CATEGORY_PAGE_MAPPING);
+                    if (free_result == 0) {
+                        log_error("VirtualFree returned 0.", SYSTEM_ERROR_INTERNAL_ERROR, SYSTEM_LOG_CATEGORY_PAGE_MAPPING);
+                        return false;
+            		}
+                }
+            
+                u32 flags = 0;
+                u32 protection = 0;
+                if (action & SYS_MEMORY_ALLOCATE) {
+                    flags |= (MEM_RESERVE | MEM_COMMIT | MEM_REPLACE_PLACEHOLDER);
+                    protection = PAGE_READWRITE;
+                } else {
+                    return 0;
+                }
+            
+                void *result = VirtualAlloc2(0, start, amount_in_bytes, flags, protection, 0, 0);
+                log_os_call("VirtualAlloc", "VirtualAlloc", result, SYSTEM_LOG_CATEGORY_PAGE_MAPPING);
+                
+                if (result != start) { 
+                    log_error("VirtualAlloc returned bad pointer.", SYSTEM_ERROR_PAGE_MAPPING_REJECTED, SYSTEM_LOG_CATEGORY_PAGE_MAPPING);
+                    return 0;
+                }
+            }
+            
+            if (left_sub) {
+                if (last_sub) {
+                    last_sub->next = left_sub;
+                } else {
+                    found_region->sub_regions = left_sub;
+                }
+            }
+            if (right_sub) {
+                right_sub->next = sub->next;
+                sub->next = right_sub;
+            }
+            
+            sub->start = start;
+            sub->page_count = number_of_pages;
+            sub->is_committed = (action & SYS_MEMORY_ALLOCATE);
+            
+            return start;
+        }
+    } else {
+        is_new = true;
+    }
+    
+    
+    if (is_new) {
+        void *result = 0;
+        
+        if (action & SYS_MEMORY_RESERVE)  {
+            result = VirtualAlloc2(0, virtual_base, amount_in_bytes, MEM_RESERVE | MEM_RESERVE_PLACEHOLDER, PAGE_NOACCESS, 0, 0);
+            log_os_call("Reserve placeholder", "VirtualAlloc2", result, SYSTEM_LOG_CATEGORY_PAGE_MAPPING);
+            if (!result) {
+                log_error("VirtualAlloc2 returned bad pointer.", SYSTEM_ERROR_PAGE_MAPPING_REJECTED, SYSTEM_LOG_CATEGORY_PAGE_MAPPING);
+                return 0;
+            }
+        }
+        
+        if (action & SYS_MEMORY_ALLOCATE) {
+            result = VirtualAlloc2(0, result, amount_in_bytes, MEM_RESERVE | MEM_COMMIT | MEM_REPLACE_PLACEHOLDER, PAGE_READWRITE, 0, 0);
+            log_os_call("Commit placeholder", "VirtualAlloc2", result, SYSTEM_LOG_CATEGORY_PAGE_MAPPING);
+            if (!result) {
+                log_error("VirtualAlloc2 returned bad pointer.", SYSTEM_ERROR_PAGE_MAPPING_REJECTED, SYSTEM_LOG_CATEGORY_PAGE_MAPPING);
+                return 0;
+            }
+        }
+        
+        _Ostd_Internal_Block_Allocator *iba = swappable_page_region_iba;
+        _Ostd_Internal_Block_Allocator *sub_iba = swappable_page_sub_region_iba;
+        
+        sys_mutex_acquire(iba->mutex);
+        sys_mutex_acquire(sub_iba->mutex);
+        
+        _Ostd_Swappable_Page_Region *region = (_Ostd_Swappable_Page_Region *)_ostd_iba_allocate_item(iba);
+        
+        *region = (_Ostd_Swappable_Page_Region){0};
+        region->start = (u8*)result;
+        region->page_count = number_of_pages;
+        sys_mutex_init(&region->mutex);
+        
+        
+        _Ostd_Swappable_Page_Sub_Region *sub_region = (_Ostd_Swappable_Page_Sub_Region *)_ostd_iba_allocate_item(sub_iba);
+        *sub_region = (_Ostd_Swappable_Page_Sub_Region){0};
+        sub_region->start = region->start;
+        sub_region->page_count = region->page_count;
+        sub_region->is_committed = (bool)(action & SYS_MEMORY_ALLOCATE);
+        
+        region->sub_regions = sub_region;
+        
+        sys_mutex_release(sub_iba->mutex);
+        sys_mutex_release(iba->mutex);
+    
+        return result;
+    }
+    
+    return 0;
+}
+
+bool sys_swap_pages_to_file(void *base, File_Handle file, u64 size) {
+    log_call(SYSTEM_LOG_CATEGORY_PAGE_MAPPING);
+    _ostd_lazy_init_swappable();
+    
+    u8 *start = (u8*)base;
+    
+    System_Info sinfo = sys_get_info();
+    
+    _Ostd_Internal_Block_Allocator *iba = swappable_page_region_iba;
+    _Ostd_Swappable_Page_Region *found_region = 0;
+    while (iba) {
+        _Ostd_Swappable_Page_Region *regions = (_Ostd_Swappable_Page_Region *)iba->mem;
+        for (u64 i = 0; i < iba->count; i += 1) {
+            _Ostd_Swappable_Page_Region *region = regions + i;
+            
+            if ((iba->state_bits[i/8] & (1 << (i%8))) && region->start == (u8*)start) {
+                found_region = region;
+                break;
+            }
+        }
+        
+        if (found_region) break;
+    
+        iba = iba->next;
+    }
+    
+    if (!found_region) {
+        log_error("Could not find page region that should exist.", SYSTEM_ERROR_INTERNAL_ERROR, SYSTEM_LOG_CATEGORY_PAGE_MAPPING);
+        return false;
+    }
+    
+    if (found_region->is_mapped_to_file) {
+        log_ok("Region is already mapped to file. If you want to remape to another file, you must first swap it back to memory.", SYSTEM_LOG_CATEGORY_PAGE_MAPPING);
+        return true;
+    }
+    
+    u64 mapping_size = size ? size : found_region->page_count * sinfo.page_size;
+    
+    HANDLE fmapping = CreateFileMappingW(
+		file,
+		0,
+		PAGE_READWRITE,
+		(DWORD)((mapping_size & 0xffffffff00000000) >> 32),
+		(DWORD)mapping_size,
+		0
+	);
+	log_os_call("Create file mapping", "CreateFileMappingW", fmapping, SYSTEM_LOG_CATEGORY_PAGE_MAPPING);
+	if (!fmapping) {
+	   log_error("Could not create file mapping. Make sure the file handle has both read and write access.", SYSTEM_ERROR_REJECTED_FILE_MAPPING, SYSTEM_LOG_CATEGORY_PAGE_MAPPING);
+	   return false;
+	}
+	
+    found_region->f = file;
+    found_region->fmapping = fmapping;
+    
+    _Ostd_Swappable_Page_Sub_Region *next_sub = found_region->sub_regions;
+    while (next_sub) {
+        
+        sys_set_file_position(file, (u64)next_sub->start - (u64)found_region->start);
+        sys_write(file, next_sub->start, next_sub->page_count*sinfo.page_size);
+    
+        next_sub = next_sub->next;
+    }
+    
+    next_sub = found_region->sub_regions;
+    while (next_sub) {
+        
+        if (next_sub->is_committed) {
+			DWORD free_result = VirtualFree(next_sub->start, next_sub->page_count*sinfo.page_size, MEM_RELEASE | MEM_PRESERVE_PLACEHOLDER);
+			log_os_call("Decommit subregion", "VirtualFree", next_sub->start, SYSTEM_LOG_CATEGORY_PAGE_MAPPING);
+            if (free_result == 0) {
+                log_error("VirtualFree returned 0.", SYSTEM_ERROR_INTERNAL_ERROR, SYSTEM_LOG_CATEGORY_PAGE_MAPPING);
+                return false;
+    		}
+		}
+    
+        next_sub = next_sub->next;
+    }
+    
+    //FlushFileBuffers(file);
+    
+    next_sub = found_region->sub_regions;
+    while (next_sub) {
+        
+        void *new_pointer = MapViewOfFile3(
+			found_region->fmapping,
+			GetCurrentProcess(),
+			next_sub->start,
+			(u64)next_sub->start-(u64)found_region->start,
+			next_sub->page_count*sinfo.page_size,
+			MEM_REPLACE_PLACEHOLDER,
+			(next_sub->is_committed) ? PAGE_READWRITE : PAGE_NOACCESS,
+			0,
+			0
+		);
+		log_os_call("Map view of file", "MapViewOfFile3", new_pointer, SYSTEM_LOG_CATEGORY_PAGE_MAPPING);
+		
+        if (!new_pointer) {
+            CloseHandle(fmapping);
+            log_error("Could not map view of file. ", SYSTEM_ERROR_INTERNAL_ERROR, SYSTEM_LOG_CATEGORY_PAGE_MAPPING);
+            return 0;
+        }
+        if ((u8*)new_pointer != next_sub->start) {
+            CloseHandle(fmapping);
+            log_error("Could not map view of file. ", SYSTEM_ERROR_INTERNAL_ERROR, SYSTEM_LOG_CATEGORY_PAGE_MAPPING);
+            return 0;
+        }
+    
+        next_sub = next_sub->next;
+    }
+    
+    found_region->is_mapped_to_file = true;
+    
+    log_ok("Swapped to file", SYSTEM_LOG_CATEGORY_PAGE_MAPPING);
+    return true;
+}
+
+bool sys_swap_pages_to_memory(void *base, u64 max_read) {
+    log_call(SYSTEM_LOG_CATEGORY_PAGE_MAPPING);
+    _ostd_lazy_init_swappable();
+
+    u8 *start = (u8*)base;
+    
+    System_Info sinfo = sys_get_info();
+    
+    _Ostd_Internal_Block_Allocator *iba = swappable_page_region_iba;
+    _Ostd_Swappable_Page_Region *found_region = 0;
+    while (iba) {
+        _Ostd_Swappable_Page_Region *regions = (_Ostd_Swappable_Page_Region *)iba->mem;
+        for (u64 i = 0; i < iba->count; i += 1) {
+            _Ostd_Swappable_Page_Region *region = regions + i;
+            
+            if ((iba->state_bits[i/8] & (1 << (i%8))) && region->start == (u8*)start) {
+                found_region = region;
+                break;
+            }
+        }
+        
+        if (found_region) break;
+    
+        iba = iba->next;
+    }
+    
+    if (!found_region) {
+        log_error("Could not find page region that should exist.", SYSTEM_ERROR_INTERNAL_ERROR, SYSTEM_LOG_CATEGORY_PAGE_MAPPING);
+        return false;
+    }
+    
+    if (!found_region->is_mapped_to_file) {
+        log_ok("Region is already mapped to memory.", SYSTEM_LOG_CATEGORY_PAGE_MAPPING);
+        return true;
+    }
+    
+    
+    _Ostd_Swappable_Page_Sub_Region *next_sub = found_region->sub_regions;
+    while (next_sub) {
+        // Unmap file views
+        bool free_result = UnmapViewOfFile2(GetCurrentProcess(), next_sub->start, MEM_PRESERVE_PLACEHOLDER);
+        if (free_result == 0) {
+            log_error("UnmapViewOfFile2 returned 0.", SYSTEM_ERROR_INTERNAL_ERROR, SYSTEM_LOG_CATEGORY_PAGE_MAPPING);
+            return false;
+		}
+		
+        next_sub = next_sub->next;
+    }
+    
+    // Are there more than one sub region?
+    if (found_region->sub_regions->next) {
+        // Coalesce placeholders into one
+        bool free_result = VirtualFree(found_region->start, found_region->page_count*sinfo.page_size, MEM_RELEASE | MEM_COALESCE_PLACEHOLDERS);
+        log_os_call("Coalesce placeholders", "VirtualFree", found_region->start, SYSTEM_LOG_CATEGORY_PAGE_MAPPING);
+        if (free_result == 0) {
+            log_error("VirtualFree returned 0.", SYSTEM_ERROR_INTERNAL_ERROR, SYSTEM_LOG_CATEGORY_PAGE_MAPPING);
+            return false;
+		}
+    }
+    
+    CloseHandle(found_region->fmapping);
+    
+    //FlushFileBuffers(found_region->f);
+    
+    {
+        void *new_pointer = VirtualAlloc2(GetCurrentProcess(), found_region->start, found_region->page_count*sinfo.page_size, MEM_RESERVE | MEM_REPLACE_PLACEHOLDER, PAGE_NOACCESS, 0, 0);
+        log_os_call("Reserve placeholder for entire region", "VirtualAlloc2", found_region->start, SYSTEM_LOG_CATEGORY_PAGE_MAPPING);
+        if (!new_pointer || (new_pointer != found_region->start)) {
+            log_error("VirtualAlloc2 returned bad pointer.", SYSTEM_ERROR_INTERNAL_ERROR, SYSTEM_LOG_CATEGORY_PAGE_MAPPING);
+            return false;
+        }
+    }
+    
+    next_sub = found_region->sub_regions;
+    while (next_sub) {
+        
+        // Split placeholder
+        bool free_result = (bool)VirtualFree(next_sub->start, next_sub->page_count*sinfo.page_size, MEM_RELEASE | MEM_PRESERVE_PLACEHOLDER);
+        log_os_call("Split placeholder", "VirtualFree", next_sub->start, SYSTEM_LOG_CATEGORY_PAGE_MAPPING);
+        if (free_result == 0) {
+            log_error("VirtualFree returned 0.", SYSTEM_ERROR_INTERNAL_ERROR, SYSTEM_LOG_CATEGORY_PAGE_MAPPING);
+            return false;
+		}
+    
+        
+        if (next_sub->is_committed) {
+            u32 flags = 0;
+            u32 protection = 0;
+            flags |= (MEM_RESERVE | MEM_COMMIT | MEM_REPLACE_PLACEHOLDER);
+            protection = PAGE_READWRITE;
+            
+            void *new_pointer = VirtualAlloc2(0, next_sub->start, next_sub->page_count*sinfo.page_size, flags, protection, 0, 0);
+            log_os_call("Map pages for subregion", "VirtualAlloc2", next_sub->start, SYSTEM_LOG_CATEGORY_PAGE_MAPPING);
+            
+            if (!new_pointer || (new_pointer != next_sub->start)) {
+                log_error("VirtualAlloc2 returned bad pointer.", SYSTEM_ERROR_INTERNAL_ERROR, SYSTEM_LOG_CATEGORY_PAGE_MAPPING);
+                return false;
+            }
+            
+            max_read = max_read ? max_read : found_region->page_count*sinfo.page_size;
+            max_read = min(max_read, found_region->page_count*sinfo.page_size);
+            
+            u64 read_start = (u64)next_sub->start - (u64)found_region->start;
+            
+            if (read_start < max_read) {
+                u64 read_size = min(next_sub->page_count*sinfo.page_size, max_read-read_start);
+                
+                sys_set_file_position(found_region->f, read_start);
+                sys_read(found_region->f, next_sub->start, read_size);
+            }
+        }
+    
+        next_sub = next_sub->next;
+    }
+    
+    
+    found_region->is_mapped_to_file = false;
+    
+    log_ok("Swapped to memory", SYSTEM_LOG_CATEGORY_PAGE_MAPPING);
+    
+    return true;
+}
+
+bool sys_coalesce_swappable_pages(void *address, u64 max_preserve) {
+    log_call(SYSTEM_LOG_CATEGORY_PAGE_MAPPING);
+    _ostd_lazy_init_swappable();
+
+    u8 *start = (u8*)address;
+    
+    System_Info sinfo = sys_get_info();
+    
+    _Ostd_Internal_Block_Allocator *iba = swappable_page_region_iba;
+    _Ostd_Swappable_Page_Region *found_region = 0;
+    while (iba) {
+        _Ostd_Swappable_Page_Region *regions = (_Ostd_Swappable_Page_Region *)iba->mem;
+        for (u64 i = 0; i < iba->count; i += 1) {
+            _Ostd_Swappable_Page_Region *region = regions + i;
+            
+            if ((iba->state_bits[i/8] & (1 << (i%8))) && region->start == (u8*)start) {
+                found_region = region;
+                break;
+            }
+        }
+        
+        if (found_region) break;
+    
+        iba = iba->next;
+    }
+    
+    if (!found_region) {
+        log_error("Could not find page region that should exist.", SYSTEM_ERROR_INTERNAL_ERROR, SYSTEM_LOG_CATEGORY_PAGE_MAPPING);
+        return false;
+    }
+    
+    if (found_region->is_mapped_to_file) {
+        log_error("Cannot coalesce regions when they are swapped to file. This is only allowed when in memory.", SYSTEM_ERROR_BAD_COALESCE, SYSTEM_LOG_CATEGORY_PAGE_MAPPING);
+        return false;
+    }
+    
+    _Ostd_Swappable_Page_Sub_Region *left = 0;
+    _Ostd_Swappable_Page_Sub_Region *right = 0;
+    
+    _Ostd_Swappable_Page_Sub_Region *next_sub = found_region->sub_regions;
+    while (next_sub) {
+        
+        if (next_sub->is_committed) {
+            if (!left) left = next_sub;
+            right = next_sub;
+        } else {
+            if (left && right) {
+                
+                u64 size = ((u64)right->start + right->page_count*sinfo.page_size) - (u64)left->start;
+                
+                void *staging = sys_map_pages(SYS_MEMORY_RESERVE | SYS_MEMORY_ALLOCATE, 0, size/sinfo.page_size, false);
+                
+                if (!staging) {
+                    log_error("Ran out of memory, needed for staging when coalescing", SYSTEM_ERROR_OUT_OF_MEMORY, SYSTEM_LOG_CATEGORY_PAGE_MAPPING);
+                    return false;
+                }
+                
+                memcpy(staging, left->start, size);
+                
+                _Ostd_Swappable_Page_Sub_Region *next_coal = left;
+                while (1) {
+                    
+                    DWORD free_result = VirtualFree(next_coal->start, next_coal->page_count*sinfo.page_size, MEM_RELEASE | MEM_PRESERVE_PLACEHOLDER);
+                    log_os_call("Free to placeholder to be able to coalesce", "VirtualFree", next_coal->start, SYSTEM_LOG_CATEGORY_PAGE_MAPPING);
+                    if (free_result == 0) {
+                        log_error("VirtualFree returned 0.", SYSTEM_ERROR_INTERNAL_ERROR, SYSTEM_LOG_CATEGORY_PAGE_MAPPING);
+                        return false;
+            		}
+                    
+                    if (next_coal == right) break;
+                    next_coal = next_coal->next;
+                }
+                
+                {
+                    DWORD free_result = VirtualFree(left->start, size, MEM_RELEASE | MEM_COALESCE_PLACEHOLDERS);
+                    log_os_call("Coalesce placeholders", "VirtualFree", left->start, SYSTEM_LOG_CATEGORY_PAGE_MAPPING);
+                    if (free_result == 0) {
+                        log_error("VirtualFree returned 0.", SYSTEM_ERROR_INTERNAL_ERROR, SYSTEM_LOG_CATEGORY_PAGE_MAPPING);
+                        return false;
+            		}
+                }
+                
+                void *new_pointer = VirtualAlloc2(0, left->start, size, MEM_RESERVE | MEM_COMMIT | MEM_REPLACE_PLACEHOLDER, PAGE_READWRITE, 0, 0);
+                log_os_call("Recommit memory in coalesced region", "VirtualAlloc2", left->start, SYSTEM_LOG_CATEGORY_PAGE_MAPPING);
+                if (!new_pointer || (new_pointer != left->start)) {
+                    log_error("VirtualAlloc2 returned bad pointer.", SYSTEM_ERROR_INTERNAL_ERROR, SYSTEM_LOG_CATEGORY_PAGE_MAPPING);
+                    return false;
+                }
+                
+                max_preserve = max_preserve ? max_preserve : found_region->page_count*sinfo.page_size;
+                max_preserve = min(max_preserve, found_region->page_count*sinfo.page_size);
+                
+                u64 preserve_start = (u64)left->start - (u64)found_region->start;
+                
+                if (preserve_start < max_preserve) {
+                    u64 preserve_size = min(left->page_count*sinfo.page_size, max_preserve - preserve_start);
+                    
+                    memcpy(left->start, staging, preserve_size);
+                }
+                
+                
+                sys_unmap_pages(staging);
+                
+                left = 0;
+                right = 0;
+            }
+        }
+        
+        next_sub = next_sub->next;
+    }
+    
+    log_ok("Coalesced region(s)", SYSTEM_LOG_CATEGORY_PAGE_MAPPING);
+    return true;
 }
 
 u64 sys_query_mapped_regions(void *start, void *end, Mapped_Memory_Info *result, u64 result_count) {
+    log_call(SYSTEM_LOG_CATEGORY_PAGE_MAPPING);
     System_Info info = sys_get_info();
 
     start = (void*)(((u64)start + info.page_size-1) & ~(info.page_size-1));
@@ -8990,7 +10450,7 @@ u64 sys_query_mapped_regions(void *start, void *end, Mapped_Memory_Info *result,
 }
 
 void *sys_find_mappable_range(u64 page_count) {
-
+    log_call(SYSTEM_LOG_CATEGORY_PAGE_MAPPING);
     System_Info info = sys_get_info();
 
     u64 amount_in_bytes = page_count*info.page_size;
@@ -9018,6 +10478,7 @@ void *sys_find_mappable_range(u64 page_count) {
 }
 
 System_Info sys_get_info(void) {
+    //log_call();
     local_persist System_Info info;
     local_persist bool has_retrieved_info = false;
 
@@ -9090,6 +10551,7 @@ unit_local BOOL WINAPI _win_query_monitors_callback(HMONITOR monitor_handle, HDC
 }
 
 u64 sys_query_monitors(Physical_Monitor *buffer, u64 max_count) {
+    log_call(SYSTEM_LOG_CATEGORY_MISC);
     _win_lazy_enable_dpi_awarness();
     MonitorContext ctx;
     ctx.buffer = buffer;
@@ -9151,6 +10613,7 @@ unit_local IDXGIOutput* _win_get_output_for_monitor(HMONITOR hmon)
     return 0;
 }
 bool sys_wait_vertical_blank(Physical_Monitor monitor) {
+    log_call(SYSTEM_LOG_CATEGORY_MISC);
     IDXGIOutput *output = _win_get_output_for_monitor(monitor.handle);
 
     if (output) {
@@ -9163,13 +10626,16 @@ bool sys_wait_vertical_blank(Physical_Monitor monitor) {
 #endif // !OSTD_HEADLESS
 
 File_Handle sys_get_stdout(void) {
+    log_call(SYSTEM_LOG_CATEGORY_IO);
     return (File_Handle)GetStdHandle((u32)-11);
 }
 File_Handle sys_get_stderr(void) {
+    log_call(SYSTEM_LOG_CATEGORY_IO);
     return (File_Handle)GetStdHandle((u32)-12);
 }
 
 bool sys_make_pipe(File_Handle *read, File_Handle *write) {
+    log_call(SYSTEM_LOG_CATEGORY_IO);
     HANDLE read_handle, write_handle;
     SECURITY_ATTRIBUTES sa = {sizeof(SECURITY_ATTRIBUTES), 0, true};
     if (!CreatePipe(&read_handle, &write_handle, &sa, 0)) return false;
@@ -9179,16 +10645,19 @@ bool sys_make_pipe(File_Handle *read, File_Handle *write) {
 }
 
 s64 sys_write(File_Handle f, void *data, u64 size) {
+    //log_call(); WE CANT LOG HERE BECAUSE STACK OVERFLOW
     u32 written = 0;
     WriteFile(f, data, (DWORD)size, (unsigned long*)&written, 0);
     return (s64)written;
 }
 
 s64 sys_write_string(File_Handle f, string s) {
+    //log_call(); WE CANT LOG HERE BECAUSE STACK OVERFLOW
     return sys_write(f, s.data, s.count);
 }
 
 s64 sys_read(File_Handle h, void *buffer, u64 buffer_size) {
+    log_call(SYSTEM_LOG_CATEGORY_IO);
     DWORD read = 0;
     ReadFile(h, (LPVOID)buffer, (DWORD)buffer_size, &read, 0);
 
@@ -9196,10 +10665,12 @@ s64 sys_read(File_Handle h, void *buffer, u64 buffer_size) {
 }
 
 void sys_close(File_Handle h) {
+    log_call(SYSTEM_LOG_CATEGORY_IO);
     CloseHandle((HANDLE)h);
 }
 
 File_Handle sys_open_file(string path, File_Open_Flags flags) {
+    log_call(SYSTEM_LOG_CATEGORY_IO);
     u16 cpath[MAX_PATH_LENGTH*2];
     _win_utf8_to_wide(path, cpath, MAX_PATH_LENGTH*2);
 
@@ -9244,6 +10715,7 @@ File_Handle sys_open_file(string path, File_Open_Flags flags) {
 }
 
 u64 sys_get_file_size(File_Handle f) {
+    log_call(SYSTEM_LOG_CATEGORY_IO);
     LARGE_INTEGER size;
     if (!GetFileSizeEx(f, &size)) {
         return 0; // Indicate failure
@@ -9252,12 +10724,14 @@ u64 sys_get_file_size(File_Handle f) {
 }
 
 bool sys_set_file_position(File_Handle f, u64 position) {
+    log_call(SYSTEM_LOG_CATEGORY_IO);
     LARGE_INTEGER li;
     li.QuadPart = (LONGLONG)position;
     return SetFilePointerEx((HANDLE)f, li, 0, 0) != 0;
 }
 
 bool sys_make_directory(string path, bool recursive) {
+    log_call(SYSTEM_LOG_CATEGORY_IO);
     u16 path_wide[2048];
     u64 path_len = _win_utf8_to_wide(path, path_wide, 2048);
     if (path_len == 0) {
@@ -9298,24 +10772,17 @@ bool sys_make_directory(string path, bool recursive) {
     return true;
 }
 
-bool sys_remove_directory(string path, bool recursive) {
-    u16 path_wide[2048];
-    u64 path_len = _win_utf8_to_wide(path, path_wide, 2048);
+unit_local bool _win_remove_directory_recursive(u16 *path_wide, u64 path_len) {
     if (path_len == 0) {
         return false;
     }
 
-    if (!recursive) {
-        return (RemoveDirectoryW((LPCWSTR)path_wide) != 0);
+    bool has_slash = false;
+    u16 last = path_wide[path_len - 1];
+    if (last == '\\' || last == '/') {
+        has_slash = true;
     }
 
-    bool has_slash = false;
-    if (path.count > 0) {
-        char last = ((char*)path.data)[path.count - 1];
-        if (last == '\\' || last == '/') {
-            has_slash = true;
-        }
-    }
     u16 search_pattern[2048];
     u64 pos = 0;
     for (u64 i = 0; i < path_len; i++) {
@@ -9332,7 +10799,9 @@ bool sys_remove_directory(string path, bool recursive) {
     if (hFind == INVALID_HANDLE_VALUE) {
         return false;
     }
-
+    
+    bool some_failed = false;
+    
     do {
         if (_wide_strcmp(findData.cFileName, L".") == 0 ||
             _wide_strcmp(findData.cFileName, L"..") == 0) {
@@ -9354,29 +10823,49 @@ bool sys_remove_directory(string path, bool recursive) {
         entry_path[new_pos] = 0;
 
         if (findData.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) {
-            u8 entry_utf8[2048];
-            string entry_str;
-            entry_str.data = entry_utf8;
-            entry_str.count = _wide_strlen(entry_path);
-            _win_wide_to_utf8(entry_path, &entry_str);
-            if (!sys_remove_directory(entry_str, true)) {
-                FindClose(hFind);
-                return false;
+            bool ok;
+            if (findData.dwFileAttributes & FILE_ATTRIBUTE_REPARSE_POINT) {
+                ok = RemoveDirectoryW((LPCWSTR)entry_path) != 0;
+            } else {
+                ok = _win_remove_directory_recursive(entry_path, new_pos);
+            }
+            if (!ok) {
+                //FindClose(hFind);
+                //return false;
+                some_failed = true;
             }
         } else {
             if (!DeleteFileW((LPCWSTR)entry_path)) {
-                FindClose(hFind);
-                return false;
+                //FindClose(hFind);
+                //return false;
+                DWORD err = GetLastError(); (void)err;
+                some_failed = true;
             }
         }
     } while (FindNextFileW(hFind, &findData));
 
     FindClose(hFind);
 
-    return (RemoveDirectoryW((LPCWSTR)path_wide) != 0);
+    return !some_failed && (RemoveDirectoryW((LPCWSTR)path_wide) != 0);
+}
+
+bool sys_remove_directory(string path, bool recursive) {
+    log_call(SYSTEM_LOG_CATEGORY_IO);
+    u16 path_wide[2048];
+    u64 path_len = _win_utf8_to_wide(path, path_wide, 2048);
+    if (path_len == 0) {
+        return false;
+    }
+
+    if (!recursive) {
+        return (RemoveDirectoryW((LPCWSTR)path_wide) != 0);
+    }
+
+    return _win_remove_directory_recursive(path_wide, path_len);
 }
 
 bool sys_is_file(string path) {
+    log_call(SYSTEM_LOG_CATEGORY_IO);
     u16 path_wide[2048];
     u64 path_len = _win_utf8_to_wide(path, path_wide, 2048);
     if (path_len == 0) {
@@ -9389,6 +10878,7 @@ bool sys_is_file(string path) {
 }
 
 bool sys_is_directory(string path) {
+    log_call(SYSTEM_LOG_CATEGORY_IO);
     u16 path_wide[2048];
     u64 path_len = _win_utf8_to_wide(path, path_wide, 2048);
     if (path_len == 0) {
@@ -9403,6 +10893,7 @@ bool sys_is_directory(string path) {
 
 
 void sys_walk_directory(string path, bool recursive, bool walk_directories, Walk_Proc walk_proc) {
+    log_call(SYSTEM_LOG_CATEGORY_IO);
     bool has_slash = false;
     if (path.count > 0) {
         char last = ((char*)path.data)[path.count - 1];
@@ -9487,6 +10978,7 @@ void sys_walk_directory(string path, bool recursive, bool walk_directories, Walk
 }
 
 Easy_Command_Result sys_run_command_easy(string command_line, File_Handle stdout, File_Handle stderr, string workspace_dir, bool wait_for_exit) {
+    log_call(SYSTEM_LOG_CATEGORY_EXECUTION);
     Easy_Command_Result res = (Easy_Command_Result){0};
 
     STARTUPINFOA si = {0};
@@ -9527,14 +11019,17 @@ Easy_Command_Result sys_run_command_easy(string command_line, File_Handle stdout
 }
 
 OSTD_LIB void sys_exit(s64 code) {
+    log_call(SYSTEM_LOG_CATEGORY_EXECUTION);
     ExitProcess((UINT)code);
 }
 
 OSTD_LIB void sys_exit_current_thread(s64 code) {
+    log_call(SYSTEM_LOG_CATEGORY_EXECUTION);
     ExitThread((DWORD)code);
 }
 
 OSTD_LIB void sys_set_clipboard_text(string text) {
+    log_call(SYSTEM_LOG_CATEGORY_IO);
 	if (OpenClipboard(0)) {
 		HGLOBAL cringe = (HGLOBAL)GlobalAlloc(GMEM_MOVEABLE, sizeof(u16) * text.count*2);
 		u16 *wide = (u16*)GlobalLock(cringe);
@@ -9546,6 +11041,7 @@ OSTD_LIB void sys_set_clipboard_text(string text) {
 }
 
 OSTD_LIB u64 sys_get_clipboard_text(u8 *out, u64 out_max) {
+    log_call(SYSTEM_LOG_CATEGORY_IO);
 	u64 n = 0;
 	if (OpenClipboard(0)) {
 		HANDLE h = GetClipboardData(CF_UNICODETEXT);
@@ -9563,6 +11059,7 @@ OSTD_LIB u64 sys_get_clipboard_text(u8 *out, u64 out_max) {
 }
 
 OSTD_LIB u64 sys_get_environment_variable(string name, u8 *out) {
+    log_call(SYSTEM_LOG_CATEGORY_IO);
     u16 wide_in[1024];
     if (_win_utf8_to_wide(name, wide_in, 1024)) {
         u16 wide_out[1024];
@@ -9581,6 +11078,9 @@ OSTD_LIB u64 sys_get_environment_variable(string name, u8 *out) {
     }
     return 0;
 }
+
+
+
 
 
 inline unit_local int _to_winsock_err(Socket_Result r) {
@@ -9640,6 +11140,7 @@ unit_local int _to_win_sock_err(Socket_Result r) {
 }
 
 u32 sys_convert_address_string(string address) {
+    log_call(SYSTEM_LOG_CATEGORY_NET);
     assert(address.count < 1024);
     char addr_str[1024] = {0};
     memcpy(addr_str, address.data, address.count);
@@ -9648,6 +11149,7 @@ u32 sys_convert_address_string(string address) {
 }
 
 Socket_Result sys_socket_init(Socket *s, Socket_Domain domain, Socket_Type type, Socket_Protocol protocol) {
+    log_call(SYSTEM_LOG_CATEGORY_NET);
     Socket_Result init_res = _ensure_winsock_initialized();
     if (init_res != SOCKET_OK)
         return init_res;
@@ -9716,6 +11218,7 @@ Socket_Result sys_socket_init(Socket *s, Socket_Domain domain, Socket_Type type,
 }
 
 Socket_Result sys_socket_bind(Socket sock, u32 address, u16 port) {
+    log_call(SYSTEM_LOG_CATEGORY_NET);
     struct sockaddr_in addr;
     addr.sin_family = AF_INET;
     addr.sin_port = htons(port);
@@ -9733,6 +11236,7 @@ Socket_Result sys_socket_bind(Socket sock, u32 address, u16 port) {
 }
 
 Socket_Result sys_socket_listen(Socket sock, s64 backlog) {
+    log_call(SYSTEM_LOG_CATEGORY_NET);
     int result = listen((SOCKET)sock, (int)backlog);
     if (result == SOCKET_ERROR) {
         return SOCKET_PROTOCOL_ERROR;
@@ -9741,6 +11245,7 @@ Socket_Result sys_socket_listen(Socket sock, s64 backlog) {
 }
 
 Socket_Result sys_socket_accept(Socket sock, Socket *accepted, u64 timeout_ms) {
+    log_call(SYSTEM_LOG_CATEGORY_NET);
     fd_set readfds;
     FD_ZERO(&readfds);
     FD_SET(sock, &readfds);
@@ -9771,6 +11276,7 @@ Socket_Result sys_socket_accept(Socket sock, Socket *accepted, u64 timeout_ms) {
 }
 
 Socket_Result sys_socket_send(Socket sock, void *data, u64 length, u64 *sent) {
+    log_call(SYSTEM_LOG_CATEGORY_NET);
     int result = send((SOCKET)sock, (const char*)data, (int)length, 0);
     if (result == SOCKET_ERROR) {
         int err = WSAGetLastError();
@@ -9789,6 +11295,7 @@ Socket_Result sys_socket_send(Socket sock, void *data, u64 length, u64 *sent) {
 }
 
 Socket_Result sys_socket_recv(Socket sock, void *buffer, u64 length, u64 *received) {
+    log_call(SYSTEM_LOG_CATEGORY_NET);
     int result = recv((SOCKET)sock, (char*)buffer, (int)length, 0);
     if (result == SOCKET_ERROR) {
         int err = WSAGetLastError();
@@ -9811,6 +11318,7 @@ Socket_Result sys_socket_recv(Socket sock, void *buffer, u64 length, u64 *receiv
 }
 
 Socket_Result sys_socket_close(Socket sock) {
+    log_call(SYSTEM_LOG_CATEGORY_NET);
     int result = closesocket((SOCKET)sock);
     if (result == SOCKET_ERROR)
         return SOCKET_PROTOCOL_ERROR;
@@ -9818,6 +11326,7 @@ Socket_Result sys_socket_close(Socket sock) {
 }
 
 Socket_Result sys_socket_set_blocking(Socket *sock, bool blocking) {
+    log_call(SYSTEM_LOG_CATEGORY_NET);
     unsigned long mode = blocking ? 0 : 1;
     int result = ioctlsocket((SOCKET)(*sock), (long)FIONBIO, &mode);
     if (result != NO_ERROR)
@@ -9825,6 +11334,7 @@ Socket_Result sys_socket_set_blocking(Socket *sock, bool blocking) {
     return SOCKET_OK;
 }
 Socket_Result sys_set_socket_blocking_timeout(Socket socket, u64 ms) {
+    log_call(SYSTEM_LOG_CATEGORY_NET);
     setsockopt(socket, SOL_SOCKET, SO_RCVTIMEO, (char*)&ms, sizeof(ms));
     setsockopt(socket, SOL_SOCKET, SO_SNDTIMEO, (char*)&ms, sizeof(ms));
     return SOCKET_OK;
@@ -9858,6 +11368,7 @@ unit_local DWORD WINAPI _windows_thread_proc(LPVOID lpParameter) {
 }
 
 bool sys_thread_init(Thread *thread, Thread_Proc proc, void *userdata) {
+    log_call(SYSTEM_LOG_CATEGORY_THREADS);
     thread->userdata = userdata;
     thread->id = 0;
     thread->handle = CreateThread(0, 0, _windows_thread_proc, thread, 0x00000004, (LPDWORD)&thread->id);
@@ -9866,11 +11377,13 @@ bool sys_thread_init(Thread *thread, Thread_Proc proc, void *userdata) {
     return thread->handle != 0;
 }
 bool sys_thread_start(Thread *thread) {
+    log_call(SYSTEM_LOG_CATEGORY_THREADS);
     (void)_ostd_get_thread_storage();
     thread->is_suspended = false;
     return ResumeThread(thread->handle) != (DWORD)-1;
 }
 s64 sys_thread_join(Thread *thread) {
+    log_call(SYSTEM_LOG_CATEGORY_THREADS);
     assert(!thread->is_suspended);
     WaitForSingleObject(thread->handle, 0xFFFFFFFF);
     
@@ -9879,10 +11392,12 @@ s64 sys_thread_join(Thread *thread) {
     return (s64)exit_code;
 }
 void sys_thread_close(Thread *thread) {
+    log_call(SYSTEM_LOG_CATEGORY_THREADS);
     CloseHandle(thread->handle);
 }
 
 bool sys_mutex_init(Mutex *mutex) {
+    log_call(SYSTEM_LOG_CATEGORY_SYNC_PRIMITIVES);
     if (!mutex) return false;
     mutex->handle = mutex->handle_backing;
     InitializeCriticalSection(mutex->handle);
@@ -9890,6 +11405,7 @@ bool sys_mutex_init(Mutex *mutex) {
 }
 
 bool sys_mutex_uninit(Mutex *mutex) {
+    log_call(SYSTEM_LOG_CATEGORY_SYNC_PRIMITIVES);
     if (!mutex || !mutex->handle) return false;
     DeleteCriticalSection(mutex->handle);
     mutex->handle = 0;
@@ -9897,28 +11413,61 @@ bool sys_mutex_uninit(Mutex *mutex) {
 }
 
 void sys_mutex_acquire(Mutex mutex) {
+    log_call(SYSTEM_LOG_CATEGORY_SYNC_PRIMITIVES);
     EnterCriticalSection(mutex.handle);
 }
 
 void sys_mutex_release(Mutex mutex) {
+    log_call(SYSTEM_LOG_CATEGORY_SYNC_PRIMITIVES);
     LeaveCriticalSection(mutex.handle);
 }
 
 OSTD_LIB bool sys_semaphore_init(Semaphore *sem) {
+    log_call(SYSTEM_LOG_CATEGORY_SYNC_PRIMITIVES);
     sem->handle = CreateSemaphoreA(0, 0, S32_MAX, 0);
     return sem->handle != 0;
 }
 
 OSTD_LIB void sys_semaphore_signal(Semaphore *sem) {
+    log_call(SYSTEM_LOG_CATEGORY_SYNC_PRIMITIVES);
     ReleaseSemaphore(sem->handle, 1, 0);
 }
 
 OSTD_LIB void sys_semaphore_wait(Semaphore *sem) {
+    log_call(SYSTEM_LOG_CATEGORY_SYNC_PRIMITIVES);
     WaitForSingleObject((HANDLE)sem->handle, 0xFFFFFFFF);
 }
 
 OSTD_LIB void sys_semaphore_uninit(Semaphore *sem) {
+    log_call(SYSTEM_LOG_CATEGORY_SYNC_PRIMITIVES);
     CloseHandle((HANDLE)sem->handle);
+}
+
+bool sys_lock_init(Lock *lock, bool locked) {
+    log_call(SYSTEM_LOG_CATEGORY_SYNC_PRIMITIVES);
+    *lock = (Lock){0};
+    lock->handle = CreateEventA(0, true, !locked, 0);
+    return lock->handle != 0;
+}
+void sys_lock_unlock(Lock *lock) {
+    log_call(SYSTEM_LOG_CATEGORY_SYNC_PRIMITIVES);
+    SetEvent(lock->handle);
+}
+void sys_lock_lock(Lock *lock) {
+    log_call(SYSTEM_LOG_CATEGORY_SYNC_PRIMITIVES);
+    ResetEvent(lock->handle);
+}
+void sys_lock_uninit(Lock *lock) {
+    log_call(SYSTEM_LOG_CATEGORY_SYNC_PRIMITIVES);
+    CloseHandle(lock->handle);
+}
+void sys_lock_wait(Lock *lock) {
+    log_call(SYSTEM_LOG_CATEGORY_SYNC_PRIMITIVES);
+    WaitForSingleObject(lock->handle, 0xFFFFFFFF);
+}
+bool sys_lock_is_locked(Lock *lock) {
+    log_call(SYSTEM_LOG_CATEGORY_SYNC_PRIMITIVES);
+    return WaitForSingleObject(lock->handle, 0) == 258 /* WAIT_TIMEOUT */;
 }
 
 inline unit_local u16 sys_atomic_add_16(volatile u16 *addend, u16 value) {
@@ -9944,9 +11493,20 @@ inline unit_local u64 sys_atomic_add_64(volatile u64 *addend, u64 value) {
     return (u64)old;
 }
 
+inline bool sys_compare_and_swap_64(volatile u64 *a, u64 b, u64 old) {
+    return _InterlockedCompareExchange64((volatile long long*)a, (long long)b, (long long)old) == old;
+}
+
+inline unit_local void sys_memory_barrier(void) {
+    volatile long Barrier;
+
+    _InterlockedOr(&Barrier, 0);
+}
+
 #ifndef OSTD_HEADLESS
 
 Surface_Handle sys_make_surface(Surface_Desc desc) {
+    log_call(SYSTEM_LOG_CATEGORY_SURFACE);
     _Surface_State *s = _alloc_surface_state();
     if (!s) {
         // todo(charlie) sys_error
@@ -10019,6 +11579,7 @@ Surface_Handle sys_make_surface(Surface_Desc desc) {
     return hwnd;
 }
 void surface_close(Surface_Handle s) {
+    log_call(SYSTEM_LOG_CATEGORY_SURFACE);
     _Surface_State *state = _get_surface_state(s);
     if (!state) return; // todo(charlie) sys_error
 
@@ -10029,6 +11590,7 @@ void surface_close(Surface_Handle s) {
 
 
 void surface_poll_events(Surface_Handle surface) {
+    log_call(SYSTEM_LOG_CATEGORY_SURFACE);
     _Surface_State *state = _get_surface_state(surface);
     state->char_byte_count = 0;
     state->vscroll_ticks = 0;
@@ -10044,12 +11606,14 @@ void surface_poll_events(Surface_Handle surface) {
 }
 
 bool surface_should_close(Surface_Handle s) {
+    log_call(SYSTEM_LOG_CATEGORY_SURFACE);
     _Surface_State *state = _get_surface_state(s);
     if (!state) return true;
     return state->should_close;
 }
 
 bool surface_set_flags(Surface_Handle h, Surface_Flags flags) {
+    log_call(SYSTEM_LOG_CATEGORY_SURFACE);
     int ex_style = GetWindowLongW((HWND)h, GWL_EXSTYLE);
     int style = GetWindowLongW((HWND)h, GWL_STYLE);
 
@@ -10075,6 +11639,7 @@ bool surface_set_flags(Surface_Handle h, Surface_Flags flags) {
     return true;
 }
 bool surface_unset_flags(Surface_Handle h, Surface_Flags flags) {
+    log_call(SYSTEM_LOG_CATEGORY_SURFACE);
     int ex_style = GetWindowLongW((HWND)h, GWL_EXSTYLE);
     int style = GetWindowLongW((HWND)h, GWL_STYLE);
 
@@ -10099,6 +11664,7 @@ bool surface_unset_flags(Surface_Handle h, Surface_Flags flags) {
 }
 
 bool surface_get_framebuffer_size(Surface_Handle h, u16 *width, u16 *height) {
+    log_call(SYSTEM_LOG_CATEGORY_SURFACE);
     RECT r;
     if (GetClientRect((HWND)h, &r)) {
         *width = (u16)(r.right - r.left);
@@ -10110,6 +11676,7 @@ bool surface_get_framebuffer_size(Surface_Handle h, u16 *width, u16 *height) {
 }
 
 void surface_set_resize_callback(Surface_Handle h, Window_Resize_Proc proc) {
+    log_call(SYSTEM_LOG_CATEGORY_SURFACE);
     _Surface_State *state = _get_surface_state(h);
     if (!state) return;
     
@@ -10117,6 +11684,7 @@ void surface_set_resize_callback(Surface_Handle h, Window_Resize_Proc proc) {
 }
 
 u64 surface_get_char_events(Surface_Handle h, u8 *char_bytes, u64 max_char_bytes) {
+    log_call(SYSTEM_LOG_CATEGORY_SURFACE);
     _Surface_State *state = _get_surface_state(h);
     if (char_bytes && max_char_bytes) {
         memcpy(char_bytes, state->char_bytes, min(state->char_byte_count, max_char_bytes));
@@ -10125,16 +11693,19 @@ u64 surface_get_char_events(Surface_Handle h, u8 *char_bytes, u64 max_char_bytes
 }
 
 u32 surface_get_vscroll_ticks(Surface_Handle h) {
+    log_call(SYSTEM_LOG_CATEGORY_SURFACE);
     _Surface_State *state = _get_surface_state(h);
     return state->vscroll_ticks;
 }
 void surface_set_minimum_size(Surface_Handle h, u16 width, u16 height) {
+    log_call(SYSTEM_LOG_CATEGORY_SURFACE);
     _Surface_State *state = _get_surface_state(h);
     state->minimum_w = width;
     state->minimum_h = height;
 }
 
 void* surface_map_pixels(Surface_Handle h) {
+    log_call(SYSTEM_LOG_CATEGORY_SURFACE);
    _Surface_State *state = _get_surface_state(h);
    if (!state) return 0;
 
@@ -10176,6 +11747,7 @@ void* surface_map_pixels(Surface_Handle h) {
    return state->pixels;
 }
 void surface_blit_pixels(Surface_Handle h) {
+    log_call(SYSTEM_LOG_CATEGORY_SURFACE);
     _Surface_State *state = _get_surface_state(h);
     if (!state) return;
 
@@ -10198,6 +11770,7 @@ void surface_blit_pixels(Surface_Handle h) {
     ReleaseDC((HWND)h, hdc);
 }
 void surface_blit_my_pixels(Surface_Handle h, void *pixels) {
+    log_call(SYSTEM_LOG_CATEGORY_SURFACE);
     _Surface_State *state = _get_surface_state(h);
     if (!state) return;
 
@@ -10220,6 +11793,7 @@ void surface_blit_my_pixels(Surface_Handle h, void *pixels) {
     ReleaseDC((HWND)h, hdc);
 }
 void surface_blit_pixels_partial(Surface_Handle h, u16 x, u16 y, u16 width, u16 height) {
+    log_call(SYSTEM_LOG_CATEGORY_SURFACE);
    _Surface_State *state = _get_surface_state(h);
    if (!state) return;
 
@@ -10237,6 +11811,7 @@ void surface_blit_pixels_partial(Surface_Handle h, u16 x, u16 y, u16 width, u16 
    ReleaseDC((HWND)h, hdc);
 }
 void surface_blit_my_pixels_partial(Surface_Handle h, u16 x, u16 y, u16 width, u16 height, void *pixels) {
+    log_call(SYSTEM_LOG_CATEGORY_SURFACE);
     _Surface_State *state = _get_surface_state(h);
     if (!state) return;
 
@@ -10260,6 +11835,7 @@ void surface_blit_my_pixels_partial(Surface_Handle h, u16 x, u16 y, u16 width, u
 }
 
 bool surface_get_monitor(Surface_Handle h, Physical_Monitor *monitor) {
+    log_call(SYSTEM_LOG_CATEGORY_SURFACE);
     HMONITOR hmon = MonitorFromWindow((HWND)h, MONITOR_DEFAULTTONEAREST);
     if (!hmon) return false;
 
@@ -10276,6 +11852,46 @@ bool surface_get_monitor(Surface_Handle h, Physical_Monitor *monitor) {
     }
 
     return false;
+}
+
+void sys_add_to_tray(void *surface) {
+    log_call(SYSTEM_LOG_CATEGORY_SURFACE);
+    
+    _Surface_State *state = _get_surface_state(surface);
+
+    state->nid.cbSize = sizeof(state->nid);
+    state->nid.hWnd = (HWND)surface;
+    state->nid.uID = 0;
+    state->nid.uFlags = NIF_MESSAGE | NIF_ICON | NIF_TIP;
+    state->nid.uCallbackMessage = WINDOWS_MESSAGE_TRAY_ICON;
+    state->nid.hIcon = LoadIconA(GetModuleHandleA(0), (LPCSTR)MAKEINTRESOURCEA(IDI_MAINICON));
+    
+    memcpy(state->nid.szTip, L"OSTD Tray Program", sizeof(L"OSTD Tray Program"));
+    state->nid.szTip[sizeof(L"OSTD Tray Program")/2] = 0;
+    
+    Shell_NotifyIconW(NIM_ADD, &state->nid);
+    
+    state->nid.DUMMYUNIONNAME.uVersion = NOTIFYICON_VERSION_4;
+    Shell_NotifyIconW(NIM_SETVERSION, &state->nid);
+}
+void sys_remove_from_tray(void *surface) {
+    log_call(SYSTEM_LOG_CATEGORY_SURFACE);
+    _Surface_State *state = _get_surface_state(surface);
+    Shell_NotifyIconW(NIM_DELETE, &state->nid);
+}
+
+void sys_set_exit_from_tray_callback(void *surface, Exit_From_Tray_Callback c) {
+    log_call(SYSTEM_LOG_CATEGORY_SURFACE);
+    _Surface_State *state = _get_surface_state(surface);
+    
+    state->exit_from_tray = c;
+    
+}
+void sys_set_open_from_tray_callback(void *surface, Open_From_Tray_Callback c) {
+    log_call(SYSTEM_LOG_CATEGORY_SURFACE);
+    _Surface_State *state = _get_surface_state(surface);
+    
+    state->open_from_tray = c;
 }
 
 #endif // !OSTD_HEADLESS
@@ -10295,10 +11911,12 @@ float64 sys_get_seconds_monotonic(void) {
 }
 
 void sys_set_thread_affinity_mask(Thread_Handle thread, u64 bits) {
+    log_call(SYSTEM_LOG_CATEGORY_THREADS);
     SetThreadAffinityMask((HANDLE)thread, (DWORD_PTR)bits);
 }
 
 void sys_set_local_process_priority_level(Priority_Level level) {
+    log_call(SYSTEM_LOG_CATEGORY_THREADS);
     switch(level) {
         case SYS_PRIORITY_LOW:
             SetPriorityClass(GetCurrentProcess(), 0x00000040 /*IDLE_PRIORITY_CLASS*/);
@@ -10314,6 +11932,7 @@ void sys_set_local_process_priority_level(Priority_Level level) {
     }
 }
 void sys_set_thread_priority_level(Thread_Handle thread, Priority_Level level) {
+    log_call(SYSTEM_LOG_CATEGORY_THREADS);
     switch(level) {
         case SYS_PRIORITY_LOW:
             SetThreadPriority(thread, -2 /*THREAD_PRIORITY_LOWEST*/);
@@ -10330,15 +11949,18 @@ void sys_set_thread_priority_level(Thread_Handle thread, Priority_Level level) {
 }
 
 void *sys_load_library(string s) {
+    log_call(SYSTEM_LOG_CATEGORY_MISC);
     char cs[1024];
     memcpy(cs, s.data, s.count);
     cs[s.count] = 0;
     return LoadLibraryA(cs);
 }
 void sys_close_library(void *lib) {
+    log_call(SYSTEM_LOG_CATEGORY_MISC);
     (void)lib;
 }
 void* sys_get_library_symbol(void *lib, string symbol) {
+    log_call(SYSTEM_LOG_CATEGORY_MISC);
     char cs[1024];
     memcpy(cs, symbol.data, symbol.count);
     cs[symbol.count] = 0;
@@ -10351,7 +11973,7 @@ Thread_Handle sys_get_current_thread(void) {
 }
 
 void sys_print_stack_trace(File_Handle handle) {
-
+    
     void* process = GetCurrentProcess();
     void* thread = GetCurrentThread();
 
@@ -11542,6 +13164,10 @@ void __start(void) {
 
 #endif // OSTD_SELF_CONTAINED
 
+#undef log_ok
+#undef log_os_call
+#undef log_error
+
 #endif // OSTD_IMPL
 
 #endif // _SYSTEM_1_H
@@ -11592,6 +13218,12 @@ typedef struct Arena {
     void *position;
     u64 reserved_size;
     u64 allocated_size;
+    
+    f64 growth_factor;
+    
+    bool swappable;
+    bool enable_coalescing;
+    bool is_swapped_to_file;
 } Arena;
 
 OSTD_LIB Arena make_arena(u64 reserved_size, u64 initial_allocated_size);
@@ -11657,6 +13289,9 @@ OSTD_LIB string string_copy(Allocator a, string s);
         persistent_array_uninit(my_array);
 */
 
+OSTD_LIB void persistent_array_push_hint_reserved_size(u64 reserved_size);
+OSTD_LIB void persistent_array_push_hint_swappable(bool swappable);
+
 OSTD_LIB void persistent_array_init(void **pparray, u64 element_size);
 OSTD_LIB void persistent_array_uninit(void *parray);
 OSTD_LIB void *persistent_array_push_copy(void *parray, void *item);
@@ -11670,6 +13305,9 @@ OSTD_LIB s64 persistent_array_find_from_left(void *parray, void *pcompare_mem);
 OSTD_LIB s64 persistent_array_find_from_right(void *parray, void *pcompare_mem);
 OSTD_LIB void persistent_array_set_count(void *parray, u64 count);
 OSTD_LIB u64 persistent_array_count(void *parray);
+
+OSTD_LIB bool persistent_array_swap_to_file(void *parray, File_Handle file);
+OSTD_LIB bool persistent_array_swap_to_memory(void *parray);
 
 typedef struct Arena_Backed_Array_Header {
     Arena arena;
@@ -11748,7 +13386,7 @@ Arena make_arena(u64 reserved_size, u64 initial_allocated_size) {
 
     assert(initial_allocated_size <= reserved_size);
 
-    Arena arena;
+    Arena arena = (Arena){0};
 
     if (reserved_size > initial_allocated_size) {
         arena.start = sys_map_pages(SYS_MEMORY_RESERVE, 0, reserved_size/info.page_size, false);
@@ -11766,6 +13404,50 @@ Arena make_arena(u64 reserved_size, u64 initial_allocated_size) {
 
     arena.reserved_size = reserved_size;
     arena.allocated_size = initial_allocated_size;
+    
+    arena.swappable = false;
+    
+    arena.growth_factor = 2.0;
+    
+    return arena;
+}
+Arena make_swappable_arena(u64 reserved_size, u64 initial_allocated_size) {
+    assert(reserved_size >= initial_allocated_size);
+
+#if OS_FLAGS & OS_FLAG_EMSCRIPTEN
+    assertmsg(reserved_size == initial_allocated_size, "Emscripten does not support reserved-only memory allocations. Arena initial allocation size must match reserved_size");
+#endif // OS_FLAGS & OS_FLAG_EMSCRIPTEN
+
+    System_Info info = sys_get_info();
+
+    // Align to page size
+    reserved_size = (reserved_size + info.page_size - 1) & ~(info.page_size - 1);
+    initial_allocated_size = (initial_allocated_size + info.page_size - 1) & ~(info.page_size - 1);
+
+    assert(initial_allocated_size <= reserved_size);
+
+    Arena arena = (Arena){0};
+
+    if (reserved_size > initial_allocated_size) {
+        arena.start = sys_map_swappable_pages(SYS_MEMORY_RESERVE, 0, reserved_size/info.page_size, false);
+        assert(arena.start);
+        if (initial_allocated_size) {
+            void *allocate_result = sys_map_swappable_pages(SYS_MEMORY_ALLOCATE, arena.start, initial_allocated_size/info.page_size, true);
+            assert(allocate_result == arena.start);
+        }
+    } else {
+        arena.start = sys_map_swappable_pages(SYS_MEMORY_RESERVE | SYS_MEMORY_ALLOCATE, 0, reserved_size/info.page_size, false);
+    }
+
+    arena.position = arena.start;
+
+
+    arena.reserved_size = reserved_size;
+    arena.allocated_size = initial_allocated_size;
+    
+    arena.growth_factor = 2.0;
+    
+    arena.swappable = true;
 
     return arena;
 }
@@ -11773,22 +13455,7 @@ void arena_reset(Arena *arena) {
     arena->position = arena->start;
 }
 void free_arena(Arena arena) {
-    if (!arena.allocated_size) {
-        sys_unmap_pages(arena.start);
-        return;
-    }
-    void *start = arena.start;
-    void *end = (u8*)arena.start + arena.reserved_size;
-
-    u64 pointer_count = sys_query_mapped_regions(start, end, 0, 0);
-
-    Mapped_Memory_Info *pointers = (Mapped_Memory_Info *)arena.start;
-    sys_query_mapped_regions(start, end, pointers, pointer_count);
-
-    u32 i;
-    for (i = 0; i < pointer_count; i += 1) {
-        sys_unmap_pages(pointers[i].base);
-    }
+    sys_unmap_pages(arena.start);
 }
 
 void *arena_push(Arena *arena, u64 size) {
@@ -11804,14 +13471,25 @@ void *arena_push(Arena *arena, u64 size) {
 
     if ((u64)arena->position + size > (u64)allocated_tail) {
 
-        u64 amount_to_allocate = ((u64)arena->position + size) - (u64)allocated_tail;
+        //u64 amount_to_allocate = ((u64)arena->position + size) - (u64)allocated_tail;
+        u64 amount_to_allocate = (u64)((f64)arena->allocated_size * arena->growth_factor) - arena->allocated_size;
+        amount_to_allocate = max(amount_to_allocate, size);
+        amount_to_allocate = min(amount_to_allocate, arena->reserved_size - arena->allocated_size);
+        amount_to_allocate = max(amount_to_allocate, info.page_size);
 
         amount_to_allocate = (amount_to_allocate + info.page_size-1) & ~(info.page_size-1);
 
         u64 pages_to_allocate = amount_to_allocate / info.page_size;
 
-        void *allocate_result = sys_map_pages(SYS_MEMORY_ALLOCATE, allocated_tail, pages_to_allocate, true);
+        void *allocate_result = arena->swappable
+            ? sys_map_swappable_pages(SYS_MEMORY_ALLOCATE, allocated_tail, pages_to_allocate, true)
+            : sys_map_pages(SYS_MEMORY_ALLOCATE, allocated_tail, pages_to_allocate, true);
         assertmsg(allocate_result == allocated_tail, "Failed allocating pages in arena");
+        
+        if (arena->swappable && arena->enable_coalescing) {
+            bool ok = sys_coalesce_swappable_pages(arena->start, (u64)arena->position - (u64)arena->start);
+            assert(ok);
+        }
 
         arena->allocated_size += amount_to_allocate;
     }
@@ -11875,6 +13553,18 @@ void* arena_allocator_proc(Allocator_Message msg, void *data, void *old, u64 old
     return 0;
 }
 
+// Leave size at 0 to make a file for entire arena reserved range
+bool arena_swap_to_file(Arena *arena, File_Handle f, u64 size) {
+    bool ok = sys_swap_pages_to_file(arena->start, f, size);
+    if (ok) arena->is_swapped_to_file = true;
+    return ok;
+}
+bool arena_swap_to_memory(Arena *arena, u64 max_read) {
+    bool ok = sys_swap_pages_to_memory(arena->start, max_read);
+    if (ok) arena->is_swapped_to_file = false;
+    return ok;
+}
+
 void *allocate(Allocator a, u64 n) {
     return a.proc(ALLOCATOR_ALLOCATE, a.data, 0, 0, n, 0, 0);
 }
@@ -11917,9 +13607,27 @@ unit_local Arena_Backed_Array_Header *_persistent_header(void *parray) {
     return h;
 }
 
+unit_local u64 _ostd_persistent_array_next_reserved_size = 0;
+unit_local bool _ostd_persistent_array_next_swappable = false;
+
+void persistent_array_push_hint_reserved_size(u64 reserved_size) {
+    _ostd_persistent_array_next_reserved_size = reserved_size;
+}
+void persistent_array_push_hint_swappable(bool swappable) {
+    _ostd_persistent_array_next_swappable = swappable;
+}
+
 void persistent_array_init(void **pparray, u64 element_size) {
     // todo(charlie) configurable
-    Arena arena = make_arena(1024ULL*1024ULL*1024ULL*4ULL, 0);
+    Arena arena;
+    
+    u64 reserved_size = _ostd_persistent_array_next_reserved_size ? (_ostd_persistent_array_next_reserved_size + sizeof(Arena_Backed_Array_Header)) : 1024ULL*1024ULL*1024ULL*4ULL;
+    
+    if (_ostd_persistent_array_next_swappable) {
+        arena = make_swappable_arena(reserved_size, 0);
+    } else {
+        arena = make_arena(reserved_size, 0);
+    }
     
     Arena_Backed_Array_Header *header = (Arena_Backed_Array_Header*)arena_push(&arena, sizeof(Arena_Backed_Array_Header));
     *header = (Arena_Backed_Array_Header){0};
@@ -11928,7 +13636,11 @@ void persistent_array_init(void **pparray, u64 element_size) {
     header->elem_size = element_size;
     
     *pparray = header->arena.position;
+    
+    _ostd_persistent_array_next_reserved_size = 0;
+    _ostd_persistent_array_next_swappable = false;
 }
+
 void persistent_array_uninit(void *parray) {
     Arena_Backed_Array_Header *h = _persistent_header(parray);
     free_arena(h->arena);
@@ -12031,6 +13743,17 @@ void persistent_array_set_count(void *parray, u64 count) {
 
 u64 persistent_array_count(void *parray) {
     return _persistent_header(parray)->count;
+}
+
+bool persistent_array_swap_to_file(void *parray, File_Handle file) {
+    Arena_Backed_Array_Header *h = _persistent_header(parray);
+    
+    return arena_swap_to_file(&h->arena, file, 0);
+}
+bool persistent_array_swap_to_memory(void *parray) {
+    Arena_Backed_Array_Header *h = _persistent_header(parray);
+    
+    return arena_swap_to_memory(&h->arena, 0);
 }
 
 #endif // OSTD_IMPL
