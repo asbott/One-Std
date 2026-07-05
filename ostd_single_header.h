@@ -1,26 +1,26 @@
 // This file was generated from One-Std/src/ostd.h
 // The following files were included & concatenated:
-// - C:\One-Std\src\ignore_warnings.h
-// - C:\One-Std\src\var_args_macros.h
-// - C:\One-Std\src\trig_tables.h
-// - C:\One-Std\src\var_args.h
-// - C:\One-Std\src\unignore_warnings.h
-// - C:\One-Std\src\system1.h
-// - C:\One-Std\src\path_utils.h
-// - C:\One-Std\src\base.h
-// - C:\One-Std\src\osl_compiler.h
-// - C:\One-Std\src\memory.h
 // - C:\One-Std\src\unicode.h
-// - C:\One-Std\src\ostd.h
-// - C:\One-Std\src\graphics_d3d12.h
-// - C:\One-Std\src\graphics_metal.h
-// - C:\One-Std\src\graphics_vulkan.h
-// - C:\One-Std\src\math.h
 // - C:\One-Std\src\string.h
+// - C:\One-Std\src\graphics_vulkan.h
+// - C:\One-Std\src\trig_tables.h
+// - C:\One-Std\src\ignore_warnings.h
+// - C:\One-Std\src\base.h
+// - C:\One-Std\src\graphics_metal.h
+// - C:\One-Std\src\memory.h
 // - C:\One-Std\src\print.h
-// - C:\One-Std\src\oga_graphics.h
+// - C:\One-Std\src\var_args.h
+// - C:\One-Std\src\osl_compiler.h
 // - C:\One-Std\src\windows_loader.h
+// - C:\One-Std\src\unignore_warnings.h
+// - C:\One-Std\src\oga_graphics.h
+// - C:\One-Std\src\math.h
+// - C:\One-Std\src\path_utils.h
+// - C:\One-Std\src\ostd.h
 // - C:\One-Std\src\system2.h
+// - C:\One-Std\src\system1.h
+// - C:\One-Std\src\var_args_macros.h
+// - C:\One-Std\src\graphics_d3d12.h
 // I try to compile with -pedantic and -Weverything, but get really dumb warnings like these,
 // so I have to ignore them.
 #if defined(__GNUC__) || defined(__GNUG__)
@@ -10113,7 +10113,7 @@ bool sys_swap_pages_to_file(void *base, File_Handle file, u64 size) {
     }
     
     if (!found_region) {
-        log_error("Could not find page region that should exist.", SYSTEM_ERROR_INTERNAL_ERROR, SYSTEM_LOG_CATEGORY_PAGE_MAPPING);
+        log_error("The passed page region does not look like it was allocated as swappable..", SYSTEM_ERROR_BAD_PAGE_REGION, SYSTEM_LOG_CATEGORY_PAGE_MAPPING);
         return false;
     }
     
@@ -10144,8 +10144,21 @@ bool sys_swap_pages_to_file(void *base, File_Handle file, u64 size) {
     _Ostd_Swappable_Page_Sub_Region *next_sub = found_region->sub_regions;
     while (next_sub) {
         
-        sys_set_file_position(file, (u64)next_sub->start - (u64)found_region->start);
-        sys_write(file, next_sub->start, next_sub->page_count*sinfo.page_size);
+        if (next_sub->is_committed) {
+            bool set_pos_ok = sys_set_file_position(file, (u64)next_sub->start - (u64)found_region->start);
+            if (!set_pos_ok) {
+                log_error("Settings file position was rejected.", SYSTEM_ERROR_INTERNAL_ERROR, SYSTEM_LOG_CATEGORY_PAGE_MAPPING);
+                CloseHandle(fmapping);
+                return false;
+            }
+            s64 written = sys_write(file, next_sub->start, next_sub->page_count*sinfo.page_size);
+            log_os_call("Write memory to file to swap to", "WriteFile", file, SYSTEM_LOG_CATEGORY_PAGE_MAPPING);
+            
+            if ((u64)written != next_sub->page_count*sinfo.page_size) {
+                log_error("Failed writing to file.", SYSTEM_ERROR_INTERNAL_ERROR, SYSTEM_LOG_CATEGORY_PAGE_MAPPING);
+                return false;
+            }
+        }
     
         next_sub = next_sub->next;
     }
@@ -10230,7 +10243,7 @@ bool sys_swap_pages_to_memory(void *base, u64 max_read) {
     }
     
     if (!found_region) {
-        log_error("Could not find page region that should exist.", SYSTEM_ERROR_INTERNAL_ERROR, SYSTEM_LOG_CATEGORY_PAGE_MAPPING);
+        log_error("The passed page region does not look like it was allocated as swappable..", SYSTEM_ERROR_BAD_PAGE_REGION, SYSTEM_LOG_CATEGORY_PAGE_MAPPING);
         return false;
     }
     
@@ -10353,7 +10366,7 @@ bool sys_coalesce_swappable_pages(void *address, u64 max_preserve) {
     }
     
     if (!found_region) {
-        log_error("Could not find page region that should exist.", SYSTEM_ERROR_INTERNAL_ERROR, SYSTEM_LOG_CATEGORY_PAGE_MAPPING);
+        log_error("The passed page region does not look like it was allocated as swappable..", SYSTEM_ERROR_BAD_PAGE_REGION, SYSTEM_LOG_CATEGORY_PAGE_MAPPING);
         return false;
     }
     
@@ -13488,6 +13501,7 @@ Arena make_swappable_arena(u64 reserved_size, u64 initial_allocated_size) {
         }
     } else {
         arena.start = sys_map_swappable_pages(SYS_MEMORY_RESERVE | SYS_MEMORY_ALLOCATE, 0, reserved_size/info.page_size, false);
+        assert(arena.start);
     }
 
     arena.position = arena.start;

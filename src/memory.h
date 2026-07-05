@@ -275,6 +275,7 @@ Arena make_swappable_arena(u64 reserved_size, u64 initial_allocated_size) {
         }
     } else {
         arena.start = sys_map_swappable_pages(SYS_MEMORY_RESERVE | SYS_MEMORY_ALLOCATE, 0, reserved_size/info.page_size, false);
+        assert(arena.start);
     }
 
     arena.position = arena.start;

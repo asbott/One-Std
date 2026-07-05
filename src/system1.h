@@ -2648,7 +2648,7 @@ bool sys_swap_pages_to_file(void *base, File_Handle file, u64 size) {
     }
     
     if (!found_region) {
-        log_error("Could not find page region that should exist.", SYSTEM_ERROR_INTERNAL_ERROR, SYSTEM_LOG_CATEGORY_PAGE_MAPPING);
+        log_error("The passed page region does not look like it was allocated as swappable..", SYSTEM_ERROR_BAD_PAGE_REGION, SYSTEM_LOG_CATEGORY_PAGE_MAPPING);
         return false;
     }
     
@@ -2679,8 +2679,21 @@ bool sys_swap_pages_to_file(void *base, File_Handle file, u64 size) {
     _Ostd_Swappable_Page_Sub_Region *next_sub = found_region->sub_regions;
     while (next_sub) {
         
-        sys_set_file_position(file, (u64)next_sub->start - (u64)found_region->start);
-        sys_write(file, next_sub->start, next_sub->page_count*sinfo.page_size);
+        if (next_sub->is_committed) {
+            bool set_pos_ok = sys_set_file_position(file, (u64)next_sub->start - (u64)found_region->start);
+            if (!set_pos_ok) {
+                log_error("Settings file position was rejected.", SYSTEM_ERROR_INTERNAL_ERROR, SYSTEM_LOG_CATEGORY_PAGE_MAPPING);
+                CloseHandle(fmapping);
+                return false;
+            }
+            s64 written = sys_write(file, next_sub->start, next_sub->page_count*sinfo.page_size);
+            log_os_call("Write memory to file to swap to", "WriteFile", file, SYSTEM_LOG_CATEGORY_PAGE_MAPPING);
+            
+            if ((u64)written != next_sub->page_count*sinfo.page_size) {
+                log_error("Failed writing to file.", SYSTEM_ERROR_INTERNAL_ERROR, SYSTEM_LOG_CATEGORY_PAGE_MAPPING);
+                return false;
+            }
+        }
     
         next_sub = next_sub->next;
     }
@@ -2765,7 +2778,7 @@ bool sys_swap_pages_to_memory(void *base, u64 max_read) {
     }
     
     if (!found_region) {
-        log_error("Could not find page region that should exist.", SYSTEM_ERROR_INTERNAL_ERROR, SYSTEM_LOG_CATEGORY_PAGE_MAPPING);
+        log_error("The passed page region does not look like it was allocated as swappable..", SYSTEM_ERROR_BAD_PAGE_REGION, SYSTEM_LOG_CATEGORY_PAGE_MAPPING);
         return false;
     }
     
@@ -2888,7 +2901,7 @@ bool sys_coalesce_swappable_pages(void *address, u64 max_preserve) {
     }
     
     if (!found_region) {
-        log_error("Could not find page region that should exist.", SYSTEM_ERROR_INTERNAL_ERROR, SYSTEM_LOG_CATEGORY_PAGE_MAPPING);
+        log_error("The passed page region does not look like it was allocated as swappable..", SYSTEM_ERROR_BAD_PAGE_REGION, SYSTEM_LOG_CATEGORY_PAGE_MAPPING);
         return false;
     }
     
