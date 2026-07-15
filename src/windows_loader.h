@@ -62,6 +62,7 @@ typedef void                *PVOID;
 
 typedef u64 DWORDLONG;
 
+typedef u8 BOOLEAN;
 
 #if !defined(_M_IX86)
  typedef s64 LONGLONG; 
@@ -1973,6 +1974,7 @@ WINDOWS_IMPORT HMODULE WINAPI LoadLibraryA(LPCSTR lpLibFileName);
 WINDOWS_IMPORT void* WINAPI GetProcAddress(HMODULE hModule,LPCSTR  lpProcName);
 
 WINDOWS_IMPORT u32 WINAPI timeBeginPeriod(UINT uPeriod);
+WINDOWS_IMPORT u32 WINAPI timeEndPeriod(UINT uPeriod);
 
 WINDOWS_IMPORT BOOL WINAPI SetPriorityClass(HANDLE hProcess,DWORD  dwPriorityClass);
 
@@ -3956,6 +3958,7 @@ typedef struct _DISK_PERFORMANCE {
   WCHAR         StorageManagerName[8];
 } DISK_PERFORMANCE, *PDISK_PERFORMANCE;
 
+#define IOCTL_STORAGE_BASE FILE_DEVICE_MASS_STORAGE
 
 #define IOCTL_DISK_BASE                 FILE_DEVICE_DISK
 #define IOCTL_DISK_GET_DRIVE_GEOMETRY   CTL_CODE(IOCTL_DISK_BASE, 0x0000, METHOD_BUFFERED, FILE_ANY_ACCESS)
@@ -3976,6 +3979,29 @@ typedef struct _DISK_PERFORMANCE {
 #define IOCTL_DISK_REQUEST_STRUCTURE    CTL_CODE(IOCTL_DISK_BASE, 0x000f, METHOD_BUFFERED, FILE_ANY_ACCESS)
 #define IOCTL_DISK_REQUEST_DATA         CTL_CODE(IOCTL_DISK_BASE, 0x0010, METHOD_BUFFERED, FILE_ANY_ACCESS)
 #define IOCTL_DISK_PERFORMANCE_OFF      CTL_CODE(IOCTL_DISK_BASE, 0x0018, METHOD_BUFFERED, FILE_ANY_ACCESS)
+
+#define IOCTL_SERIAL_LSRMST_INSERT      CTL_CODE(FILE_DEVICE_SERIAL_PORT,31,METHOD_BUFFERED,FILE_ANY_ACCESS)
+
+#define IOCTL_SERENUM_EXPOSE_HARDWARE   CTL_CODE(FILE_DEVICE_SERENUM,128,METHOD_BUFFERED,FILE_ANY_ACCESS)
+#define IOCTL_SERENUM_REMOVE_HARDWARE   CTL_CODE(FILE_DEVICE_SERENUM,129,METHOD_BUFFERED,FILE_ANY_ACCESS)
+#define IOCTL_SERENUM_PORT_DESC         CTL_CODE(FILE_DEVICE_SERENUM,130,METHOD_BUFFERED,FILE_ANY_ACCESS)
+#define IOCTL_SERENUM_GET_PORT_NAME     CTL_CODE(FILE_DEVICE_SERENUM,131,METHOD_BUFFERED,FILE_ANY_ACCESS)
+
+#define IOCTL_STORAGE_GET_DEVICE_TELEMETRY      CTL_CODE(IOCTL_STORAGE_BASE, 0x0470, METHOD_BUFFERED, FILE_READ_ACCESS | FILE_WRITE_ACCESS)
+#define IOCTL_STORAGE_DEVICE_TELEMETRY_NOTIFY   CTL_CODE(IOCTL_STORAGE_BASE, 0x0471, METHOD_BUFFERED, FILE_READ_ACCESS | FILE_WRITE_ACCESS)
+#define IOCTL_STORAGE_DEVICE_TELEMETRY_QUERY_CAPS CTL_CODE(IOCTL_STORAGE_BASE, 0x0472, METHOD_BUFFERED, FILE_READ_ACCESS | FILE_WRITE_ACCESS)
+#define IOCTL_STORAGE_GET_DEVICE_TELEMETRY_RAW  CTL_CODE(IOCTL_STORAGE_BASE, 0x0473, METHOD_BUFFERED, FILE_READ_ACCESS | FILE_WRITE_ACCESS)
+
+
+#define IOCTL_STORAGE_SET_TEMPERATURE_THRESHOLD     CTL_CODE(IOCTL_STORAGE_BASE, 0x0480, METHOD_BUFFERED, FILE_READ_ACCESS | FILE_WRITE_ACCESS)
+
+#define IOCTL_STORAGE_PROTOCOL_COMMAND              CTL_CODE(IOCTL_STORAGE_BASE, 0x04F0, METHOD_BUFFERED, FILE_READ_ACCESS | FILE_WRITE_ACCESS)
+
+#define IOCTL_STORAGE_QUERY_PROPERTY                CTL_CODE(IOCTL_STORAGE_BASE, 0x0500, METHOD_BUFFERED, FILE_ANY_ACCESS)
+#define IOCTL_STORAGE_MANAGE_DATA_SET_ATTRIBUTES    CTL_CODE(IOCTL_STORAGE_BASE, 0x0501, METHOD_BUFFERED, FILE_WRITE_ACCESS)
+#define IOCTL_STORAGE_GET_LB_PROVISIONING_MAP_RESOURCES  CTL_CODE(IOCTL_STORAGE_BASE, 0x0502, METHOD_BUFFERED, FILE_READ_ACCESS)
+
+#define IOCTL_STORAGE_SET_PROPERTY                  CTL_CODE(IOCTL_STORAGE_BASE, 0x0503, METHOD_BUFFERED, FILE_WRITE_ACCESS)
 
 typedef struct _GLYPHMETRICS {
     UINT    gmBlackBoxX;
@@ -5728,4 +5754,205 @@ WINDOWS_IMPORT HANDLE WINAPI CreateFileMappingW( HANDLE hFile, LPSECURITY_ATTRIB
 WINDOWS_IMPORT BOOL WINAPI SetEvent(HANDLE hEvent);
 
 WINDOWS_IMPORT HWND WINAPI WindowFromPoint(POINT Point);
+
+WINDOWS_IMPORT HWND WINAPI SetFocus(HWND hWnd);
+
+WINDOWS_IMPORT BOOL WINAPI ReplaceFileW( LPCWSTR lpReplacedFileName, LPCWSTR lpReplacementFileName, LPCWSTR lpBackupFileName, DWORD dwReplaceFlags, LPVOID lpExclude, LPVOID lpReserved);
+
+WINDOWS_IMPORT BOOL WINAPI CopyFileW(LPCWSTR lpExistingFileName,LPCWSTR lpNewFileName,BOOL bFailIfExists);
+
+WINDOWS_IMPORT BOOL WINAPI DeleteFileW(LPCWSTR lpFileName);
+
+WINDOWS_IMPORT BOOL WINAPI GetOverlappedResultEx(HANDLE hFile,LPOVERLAPPED lpOverlapped,LPDWORD lpNumberOfBytesTransferred,DWORD dwMilliseconds,BOOL bAlertable);
+
+#define THREAD_MODE_BACKGROUND_BEGIN 0x00010000
+#define THREAD_MODE_BACKGROUND_END 0x00020000
+
+
+typedef enum _PRIORITY_HINT {
+      IoPriorityHintVeryLow = 0,
+      IoPriorityHintLow,
+      IoPriorityHintNormal,
+      MaximumIoPriorityHintType
+} PRIORITY_HINT;
+
+typedef struct _FILE_IO_PRIORITY_HINT_INFO {
+    PRIORITY_HINT PriorityHint;
+} FILE_IO_PRIORITY_HINT_INFO, *PFILE_IO_PRIORITY_HINT_INFO;
+
+typedef enum _FILE_INFO_BY_HANDLE_CLASS {
+    FileBasicInfo,
+    FileStandardInfo,
+    FileNameInfo,
+    FileRenameInfo,
+    FileDispositionInfo,
+    FileAllocationInfo,
+    FileEndOfFileInfo,
+    FileStreamInfo,
+    FileCompressionInfo,
+    FileAttributeTagInfo,
+    FileIdBothDirectoryInfo,
+    FileIdBothDirectoryRestartInfo,
+    FileIoPriorityHintInfo,
+    FileRemoteProtocolInfo,
+    FileFullDirectoryInfo,
+    FileFullDirectoryRestartInfo,
+#if (NTDDI_VERSION >= NTDDI_WIN8)
+    FileStorageInfo,
+    FileAlignmentInfo,
+    FileIdInfo,
+    FileIdExtdDirectoryInfo,
+    FileIdExtdDirectoryRestartInfo,
+#endif
+#if (NTDDI_VERSION >= NTDDI_WIN10_RS1)
+    FileDispositionInfoEx,
+    FileRenameInfoEx,
+#endif
+#if (NTDDI_VERSION >= NTDDI_WIN10_19H1)
+    FileCaseSensitiveInfo,
+    FileNormalizedNameInfo,
+#endif
+    MaximumFileInfoByHandleClass
+} FILE_INFO_BY_HANDLE_CLASS, *PFILE_INFO_BY_HANDLE_CLASS;
+
+
+WINDOWS_IMPORT BOOL WINAPI SetFileInformationByHandle(HANDLE hFile, FILE_INFO_BY_HANDLE_CLASS FileInformationClass, LPVOID lpFileInformation, DWORD dwBufferSize);
+
+typedef enum _STORAGE_PROPERTY_ID {
+  StorageDeviceProperty = 0,
+  StorageAdapterProperty,
+  StorageDeviceIdProperty,
+  StorageDeviceUniqueIdProperty,
+  StorageDeviceWriteCacheProperty,
+  StorageMiniportProperty,
+  StorageAccessAlignmentProperty,
+  StorageDeviceSeekPenaltyProperty,
+  StorageDeviceTrimProperty,
+  StorageDeviceWriteAggregationProperty,
+  StorageDeviceDeviceTelemetryProperty,
+  StorageDeviceLBProvisioningProperty,
+  StorageDevicePowerProperty,
+  StorageDeviceCopyOffloadProperty,
+  StorageDeviceResiliencyProperty,
+  StorageDeviceMediumProductType,
+  StorageAdapterRpmbProperty,
+  StorageAdapterCryptoProperty,
+  StorageDeviceIoCapabilityProperty = 48,
+  StorageAdapterProtocolSpecificProperty,
+  StorageDeviceProtocolSpecificProperty,
+  StorageAdapterTemperatureProperty,
+  StorageDeviceTemperatureProperty,
+  StorageAdapterPhysicalTopologyProperty,
+  StorageDevicePhysicalTopologyProperty,
+  StorageDeviceAttributesProperty,
+  StorageDeviceManagementStatus,
+  StorageAdapterSerialNumberProperty,
+  StorageDeviceLocationProperty,
+  StorageDeviceNumaProperty,
+  StorageDeviceZonedDeviceProperty,
+  StorageDeviceUnsafeShutdownCount,
+  StorageDeviceEnduranceProperty,
+  StorageDeviceLedStateProperty,
+  StorageDeviceSelfEncryptionProperty = 64,
+  StorageFruIdProperty,
+  StorageStackProperty,
+  StorageAdapterProtocolSpecificPropertyEx,
+  StorageDeviceProtocolSpecificPropertyEx,
+  StorageHwCryptoProperty
+} STORAGE_PROPERTY_ID, *PSTORAGE_PROPERTY_ID;
+
+// StorageDeviceSeekPenaltyProperty
+typedef struct _DEVICE_SEEK_PENALTY_DESCRIPTOR {
+  DWORD   Version;
+  DWORD   Size;
+  BOOLEAN IncursSeekPenalty;
+} DEVICE_SEEK_PENALTY_DESCRIPTOR, *PDEVICE_SEEK_PENALTY_DESCRIPTOR;
+
+// StorageDeviceIoCapabilityProperty
+typedef struct _STORAGE_DEVICE_IO_CAPABILITY_DESCRIPTOR {
+  DWORD Version;
+  DWORD Size;
+  DWORD LunMaxIoCount;
+  DWORD AdapterMaxIoCount;
+} STORAGE_DEVICE_IO_CAPABILITY_DESCRIPTOR, *PSTORAGE_DEVICE_IO_CAPABILITY_DESCRIPTOR;
+
+typedef enum _STORAGE_QUERY_TYPE {
+  PropertyStandardQuery = 0,
+  PropertyExistsQuery,
+  PropertyMaskQuery,
+  PropertyQueryMaxDefined
+} STORAGE_QUERY_TYPE, *PSTORAGE_QUERY_TYPE;
+
+typedef struct _STORAGE_PROPERTY_QUERY {
+  STORAGE_PROPERTY_ID PropertyId;
+  STORAGE_QUERY_TYPE  QueryType;
+  BYTE                AdditionalParameters[1];
+} STORAGE_PROPERTY_QUERY, *PSTORAGE_PROPERTY_QUERY;
+
+
+
+typedef struct _STORAGE_ADAPTER_DESCRIPTOR {
+
+    ULONG Version;
+
+    ULONG Size;
+
+    ULONG MaximumTransferLength;
+
+    ULONG MaximumPhysicalPages;
+
+    ULONG AlignmentMask;
+
+    BOOLEAN AdapterUsesPio;
+
+    BOOLEAN AdapterScansDown;
+
+    BOOLEAN CommandQueueing;
+
+    BOOLEAN AcceleratedTransfer;
+
+#if (NTDDI_VERSION < NTDDI_WINXP)
+    BOOLEAN BusType;
+#else
+    UCHAR BusType;
+#endif
+
+    USHORT BusMajorVersion;
+
+    USHORT BusMinorVersion;
+
+#if (NTDDI_VERSION >= NTDDI_WIN8)
+
+    UCHAR SrbType;
+
+    UCHAR AddressType;
+#endif
+
+} STORAGE_ADAPTER_DESCRIPTOR, *PSTORAGE_ADAPTER_DESCRIPTOR;
+
+typedef enum _STORAGE_BUS_TYPE {
+  BusTypeUnknown = 0x00,
+  BusTypeScsi,
+  BusTypeAtapi,
+  BusTypeAta,
+  BusType1394,
+  BusTypeSsa,
+  BusTypeFibre,
+  BusTypeUsb,
+  BusTypeRAID,
+  BusTypeiScsi,
+  BusTypeSas,
+  BusTypeSata,
+  BusTypeSd,
+  BusTypeMmc,
+  BusTypeVirtual,
+  BusTypeFileBackedVirtual,
+  BusTypeSpaces,
+  BusTypeNvme,
+  BusTypeSCM,
+  BusTypeUfs,
+  BusTypeNvmeof,
+  BusTypeMax,
+  BusTypeMaxReserved = 0x7F
+} STORAGE_BUS_TYPE, *PSTORAGE_BUS_TYPE;
 

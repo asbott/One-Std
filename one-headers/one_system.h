@@ -1,15 +1,15 @@
 // This file was generated from One-Std/src/system.h
 // The following files were included & concatenated:
-// - C:\One-Std\src\print.h
+// - C:\One-Std\src\var_args_macros.h
+// - C:\One-Std\src\system.h
 // - C:\One-Std\src\windows_loader.h
-// - C:\One-Std\src\var_args.h
 // - C:\One-Std\src\system2.h
+// - C:\One-Std\src\print.h
 // - C:\One-Std\src\string.h
+// - C:\One-Std\src\var_args.h
+// - C:\One-Std\src\system1.h
 // - C:\One-Std\src\memory.h
 // - C:\One-Std\src\base.h
-// - C:\One-Std\src\var_args_macros.h
-// - C:\One-Std\src\system1.h
-// - C:\One-Std\src\system.h
 // I try to compile with -pedantic and -Weverything, but get really dumb warnings like these,
 // so I have to ignore them.
 #if defined(__GNUC__) || defined(__GNUG__)
@@ -702,6 +702,8 @@ typedef enum System_Error {
     SYSTEM_ERROR_REJECTED_FILE_MAPPING,
     SYSTEM_ERROR_BAD_COALESCE,
     SYSTEM_ERROR_OUT_OF_MEMORY,
+    SYSTEM_ERROR_BAD_STRING,
+    SYSTEM_ERROR_OS_CALL_FAILED,
 } System_Error;
 
 typedef enum System_Log_Kind {
@@ -817,6 +819,8 @@ typedef u64 File_Open_Flags;
 #define FILE_OPEN_READ   (1 << 1)
 #define FILE_OPEN_RESET  (1 << 2)
 #define FILE_OPEN_CREATE (1 << 3)
+#define FILE_OPEN_NO_CACHE (1 << 4)
+#define FILE_OPEN_SHARE_DELETE (1 << 5)
 
 OSTD_LIB File_Handle sys_get_stdout(void);
 OSTD_LIB File_Handle sys_get_stderr(void);
@@ -843,6 +847,10 @@ OSTD_LIB bool sys_make_directory(string path, bool recursive);
 OSTD_LIB bool sys_remove_directory(string path, bool recursive);
 OSTD_LIB bool sys_is_file(string path);
 OSTD_LIB bool sys_is_directory(string path);
+
+OSTD_LIB bool sys_replace_file(string path_replace, string path_replacement);
+OSTD_LIB bool sys_copy_file(string dst, string src);
+OSTD_LIB bool sys_delete_file(string path);
 
 typedef bool (*Walk_Proc)(string); // Return true to continue, false to break
 OSTD_LIB void sys_walk_directory(string path, bool recursive, bool walk_directories, Walk_Proc walk_proc);
@@ -1603,6 +1611,7 @@ typedef void                *PVOID;
 
 typedef u64 DWORDLONG;
 
+typedef u8 BOOLEAN;
 
 #if !defined(_M_IX86)
  typedef s64 LONGLONG; 
@@ -3514,6 +3523,7 @@ WINDOWS_IMPORT HMODULE WINAPI LoadLibraryA(LPCSTR lpLibFileName);
 WINDOWS_IMPORT void* WINAPI GetProcAddress(HMODULE hModule,LPCSTR  lpProcName);
 
 WINDOWS_IMPORT u32 WINAPI timeBeginPeriod(UINT uPeriod);
+WINDOWS_IMPORT u32 WINAPI timeEndPeriod(UINT uPeriod);
 
 WINDOWS_IMPORT BOOL WINAPI SetPriorityClass(HANDLE hProcess,DWORD  dwPriorityClass);
 
@@ -5497,6 +5507,7 @@ typedef struct _DISK_PERFORMANCE {
   WCHAR         StorageManagerName[8];
 } DISK_PERFORMANCE, *PDISK_PERFORMANCE;
 
+#define IOCTL_STORAGE_BASE FILE_DEVICE_MASS_STORAGE
 
 #define IOCTL_DISK_BASE                 FILE_DEVICE_DISK
 #define IOCTL_DISK_GET_DRIVE_GEOMETRY   CTL_CODE(IOCTL_DISK_BASE, 0x0000, METHOD_BUFFERED, FILE_ANY_ACCESS)
@@ -5517,6 +5528,29 @@ typedef struct _DISK_PERFORMANCE {
 #define IOCTL_DISK_REQUEST_STRUCTURE    CTL_CODE(IOCTL_DISK_BASE, 0x000f, METHOD_BUFFERED, FILE_ANY_ACCESS)
 #define IOCTL_DISK_REQUEST_DATA         CTL_CODE(IOCTL_DISK_BASE, 0x0010, METHOD_BUFFERED, FILE_ANY_ACCESS)
 #define IOCTL_DISK_PERFORMANCE_OFF      CTL_CODE(IOCTL_DISK_BASE, 0x0018, METHOD_BUFFERED, FILE_ANY_ACCESS)
+
+#define IOCTL_SERIAL_LSRMST_INSERT      CTL_CODE(FILE_DEVICE_SERIAL_PORT,31,METHOD_BUFFERED,FILE_ANY_ACCESS)
+
+#define IOCTL_SERENUM_EXPOSE_HARDWARE   CTL_CODE(FILE_DEVICE_SERENUM,128,METHOD_BUFFERED,FILE_ANY_ACCESS)
+#define IOCTL_SERENUM_REMOVE_HARDWARE   CTL_CODE(FILE_DEVICE_SERENUM,129,METHOD_BUFFERED,FILE_ANY_ACCESS)
+#define IOCTL_SERENUM_PORT_DESC         CTL_CODE(FILE_DEVICE_SERENUM,130,METHOD_BUFFERED,FILE_ANY_ACCESS)
+#define IOCTL_SERENUM_GET_PORT_NAME     CTL_CODE(FILE_DEVICE_SERENUM,131,METHOD_BUFFERED,FILE_ANY_ACCESS)
+
+#define IOCTL_STORAGE_GET_DEVICE_TELEMETRY      CTL_CODE(IOCTL_STORAGE_BASE, 0x0470, METHOD_BUFFERED, FILE_READ_ACCESS | FILE_WRITE_ACCESS)
+#define IOCTL_STORAGE_DEVICE_TELEMETRY_NOTIFY   CTL_CODE(IOCTL_STORAGE_BASE, 0x0471, METHOD_BUFFERED, FILE_READ_ACCESS | FILE_WRITE_ACCESS)
+#define IOCTL_STORAGE_DEVICE_TELEMETRY_QUERY_CAPS CTL_CODE(IOCTL_STORAGE_BASE, 0x0472, METHOD_BUFFERED, FILE_READ_ACCESS | FILE_WRITE_ACCESS)
+#define IOCTL_STORAGE_GET_DEVICE_TELEMETRY_RAW  CTL_CODE(IOCTL_STORAGE_BASE, 0x0473, METHOD_BUFFERED, FILE_READ_ACCESS | FILE_WRITE_ACCESS)
+
+
+#define IOCTL_STORAGE_SET_TEMPERATURE_THRESHOLD     CTL_CODE(IOCTL_STORAGE_BASE, 0x0480, METHOD_BUFFERED, FILE_READ_ACCESS | FILE_WRITE_ACCESS)
+
+#define IOCTL_STORAGE_PROTOCOL_COMMAND              CTL_CODE(IOCTL_STORAGE_BASE, 0x04F0, METHOD_BUFFERED, FILE_READ_ACCESS | FILE_WRITE_ACCESS)
+
+#define IOCTL_STORAGE_QUERY_PROPERTY                CTL_CODE(IOCTL_STORAGE_BASE, 0x0500, METHOD_BUFFERED, FILE_ANY_ACCESS)
+#define IOCTL_STORAGE_MANAGE_DATA_SET_ATTRIBUTES    CTL_CODE(IOCTL_STORAGE_BASE, 0x0501, METHOD_BUFFERED, FILE_WRITE_ACCESS)
+#define IOCTL_STORAGE_GET_LB_PROVISIONING_MAP_RESOURCES  CTL_CODE(IOCTL_STORAGE_BASE, 0x0502, METHOD_BUFFERED, FILE_READ_ACCESS)
+
+#define IOCTL_STORAGE_SET_PROPERTY                  CTL_CODE(IOCTL_STORAGE_BASE, 0x0503, METHOD_BUFFERED, FILE_WRITE_ACCESS)
 
 typedef struct _GLYPHMETRICS {
     UINT    gmBlackBoxX;
@@ -7270,6 +7304,207 @@ WINDOWS_IMPORT BOOL WINAPI SetEvent(HANDLE hEvent);
 
 WINDOWS_IMPORT HWND WINAPI WindowFromPoint(POINT Point);
 
+WINDOWS_IMPORT HWND WINAPI SetFocus(HWND hWnd);
+
+WINDOWS_IMPORT BOOL WINAPI ReplaceFileW( LPCWSTR lpReplacedFileName, LPCWSTR lpReplacementFileName, LPCWSTR lpBackupFileName, DWORD dwReplaceFlags, LPVOID lpExclude, LPVOID lpReserved);
+
+WINDOWS_IMPORT BOOL WINAPI CopyFileW(LPCWSTR lpExistingFileName,LPCWSTR lpNewFileName,BOOL bFailIfExists);
+
+WINDOWS_IMPORT BOOL WINAPI DeleteFileW(LPCWSTR lpFileName);
+
+WINDOWS_IMPORT BOOL WINAPI GetOverlappedResultEx(HANDLE hFile,LPOVERLAPPED lpOverlapped,LPDWORD lpNumberOfBytesTransferred,DWORD dwMilliseconds,BOOL bAlertable);
+
+#define THREAD_MODE_BACKGROUND_BEGIN 0x00010000
+#define THREAD_MODE_BACKGROUND_END 0x00020000
+
+
+typedef enum _PRIORITY_HINT {
+      IoPriorityHintVeryLow = 0,
+      IoPriorityHintLow,
+      IoPriorityHintNormal,
+      MaximumIoPriorityHintType
+} PRIORITY_HINT;
+
+typedef struct _FILE_IO_PRIORITY_HINT_INFO {
+    PRIORITY_HINT PriorityHint;
+} FILE_IO_PRIORITY_HINT_INFO, *PFILE_IO_PRIORITY_HINT_INFO;
+
+typedef enum _FILE_INFO_BY_HANDLE_CLASS {
+    FileBasicInfo,
+    FileStandardInfo,
+    FileNameInfo,
+    FileRenameInfo,
+    FileDispositionInfo,
+    FileAllocationInfo,
+    FileEndOfFileInfo,
+    FileStreamInfo,
+    FileCompressionInfo,
+    FileAttributeTagInfo,
+    FileIdBothDirectoryInfo,
+    FileIdBothDirectoryRestartInfo,
+    FileIoPriorityHintInfo,
+    FileRemoteProtocolInfo,
+    FileFullDirectoryInfo,
+    FileFullDirectoryRestartInfo,
+#if (NTDDI_VERSION >= NTDDI_WIN8)
+    FileStorageInfo,
+    FileAlignmentInfo,
+    FileIdInfo,
+    FileIdExtdDirectoryInfo,
+    FileIdExtdDirectoryRestartInfo,
+#endif
+#if (NTDDI_VERSION >= NTDDI_WIN10_RS1)
+    FileDispositionInfoEx,
+    FileRenameInfoEx,
+#endif
+#if (NTDDI_VERSION >= NTDDI_WIN10_19H1)
+    FileCaseSensitiveInfo,
+    FileNormalizedNameInfo,
+#endif
+    MaximumFileInfoByHandleClass
+} FILE_INFO_BY_HANDLE_CLASS, *PFILE_INFO_BY_HANDLE_CLASS;
+
+
+WINDOWS_IMPORT BOOL WINAPI SetFileInformationByHandle(HANDLE hFile, FILE_INFO_BY_HANDLE_CLASS FileInformationClass, LPVOID lpFileInformation, DWORD dwBufferSize);
+
+typedef enum _STORAGE_PROPERTY_ID {
+  StorageDeviceProperty = 0,
+  StorageAdapterProperty,
+  StorageDeviceIdProperty,
+  StorageDeviceUniqueIdProperty,
+  StorageDeviceWriteCacheProperty,
+  StorageMiniportProperty,
+  StorageAccessAlignmentProperty,
+  StorageDeviceSeekPenaltyProperty,
+  StorageDeviceTrimProperty,
+  StorageDeviceWriteAggregationProperty,
+  StorageDeviceDeviceTelemetryProperty,
+  StorageDeviceLBProvisioningProperty,
+  StorageDevicePowerProperty,
+  StorageDeviceCopyOffloadProperty,
+  StorageDeviceResiliencyProperty,
+  StorageDeviceMediumProductType,
+  StorageAdapterRpmbProperty,
+  StorageAdapterCryptoProperty,
+  StorageDeviceIoCapabilityProperty = 48,
+  StorageAdapterProtocolSpecificProperty,
+  StorageDeviceProtocolSpecificProperty,
+  StorageAdapterTemperatureProperty,
+  StorageDeviceTemperatureProperty,
+  StorageAdapterPhysicalTopologyProperty,
+  StorageDevicePhysicalTopologyProperty,
+  StorageDeviceAttributesProperty,
+  StorageDeviceManagementStatus,
+  StorageAdapterSerialNumberProperty,
+  StorageDeviceLocationProperty,
+  StorageDeviceNumaProperty,
+  StorageDeviceZonedDeviceProperty,
+  StorageDeviceUnsafeShutdownCount,
+  StorageDeviceEnduranceProperty,
+  StorageDeviceLedStateProperty,
+  StorageDeviceSelfEncryptionProperty = 64,
+  StorageFruIdProperty,
+  StorageStackProperty,
+  StorageAdapterProtocolSpecificPropertyEx,
+  StorageDeviceProtocolSpecificPropertyEx,
+  StorageHwCryptoProperty
+} STORAGE_PROPERTY_ID, *PSTORAGE_PROPERTY_ID;
+
+// StorageDeviceSeekPenaltyProperty
+typedef struct _DEVICE_SEEK_PENALTY_DESCRIPTOR {
+  DWORD   Version;
+  DWORD   Size;
+  BOOLEAN IncursSeekPenalty;
+} DEVICE_SEEK_PENALTY_DESCRIPTOR, *PDEVICE_SEEK_PENALTY_DESCRIPTOR;
+
+// StorageDeviceIoCapabilityProperty
+typedef struct _STORAGE_DEVICE_IO_CAPABILITY_DESCRIPTOR {
+  DWORD Version;
+  DWORD Size;
+  DWORD LunMaxIoCount;
+  DWORD AdapterMaxIoCount;
+} STORAGE_DEVICE_IO_CAPABILITY_DESCRIPTOR, *PSTORAGE_DEVICE_IO_CAPABILITY_DESCRIPTOR;
+
+typedef enum _STORAGE_QUERY_TYPE {
+  PropertyStandardQuery = 0,
+  PropertyExistsQuery,
+  PropertyMaskQuery,
+  PropertyQueryMaxDefined
+} STORAGE_QUERY_TYPE, *PSTORAGE_QUERY_TYPE;
+
+typedef struct _STORAGE_PROPERTY_QUERY {
+  STORAGE_PROPERTY_ID PropertyId;
+  STORAGE_QUERY_TYPE  QueryType;
+  BYTE                AdditionalParameters[1];
+} STORAGE_PROPERTY_QUERY, *PSTORAGE_PROPERTY_QUERY;
+
+
+
+typedef struct _STORAGE_ADAPTER_DESCRIPTOR {
+
+    ULONG Version;
+
+    ULONG Size;
+
+    ULONG MaximumTransferLength;
+
+    ULONG MaximumPhysicalPages;
+
+    ULONG AlignmentMask;
+
+    BOOLEAN AdapterUsesPio;
+
+    BOOLEAN AdapterScansDown;
+
+    BOOLEAN CommandQueueing;
+
+    BOOLEAN AcceleratedTransfer;
+
+#if (NTDDI_VERSION < NTDDI_WINXP)
+    BOOLEAN BusType;
+#else
+    UCHAR BusType;
+#endif
+
+    USHORT BusMajorVersion;
+
+    USHORT BusMinorVersion;
+
+#if (NTDDI_VERSION >= NTDDI_WIN8)
+
+    UCHAR SrbType;
+
+    UCHAR AddressType;
+#endif
+
+} STORAGE_ADAPTER_DESCRIPTOR, *PSTORAGE_ADAPTER_DESCRIPTOR;
+
+typedef enum _STORAGE_BUS_TYPE {
+  BusTypeUnknown = 0x00,
+  BusTypeScsi,
+  BusTypeAtapi,
+  BusTypeAta,
+  BusType1394,
+  BusTypeSsa,
+  BusTypeFibre,
+  BusTypeUsb,
+  BusTypeRAID,
+  BusTypeiScsi,
+  BusTypeSas,
+  BusTypeSata,
+  BusTypeSd,
+  BusTypeMmc,
+  BusTypeVirtual,
+  BusTypeFileBackedVirtual,
+  BusTypeSpaces,
+  BusTypeNvme,
+  BusTypeSCM,
+  BusTypeUfs,
+  BusTypeNvmeof,
+  BusTypeMax,
+  BusTypeMaxReserved = 0x7F
+} STORAGE_BUS_TYPE, *PSTORAGE_BUS_TYPE;
+
 
 /* End include: windows_loader.h */
     #endif // _WINDOWS_
@@ -7847,6 +8082,8 @@ bool sys_is_directory(string path) {
     return S_ISDIR(st.st_mode);
 }
 
+
+
 extern char **environ;
 
 OSTD_LIB u64 sys_get_environment_variable(string name, u8 *out) {
@@ -8377,6 +8614,11 @@ unit_local LRESULT window_proc ( HWND hwnd,  u32 message,  WPARAM wparam,  LPARA
             DwmSetWindowAttribute(hwnd, DWMWA_WINDOW_CORNER_PREFERENCE, &DWMWCP_DONOTROUND, sizeof(DWMWCP_DONOTROUND));
             return 0;
         }
+        case WM_QUERYENDSESSION: {
+           return TRUE;
+        }
+
+        case WM_ENDSESSION:
         case WM_QUIT:
         case WM_CLOSE:
         case WM_DESTROY:
@@ -8458,6 +8700,7 @@ unit_local LRESULT window_proc ( HWND hwnd,  u32 message,  WPARAM wparam,  LPARA
                     state->open_from_tray(0);
                 } else {
                     surface_unset_flags(hwnd, SURFACE_FLAG_HIDDEN);
+                    SetFocus(hwnd);
                 }
             }
             
@@ -9095,9 +9338,17 @@ bool sys_swap_pages_to_file(void *base, File_Handle file, u64 size) {
     while (next_sub) {
         
         if (next_sub->is_committed) {
-            bool set_pos_ok = sys_set_file_position(file, (u64)next_sub->start - (u64)found_region->start);
+            u64 attempts = 0;
+            u64 max_attempts = 100;
+            
+            bool set_pos_ok = false;
+            while (1) {
+                attempts += 1;
+                set_pos_ok = sys_set_file_position(file, (u64)next_sub->start - (u64)found_region->start);
+                if (set_pos_ok || attempts >= max_attempts) break;
+            }
             if (!set_pos_ok) {
-                log_error("Settings file position was rejected.", SYSTEM_ERROR_INTERNAL_ERROR, SYSTEM_LOG_CATEGORY_PAGE_MAPPING);
+                log_error("Setting file position was rejected.", SYSTEM_ERROR_INTERNAL_ERROR, SYSTEM_LOG_CATEGORY_PAGE_MAPPING);
                 CloseHandle(fmapping);
                 return false;
             }
@@ -9273,7 +9524,18 @@ bool sys_swap_pages_to_memory(void *base, u64 max_read) {
             if (read_start < max_read) {
                 u64 read_size = min(next_sub->page_count*sinfo.page_size, max_read-read_start);
                 
-                sys_set_file_position(found_region->f, read_start);
+                u64 max_attempts = 100;
+                u64 attempts = 0;
+                bool set_pos_ok = false;
+                while (1) {
+                    attempts += 1;
+                    set_pos_ok = sys_set_file_position(found_region->f, read_start);
+                    if (set_pos_ok || attempts >= max_attempts) break;
+                }
+                if (!set_pos_ok) {
+                    log_error("Setting file position was rejected.", SYSTEM_ERROR_INTERNAL_ERROR, SYSTEM_LOG_CATEGORY_PAGE_MAPPING);
+                    return false;
+                }
                 sys_read(found_region->f, next_sub->start, read_size);
             }
         }
@@ -9335,18 +9597,32 @@ bool sys_coalesce_swappable_pages(void *address, u64 max_preserve) {
             if (!left) left = next_sub;
             right = next_sub;
         } else {
-            if (left && right) {
+            if (left && right && left != right) {
+                
                 
                 u64 size = ((u64)right->start + right->page_count*sinfo.page_size) - (u64)left->start;
                 
-                void *staging = sys_map_pages(SYS_MEMORY_RESERVE | SYS_MEMORY_ALLOCATE, 0, size/sinfo.page_size, false);
+                max_preserve = max_preserve ? max_preserve : found_region->page_count*sinfo.page_size;
+                max_preserve = min(max_preserve, found_region->page_count*sinfo.page_size);
                 
-                if (!staging) {
-                    log_error("Ran out of memory, needed for staging when coalescing", SYSTEM_ERROR_OUT_OF_MEMORY, SYSTEM_LOG_CATEGORY_PAGE_MAPPING);
-                    return false;
+                u64 preserve_start = (u64)left->start - (u64)found_region->start;
+                
+                u64 preserve_size = min(((u64)right->start - (u64)left->start) + right->page_count*sinfo.page_size, max_preserve - preserve_start);
+                
+                void *staging = 0;
+                
+                if (preserve_start < max_preserve) {
+                    staging = sys_map_pages(SYS_MEMORY_RESERVE | SYS_MEMORY_ALLOCATE, 0, align_next(preserve_size, sinfo.page_size)/sinfo.page_size, false);
+                    if (!staging) {
+                        log_error("Ran out of memory, needed for staging when coalescing", SYSTEM_ERROR_OUT_OF_MEMORY, SYSTEM_LOG_CATEGORY_PAGE_MAPPING);
+                        return false;
+                    }
                 }
                 
-                memcpy(staging, left->start, size);
+                
+                if (preserve_start < max_preserve) {
+                    memcpy(staging, left->start, preserve_size);
+                }
                 
                 _Ostd_Swappable_Page_Sub_Region *next_coal = left;
                 while (1) {
@@ -9378,20 +9654,21 @@ bool sys_coalesce_swappable_pages(void *address, u64 max_preserve) {
                     return false;
                 }
                 
-                max_preserve = max_preserve ? max_preserve : found_region->page_count*sinfo.page_size;
-                max_preserve = min(max_preserve, found_region->page_count*sinfo.page_size);
                 
-                u64 preserve_start = (u64)left->start - (u64)found_region->start;
                 
                 if (preserve_start < max_preserve) {
-                    u64 preserve_size = min(left->page_count*sinfo.page_size, max_preserve - preserve_start);
-                    
                     memcpy(left->start, staging, preserve_size);
+                    sys_unmap_pages(staging);
                 }
                 
+                left->page_count = size/sinfo.page_size;
+                left->next = right->next;
                 
-                sys_unmap_pages(staging);
-                
+                left = 0;
+                right = 0;
+            }
+            
+            if (left == right) {
                 left = 0;
                 right = 0;
             }
@@ -9690,6 +9967,8 @@ File_Handle sys_open_file(string path, File_Open_Flags flags) {
 
     DWORD access_mode = 0;
     DWORD creation_flags = 0;
+    DWORD share_flags = FILE_SHARE_READ | FILE_SHARE_WRITE;
+    DWORD attribute_flags = FILE_ATTRIBUTE_NORMAL;
 
     if (flags & FILE_OPEN_WRITE) {
         access_mode |= FILE_GENERIC_WRITE;
@@ -9706,7 +9985,15 @@ File_Handle sys_open_file(string path, File_Open_Flags flags) {
     } else {
         creation_flags = OPEN_EXISTING;
     }
-
+    
+    if (flags & FILE_OPEN_NO_CACHE) {
+        attribute_flags = FILE_FLAG_NO_BUFFERING;
+    }
+    
+    if (flags & FILE_OPEN_SHARE_DELETE) {
+        share_flags |= FILE_SHARE_DELETE;
+    }
+    
     SECURITY_ATTRIBUTES attr = (SECURITY_ATTRIBUTES){0};
     attr.nLength = sizeof(SECURITY_ATTRIBUTES);
     attr.bInheritHandle = 1;
@@ -9714,10 +10001,10 @@ File_Handle sys_open_file(string path, File_Open_Flags flags) {
     HANDLE handle = CreateFileW(
         cpath,
         access_mode,
-        FILE_SHARE_READ | FILE_SHARE_WRITE,
+        share_flags,
         &attr,
         creation_flags,
-        FILE_ATTRIBUTE_NORMAL,
+        attribute_flags,
         0
     );
 
@@ -9904,7 +10191,83 @@ bool sys_is_directory(string path) {
     return ((attr & FILE_ATTRIBUTE_DIRECTORY) != 0);
 }
 
+bool sys_replace_file(string path_replaced, string path_replacement) {
+    log_call(SYSTEM_LOG_CATEGORY_IO);
+    u16 path_replaced_wide[2048];
+    u64 path_replaced_len = _win_utf8_to_wide(path_replaced, path_replaced_wide, 2048);
+    if (path_replaced_len == 0) {
+        log_error("path_replaced could not be converted to wide string", SYSTEM_ERROR_BAD_STRING, SYSTEM_LOG_CATEGORY_IO);
+        return false;
+    }
+    u16 path_replacement_wide[2048];
+    u64 path_replacement_len = _win_utf8_to_wide(path_replacement, path_replacement_wide, 2048);
+    if (path_replacement_len == 0) {
+        log_error("path_replacement could not be converted to wide string", SYSTEM_ERROR_BAD_STRING, SYSTEM_LOG_CATEGORY_IO);
+        return false;
+    }
+    
+    BOOL ok = ReplaceFileW(
+        (LPCWSTR)path_replaced_wide,
+        (LPCWSTR)path_replacement_wide,
+        0,
+        0,
+        0,
+        0
+    );
+    log_os_call("Replace file", "ReplaceFileW", path_replaced_wide, SYSTEM_LOG_CATEGORY_IO);
+    
+    if (ok) log_ok("Successful copy", SYSTEM_LOG_CATEGORY_IO);
+    else log_error("ReplaceFileW failed", SYSTEM_ERROR_OS_CALL_FAILED, SYSTEM_LOG_CATEGORY_IO);
+    
+    return ok;
+}
+bool sys_copy_file(string dst, string src) {
+    log_call(SYSTEM_LOG_CATEGORY_IO);
+    
+    u16 dst_wide[2048];
+    u64 dst_len = _win_utf8_to_wide(dst, dst_wide, 2048);
+    if (dst_len == 0) {
+        log_error("dst could not be converted to wide string", SYSTEM_ERROR_BAD_STRING, SYSTEM_LOG_CATEGORY_IO);
+        return false;
+    }
+    u16 src_wide[2048];
+    u64 src_len = _win_utf8_to_wide(src, src_wide, 2048);
+    if (src_len == 0) {
+        log_error("src could not be converted to wide string", SYSTEM_ERROR_BAD_STRING, SYSTEM_LOG_CATEGORY_IO);
+        return false;
+    }
+    
+    BOOL ok = CopyFileW(
+        src_wide,
+        dst_wide,
+        FALSE
+    );
+    log_os_call("Copy file", "CopyFileW", dst_wide, SYSTEM_LOG_CATEGORY_IO);
+    
+    if (ok) log_ok("Successful copy", SYSTEM_LOG_CATEGORY_IO);
+    else log_error("CopyFileW failed", SYSTEM_ERROR_OS_CALL_FAILED, SYSTEM_LOG_CATEGORY_IO);
+    
+    return ok;
+}
 
+bool sys_delete_file(string path) {
+    log_call(SYSTEM_LOG_CATEGORY_IO);
+    
+    u16 path_wide[2048];
+    u64 path_len = _win_utf8_to_wide(path, path_wide, 2048);
+    if (path_len == 0) {
+        log_error("path could not be converted to wide string", SYSTEM_ERROR_BAD_STRING, SYSTEM_LOG_CATEGORY_IO);
+        return false;
+    }
+    
+    BOOL ok = DeleteFileW(path_wide);
+    log_os_call("Delete file", "DeleteFile2W", path_wide, SYSTEM_LOG_CATEGORY_IO);
+    
+    if (ok) log_ok("Successful delete", SYSTEM_LOG_CATEGORY_IO);
+    else log_error("DeleteFile2W failed", SYSTEM_ERROR_OS_CALL_FAILED, SYSTEM_LOG_CATEGORY_IO);
+    
+    return ok;
+}
 
 void sys_walk_directory(string path, bool recursive, bool walk_directories, Walk_Proc walk_proc) {
     log_call(SYSTEM_LOG_CATEGORY_IO);
@@ -12682,8 +13045,21 @@ void persistent_array_uninit(void *parray) {
 }
 void *persistent_array_push_copy(void *parray, void *src) {
     Arena_Backed_Array_Header *h = _persistent_header(parray);
-    void *p = persistent_array_push_empty(parray);
+    //void *p = persistent_array_push_empty(parray); // Cant do this because it creates unnecessary race conditions.
+    
+    void *p;
+    if (h->count == h->capacity) {
+        p = arena_push(&h->arena, h->elem_size);
+        h->capacity += 1;
+    } else {
+        assert(h->count < h->capacity);
+        p = (u8*)parray + h->count*h->elem_size;
+    }
+    
     memcpy(p, src, h->elem_size);
+    
+    h->count += 1; // Important that this increments after the memcpy
+    
     return p;
 }
 void *persistent_array_push_empty(void *parray) {

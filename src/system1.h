@@ -20,6 +20,8 @@ typedef enum System_Error {
     SYSTEM_ERROR_REJECTED_FILE_MAPPING,
     SYSTEM_ERROR_BAD_COALESCE,
     SYSTEM_ERROR_OUT_OF_MEMORY,
+    SYSTEM_ERROR_BAD_STRING,
+    SYSTEM_ERROR_OS_CALL_FAILED,
 } System_Error;
 
 typedef enum System_Log_Kind {
@@ -135,6 +137,8 @@ typedef u64 File_Open_Flags;
 #define FILE_OPEN_READ   (1 << 1)
 #define FILE_OPEN_RESET  (1 << 2)
 #define FILE_OPEN_CREATE (1 << 3)
+#define FILE_OPEN_NO_CACHE (1 << 4)
+#define FILE_OPEN_SHARE_DELETE (1 << 5)
 
 OSTD_LIB File_Handle sys_get_stdout(void);
 OSTD_LIB File_Handle sys_get_stderr(void);
@@ -161,6 +165,10 @@ OSTD_LIB bool sys_make_directory(string path, bool recursive);
 OSTD_LIB bool sys_remove_directory(string path, bool recursive);
 OSTD_LIB bool sys_is_file(string path);
 OSTD_LIB bool sys_is_directory(string path);
+
+OSTD_LIB bool sys_replace_file(string path_replace, string path_replacement);
+OSTD_LIB bool sys_copy_file(string dst, string src);
+OSTD_LIB bool sys_delete_file(string path);
 
 typedef bool (*Walk_Proc)(string); // Return true to continue, false to break
 OSTD_LIB void sys_walk_directory(string path, bool recursive, bool walk_directories, Walk_Proc walk_proc);
@@ -1432,6 +1440,8 @@ bool sys_is_directory(string path) {
     return S_ISDIR(st.st_mode);
 }
 
+
+
 extern char **environ;
 
 OSTD_LIB u64 sys_get_environment_variable(string name, u8 *out) {
@@ -1962,6 +1972,11 @@ unit_local LRESULT window_proc ( HWND hwnd,  u32 message,  WPARAM wparam,  LPARA
             DwmSetWindowAttribute(hwnd, DWMWA_WINDOW_CORNER_PREFERENCE, &DWMWCP_DONOTROUND, sizeof(DWMWCP_DONOTROUND));
             return 0;
         }
+        case WM_QUERYENDSESSION: {
+           return TRUE;
+        }
+
+        case WM_ENDSESSION:
         case WM_QUIT:
         case WM_CLOSE:
         case WM_DESTROY:
@@ -2043,6 +2058,7 @@ unit_local LRESULT window_proc ( HWND hwnd,  u32 message,  WPARAM wparam,  LPARA
                     state->open_from_tray(0);
                 } else {
                     surface_unset_flags(hwnd, SURFACE_FLAG_HIDDEN);
+                    SetFocus(hwnd);
                 }
             }
             
@@ -2680,9 +2696,17 @@ bool sys_swap_pages_to_file(void *base, File_Handle file, u64 size) {
     while (next_sub) {
         
         if (next_sub->is_committed) {
-            bool set_pos_ok = sys_set_file_position(file, (u64)next_sub->start - (u64)found_region->start);
+            u64 attempts = 0;
+            u64 max_attempts = 100;
+            
+            bool set_pos_ok = false;
+            while (1) {
+                attempts += 1;
+                set_pos_ok = sys_set_file_position(file, (u64)next_sub->start - (u64)found_region->start);
+                if (set_pos_ok || attempts >= max_attempts) break;
+            }
             if (!set_pos_ok) {
-                log_error("Settings file position was rejected.", SYSTEM_ERROR_INTERNAL_ERROR, SYSTEM_LOG_CATEGORY_PAGE_MAPPING);
+                log_error("Setting file position was rejected.", SYSTEM_ERROR_INTERNAL_ERROR, SYSTEM_LOG_CATEGORY_PAGE_MAPPING);
                 CloseHandle(fmapping);
                 return false;
             }
@@ -2858,7 +2882,18 @@ bool sys_swap_pages_to_memory(void *base, u64 max_read) {
             if (read_start < max_read) {
                 u64 read_size = min(next_sub->page_count*sinfo.page_size, max_read-read_start);
                 
-                sys_set_file_position(found_region->f, read_start);
+                u64 max_attempts = 100;
+                u64 attempts = 0;
+                bool set_pos_ok = false;
+                while (1) {
+                    attempts += 1;
+                    set_pos_ok = sys_set_file_position(found_region->f, read_start);
+                    if (set_pos_ok || attempts >= max_attempts) break;
+                }
+                if (!set_pos_ok) {
+                    log_error("Setting file position was rejected.", SYSTEM_ERROR_INTERNAL_ERROR, SYSTEM_LOG_CATEGORY_PAGE_MAPPING);
+                    return false;
+                }
                 sys_read(found_region->f, next_sub->start, read_size);
             }
         }
@@ -2920,18 +2955,32 @@ bool sys_coalesce_swappable_pages(void *address, u64 max_preserve) {
             if (!left) left = next_sub;
             right = next_sub;
         } else {
-            if (left && right) {
+            if (left && right && left != right) {
+                
                 
                 u64 size = ((u64)right->start + right->page_count*sinfo.page_size) - (u64)left->start;
                 
-                void *staging = sys_map_pages(SYS_MEMORY_RESERVE | SYS_MEMORY_ALLOCATE, 0, size/sinfo.page_size, false);
+                max_preserve = max_preserve ? max_preserve : found_region->page_count*sinfo.page_size;
+                max_preserve = min(max_preserve, found_region->page_count*sinfo.page_size);
                 
-                if (!staging) {
-                    log_error("Ran out of memory, needed for staging when coalescing", SYSTEM_ERROR_OUT_OF_MEMORY, SYSTEM_LOG_CATEGORY_PAGE_MAPPING);
-                    return false;
+                u64 preserve_start = (u64)left->start - (u64)found_region->start;
+                
+                u64 preserve_size = min(((u64)right->start - (u64)left->start) + right->page_count*sinfo.page_size, max_preserve - preserve_start);
+                
+                void *staging = 0;
+                
+                if (preserve_start < max_preserve) {
+                    staging = sys_map_pages(SYS_MEMORY_RESERVE | SYS_MEMORY_ALLOCATE, 0, align_next(preserve_size, sinfo.page_size)/sinfo.page_size, false);
+                    if (!staging) {
+                        log_error("Ran out of memory, needed for staging when coalescing", SYSTEM_ERROR_OUT_OF_MEMORY, SYSTEM_LOG_CATEGORY_PAGE_MAPPING);
+                        return false;
+                    }
                 }
                 
-                memcpy(staging, left->start, size);
+                
+                if (preserve_start < max_preserve) {
+                    memcpy(staging, left->start, preserve_size);
+                }
                 
                 _Ostd_Swappable_Page_Sub_Region *next_coal = left;
                 while (1) {
@@ -2963,20 +3012,21 @@ bool sys_coalesce_swappable_pages(void *address, u64 max_preserve) {
                     return false;
                 }
                 
-                max_preserve = max_preserve ? max_preserve : found_region->page_count*sinfo.page_size;
-                max_preserve = min(max_preserve, found_region->page_count*sinfo.page_size);
                 
-                u64 preserve_start = (u64)left->start - (u64)found_region->start;
                 
                 if (preserve_start < max_preserve) {
-                    u64 preserve_size = min(left->page_count*sinfo.page_size, max_preserve - preserve_start);
-                    
                     memcpy(left->start, staging, preserve_size);
+                    sys_unmap_pages(staging);
                 }
                 
+                left->page_count = size/sinfo.page_size;
+                left->next = right->next;
                 
-                sys_unmap_pages(staging);
-                
+                left = 0;
+                right = 0;
+            }
+            
+            if (left == right) {
                 left = 0;
                 right = 0;
             }
@@ -3275,6 +3325,8 @@ File_Handle sys_open_file(string path, File_Open_Flags flags) {
 
     DWORD access_mode = 0;
     DWORD creation_flags = 0;
+    DWORD share_flags = FILE_SHARE_READ | FILE_SHARE_WRITE;
+    DWORD attribute_flags = FILE_ATTRIBUTE_NORMAL;
 
     if (flags & FILE_OPEN_WRITE) {
         access_mode |= FILE_GENERIC_WRITE;
@@ -3291,7 +3343,15 @@ File_Handle sys_open_file(string path, File_Open_Flags flags) {
     } else {
         creation_flags = OPEN_EXISTING;
     }
-
+    
+    if (flags & FILE_OPEN_NO_CACHE) {
+        attribute_flags = FILE_FLAG_NO_BUFFERING;
+    }
+    
+    if (flags & FILE_OPEN_SHARE_DELETE) {
+        share_flags |= FILE_SHARE_DELETE;
+    }
+    
     SECURITY_ATTRIBUTES attr = (SECURITY_ATTRIBUTES){0};
     attr.nLength = sizeof(SECURITY_ATTRIBUTES);
     attr.bInheritHandle = 1;
@@ -3299,10 +3359,10 @@ File_Handle sys_open_file(string path, File_Open_Flags flags) {
     HANDLE handle = CreateFileW(
         cpath,
         access_mode,
-        FILE_SHARE_READ | FILE_SHARE_WRITE,
+        share_flags,
         &attr,
         creation_flags,
-        FILE_ATTRIBUTE_NORMAL,
+        attribute_flags,
         0
     );
 
@@ -3489,7 +3549,83 @@ bool sys_is_directory(string path) {
     return ((attr & FILE_ATTRIBUTE_DIRECTORY) != 0);
 }
 
+bool sys_replace_file(string path_replaced, string path_replacement) {
+    log_call(SYSTEM_LOG_CATEGORY_IO);
+    u16 path_replaced_wide[2048];
+    u64 path_replaced_len = _win_utf8_to_wide(path_replaced, path_replaced_wide, 2048);
+    if (path_replaced_len == 0) {
+        log_error("path_replaced could not be converted to wide string", SYSTEM_ERROR_BAD_STRING, SYSTEM_LOG_CATEGORY_IO);
+        return false;
+    }
+    u16 path_replacement_wide[2048];
+    u64 path_replacement_len = _win_utf8_to_wide(path_replacement, path_replacement_wide, 2048);
+    if (path_replacement_len == 0) {
+        log_error("path_replacement could not be converted to wide string", SYSTEM_ERROR_BAD_STRING, SYSTEM_LOG_CATEGORY_IO);
+        return false;
+    }
+    
+    BOOL ok = ReplaceFileW(
+        (LPCWSTR)path_replaced_wide,
+        (LPCWSTR)path_replacement_wide,
+        0,
+        0,
+        0,
+        0
+    );
+    log_os_call("Replace file", "ReplaceFileW", path_replaced_wide, SYSTEM_LOG_CATEGORY_IO);
+    
+    if (ok) log_ok("Successful copy", SYSTEM_LOG_CATEGORY_IO);
+    else log_error("ReplaceFileW failed", SYSTEM_ERROR_OS_CALL_FAILED, SYSTEM_LOG_CATEGORY_IO);
+    
+    return ok;
+}
+bool sys_copy_file(string dst, string src) {
+    log_call(SYSTEM_LOG_CATEGORY_IO);
+    
+    u16 dst_wide[2048];
+    u64 dst_len = _win_utf8_to_wide(dst, dst_wide, 2048);
+    if (dst_len == 0) {
+        log_error("dst could not be converted to wide string", SYSTEM_ERROR_BAD_STRING, SYSTEM_LOG_CATEGORY_IO);
+        return false;
+    }
+    u16 src_wide[2048];
+    u64 src_len = _win_utf8_to_wide(src, src_wide, 2048);
+    if (src_len == 0) {
+        log_error("src could not be converted to wide string", SYSTEM_ERROR_BAD_STRING, SYSTEM_LOG_CATEGORY_IO);
+        return false;
+    }
+    
+    BOOL ok = CopyFileW(
+        src_wide,
+        dst_wide,
+        FALSE
+    );
+    log_os_call("Copy file", "CopyFileW", dst_wide, SYSTEM_LOG_CATEGORY_IO);
+    
+    if (ok) log_ok("Successful copy", SYSTEM_LOG_CATEGORY_IO);
+    else log_error("CopyFileW failed", SYSTEM_ERROR_OS_CALL_FAILED, SYSTEM_LOG_CATEGORY_IO);
+    
+    return ok;
+}
 
+bool sys_delete_file(string path) {
+    log_call(SYSTEM_LOG_CATEGORY_IO);
+    
+    u16 path_wide[2048];
+    u64 path_len = _win_utf8_to_wide(path, path_wide, 2048);
+    if (path_len == 0) {
+        log_error("path could not be converted to wide string", SYSTEM_ERROR_BAD_STRING, SYSTEM_LOG_CATEGORY_IO);
+        return false;
+    }
+    
+    BOOL ok = DeleteFileW(path_wide);
+    log_os_call("Delete file", "DeleteFile2W", path_wide, SYSTEM_LOG_CATEGORY_IO);
+    
+    if (ok) log_ok("Successful delete", SYSTEM_LOG_CATEGORY_IO);
+    else log_error("DeleteFile2W failed", SYSTEM_ERROR_OS_CALL_FAILED, SYSTEM_LOG_CATEGORY_IO);
+    
+    return ok;
+}
 
 void sys_walk_directory(string path, bool recursive, bool walk_directories, Walk_Proc walk_proc) {
     log_call(SYSTEM_LOG_CATEGORY_IO);

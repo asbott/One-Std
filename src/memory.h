@@ -486,8 +486,21 @@ void persistent_array_uninit(void *parray) {
 }
 void *persistent_array_push_copy(void *parray, void *src) {
     Arena_Backed_Array_Header *h = _persistent_header(parray);
-    void *p = persistent_array_push_empty(parray);
+    //void *p = persistent_array_push_empty(parray); // Cant do this because it creates unnecessary race conditions.
+    
+    void *p;
+    if (h->count == h->capacity) {
+        p = arena_push(&h->arena, h->elem_size);
+        h->capacity += 1;
+    } else {
+        assert(h->count < h->capacity);
+        p = (u8*)parray + h->count*h->elem_size;
+    }
+    
     memcpy(p, src, h->elem_size);
+    
+    h->count += 1; // Important that this increments after the memcpy
+    
     return p;
 }
 void *persistent_array_push_empty(void *parray) {

@@ -1,8 +1,8 @@
 // This file was generated from One-Std/src/unicode.h
 // The following files were included & concatenated:
 // - C:\One-Std\src\string.h
-// - C:\One-Std\src\base.h
 // - C:\One-Std\src\unicode.h
+// - C:\One-Std\src\base.h
 // I try to compile with -pedantic and -Weverything, but get really dumb warnings like these,
 // so I have to ignore them.
 #if defined(__GNUC__) || defined(__GNUG__)
@@ -727,8 +727,6 @@ u32 next_utf16(Utf16_Iterator *it);
 
 u32 next_utf8(string *s);
 
-#ifdef OSTD_IMPL
-
 unit_local const u8 trailing_bytes_for_utf8[] = {
 	0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0, 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
 	0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0, 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
@@ -740,6 +738,9 @@ unit_local const u8 trailing_bytes_for_utf8[] = {
 	2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2, 3,3,3,3,3,3,3,3,4,4,4,4,5,5,5,5
 };
 unit_local const u8 utf8_inital_byte_mask[] = { 0x7F, 0x1F, 0x0F, 0x07, 0x03, 0x01 };
+
+#ifdef OSTD_IMPL
+
 
 // Convert single utf8 character to a single utf32 codepoint
 To_Utf32_Result one_utf8_to_utf32(u8 *s, u64 source_length, bool strict) {
