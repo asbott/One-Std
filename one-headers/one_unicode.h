@@ -1,8 +1,8 @@
 // This file was generated from One-Std/src/unicode.h
 // The following files were included & concatenated:
+// - C:\One-Std\src\base.h
 // - C:\One-Std\src\string.h
 // - C:\One-Std\src\unicode.h
-// - C:\One-Std\src\base.h
 // I try to compile with -pedantic and -Weverything, but get really dumb warnings like these,
 // so I have to ignore them.
 #if defined(__GNUC__) || defined(__GNUG__)
@@ -144,9 +144,11 @@
 #pragma clang diagnostic ignored "-Wkeyword-macro"
 #endif
 #if COMPILER_FLAGS & COMPILER_FLAG_GNU
-    #define inline __attribute__((always_inline))
+    #define inline __inline__ __attribute__((always_inline))
+    #define maybe_inline __inline__
 #elif COMPILER_FLAGS & COMPILER_FLAG_MSC
     #define inline __forceinline
+    #define maybe_inline __inline
 #endif
 #ifdef __clang__
 #pragma clang diagnostic pop
@@ -378,6 +380,9 @@ typedef u32 sys_uint;
 
 #endif // CSTD_C23
 
+void __cpuid(int cpuInfo[4], int function_id);
+u64 __cdecl _xgetbv(unsigned int);
+
 #if COMPILER_FLAGS & COMPILER_FLAG_MSC
 #define debug_break(...) __debugbreak()
 #elif COMPILER_FLAGS & COMPILER_FLAG_GNU
@@ -443,36 +448,1774 @@ Assert_Fail_Callback assert_fail_callback;
     #define OSTD_LIB
 #endif
 
-#ifndef BUILTIN_ATTRIB
-    #ifdef OSTD_SELF_CONTAINED
-        #define BUILTIN_ATTRIB __attribute__((used))
-    #else
-        #define BUILTIN_ATTRIB
+#ifdef OSTD_SELF_CONTAINED
+
+    #if OS_FLAGS & OS_FLAG_WINDOWS
+        #pragma comment(linker, "/ENTRY:mainCRTStartup /SUBSYSTEM:WINDOWS")
+        #pragma comment(linker, "/STACK:0x100000,0x100000")
     #endif
+
 #endif
 
-// todo(charlie) inline asm / dynamically load crt's if msvc
-// --- Actually I tried vectorized versions, but a) it seems slower than what -O3 compiles 
-// these basic versions to and b) it's much slower in debug. 
-// There does not seem to be any gain from manually writing vectorized versions.
+typedef u64 unaligned_u64 __attribute__((aligned(1), may_alias));
+typedef u32 unaligned_u32 __attribute__((aligned(1), may_alias));
+typedef u16 unaligned_u16 __attribute__((aligned(1), may_alias));
+
+#define JUMP_TABLE(dst, src, n) \
+    case 0: break; \
+    case 1: { \
+        *(u8 *)((u8 *)(dst) + 0) = *(const u8 *)((const u8 *)(src) + 0); \
+        break; \
+    } \
+    case 2: { \
+        *(unaligned_u16 *)((u8 *)(dst) + 0) = *(const unaligned_u16 *)((const u8 *)(src) + 0); \
+        break; \
+    } \
+    case 3: { \
+        *(unaligned_u16 *)((u8 *)(dst) + 0) = *(const unaligned_u16 *)((const u8 *)(src) + 0); \
+        *(u8 *)((u8 *)(dst) + 2) = *(const u8 *)((const u8 *)(src) + 2); \
+        break; \
+    } \
+    case 4: { \
+        *(unaligned_u32 *)((u8 *)(dst) + 0) = *(const unaligned_u32 *)((const u8 *)(src) + 0); \
+        break; \
+    } \
+    case 5: { \
+        *(unaligned_u32 *)((u8 *)(dst) + 0) = *(const unaligned_u32 *)((const u8 *)(src) + 0); \
+        *(u8 *)((u8 *)(dst) + 4) = *(const u8 *)((const u8 *)(src) + 4); \
+        break; \
+    } \
+    case 6: { \
+        *(unaligned_u32 *)((u8 *)(dst) + 0) = *(const unaligned_u32 *)((const u8 *)(src) + 0); \
+        *(unaligned_u16 *)((u8 *)(dst) + 4) = *(const unaligned_u16 *)((const u8 *)(src) + 4); \
+        break; \
+    } \
+    case 7: { \
+        *(unaligned_u32 *)((u8 *)(dst) + 0) = *(const unaligned_u32 *)((const u8 *)(src) + 0); \
+        *(unaligned_u16 *)((u8 *)(dst) + 4) = *(const unaligned_u16 *)((const u8 *)(src) + 4); \
+        *(u8 *)((u8 *)(dst) + 6) = *(const u8 *)((const u8 *)(src) + 6); \
+        break; \
+    } \
+    case 8: { \
+        *(unaligned_u64 *)((u8 *)(dst) + 0) = *(const unaligned_u64 *)((const u8 *)(src) + 0); \
+        break; \
+    } \
+    case 9: { \
+        *(unaligned_u64 *)((u8 *)(dst) + 0) = *(const unaligned_u64 *)((const u8 *)(src) + 0); \
+        *(u8 *)((u8 *)(dst) + 8) = *(const u8 *)((const u8 *)(src) + 8); \
+        break; \
+    } \
+    case 10: { \
+        *(unaligned_u64 *)((u8 *)(dst) + 0) = *(const unaligned_u64 *)((const u8 *)(src) + 0); \
+        *(unaligned_u16 *)((u8 *)(dst) + 8) = *(const unaligned_u16 *)((const u8 *)(src) + 8); \
+        break; \
+    } \
+    case 11: { \
+        *(unaligned_u64 *)((u8 *)(dst) + 0) = *(const unaligned_u64 *)((const u8 *)(src) + 0); \
+        *(unaligned_u16 *)((u8 *)(dst) + 8) = *(const unaligned_u16 *)((const u8 *)(src) + 8); \
+        *(u8 *)((u8 *)(dst) + 10) = *(const u8 *)((const u8 *)(src) + 10); \
+        break; \
+    } \
+    case 12: { \
+        *(unaligned_u64 *)((u8 *)(dst) + 0) = *(const unaligned_u64 *)((const u8 *)(src) + 0); \
+        *(unaligned_u32 *)((u8 *)(dst) + 8) = *(const unaligned_u32 *)((const u8 *)(src) + 8); \
+        break; \
+    } \
+    case 13: { \
+        *(unaligned_u64 *)((u8 *)(dst) + 0) = *(const unaligned_u64 *)((const u8 *)(src) + 0); \
+        *(unaligned_u32 *)((u8 *)(dst) + 8) = *(const unaligned_u32 *)((const u8 *)(src) + 8); \
+        *(u8 *)((u8 *)(dst) + 12) = *(const u8 *)((const u8 *)(src) + 12); \
+        break; \
+    } \
+    case 14: { \
+        *(unaligned_u64 *)((u8 *)(dst) + 0) = *(const unaligned_u64 *)((const u8 *)(src) + 0); \
+        *(unaligned_u64 *)((u8 *)(dst) + 6) = *(const unaligned_u64 *)((const u8 *)(src) + 6); \
+        break; \
+    } \
+    case 15: { \
+        *(unaligned_u64 *)((u8 *)(dst) + 0) = *(const unaligned_u64 *)((const u8 *)(src) + 0); \
+        *(unaligned_u64 *)((u8 *)(dst) + 7) = *(const unaligned_u64 *)((const u8 *)(src) + 7); \
+        break; \
+    } \
+    case 16: { \
+        *(unaligned_u64 *)((u8 *)(dst) + 0) = *(const unaligned_u64 *)((const u8 *)(src) + 0); \
+        *(unaligned_u64 *)((u8 *)(dst) + 8) = *(const unaligned_u64 *)((const u8 *)(src) + 8); \
+        break; \
+    } \
+    case 17: { \
+        *(unaligned_u64 *)((u8 *)(dst) + 0) = *(const unaligned_u64 *)((const u8 *)(src) + 0); \
+        *(unaligned_u64 *)((u8 *)(dst) + 8) = *(const unaligned_u64 *)((const u8 *)(src) + 8); \
+        *(u8 *)((u8 *)(dst) + 16) = *(const u8 *)((const u8 *)(src) + 16); \
+        break; \
+    } \
+    case 18: { \
+        *(unaligned_u64 *)((u8 *)(dst) + 0) = *(const unaligned_u64 *)((const u8 *)(src) + 0); \
+        *(unaligned_u64 *)((u8 *)(dst) + 8) = *(const unaligned_u64 *)((const u8 *)(src) + 8); \
+        *(unaligned_u16 *)((u8 *)(dst) + 16) = *(const unaligned_u16 *)((const u8 *)(src) + 16); \
+        break; \
+    } \
+    case 19: { \
+        *(unaligned_u64 *)((u8 *)(dst) + 0) = *(const unaligned_u64 *)((const u8 *)(src) + 0); \
+        *(unaligned_u64 *)((u8 *)(dst) + 8) = *(const unaligned_u64 *)((const u8 *)(src) + 8); \
+        *(unaligned_u32 *)((u8 *)(dst) + 15) = *(const unaligned_u32 *)((const u8 *)(src) + 15); \
+        break; \
+    } \
+    case 20: { \
+        *(unaligned_u64 *)((u8 *)(dst) + 0) = *(const unaligned_u64 *)((const u8 *)(src) + 0); \
+        *(unaligned_u64 *)((u8 *)(dst) + 8) = *(const unaligned_u64 *)((const u8 *)(src) + 8); \
+        *(unaligned_u32 *)((u8 *)(dst) + 16) = *(const unaligned_u32 *)((const u8 *)(src) + 16); \
+        break; \
+    } \
+    case 21: { \
+        *(unaligned_u64 *)((u8 *)(dst) + 0) = *(const unaligned_u64 *)((const u8 *)(src) + 0); \
+        *(unaligned_u64 *)((u8 *)(dst) + 8) = *(const unaligned_u64 *)((const u8 *)(src) + 8); \
+        *(unaligned_u32 *)((u8 *)(dst) + 16) = *(const unaligned_u32 *)((const u8 *)(src) + 16); \
+        *(u8 *)((u8 *)(dst) + 20) = *(const u8 *)((const u8 *)(src) + 20); \
+        break; \
+    } \
+    case 22: { \
+        *(unaligned_u64 *)((u8 *)(dst) + 0) = *(const unaligned_u64 *)((const u8 *)(src) + 0); \
+        *(unaligned_u64 *)((u8 *)(dst) + 8) = *(const unaligned_u64 *)((const u8 *)(src) + 8); \
+        *(unaligned_u32 *)((u8 *)(dst) + 16) = *(const unaligned_u32 *)((const u8 *)(src) + 16); \
+        *(unaligned_u16 *)((u8 *)(dst) + 20) = *(const unaligned_u16 *)((const u8 *)(src) + 20); \
+        break; \
+    } \
+    case 23: { \
+        *(unaligned_u64 *)((u8 *)(dst) + 0) = *(const unaligned_u64 *)((const u8 *)(src) + 0); \
+        *(unaligned_u64 *)((u8 *)(dst) + 8) = *(const unaligned_u64 *)((const u8 *)(src) + 8); \
+        *(unaligned_u64 *)((u8 *)(dst) + 15) = *(const unaligned_u64 *)((const u8 *)(src) + 15); \
+        break; \
+    } \
+    case 24: { \
+        *(unaligned_u64 *)((u8 *)(dst) + 0) = *(const unaligned_u64 *)((const u8 *)(src) + 0); \
+        *(unaligned_u64 *)((u8 *)(dst) + 8) = *(const unaligned_u64 *)((const u8 *)(src) + 8); \
+        *(unaligned_u64 *)((u8 *)(dst) + 16) = *(const unaligned_u64 *)((const u8 *)(src) + 16); \
+        break; \
+    } \
+    case 25: { \
+        *(unaligned_u64 *)((u8 *)(dst) + 0) = *(const unaligned_u64 *)((const u8 *)(src) + 0); \
+        *(unaligned_u64 *)((u8 *)(dst) + 8) = *(const unaligned_u64 *)((const u8 *)(src) + 8); \
+        *(unaligned_u64 *)((u8 *)(dst) + 16) = *(const unaligned_u64 *)((const u8 *)(src) + 16); \
+        *(u8 *)((u8 *)(dst) + 24) = *(const u8 *)((const u8 *)(src) + 24); \
+        break; \
+    } \
+    case 26: { \
+        *(unaligned_u64 *)((u8 *)(dst) + 0) = *(const unaligned_u64 *)((const u8 *)(src) + 0); \
+        *(unaligned_u64 *)((u8 *)(dst) + 8) = *(const unaligned_u64 *)((const u8 *)(src) + 8); \
+        *(unaligned_u64 *)((u8 *)(dst) + 16) = *(const unaligned_u64 *)((const u8 *)(src) + 16); \
+        *(unaligned_u16 *)((u8 *)(dst) + 24) = *(const unaligned_u16 *)((const u8 *)(src) + 24); \
+        break; \
+    } \
+    case 27: { \
+        *(unaligned_u64 *)((u8 *)(dst) + 0) = *(const unaligned_u64 *)((const u8 *)(src) + 0); \
+        *(unaligned_u64 *)((u8 *)(dst) + 8) = *(const unaligned_u64 *)((const u8 *)(src) + 8); \
+        *(unaligned_u64 *)((u8 *)(dst) + 16) = *(const unaligned_u64 *)((const u8 *)(src) + 16); \
+        *(unaligned_u32 *)((u8 *)(dst) + 23) = *(const unaligned_u32 *)((const u8 *)(src) + 23); \
+        break; \
+    } \
+    case 28: { \
+        *(unaligned_u64 *)((u8 *)(dst) + 0) = *(const unaligned_u64 *)((const u8 *)(src) + 0); \
+        *(unaligned_u64 *)((u8 *)(dst) + 8) = *(const unaligned_u64 *)((const u8 *)(src) + 8); \
+        *(unaligned_u64 *)((u8 *)(dst) + 16) = *(const unaligned_u64 *)((const u8 *)(src) + 16); \
+        *(unaligned_u32 *)((u8 *)(dst) + 24) = *(const unaligned_u32 *)((const u8 *)(src) + 24); \
+        break; \
+    } \
+    case 29: { \
+        *(unaligned_u64 *)((u8 *)(dst) + 0) = *(const unaligned_u64 *)((const u8 *)(src) + 0); \
+        *(unaligned_u64 *)((u8 *)(dst) + 8) = *(const unaligned_u64 *)((const u8 *)(src) + 8); \
+        *(unaligned_u64 *)((u8 *)(dst) + 16) = *(const unaligned_u64 *)((const u8 *)(src) + 16); \
+        *(unaligned_u64 *)((u8 *)(dst) + 21) = *(const unaligned_u64 *)((const u8 *)(src) + 21); \
+        break; \
+    } \
+    case 30: { \
+        *(unaligned_u64 *)((u8 *)(dst) + 0) = *(const unaligned_u64 *)((const u8 *)(src) + 0); \
+        *(unaligned_u64 *)((u8 *)(dst) + 8) = *(const unaligned_u64 *)((const u8 *)(src) + 8); \
+        *(unaligned_u64 *)((u8 *)(dst) + 16) = *(const unaligned_u64 *)((const u8 *)(src) + 16); \
+        *(unaligned_u64 *)((u8 *)(dst) + 22) = *(const unaligned_u64 *)((const u8 *)(src) + 22); \
+        break; \
+    } \
+    case 31: { \
+        *(unaligned_u64 *)((u8 *)(dst) + 0) = *(const unaligned_u64 *)((const u8 *)(src) + 0); \
+        *(unaligned_u64 *)((u8 *)(dst) + 8) = *(const unaligned_u64 *)((const u8 *)(src) + 8); \
+        *(unaligned_u64 *)((u8 *)(dst) + 16) = *(const unaligned_u64 *)((const u8 *)(src) + 16); \
+        *(unaligned_u64 *)((u8 *)(dst) + 23) = *(const unaligned_u64 *)((const u8 *)(src) + 23); \
+        break; \
+    } \
+    case 32: { \
+        *(unaligned_u64 *)((u8 *)(dst) + 0) = *(const unaligned_u64 *)((const u8 *)(src) + 0); \
+        *(unaligned_u64 *)((u8 *)(dst) + 8) = *(const unaligned_u64 *)((const u8 *)(src) + 8); \
+        *(unaligned_u64 *)((u8 *)(dst) + 16) = *(const unaligned_u64 *)((const u8 *)(src) + 16); \
+        *(unaligned_u64 *)((u8 *)(dst) + 24) = *(const unaligned_u64 *)((const u8 *)(src) + 24); \
+        break; \
+    } \
+    case 33: { \
+        *(unaligned_u64 *)((u8 *)(dst) + 0) = *(const unaligned_u64 *)((const u8 *)(src) + 0); \
+        *(unaligned_u64 *)((u8 *)(dst) + 8) = *(const unaligned_u64 *)((const u8 *)(src) + 8); \
+        *(unaligned_u64 *)((u8 *)(dst) + 16) = *(const unaligned_u64 *)((const u8 *)(src) + 16); \
+        *(unaligned_u64 *)((u8 *)(dst) + 24) = *(const unaligned_u64 *)((const u8 *)(src) + 24); \
+        *(unaligned_u64 *)((u8 *)(dst) + 1) = *(const unaligned_u64 *)((const u8 *)(src) + 1); \
+        *(unaligned_u64 *)((u8 *)(dst) + 9) = *(const unaligned_u64 *)((const u8 *)(src) + 9); \
+        *(unaligned_u64 *)((u8 *)(dst) + 17) = *(const unaligned_u64 *)((const u8 *)(src) + 17); \
+        *(unaligned_u64 *)((u8 *)(dst) + 25) = *(const unaligned_u64 *)((const u8 *)(src) + 25); \
+        break; \
+    } \
+    case 34: { \
+        *(unaligned_u64 *)((u8 *)(dst) + 0) = *(const unaligned_u64 *)((const u8 *)(src) + 0); \
+        *(unaligned_u64 *)((u8 *)(dst) + 8) = *(const unaligned_u64 *)((const u8 *)(src) + 8); \
+        *(unaligned_u64 *)((u8 *)(dst) + 16) = *(const unaligned_u64 *)((const u8 *)(src) + 16); \
+        *(unaligned_u64 *)((u8 *)(dst) + 24) = *(const unaligned_u64 *)((const u8 *)(src) + 24); \
+        *(unaligned_u64 *)((u8 *)(dst) + 2) = *(const unaligned_u64 *)((const u8 *)(src) + 2); \
+        *(unaligned_u64 *)((u8 *)(dst) + 10) = *(const unaligned_u64 *)((const u8 *)(src) + 10); \
+        *(unaligned_u64 *)((u8 *)(dst) + 18) = *(const unaligned_u64 *)((const u8 *)(src) + 18); \
+        *(unaligned_u64 *)((u8 *)(dst) + 26) = *(const unaligned_u64 *)((const u8 *)(src) + 26); \
+        break; \
+    } \
+    case 35: { \
+        *(unaligned_u64 *)((u8 *)(dst) + 0) = *(const unaligned_u64 *)((const u8 *)(src) + 0); \
+        *(unaligned_u64 *)((u8 *)(dst) + 8) = *(const unaligned_u64 *)((const u8 *)(src) + 8); \
+        *(unaligned_u64 *)((u8 *)(dst) + 16) = *(const unaligned_u64 *)((const u8 *)(src) + 16); \
+        *(unaligned_u64 *)((u8 *)(dst) + 24) = *(const unaligned_u64 *)((const u8 *)(src) + 24); \
+        *(unaligned_u64 *)((u8 *)(dst) + 3) = *(const unaligned_u64 *)((const u8 *)(src) + 3); \
+        *(unaligned_u64 *)((u8 *)(dst) + 11) = *(const unaligned_u64 *)((const u8 *)(src) + 11); \
+        *(unaligned_u64 *)((u8 *)(dst) + 19) = *(const unaligned_u64 *)((const u8 *)(src) + 19); \
+        *(unaligned_u64 *)((u8 *)(dst) + 27) = *(const unaligned_u64 *)((const u8 *)(src) + 27); \
+        break; \
+    } \
+    case 36: { \
+        *(unaligned_u64 *)((u8 *)(dst) + 0) = *(const unaligned_u64 *)((const u8 *)(src) + 0); \
+        *(unaligned_u64 *)((u8 *)(dst) + 8) = *(const unaligned_u64 *)((const u8 *)(src) + 8); \
+        *(unaligned_u64 *)((u8 *)(dst) + 16) = *(const unaligned_u64 *)((const u8 *)(src) + 16); \
+        *(unaligned_u64 *)((u8 *)(dst) + 24) = *(const unaligned_u64 *)((const u8 *)(src) + 24); \
+        *(unaligned_u64 *)((u8 *)(dst) + 4) = *(const unaligned_u64 *)((const u8 *)(src) + 4); \
+        *(unaligned_u64 *)((u8 *)(dst) + 12) = *(const unaligned_u64 *)((const u8 *)(src) + 12); \
+        *(unaligned_u64 *)((u8 *)(dst) + 20) = *(const unaligned_u64 *)((const u8 *)(src) + 20); \
+        *(unaligned_u64 *)((u8 *)(dst) + 28) = *(const unaligned_u64 *)((const u8 *)(src) + 28); \
+        break; \
+    } \
+    case 37: { \
+        *(unaligned_u64 *)((u8 *)(dst) + 0) = *(const unaligned_u64 *)((const u8 *)(src) + 0); \
+        *(unaligned_u64 *)((u8 *)(dst) + 8) = *(const unaligned_u64 *)((const u8 *)(src) + 8); \
+        *(unaligned_u64 *)((u8 *)(dst) + 16) = *(const unaligned_u64 *)((const u8 *)(src) + 16); \
+        *(unaligned_u64 *)((u8 *)(dst) + 24) = *(const unaligned_u64 *)((const u8 *)(src) + 24); \
+        *(unaligned_u64 *)((u8 *)(dst) + 5) = *(const unaligned_u64 *)((const u8 *)(src) + 5); \
+        *(unaligned_u64 *)((u8 *)(dst) + 13) = *(const unaligned_u64 *)((const u8 *)(src) + 13); \
+        *(unaligned_u64 *)((u8 *)(dst) + 21) = *(const unaligned_u64 *)((const u8 *)(src) + 21); \
+        *(unaligned_u64 *)((u8 *)(dst) + 29) = *(const unaligned_u64 *)((const u8 *)(src) + 29); \
+        break; \
+    } \
+    case 38: { \
+        *(unaligned_u64 *)((u8 *)(dst) + 0) = *(const unaligned_u64 *)((const u8 *)(src) + 0); \
+        *(unaligned_u64 *)((u8 *)(dst) + 8) = *(const unaligned_u64 *)((const u8 *)(src) + 8); \
+        *(unaligned_u64 *)((u8 *)(dst) + 16) = *(const unaligned_u64 *)((const u8 *)(src) + 16); \
+        *(unaligned_u64 *)((u8 *)(dst) + 24) = *(const unaligned_u64 *)((const u8 *)(src) + 24); \
+        *(unaligned_u64 *)((u8 *)(dst) + 6) = *(const unaligned_u64 *)((const u8 *)(src) + 6); \
+        *(unaligned_u64 *)((u8 *)(dst) + 14) = *(const unaligned_u64 *)((const u8 *)(src) + 14); \
+        *(unaligned_u64 *)((u8 *)(dst) + 22) = *(const unaligned_u64 *)((const u8 *)(src) + 22); \
+        *(unaligned_u64 *)((u8 *)(dst) + 30) = *(const unaligned_u64 *)((const u8 *)(src) + 30); \
+        break; \
+    } \
+    case 39: { \
+        *(unaligned_u64 *)((u8 *)(dst) + 0) = *(const unaligned_u64 *)((const u8 *)(src) + 0); \
+        *(unaligned_u64 *)((u8 *)(dst) + 8) = *(const unaligned_u64 *)((const u8 *)(src) + 8); \
+        *(unaligned_u64 *)((u8 *)(dst) + 16) = *(const unaligned_u64 *)((const u8 *)(src) + 16); \
+        *(unaligned_u64 *)((u8 *)(dst) + 24) = *(const unaligned_u64 *)((const u8 *)(src) + 24); \
+        *(unaligned_u64 *)((u8 *)(dst) + 7) = *(const unaligned_u64 *)((const u8 *)(src) + 7); \
+        *(unaligned_u64 *)((u8 *)(dst) + 15) = *(const unaligned_u64 *)((const u8 *)(src) + 15); \
+        *(unaligned_u64 *)((u8 *)(dst) + 23) = *(const unaligned_u64 *)((const u8 *)(src) + 23); \
+        *(unaligned_u64 *)((u8 *)(dst) + 31) = *(const unaligned_u64 *)((const u8 *)(src) + 31); \
+        break; \
+    } \
+    case 40: { \
+        *(unaligned_u64 *)((u8 *)(dst) + 0) = *(const unaligned_u64 *)((const u8 *)(src) + 0); \
+        *(unaligned_u64 *)((u8 *)(dst) + 8) = *(const unaligned_u64 *)((const u8 *)(src) + 8); \
+        *(unaligned_u64 *)((u8 *)(dst) + 16) = *(const unaligned_u64 *)((const u8 *)(src) + 16); \
+        *(unaligned_u64 *)((u8 *)(dst) + 24) = *(const unaligned_u64 *)((const u8 *)(src) + 24); \
+        *(unaligned_u64 *)((u8 *)(dst) + 8) = *(const unaligned_u64 *)((const u8 *)(src) + 8); \
+        *(unaligned_u64 *)((u8 *)(dst) + 16) = *(const unaligned_u64 *)((const u8 *)(src) + 16); \
+        *(unaligned_u64 *)((u8 *)(dst) + 24) = *(const unaligned_u64 *)((const u8 *)(src) + 24); \
+        *(unaligned_u64 *)((u8 *)(dst) + 32) = *(const unaligned_u64 *)((const u8 *)(src) + 32); \
+        break; \
+    } \
+    case 41: { \
+        *(unaligned_u64 *)((u8 *)(dst) + 0) = *(const unaligned_u64 *)((const u8 *)(src) + 0); \
+        *(unaligned_u64 *)((u8 *)(dst) + 8) = *(const unaligned_u64 *)((const u8 *)(src) + 8); \
+        *(unaligned_u64 *)((u8 *)(dst) + 16) = *(const unaligned_u64 *)((const u8 *)(src) + 16); \
+        *(unaligned_u64 *)((u8 *)(dst) + 24) = *(const unaligned_u64 *)((const u8 *)(src) + 24); \
+        *(unaligned_u64 *)((u8 *)(dst) + 9) = *(const unaligned_u64 *)((const u8 *)(src) + 9); \
+        *(unaligned_u64 *)((u8 *)(dst) + 17) = *(const unaligned_u64 *)((const u8 *)(src) + 17); \
+        *(unaligned_u64 *)((u8 *)(dst) + 25) = *(const unaligned_u64 *)((const u8 *)(src) + 25); \
+        *(unaligned_u64 *)((u8 *)(dst) + 33) = *(const unaligned_u64 *)((const u8 *)(src) + 33); \
+        break; \
+    } \
+    case 42: { \
+        *(unaligned_u64 *)((u8 *)(dst) + 0) = *(const unaligned_u64 *)((const u8 *)(src) + 0); \
+        *(unaligned_u64 *)((u8 *)(dst) + 8) = *(const unaligned_u64 *)((const u8 *)(src) + 8); \
+        *(unaligned_u64 *)((u8 *)(dst) + 16) = *(const unaligned_u64 *)((const u8 *)(src) + 16); \
+        *(unaligned_u64 *)((u8 *)(dst) + 24) = *(const unaligned_u64 *)((const u8 *)(src) + 24); \
+        *(unaligned_u64 *)((u8 *)(dst) + 10) = *(const unaligned_u64 *)((const u8 *)(src) + 10); \
+        *(unaligned_u64 *)((u8 *)(dst) + 18) = *(const unaligned_u64 *)((const u8 *)(src) + 18); \
+        *(unaligned_u64 *)((u8 *)(dst) + 26) = *(const unaligned_u64 *)((const u8 *)(src) + 26); \
+        *(unaligned_u64 *)((u8 *)(dst) + 34) = *(const unaligned_u64 *)((const u8 *)(src) + 34); \
+        break; \
+    } \
+    case 43: { \
+        *(unaligned_u64 *)((u8 *)(dst) + 0) = *(const unaligned_u64 *)((const u8 *)(src) + 0); \
+        *(unaligned_u64 *)((u8 *)(dst) + 8) = *(const unaligned_u64 *)((const u8 *)(src) + 8); \
+        *(unaligned_u64 *)((u8 *)(dst) + 16) = *(const unaligned_u64 *)((const u8 *)(src) + 16); \
+        *(unaligned_u64 *)((u8 *)(dst) + 24) = *(const unaligned_u64 *)((const u8 *)(src) + 24); \
+        *(unaligned_u64 *)((u8 *)(dst) + 11) = *(const unaligned_u64 *)((const u8 *)(src) + 11); \
+        *(unaligned_u64 *)((u8 *)(dst) + 19) = *(const unaligned_u64 *)((const u8 *)(src) + 19); \
+        *(unaligned_u64 *)((u8 *)(dst) + 27) = *(const unaligned_u64 *)((const u8 *)(src) + 27); \
+        *(unaligned_u64 *)((u8 *)(dst) + 35) = *(const unaligned_u64 *)((const u8 *)(src) + 35); \
+        break; \
+    } \
+    case 44: { \
+        *(unaligned_u64 *)((u8 *)(dst) + 0) = *(const unaligned_u64 *)((const u8 *)(src) + 0); \
+        *(unaligned_u64 *)((u8 *)(dst) + 8) = *(const unaligned_u64 *)((const u8 *)(src) + 8); \
+        *(unaligned_u64 *)((u8 *)(dst) + 16) = *(const unaligned_u64 *)((const u8 *)(src) + 16); \
+        *(unaligned_u64 *)((u8 *)(dst) + 24) = *(const unaligned_u64 *)((const u8 *)(src) + 24); \
+        *(unaligned_u64 *)((u8 *)(dst) + 12) = *(const unaligned_u64 *)((const u8 *)(src) + 12); \
+        *(unaligned_u64 *)((u8 *)(dst) + 20) = *(const unaligned_u64 *)((const u8 *)(src) + 20); \
+        *(unaligned_u64 *)((u8 *)(dst) + 28) = *(const unaligned_u64 *)((const u8 *)(src) + 28); \
+        *(unaligned_u64 *)((u8 *)(dst) + 36) = *(const unaligned_u64 *)((const u8 *)(src) + 36); \
+        break; \
+    } \
+    case 45: { \
+        *(unaligned_u64 *)((u8 *)(dst) + 0) = *(const unaligned_u64 *)((const u8 *)(src) + 0); \
+        *(unaligned_u64 *)((u8 *)(dst) + 8) = *(const unaligned_u64 *)((const u8 *)(src) + 8); \
+        *(unaligned_u64 *)((u8 *)(dst) + 16) = *(const unaligned_u64 *)((const u8 *)(src) + 16); \
+        *(unaligned_u64 *)((u8 *)(dst) + 24) = *(const unaligned_u64 *)((const u8 *)(src) + 24); \
+        *(unaligned_u64 *)((u8 *)(dst) + 13) = *(const unaligned_u64 *)((const u8 *)(src) + 13); \
+        *(unaligned_u64 *)((u8 *)(dst) + 21) = *(const unaligned_u64 *)((const u8 *)(src) + 21); \
+        *(unaligned_u64 *)((u8 *)(dst) + 29) = *(const unaligned_u64 *)((const u8 *)(src) + 29); \
+        *(unaligned_u64 *)((u8 *)(dst) + 37) = *(const unaligned_u64 *)((const u8 *)(src) + 37); \
+        break; \
+    } \
+    case 46: { \
+        *(unaligned_u64 *)((u8 *)(dst) + 0) = *(const unaligned_u64 *)((const u8 *)(src) + 0); \
+        *(unaligned_u64 *)((u8 *)(dst) + 8) = *(const unaligned_u64 *)((const u8 *)(src) + 8); \
+        *(unaligned_u64 *)((u8 *)(dst) + 16) = *(const unaligned_u64 *)((const u8 *)(src) + 16); \
+        *(unaligned_u64 *)((u8 *)(dst) + 24) = *(const unaligned_u64 *)((const u8 *)(src) + 24); \
+        *(unaligned_u64 *)((u8 *)(dst) + 14) = *(const unaligned_u64 *)((const u8 *)(src) + 14); \
+        *(unaligned_u64 *)((u8 *)(dst) + 22) = *(const unaligned_u64 *)((const u8 *)(src) + 22); \
+        *(unaligned_u64 *)((u8 *)(dst) + 30) = *(const unaligned_u64 *)((const u8 *)(src) + 30); \
+        *(unaligned_u64 *)((u8 *)(dst) + 38) = *(const unaligned_u64 *)((const u8 *)(src) + 38); \
+        break; \
+    } \
+    case 47: { \
+        *(unaligned_u64 *)((u8 *)(dst) + 0) = *(const unaligned_u64 *)((const u8 *)(src) + 0); \
+        *(unaligned_u64 *)((u8 *)(dst) + 8) = *(const unaligned_u64 *)((const u8 *)(src) + 8); \
+        *(unaligned_u64 *)((u8 *)(dst) + 16) = *(const unaligned_u64 *)((const u8 *)(src) + 16); \
+        *(unaligned_u64 *)((u8 *)(dst) + 24) = *(const unaligned_u64 *)((const u8 *)(src) + 24); \
+        *(unaligned_u64 *)((u8 *)(dst) + 15) = *(const unaligned_u64 *)((const u8 *)(src) + 15); \
+        *(unaligned_u64 *)((u8 *)(dst) + 23) = *(const unaligned_u64 *)((const u8 *)(src) + 23); \
+        *(unaligned_u64 *)((u8 *)(dst) + 31) = *(const unaligned_u64 *)((const u8 *)(src) + 31); \
+        *(unaligned_u64 *)((u8 *)(dst) + 39) = *(const unaligned_u64 *)((const u8 *)(src) + 39); \
+        break; \
+    } \
+    case 48: { \
+        *(unaligned_u64 *)((u8 *)(dst) + 0) = *(const unaligned_u64 *)((const u8 *)(src) + 0); \
+        *(unaligned_u64 *)((u8 *)(dst) + 8) = *(const unaligned_u64 *)((const u8 *)(src) + 8); \
+        *(unaligned_u64 *)((u8 *)(dst) + 16) = *(const unaligned_u64 *)((const u8 *)(src) + 16); \
+        *(unaligned_u64 *)((u8 *)(dst) + 24) = *(const unaligned_u64 *)((const u8 *)(src) + 24); \
+        *(unaligned_u64 *)((u8 *)(dst) + 16) = *(const unaligned_u64 *)((const u8 *)(src) + 16); \
+        *(unaligned_u64 *)((u8 *)(dst) + 24) = *(const unaligned_u64 *)((const u8 *)(src) + 24); \
+        *(unaligned_u64 *)((u8 *)(dst) + 32) = *(const unaligned_u64 *)((const u8 *)(src) + 32); \
+        *(unaligned_u64 *)((u8 *)(dst) + 40) = *(const unaligned_u64 *)((const u8 *)(src) + 40); \
+        break; \
+    } \
+    case 49: { \
+        *(unaligned_u64 *)((u8 *)(dst) + 0) = *(const unaligned_u64 *)((const u8 *)(src) + 0); \
+        *(unaligned_u64 *)((u8 *)(dst) + 8) = *(const unaligned_u64 *)((const u8 *)(src) + 8); \
+        *(unaligned_u64 *)((u8 *)(dst) + 16) = *(const unaligned_u64 *)((const u8 *)(src) + 16); \
+        *(unaligned_u64 *)((u8 *)(dst) + 24) = *(const unaligned_u64 *)((const u8 *)(src) + 24); \
+        *(unaligned_u64 *)((u8 *)(dst) + 17) = *(const unaligned_u64 *)((const u8 *)(src) + 17); \
+        *(unaligned_u64 *)((u8 *)(dst) + 25) = *(const unaligned_u64 *)((const u8 *)(src) + 25); \
+        *(unaligned_u64 *)((u8 *)(dst) + 33) = *(const unaligned_u64 *)((const u8 *)(src) + 33); \
+        *(unaligned_u64 *)((u8 *)(dst) + 41) = *(const unaligned_u64 *)((const u8 *)(src) + 41); \
+        break; \
+    } \
+    case 50: { \
+        *(unaligned_u64 *)((u8 *)(dst) + 0) = *(const unaligned_u64 *)((const u8 *)(src) + 0); \
+        *(unaligned_u64 *)((u8 *)(dst) + 8) = *(const unaligned_u64 *)((const u8 *)(src) + 8); \
+        *(unaligned_u64 *)((u8 *)(dst) + 16) = *(const unaligned_u64 *)((const u8 *)(src) + 16); \
+        *(unaligned_u64 *)((u8 *)(dst) + 24) = *(const unaligned_u64 *)((const u8 *)(src) + 24); \
+        *(unaligned_u64 *)((u8 *)(dst) + 18) = *(const unaligned_u64 *)((const u8 *)(src) + 18); \
+        *(unaligned_u64 *)((u8 *)(dst) + 26) = *(const unaligned_u64 *)((const u8 *)(src) + 26); \
+        *(unaligned_u64 *)((u8 *)(dst) + 34) = *(const unaligned_u64 *)((const u8 *)(src) + 34); \
+        *(unaligned_u64 *)((u8 *)(dst) + 42) = *(const unaligned_u64 *)((const u8 *)(src) + 42); \
+        break; \
+    } \
+    case 51: { \
+        *(unaligned_u64 *)((u8 *)(dst) + 0) = *(const unaligned_u64 *)((const u8 *)(src) + 0); \
+        *(unaligned_u64 *)((u8 *)(dst) + 8) = *(const unaligned_u64 *)((const u8 *)(src) + 8); \
+        *(unaligned_u64 *)((u8 *)(dst) + 16) = *(const unaligned_u64 *)((const u8 *)(src) + 16); \
+        *(unaligned_u64 *)((u8 *)(dst) + 24) = *(const unaligned_u64 *)((const u8 *)(src) + 24); \
+        *(unaligned_u64 *)((u8 *)(dst) + 19) = *(const unaligned_u64 *)((const u8 *)(src) + 19); \
+        *(unaligned_u64 *)((u8 *)(dst) + 27) = *(const unaligned_u64 *)((const u8 *)(src) + 27); \
+        *(unaligned_u64 *)((u8 *)(dst) + 35) = *(const unaligned_u64 *)((const u8 *)(src) + 35); \
+        *(unaligned_u64 *)((u8 *)(dst) + 43) = *(const unaligned_u64 *)((const u8 *)(src) + 43); \
+        break; \
+    } \
+    case 52: { \
+        *(unaligned_u64 *)((u8 *)(dst) + 0) = *(const unaligned_u64 *)((const u8 *)(src) + 0); \
+        *(unaligned_u64 *)((u8 *)(dst) + 8) = *(const unaligned_u64 *)((const u8 *)(src) + 8); \
+        *(unaligned_u64 *)((u8 *)(dst) + 16) = *(const unaligned_u64 *)((const u8 *)(src) + 16); \
+        *(unaligned_u64 *)((u8 *)(dst) + 24) = *(const unaligned_u64 *)((const u8 *)(src) + 24); \
+        *(unaligned_u64 *)((u8 *)(dst) + 20) = *(const unaligned_u64 *)((const u8 *)(src) + 20); \
+        *(unaligned_u64 *)((u8 *)(dst) + 28) = *(const unaligned_u64 *)((const u8 *)(src) + 28); \
+        *(unaligned_u64 *)((u8 *)(dst) + 36) = *(const unaligned_u64 *)((const u8 *)(src) + 36); \
+        *(unaligned_u64 *)((u8 *)(dst) + 44) = *(const unaligned_u64 *)((const u8 *)(src) + 44); \
+        break; \
+    } \
+    case 53: { \
+        *(unaligned_u64 *)((u8 *)(dst) + 0) = *(const unaligned_u64 *)((const u8 *)(src) + 0); \
+        *(unaligned_u64 *)((u8 *)(dst) + 8) = *(const unaligned_u64 *)((const u8 *)(src) + 8); \
+        *(unaligned_u64 *)((u8 *)(dst) + 16) = *(const unaligned_u64 *)((const u8 *)(src) + 16); \
+        *(unaligned_u64 *)((u8 *)(dst) + 24) = *(const unaligned_u64 *)((const u8 *)(src) + 24); \
+        *(unaligned_u64 *)((u8 *)(dst) + 21) = *(const unaligned_u64 *)((const u8 *)(src) + 21); \
+        *(unaligned_u64 *)((u8 *)(dst) + 29) = *(const unaligned_u64 *)((const u8 *)(src) + 29); \
+        *(unaligned_u64 *)((u8 *)(dst) + 37) = *(const unaligned_u64 *)((const u8 *)(src) + 37); \
+        *(unaligned_u64 *)((u8 *)(dst) + 45) = *(const unaligned_u64 *)((const u8 *)(src) + 45); \
+        break; \
+    } \
+    case 54: { \
+        *(unaligned_u64 *)((u8 *)(dst) + 0) = *(const unaligned_u64 *)((const u8 *)(src) + 0); \
+        *(unaligned_u64 *)((u8 *)(dst) + 8) = *(const unaligned_u64 *)((const u8 *)(src) + 8); \
+        *(unaligned_u64 *)((u8 *)(dst) + 16) = *(const unaligned_u64 *)((const u8 *)(src) + 16); \
+        *(unaligned_u64 *)((u8 *)(dst) + 24) = *(const unaligned_u64 *)((const u8 *)(src) + 24); \
+        *(unaligned_u64 *)((u8 *)(dst) + 22) = *(const unaligned_u64 *)((const u8 *)(src) + 22); \
+        *(unaligned_u64 *)((u8 *)(dst) + 30) = *(const unaligned_u64 *)((const u8 *)(src) + 30); \
+        *(unaligned_u64 *)((u8 *)(dst) + 38) = *(const unaligned_u64 *)((const u8 *)(src) + 38); \
+        *(unaligned_u64 *)((u8 *)(dst) + 46) = *(const unaligned_u64 *)((const u8 *)(src) + 46); \
+        break; \
+    } \
+    case 55: { \
+        *(unaligned_u64 *)((u8 *)(dst) + 0) = *(const unaligned_u64 *)((const u8 *)(src) + 0); \
+        *(unaligned_u64 *)((u8 *)(dst) + 8) = *(const unaligned_u64 *)((const u8 *)(src) + 8); \
+        *(unaligned_u64 *)((u8 *)(dst) + 16) = *(const unaligned_u64 *)((const u8 *)(src) + 16); \
+        *(unaligned_u64 *)((u8 *)(dst) + 24) = *(const unaligned_u64 *)((const u8 *)(src) + 24); \
+        *(unaligned_u64 *)((u8 *)(dst) + 23) = *(const unaligned_u64 *)((const u8 *)(src) + 23); \
+        *(unaligned_u64 *)((u8 *)(dst) + 31) = *(const unaligned_u64 *)((const u8 *)(src) + 31); \
+        *(unaligned_u64 *)((u8 *)(dst) + 39) = *(const unaligned_u64 *)((const u8 *)(src) + 39); \
+        *(unaligned_u64 *)((u8 *)(dst) + 47) = *(const unaligned_u64 *)((const u8 *)(src) + 47); \
+        break; \
+    } \
+    case 56: { \
+        *(unaligned_u64 *)((u8 *)(dst) + 0) = *(const unaligned_u64 *)((const u8 *)(src) + 0); \
+        *(unaligned_u64 *)((u8 *)(dst) + 8) = *(const unaligned_u64 *)((const u8 *)(src) + 8); \
+        *(unaligned_u64 *)((u8 *)(dst) + 16) = *(const unaligned_u64 *)((const u8 *)(src) + 16); \
+        *(unaligned_u64 *)((u8 *)(dst) + 24) = *(const unaligned_u64 *)((const u8 *)(src) + 24); \
+        *(unaligned_u64 *)((u8 *)(dst) + 24) = *(const unaligned_u64 *)((const u8 *)(src) + 24); \
+        *(unaligned_u64 *)((u8 *)(dst) + 32) = *(const unaligned_u64 *)((const u8 *)(src) + 32); \
+        *(unaligned_u64 *)((u8 *)(dst) + 40) = *(const unaligned_u64 *)((const u8 *)(src) + 40); \
+        *(unaligned_u64 *)((u8 *)(dst) + 48) = *(const unaligned_u64 *)((const u8 *)(src) + 48); \
+        break; \
+    } \
+    case 57: { \
+        *(unaligned_u64 *)((u8 *)(dst) + 0) = *(const unaligned_u64 *)((const u8 *)(src) + 0); \
+        *(unaligned_u64 *)((u8 *)(dst) + 8) = *(const unaligned_u64 *)((const u8 *)(src) + 8); \
+        *(unaligned_u64 *)((u8 *)(dst) + 16) = *(const unaligned_u64 *)((const u8 *)(src) + 16); \
+        *(unaligned_u64 *)((u8 *)(dst) + 24) = *(const unaligned_u64 *)((const u8 *)(src) + 24); \
+        *(unaligned_u64 *)((u8 *)(dst) + 25) = *(const unaligned_u64 *)((const u8 *)(src) + 25); \
+        *(unaligned_u64 *)((u8 *)(dst) + 33) = *(const unaligned_u64 *)((const u8 *)(src) + 33); \
+        *(unaligned_u64 *)((u8 *)(dst) + 41) = *(const unaligned_u64 *)((const u8 *)(src) + 41); \
+        *(unaligned_u64 *)((u8 *)(dst) + 49) = *(const unaligned_u64 *)((const u8 *)(src) + 49); \
+        break; \
+    } \
+    case 58: { \
+        *(unaligned_u64 *)((u8 *)(dst) + 0) = *(const unaligned_u64 *)((const u8 *)(src) + 0); \
+        *(unaligned_u64 *)((u8 *)(dst) + 8) = *(const unaligned_u64 *)((const u8 *)(src) + 8); \
+        *(unaligned_u64 *)((u8 *)(dst) + 16) = *(const unaligned_u64 *)((const u8 *)(src) + 16); \
+        *(unaligned_u64 *)((u8 *)(dst) + 24) = *(const unaligned_u64 *)((const u8 *)(src) + 24); \
+        *(unaligned_u64 *)((u8 *)(dst) + 26) = *(const unaligned_u64 *)((const u8 *)(src) + 26); \
+        *(unaligned_u64 *)((u8 *)(dst) + 34) = *(const unaligned_u64 *)((const u8 *)(src) + 34); \
+        *(unaligned_u64 *)((u8 *)(dst) + 42) = *(const unaligned_u64 *)((const u8 *)(src) + 42); \
+        *(unaligned_u64 *)((u8 *)(dst) + 50) = *(const unaligned_u64 *)((const u8 *)(src) + 50); \
+        break; \
+    } \
+    case 59: { \
+        *(unaligned_u64 *)((u8 *)(dst) + 0) = *(const unaligned_u64 *)((const u8 *)(src) + 0); \
+        *(unaligned_u64 *)((u8 *)(dst) + 8) = *(const unaligned_u64 *)((const u8 *)(src) + 8); \
+        *(unaligned_u64 *)((u8 *)(dst) + 16) = *(const unaligned_u64 *)((const u8 *)(src) + 16); \
+        *(unaligned_u64 *)((u8 *)(dst) + 24) = *(const unaligned_u64 *)((const u8 *)(src) + 24); \
+        *(unaligned_u64 *)((u8 *)(dst) + 27) = *(const unaligned_u64 *)((const u8 *)(src) + 27); \
+        *(unaligned_u64 *)((u8 *)(dst) + 35) = *(const unaligned_u64 *)((const u8 *)(src) + 35); \
+        *(unaligned_u64 *)((u8 *)(dst) + 43) = *(const unaligned_u64 *)((const u8 *)(src) + 43); \
+        *(unaligned_u64 *)((u8 *)(dst) + 51) = *(const unaligned_u64 *)((const u8 *)(src) + 51); \
+        break; \
+    } \
+    case 60: { \
+        *(unaligned_u64 *)((u8 *)(dst) + 0) = *(const unaligned_u64 *)((const u8 *)(src) + 0); \
+        *(unaligned_u64 *)((u8 *)(dst) + 8) = *(const unaligned_u64 *)((const u8 *)(src) + 8); \
+        *(unaligned_u64 *)((u8 *)(dst) + 16) = *(const unaligned_u64 *)((const u8 *)(src) + 16); \
+        *(unaligned_u64 *)((u8 *)(dst) + 24) = *(const unaligned_u64 *)((const u8 *)(src) + 24); \
+        *(unaligned_u64 *)((u8 *)(dst) + 28) = *(const unaligned_u64 *)((const u8 *)(src) + 28); \
+        *(unaligned_u64 *)((u8 *)(dst) + 36) = *(const unaligned_u64 *)((const u8 *)(src) + 36); \
+        *(unaligned_u64 *)((u8 *)(dst) + 44) = *(const unaligned_u64 *)((const u8 *)(src) + 44); \
+        *(unaligned_u64 *)((u8 *)(dst) + 52) = *(const unaligned_u64 *)((const u8 *)(src) + 52); \
+        break; \
+    } \
+    case 61: { \
+        *(unaligned_u64 *)((u8 *)(dst) + 0) = *(const unaligned_u64 *)((const u8 *)(src) + 0); \
+        *(unaligned_u64 *)((u8 *)(dst) + 8) = *(const unaligned_u64 *)((const u8 *)(src) + 8); \
+        *(unaligned_u64 *)((u8 *)(dst) + 16) = *(const unaligned_u64 *)((const u8 *)(src) + 16); \
+        *(unaligned_u64 *)((u8 *)(dst) + 24) = *(const unaligned_u64 *)((const u8 *)(src) + 24); \
+        *(unaligned_u64 *)((u8 *)(dst) + 29) = *(const unaligned_u64 *)((const u8 *)(src) + 29); \
+        *(unaligned_u64 *)((u8 *)(dst) + 37) = *(const unaligned_u64 *)((const u8 *)(src) + 37); \
+        *(unaligned_u64 *)((u8 *)(dst) + 45) = *(const unaligned_u64 *)((const u8 *)(src) + 45); \
+        *(unaligned_u64 *)((u8 *)(dst) + 53) = *(const unaligned_u64 *)((const u8 *)(src) + 53); \
+        break; \
+    } \
+    case 62: { \
+        *(unaligned_u64 *)((u8 *)(dst) + 0) = *(const unaligned_u64 *)((const u8 *)(src) + 0); \
+        *(unaligned_u64 *)((u8 *)(dst) + 8) = *(const unaligned_u64 *)((const u8 *)(src) + 8); \
+        *(unaligned_u64 *)((u8 *)(dst) + 16) = *(const unaligned_u64 *)((const u8 *)(src) + 16); \
+        *(unaligned_u64 *)((u8 *)(dst) + 24) = *(const unaligned_u64 *)((const u8 *)(src) + 24); \
+        *(unaligned_u64 *)((u8 *)(dst) + 30) = *(const unaligned_u64 *)((const u8 *)(src) + 30); \
+        *(unaligned_u64 *)((u8 *)(dst) + 38) = *(const unaligned_u64 *)((const u8 *)(src) + 38); \
+        *(unaligned_u64 *)((u8 *)(dst) + 46) = *(const unaligned_u64 *)((const u8 *)(src) + 46); \
+        *(unaligned_u64 *)((u8 *)(dst) + 54) = *(const unaligned_u64 *)((const u8 *)(src) + 54); \
+        break; \
+    } \
+    case 63: { \
+        *(unaligned_u64 *)((u8 *)(dst) + 0) = *(const unaligned_u64 *)((const u8 *)(src) + 0); \
+        *(unaligned_u64 *)((u8 *)(dst) + 8) = *(const unaligned_u64 *)((const u8 *)(src) + 8); \
+        *(unaligned_u64 *)((u8 *)(dst) + 16) = *(const unaligned_u64 *)((const u8 *)(src) + 16); \
+        *(unaligned_u64 *)((u8 *)(dst) + 24) = *(const unaligned_u64 *)((const u8 *)(src) + 24); \
+        *(unaligned_u64 *)((u8 *)(dst) + 31) = *(const unaligned_u64 *)((const u8 *)(src) + 31); \
+        *(unaligned_u64 *)((u8 *)(dst) + 39) = *(const unaligned_u64 *)((const u8 *)(src) + 39); \
+        *(unaligned_u64 *)((u8 *)(dst) + 47) = *(const unaligned_u64 *)((const u8 *)(src) + 47); \
+        *(unaligned_u64 *)((u8 *)(dst) + 55) = *(const unaligned_u64 *)((const u8 *)(src) + 55); \
+        break; \
+    } \
+    case 64: { \
+        *(unaligned_u64 *)((u8 *)(dst) + 0) = *(const unaligned_u64 *)((const u8 *)(src) + 0); \
+        *(unaligned_u64 *)((u8 *)(dst) + 8) = *(const unaligned_u64 *)((const u8 *)(src) + 8); \
+        *(unaligned_u64 *)((u8 *)(dst) + 16) = *(const unaligned_u64 *)((const u8 *)(src) + 16); \
+        *(unaligned_u64 *)((u8 *)(dst) + 24) = *(const unaligned_u64 *)((const u8 *)(src) + 24); \
+        *(unaligned_u64 *)((u8 *)(dst) + 32) = *(const unaligned_u64 *)((const u8 *)(src) + 32); \
+        *(unaligned_u64 *)((u8 *)(dst) + 40) = *(const unaligned_u64 *)((const u8 *)(src) + 40); \
+        *(unaligned_u64 *)((u8 *)(dst) + 48) = *(const unaligned_u64 *)((const u8 *)(src) + 48); \
+        *(unaligned_u64 *)((u8 *)(dst) + 56) = *(const unaligned_u64 *)((const u8 *)(src) + 56); \
+        break; \
+    } \
+    case 65: { \
+        *(unaligned_u64 *)((u8 *)(dst) + 0) = *(const unaligned_u64 *)((const u8 *)(src) + 0); \
+        *(unaligned_u64 *)((u8 *)(dst) + 8) = *(const unaligned_u64 *)((const u8 *)(src) + 8); \
+        *(unaligned_u64 *)((u8 *)(dst) + 16) = *(const unaligned_u64 *)((const u8 *)(src) + 16); \
+        *(unaligned_u64 *)((u8 *)(dst) + 24) = *(const unaligned_u64 *)((const u8 *)(src) + 24); \
+        *(unaligned_u64 *)((u8 *)(dst) + 32) = *(const unaligned_u64 *)((const u8 *)(src) + 32); \
+        *(unaligned_u64 *)((u8 *)(dst) + 40) = *(const unaligned_u64 *)((const u8 *)(src) + 40); \
+        *(unaligned_u64 *)((u8 *)(dst) + 48) = *(const unaligned_u64 *)((const u8 *)(src) + 48); \
+        *(unaligned_u64 *)((u8 *)(dst) + 56) = *(const unaligned_u64 *)((const u8 *)(src) + 56); \
+        *(unaligned_u64 *)((u8 *)(dst) + 33) = *(const unaligned_u64 *)((const u8 *)(src) + 33); \
+        *(unaligned_u64 *)((u8 *)(dst) + 41) = *(const unaligned_u64 *)((const u8 *)(src) + 41); \
+        *(unaligned_u64 *)((u8 *)(dst) + 49) = *(const unaligned_u64 *)((const u8 *)(src) + 49); \
+        *(unaligned_u64 *)((u8 *)(dst) + 57) = *(const unaligned_u64 *)((const u8 *)(src) + 57); \
+        break; \
+    } \
+    case 66: { \
+        *(unaligned_u64 *)((u8 *)(dst) + 0) = *(const unaligned_u64 *)((const u8 *)(src) + 0); \
+        *(unaligned_u64 *)((u8 *)(dst) + 8) = *(const unaligned_u64 *)((const u8 *)(src) + 8); \
+        *(unaligned_u64 *)((u8 *)(dst) + 16) = *(const unaligned_u64 *)((const u8 *)(src) + 16); \
+        *(unaligned_u64 *)((u8 *)(dst) + 24) = *(const unaligned_u64 *)((const u8 *)(src) + 24); \
+        *(unaligned_u64 *)((u8 *)(dst) + 32) = *(const unaligned_u64 *)((const u8 *)(src) + 32); \
+        *(unaligned_u64 *)((u8 *)(dst) + 40) = *(const unaligned_u64 *)((const u8 *)(src) + 40); \
+        *(unaligned_u64 *)((u8 *)(dst) + 48) = *(const unaligned_u64 *)((const u8 *)(src) + 48); \
+        *(unaligned_u64 *)((u8 *)(dst) + 56) = *(const unaligned_u64 *)((const u8 *)(src) + 56); \
+        *(unaligned_u64 *)((u8 *)(dst) + 34) = *(const unaligned_u64 *)((const u8 *)(src) + 34); \
+        *(unaligned_u64 *)((u8 *)(dst) + 42) = *(const unaligned_u64 *)((const u8 *)(src) + 42); \
+        *(unaligned_u64 *)((u8 *)(dst) + 50) = *(const unaligned_u64 *)((const u8 *)(src) + 50); \
+        *(unaligned_u64 *)((u8 *)(dst) + 58) = *(const unaligned_u64 *)((const u8 *)(src) + 58); \
+        break; \
+    } \
+    case 67: { \
+        *(unaligned_u64 *)((u8 *)(dst) + 0) = *(const unaligned_u64 *)((const u8 *)(src) + 0); \
+        *(unaligned_u64 *)((u8 *)(dst) + 8) = *(const unaligned_u64 *)((const u8 *)(src) + 8); \
+        *(unaligned_u64 *)((u8 *)(dst) + 16) = *(const unaligned_u64 *)((const u8 *)(src) + 16); \
+        *(unaligned_u64 *)((u8 *)(dst) + 24) = *(const unaligned_u64 *)((const u8 *)(src) + 24); \
+        *(unaligned_u64 *)((u8 *)(dst) + 32) = *(const unaligned_u64 *)((const u8 *)(src) + 32); \
+        *(unaligned_u64 *)((u8 *)(dst) + 40) = *(const unaligned_u64 *)((const u8 *)(src) + 40); \
+        *(unaligned_u64 *)((u8 *)(dst) + 48) = *(const unaligned_u64 *)((const u8 *)(src) + 48); \
+        *(unaligned_u64 *)((u8 *)(dst) + 56) = *(const unaligned_u64 *)((const u8 *)(src) + 56); \
+        *(unaligned_u64 *)((u8 *)(dst) + 35) = *(const unaligned_u64 *)((const u8 *)(src) + 35); \
+        *(unaligned_u64 *)((u8 *)(dst) + 43) = *(const unaligned_u64 *)((const u8 *)(src) + 43); \
+        *(unaligned_u64 *)((u8 *)(dst) + 51) = *(const unaligned_u64 *)((const u8 *)(src) + 51); \
+        *(unaligned_u64 *)((u8 *)(dst) + 59) = *(const unaligned_u64 *)((const u8 *)(src) + 59); \
+        break; \
+    } \
+    case 68: { \
+        *(unaligned_u64 *)((u8 *)(dst) + 0) = *(const unaligned_u64 *)((const u8 *)(src) + 0); \
+        *(unaligned_u64 *)((u8 *)(dst) + 8) = *(const unaligned_u64 *)((const u8 *)(src) + 8); \
+        *(unaligned_u64 *)((u8 *)(dst) + 16) = *(const unaligned_u64 *)((const u8 *)(src) + 16); \
+        *(unaligned_u64 *)((u8 *)(dst) + 24) = *(const unaligned_u64 *)((const u8 *)(src) + 24); \
+        *(unaligned_u64 *)((u8 *)(dst) + 32) = *(const unaligned_u64 *)((const u8 *)(src) + 32); \
+        *(unaligned_u64 *)((u8 *)(dst) + 40) = *(const unaligned_u64 *)((const u8 *)(src) + 40); \
+        *(unaligned_u64 *)((u8 *)(dst) + 48) = *(const unaligned_u64 *)((const u8 *)(src) + 48); \
+        *(unaligned_u64 *)((u8 *)(dst) + 56) = *(const unaligned_u64 *)((const u8 *)(src) + 56); \
+        *(unaligned_u64 *)((u8 *)(dst) + 36) = *(const unaligned_u64 *)((const u8 *)(src) + 36); \
+        *(unaligned_u64 *)((u8 *)(dst) + 44) = *(const unaligned_u64 *)((const u8 *)(src) + 44); \
+        *(unaligned_u64 *)((u8 *)(dst) + 52) = *(const unaligned_u64 *)((const u8 *)(src) + 52); \
+        *(unaligned_u64 *)((u8 *)(dst) + 60) = *(const unaligned_u64 *)((const u8 *)(src) + 60); \
+        break; \
+    } \
+    case 69: { \
+        *(unaligned_u64 *)((u8 *)(dst) + 0) = *(const unaligned_u64 *)((const u8 *)(src) + 0); \
+        *(unaligned_u64 *)((u8 *)(dst) + 8) = *(const unaligned_u64 *)((const u8 *)(src) + 8); \
+        *(unaligned_u64 *)((u8 *)(dst) + 16) = *(const unaligned_u64 *)((const u8 *)(src) + 16); \
+        *(unaligned_u64 *)((u8 *)(dst) + 24) = *(const unaligned_u64 *)((const u8 *)(src) + 24); \
+        *(unaligned_u64 *)((u8 *)(dst) + 32) = *(const unaligned_u64 *)((const u8 *)(src) + 32); \
+        *(unaligned_u64 *)((u8 *)(dst) + 40) = *(const unaligned_u64 *)((const u8 *)(src) + 40); \
+        *(unaligned_u64 *)((u8 *)(dst) + 48) = *(const unaligned_u64 *)((const u8 *)(src) + 48); \
+        *(unaligned_u64 *)((u8 *)(dst) + 56) = *(const unaligned_u64 *)((const u8 *)(src) + 56); \
+        *(unaligned_u64 *)((u8 *)(dst) + 37) = *(const unaligned_u64 *)((const u8 *)(src) + 37); \
+        *(unaligned_u64 *)((u8 *)(dst) + 45) = *(const unaligned_u64 *)((const u8 *)(src) + 45); \
+        *(unaligned_u64 *)((u8 *)(dst) + 53) = *(const unaligned_u64 *)((const u8 *)(src) + 53); \
+        *(unaligned_u64 *)((u8 *)(dst) + 61) = *(const unaligned_u64 *)((const u8 *)(src) + 61); \
+        break; \
+    } \
+    case 70: { \
+        *(unaligned_u64 *)((u8 *)(dst) + 0) = *(const unaligned_u64 *)((const u8 *)(src) + 0); \
+        *(unaligned_u64 *)((u8 *)(dst) + 8) = *(const unaligned_u64 *)((const u8 *)(src) + 8); \
+        *(unaligned_u64 *)((u8 *)(dst) + 16) = *(const unaligned_u64 *)((const u8 *)(src) + 16); \
+        *(unaligned_u64 *)((u8 *)(dst) + 24) = *(const unaligned_u64 *)((const u8 *)(src) + 24); \
+        *(unaligned_u64 *)((u8 *)(dst) + 32) = *(const unaligned_u64 *)((const u8 *)(src) + 32); \
+        *(unaligned_u64 *)((u8 *)(dst) + 40) = *(const unaligned_u64 *)((const u8 *)(src) + 40); \
+        *(unaligned_u64 *)((u8 *)(dst) + 48) = *(const unaligned_u64 *)((const u8 *)(src) + 48); \
+        *(unaligned_u64 *)((u8 *)(dst) + 56) = *(const unaligned_u64 *)((const u8 *)(src) + 56); \
+        *(unaligned_u64 *)((u8 *)(dst) + 38) = *(const unaligned_u64 *)((const u8 *)(src) + 38); \
+        *(unaligned_u64 *)((u8 *)(dst) + 46) = *(const unaligned_u64 *)((const u8 *)(src) + 46); \
+        *(unaligned_u64 *)((u8 *)(dst) + 54) = *(const unaligned_u64 *)((const u8 *)(src) + 54); \
+        *(unaligned_u64 *)((u8 *)(dst) + 62) = *(const unaligned_u64 *)((const u8 *)(src) + 62); \
+        break; \
+    } \
+    case 71: { \
+        *(unaligned_u64 *)((u8 *)(dst) + 0) = *(const unaligned_u64 *)((const u8 *)(src) + 0); \
+        *(unaligned_u64 *)((u8 *)(dst) + 8) = *(const unaligned_u64 *)((const u8 *)(src) + 8); \
+        *(unaligned_u64 *)((u8 *)(dst) + 16) = *(const unaligned_u64 *)((const u8 *)(src) + 16); \
+        *(unaligned_u64 *)((u8 *)(dst) + 24) = *(const unaligned_u64 *)((const u8 *)(src) + 24); \
+        *(unaligned_u64 *)((u8 *)(dst) + 32) = *(const unaligned_u64 *)((const u8 *)(src) + 32); \
+        *(unaligned_u64 *)((u8 *)(dst) + 40) = *(const unaligned_u64 *)((const u8 *)(src) + 40); \
+        *(unaligned_u64 *)((u8 *)(dst) + 48) = *(const unaligned_u64 *)((const u8 *)(src) + 48); \
+        *(unaligned_u64 *)((u8 *)(dst) + 56) = *(const unaligned_u64 *)((const u8 *)(src) + 56); \
+        *(unaligned_u64 *)((u8 *)(dst) + 39) = *(const unaligned_u64 *)((const u8 *)(src) + 39); \
+        *(unaligned_u64 *)((u8 *)(dst) + 47) = *(const unaligned_u64 *)((const u8 *)(src) + 47); \
+        *(unaligned_u64 *)((u8 *)(dst) + 55) = *(const unaligned_u64 *)((const u8 *)(src) + 55); \
+        *(unaligned_u64 *)((u8 *)(dst) + 63) = *(const unaligned_u64 *)((const u8 *)(src) + 63); \
+        break; \
+    } \
+    case 72: { \
+        *(unaligned_u64 *)((u8 *)(dst) + 0) = *(const unaligned_u64 *)((const u8 *)(src) + 0); \
+        *(unaligned_u64 *)((u8 *)(dst) + 8) = *(const unaligned_u64 *)((const u8 *)(src) + 8); \
+        *(unaligned_u64 *)((u8 *)(dst) + 16) = *(const unaligned_u64 *)((const u8 *)(src) + 16); \
+        *(unaligned_u64 *)((u8 *)(dst) + 24) = *(const unaligned_u64 *)((const u8 *)(src) + 24); \
+        *(unaligned_u64 *)((u8 *)(dst) + 32) = *(const unaligned_u64 *)((const u8 *)(src) + 32); \
+        *(unaligned_u64 *)((u8 *)(dst) + 40) = *(const unaligned_u64 *)((const u8 *)(src) + 40); \
+        *(unaligned_u64 *)((u8 *)(dst) + 48) = *(const unaligned_u64 *)((const u8 *)(src) + 48); \
+        *(unaligned_u64 *)((u8 *)(dst) + 56) = *(const unaligned_u64 *)((const u8 *)(src) + 56); \
+        *(unaligned_u64 *)((u8 *)(dst) + 40) = *(const unaligned_u64 *)((const u8 *)(src) + 40); \
+        *(unaligned_u64 *)((u8 *)(dst) + 48) = *(const unaligned_u64 *)((const u8 *)(src) + 48); \
+        *(unaligned_u64 *)((u8 *)(dst) + 56) = *(const unaligned_u64 *)((const u8 *)(src) + 56); \
+        *(unaligned_u64 *)((u8 *)(dst) + 64) = *(const unaligned_u64 *)((const u8 *)(src) + 64); \
+        break; \
+    } \
+    case 73: { \
+        *(unaligned_u64 *)((u8 *)(dst) + 0) = *(const unaligned_u64 *)((const u8 *)(src) + 0); \
+        *(unaligned_u64 *)((u8 *)(dst) + 8) = *(const unaligned_u64 *)((const u8 *)(src) + 8); \
+        *(unaligned_u64 *)((u8 *)(dst) + 16) = *(const unaligned_u64 *)((const u8 *)(src) + 16); \
+        *(unaligned_u64 *)((u8 *)(dst) + 24) = *(const unaligned_u64 *)((const u8 *)(src) + 24); \
+        *(unaligned_u64 *)((u8 *)(dst) + 32) = *(const unaligned_u64 *)((const u8 *)(src) + 32); \
+        *(unaligned_u64 *)((u8 *)(dst) + 40) = *(const unaligned_u64 *)((const u8 *)(src) + 40); \
+        *(unaligned_u64 *)((u8 *)(dst) + 48) = *(const unaligned_u64 *)((const u8 *)(src) + 48); \
+        *(unaligned_u64 *)((u8 *)(dst) + 56) = *(const unaligned_u64 *)((const u8 *)(src) + 56); \
+        *(unaligned_u64 *)((u8 *)(dst) + 41) = *(const unaligned_u64 *)((const u8 *)(src) + 41); \
+        *(unaligned_u64 *)((u8 *)(dst) + 49) = *(const unaligned_u64 *)((const u8 *)(src) + 49); \
+        *(unaligned_u64 *)((u8 *)(dst) + 57) = *(const unaligned_u64 *)((const u8 *)(src) + 57); \
+        *(unaligned_u64 *)((u8 *)(dst) + 65) = *(const unaligned_u64 *)((const u8 *)(src) + 65); \
+        break; \
+    } \
+    case 74: { \
+        *(unaligned_u64 *)((u8 *)(dst) + 0) = *(const unaligned_u64 *)((const u8 *)(src) + 0); \
+        *(unaligned_u64 *)((u8 *)(dst) + 8) = *(const unaligned_u64 *)((const u8 *)(src) + 8); \
+        *(unaligned_u64 *)((u8 *)(dst) + 16) = *(const unaligned_u64 *)((const u8 *)(src) + 16); \
+        *(unaligned_u64 *)((u8 *)(dst) + 24) = *(const unaligned_u64 *)((const u8 *)(src) + 24); \
+        *(unaligned_u64 *)((u8 *)(dst) + 32) = *(const unaligned_u64 *)((const u8 *)(src) + 32); \
+        *(unaligned_u64 *)((u8 *)(dst) + 40) = *(const unaligned_u64 *)((const u8 *)(src) + 40); \
+        *(unaligned_u64 *)((u8 *)(dst) + 48) = *(const unaligned_u64 *)((const u8 *)(src) + 48); \
+        *(unaligned_u64 *)((u8 *)(dst) + 56) = *(const unaligned_u64 *)((const u8 *)(src) + 56); \
+        *(unaligned_u64 *)((u8 *)(dst) + 42) = *(const unaligned_u64 *)((const u8 *)(src) + 42); \
+        *(unaligned_u64 *)((u8 *)(dst) + 50) = *(const unaligned_u64 *)((const u8 *)(src) + 50); \
+        *(unaligned_u64 *)((u8 *)(dst) + 58) = *(const unaligned_u64 *)((const u8 *)(src) + 58); \
+        *(unaligned_u64 *)((u8 *)(dst) + 66) = *(const unaligned_u64 *)((const u8 *)(src) + 66); \
+        break; \
+    } \
+    case 75: { \
+        *(unaligned_u64 *)((u8 *)(dst) + 0) = *(const unaligned_u64 *)((const u8 *)(src) + 0); \
+        *(unaligned_u64 *)((u8 *)(dst) + 8) = *(const unaligned_u64 *)((const u8 *)(src) + 8); \
+        *(unaligned_u64 *)((u8 *)(dst) + 16) = *(const unaligned_u64 *)((const u8 *)(src) + 16); \
+        *(unaligned_u64 *)((u8 *)(dst) + 24) = *(const unaligned_u64 *)((const u8 *)(src) + 24); \
+        *(unaligned_u64 *)((u8 *)(dst) + 32) = *(const unaligned_u64 *)((const u8 *)(src) + 32); \
+        *(unaligned_u64 *)((u8 *)(dst) + 40) = *(const unaligned_u64 *)((const u8 *)(src) + 40); \
+        *(unaligned_u64 *)((u8 *)(dst) + 48) = *(const unaligned_u64 *)((const u8 *)(src) + 48); \
+        *(unaligned_u64 *)((u8 *)(dst) + 56) = *(const unaligned_u64 *)((const u8 *)(src) + 56); \
+        *(unaligned_u64 *)((u8 *)(dst) + 43) = *(const unaligned_u64 *)((const u8 *)(src) + 43); \
+        *(unaligned_u64 *)((u8 *)(dst) + 51) = *(const unaligned_u64 *)((const u8 *)(src) + 51); \
+        *(unaligned_u64 *)((u8 *)(dst) + 59) = *(const unaligned_u64 *)((const u8 *)(src) + 59); \
+        *(unaligned_u64 *)((u8 *)(dst) + 67) = *(const unaligned_u64 *)((const u8 *)(src) + 67); \
+        break; \
+    } \
+    case 76: { \
+        *(unaligned_u64 *)((u8 *)(dst) + 0) = *(const unaligned_u64 *)((const u8 *)(src) + 0); \
+        *(unaligned_u64 *)((u8 *)(dst) + 8) = *(const unaligned_u64 *)((const u8 *)(src) + 8); \
+        *(unaligned_u64 *)((u8 *)(dst) + 16) = *(const unaligned_u64 *)((const u8 *)(src) + 16); \
+        *(unaligned_u64 *)((u8 *)(dst) + 24) = *(const unaligned_u64 *)((const u8 *)(src) + 24); \
+        *(unaligned_u64 *)((u8 *)(dst) + 32) = *(const unaligned_u64 *)((const u8 *)(src) + 32); \
+        *(unaligned_u64 *)((u8 *)(dst) + 40) = *(const unaligned_u64 *)((const u8 *)(src) + 40); \
+        *(unaligned_u64 *)((u8 *)(dst) + 48) = *(const unaligned_u64 *)((const u8 *)(src) + 48); \
+        *(unaligned_u64 *)((u8 *)(dst) + 56) = *(const unaligned_u64 *)((const u8 *)(src) + 56); \
+        *(unaligned_u64 *)((u8 *)(dst) + 44) = *(const unaligned_u64 *)((const u8 *)(src) + 44); \
+        *(unaligned_u64 *)((u8 *)(dst) + 52) = *(const unaligned_u64 *)((const u8 *)(src) + 52); \
+        *(unaligned_u64 *)((u8 *)(dst) + 60) = *(const unaligned_u64 *)((const u8 *)(src) + 60); \
+        *(unaligned_u64 *)((u8 *)(dst) + 68) = *(const unaligned_u64 *)((const u8 *)(src) + 68); \
+        break; \
+    } \
+    case 77: { \
+        *(unaligned_u64 *)((u8 *)(dst) + 0) = *(const unaligned_u64 *)((const u8 *)(src) + 0); \
+        *(unaligned_u64 *)((u8 *)(dst) + 8) = *(const unaligned_u64 *)((const u8 *)(src) + 8); \
+        *(unaligned_u64 *)((u8 *)(dst) + 16) = *(const unaligned_u64 *)((const u8 *)(src) + 16); \
+        *(unaligned_u64 *)((u8 *)(dst) + 24) = *(const unaligned_u64 *)((const u8 *)(src) + 24); \
+        *(unaligned_u64 *)((u8 *)(dst) + 32) = *(const unaligned_u64 *)((const u8 *)(src) + 32); \
+        *(unaligned_u64 *)((u8 *)(dst) + 40) = *(const unaligned_u64 *)((const u8 *)(src) + 40); \
+        *(unaligned_u64 *)((u8 *)(dst) + 48) = *(const unaligned_u64 *)((const u8 *)(src) + 48); \
+        *(unaligned_u64 *)((u8 *)(dst) + 56) = *(const unaligned_u64 *)((const u8 *)(src) + 56); \
+        *(unaligned_u64 *)((u8 *)(dst) + 45) = *(const unaligned_u64 *)((const u8 *)(src) + 45); \
+        *(unaligned_u64 *)((u8 *)(dst) + 53) = *(const unaligned_u64 *)((const u8 *)(src) + 53); \
+        *(unaligned_u64 *)((u8 *)(dst) + 61) = *(const unaligned_u64 *)((const u8 *)(src) + 61); \
+        *(unaligned_u64 *)((u8 *)(dst) + 69) = *(const unaligned_u64 *)((const u8 *)(src) + 69); \
+        break; \
+    } \
+    case 78: { \
+        *(unaligned_u64 *)((u8 *)(dst) + 0) = *(const unaligned_u64 *)((const u8 *)(src) + 0); \
+        *(unaligned_u64 *)((u8 *)(dst) + 8) = *(const unaligned_u64 *)((const u8 *)(src) + 8); \
+        *(unaligned_u64 *)((u8 *)(dst) + 16) = *(const unaligned_u64 *)((const u8 *)(src) + 16); \
+        *(unaligned_u64 *)((u8 *)(dst) + 24) = *(const unaligned_u64 *)((const u8 *)(src) + 24); \
+        *(unaligned_u64 *)((u8 *)(dst) + 32) = *(const unaligned_u64 *)((const u8 *)(src) + 32); \
+        *(unaligned_u64 *)((u8 *)(dst) + 40) = *(const unaligned_u64 *)((const u8 *)(src) + 40); \
+        *(unaligned_u64 *)((u8 *)(dst) + 48) = *(const unaligned_u64 *)((const u8 *)(src) + 48); \
+        *(unaligned_u64 *)((u8 *)(dst) + 56) = *(const unaligned_u64 *)((const u8 *)(src) + 56); \
+        *(unaligned_u64 *)((u8 *)(dst) + 46) = *(const unaligned_u64 *)((const u8 *)(src) + 46); \
+        *(unaligned_u64 *)((u8 *)(dst) + 54) = *(const unaligned_u64 *)((const u8 *)(src) + 54); \
+        *(unaligned_u64 *)((u8 *)(dst) + 62) = *(const unaligned_u64 *)((const u8 *)(src) + 62); \
+        *(unaligned_u64 *)((u8 *)(dst) + 70) = *(const unaligned_u64 *)((const u8 *)(src) + 70); \
+        break; \
+    } \
+    case 79: { \
+        *(unaligned_u64 *)((u8 *)(dst) + 0) = *(const unaligned_u64 *)((const u8 *)(src) + 0); \
+        *(unaligned_u64 *)((u8 *)(dst) + 8) = *(const unaligned_u64 *)((const u8 *)(src) + 8); \
+        *(unaligned_u64 *)((u8 *)(dst) + 16) = *(const unaligned_u64 *)((const u8 *)(src) + 16); \
+        *(unaligned_u64 *)((u8 *)(dst) + 24) = *(const unaligned_u64 *)((const u8 *)(src) + 24); \
+        *(unaligned_u64 *)((u8 *)(dst) + 32) = *(const unaligned_u64 *)((const u8 *)(src) + 32); \
+        *(unaligned_u64 *)((u8 *)(dst) + 40) = *(const unaligned_u64 *)((const u8 *)(src) + 40); \
+        *(unaligned_u64 *)((u8 *)(dst) + 48) = *(const unaligned_u64 *)((const u8 *)(src) + 48); \
+        *(unaligned_u64 *)((u8 *)(dst) + 56) = *(const unaligned_u64 *)((const u8 *)(src) + 56); \
+        *(unaligned_u64 *)((u8 *)(dst) + 47) = *(const unaligned_u64 *)((const u8 *)(src) + 47); \
+        *(unaligned_u64 *)((u8 *)(dst) + 55) = *(const unaligned_u64 *)((const u8 *)(src) + 55); \
+        *(unaligned_u64 *)((u8 *)(dst) + 63) = *(const unaligned_u64 *)((const u8 *)(src) + 63); \
+        *(unaligned_u64 *)((u8 *)(dst) + 71) = *(const unaligned_u64 *)((const u8 *)(src) + 71); \
+        break; \
+    } \
+    case 80: { \
+        *(unaligned_u64 *)((u8 *)(dst) + 0) = *(const unaligned_u64 *)((const u8 *)(src) + 0); \
+        *(unaligned_u64 *)((u8 *)(dst) + 8) = *(const unaligned_u64 *)((const u8 *)(src) + 8); \
+        *(unaligned_u64 *)((u8 *)(dst) + 16) = *(const unaligned_u64 *)((const u8 *)(src) + 16); \
+        *(unaligned_u64 *)((u8 *)(dst) + 24) = *(const unaligned_u64 *)((const u8 *)(src) + 24); \
+        *(unaligned_u64 *)((u8 *)(dst) + 32) = *(const unaligned_u64 *)((const u8 *)(src) + 32); \
+        *(unaligned_u64 *)((u8 *)(dst) + 40) = *(const unaligned_u64 *)((const u8 *)(src) + 40); \
+        *(unaligned_u64 *)((u8 *)(dst) + 48) = *(const unaligned_u64 *)((const u8 *)(src) + 48); \
+        *(unaligned_u64 *)((u8 *)(dst) + 56) = *(const unaligned_u64 *)((const u8 *)(src) + 56); \
+        *(unaligned_u64 *)((u8 *)(dst) + 48) = *(const unaligned_u64 *)((const u8 *)(src) + 48); \
+        *(unaligned_u64 *)((u8 *)(dst) + 56) = *(const unaligned_u64 *)((const u8 *)(src) + 56); \
+        *(unaligned_u64 *)((u8 *)(dst) + 64) = *(const unaligned_u64 *)((const u8 *)(src) + 64); \
+        *(unaligned_u64 *)((u8 *)(dst) + 72) = *(const unaligned_u64 *)((const u8 *)(src) + 72); \
+        break; \
+    } \
+    case 81: { \
+        *(unaligned_u64 *)((u8 *)(dst) + 0) = *(const unaligned_u64 *)((const u8 *)(src) + 0); \
+        *(unaligned_u64 *)((u8 *)(dst) + 8) = *(const unaligned_u64 *)((const u8 *)(src) + 8); \
+        *(unaligned_u64 *)((u8 *)(dst) + 16) = *(const unaligned_u64 *)((const u8 *)(src) + 16); \
+        *(unaligned_u64 *)((u8 *)(dst) + 24) = *(const unaligned_u64 *)((const u8 *)(src) + 24); \
+        *(unaligned_u64 *)((u8 *)(dst) + 32) = *(const unaligned_u64 *)((const u8 *)(src) + 32); \
+        *(unaligned_u64 *)((u8 *)(dst) + 40) = *(const unaligned_u64 *)((const u8 *)(src) + 40); \
+        *(unaligned_u64 *)((u8 *)(dst) + 48) = *(const unaligned_u64 *)((const u8 *)(src) + 48); \
+        *(unaligned_u64 *)((u8 *)(dst) + 56) = *(const unaligned_u64 *)((const u8 *)(src) + 56); \
+        *(unaligned_u64 *)((u8 *)(dst) + 49) = *(const unaligned_u64 *)((const u8 *)(src) + 49); \
+        *(unaligned_u64 *)((u8 *)(dst) + 57) = *(const unaligned_u64 *)((const u8 *)(src) + 57); \
+        *(unaligned_u64 *)((u8 *)(dst) + 65) = *(const unaligned_u64 *)((const u8 *)(src) + 65); \
+        *(unaligned_u64 *)((u8 *)(dst) + 73) = *(const unaligned_u64 *)((const u8 *)(src) + 73); \
+        break; \
+    } \
+    case 82: { \
+        *(unaligned_u64 *)((u8 *)(dst) + 0) = *(const unaligned_u64 *)((const u8 *)(src) + 0); \
+        *(unaligned_u64 *)((u8 *)(dst) + 8) = *(const unaligned_u64 *)((const u8 *)(src) + 8); \
+        *(unaligned_u64 *)((u8 *)(dst) + 16) = *(const unaligned_u64 *)((const u8 *)(src) + 16); \
+        *(unaligned_u64 *)((u8 *)(dst) + 24) = *(const unaligned_u64 *)((const u8 *)(src) + 24); \
+        *(unaligned_u64 *)((u8 *)(dst) + 32) = *(const unaligned_u64 *)((const u8 *)(src) + 32); \
+        *(unaligned_u64 *)((u8 *)(dst) + 40) = *(const unaligned_u64 *)((const u8 *)(src) + 40); \
+        *(unaligned_u64 *)((u8 *)(dst) + 48) = *(const unaligned_u64 *)((const u8 *)(src) + 48); \
+        *(unaligned_u64 *)((u8 *)(dst) + 56) = *(const unaligned_u64 *)((const u8 *)(src) + 56); \
+        *(unaligned_u64 *)((u8 *)(dst) + 50) = *(const unaligned_u64 *)((const u8 *)(src) + 50); \
+        *(unaligned_u64 *)((u8 *)(dst) + 58) = *(const unaligned_u64 *)((const u8 *)(src) + 58); \
+        *(unaligned_u64 *)((u8 *)(dst) + 66) = *(const unaligned_u64 *)((const u8 *)(src) + 66); \
+        *(unaligned_u64 *)((u8 *)(dst) + 74) = *(const unaligned_u64 *)((const u8 *)(src) + 74); \
+        break; \
+    } \
+    case 83: { \
+        *(unaligned_u64 *)((u8 *)(dst) + 0) = *(const unaligned_u64 *)((const u8 *)(src) + 0); \
+        *(unaligned_u64 *)((u8 *)(dst) + 8) = *(const unaligned_u64 *)((const u8 *)(src) + 8); \
+        *(unaligned_u64 *)((u8 *)(dst) + 16) = *(const unaligned_u64 *)((const u8 *)(src) + 16); \
+        *(unaligned_u64 *)((u8 *)(dst) + 24) = *(const unaligned_u64 *)((const u8 *)(src) + 24); \
+        *(unaligned_u64 *)((u8 *)(dst) + 32) = *(const unaligned_u64 *)((const u8 *)(src) + 32); \
+        *(unaligned_u64 *)((u8 *)(dst) + 40) = *(const unaligned_u64 *)((const u8 *)(src) + 40); \
+        *(unaligned_u64 *)((u8 *)(dst) + 48) = *(const unaligned_u64 *)((const u8 *)(src) + 48); \
+        *(unaligned_u64 *)((u8 *)(dst) + 56) = *(const unaligned_u64 *)((const u8 *)(src) + 56); \
+        *(unaligned_u64 *)((u8 *)(dst) + 51) = *(const unaligned_u64 *)((const u8 *)(src) + 51); \
+        *(unaligned_u64 *)((u8 *)(dst) + 59) = *(const unaligned_u64 *)((const u8 *)(src) + 59); \
+        *(unaligned_u64 *)((u8 *)(dst) + 67) = *(const unaligned_u64 *)((const u8 *)(src) + 67); \
+        *(unaligned_u64 *)((u8 *)(dst) + 75) = *(const unaligned_u64 *)((const u8 *)(src) + 75); \
+        break; \
+    } \
+    case 84: { \
+        *(unaligned_u64 *)((u8 *)(dst) + 0) = *(const unaligned_u64 *)((const u8 *)(src) + 0); \
+        *(unaligned_u64 *)((u8 *)(dst) + 8) = *(const unaligned_u64 *)((const u8 *)(src) + 8); \
+        *(unaligned_u64 *)((u8 *)(dst) + 16) = *(const unaligned_u64 *)((const u8 *)(src) + 16); \
+        *(unaligned_u64 *)((u8 *)(dst) + 24) = *(const unaligned_u64 *)((const u8 *)(src) + 24); \
+        *(unaligned_u64 *)((u8 *)(dst) + 32) = *(const unaligned_u64 *)((const u8 *)(src) + 32); \
+        *(unaligned_u64 *)((u8 *)(dst) + 40) = *(const unaligned_u64 *)((const u8 *)(src) + 40); \
+        *(unaligned_u64 *)((u8 *)(dst) + 48) = *(const unaligned_u64 *)((const u8 *)(src) + 48); \
+        *(unaligned_u64 *)((u8 *)(dst) + 56) = *(const unaligned_u64 *)((const u8 *)(src) + 56); \
+        *(unaligned_u64 *)((u8 *)(dst) + 52) = *(const unaligned_u64 *)((const u8 *)(src) + 52); \
+        *(unaligned_u64 *)((u8 *)(dst) + 60) = *(const unaligned_u64 *)((const u8 *)(src) + 60); \
+        *(unaligned_u64 *)((u8 *)(dst) + 68) = *(const unaligned_u64 *)((const u8 *)(src) + 68); \
+        *(unaligned_u64 *)((u8 *)(dst) + 76) = *(const unaligned_u64 *)((const u8 *)(src) + 76); \
+        break; \
+    } \
+    case 85: { \
+        *(unaligned_u64 *)((u8 *)(dst) + 0) = *(const unaligned_u64 *)((const u8 *)(src) + 0); \
+        *(unaligned_u64 *)((u8 *)(dst) + 8) = *(const unaligned_u64 *)((const u8 *)(src) + 8); \
+        *(unaligned_u64 *)((u8 *)(dst) + 16) = *(const unaligned_u64 *)((const u8 *)(src) + 16); \
+        *(unaligned_u64 *)((u8 *)(dst) + 24) = *(const unaligned_u64 *)((const u8 *)(src) + 24); \
+        *(unaligned_u64 *)((u8 *)(dst) + 32) = *(const unaligned_u64 *)((const u8 *)(src) + 32); \
+        *(unaligned_u64 *)((u8 *)(dst) + 40) = *(const unaligned_u64 *)((const u8 *)(src) + 40); \
+        *(unaligned_u64 *)((u8 *)(dst) + 48) = *(const unaligned_u64 *)((const u8 *)(src) + 48); \
+        *(unaligned_u64 *)((u8 *)(dst) + 56) = *(const unaligned_u64 *)((const u8 *)(src) + 56); \
+        *(unaligned_u64 *)((u8 *)(dst) + 53) = *(const unaligned_u64 *)((const u8 *)(src) + 53); \
+        *(unaligned_u64 *)((u8 *)(dst) + 61) = *(const unaligned_u64 *)((const u8 *)(src) + 61); \
+        *(unaligned_u64 *)((u8 *)(dst) + 69) = *(const unaligned_u64 *)((const u8 *)(src) + 69); \
+        *(unaligned_u64 *)((u8 *)(dst) + 77) = *(const unaligned_u64 *)((const u8 *)(src) + 77); \
+        break; \
+    } \
+    case 86: { \
+        *(unaligned_u64 *)((u8 *)(dst) + 0) = *(const unaligned_u64 *)((const u8 *)(src) + 0); \
+        *(unaligned_u64 *)((u8 *)(dst) + 8) = *(const unaligned_u64 *)((const u8 *)(src) + 8); \
+        *(unaligned_u64 *)((u8 *)(dst) + 16) = *(const unaligned_u64 *)((const u8 *)(src) + 16); \
+        *(unaligned_u64 *)((u8 *)(dst) + 24) = *(const unaligned_u64 *)((const u8 *)(src) + 24); \
+        *(unaligned_u64 *)((u8 *)(dst) + 32) = *(const unaligned_u64 *)((const u8 *)(src) + 32); \
+        *(unaligned_u64 *)((u8 *)(dst) + 40) = *(const unaligned_u64 *)((const u8 *)(src) + 40); \
+        *(unaligned_u64 *)((u8 *)(dst) + 48) = *(const unaligned_u64 *)((const u8 *)(src) + 48); \
+        *(unaligned_u64 *)((u8 *)(dst) + 56) = *(const unaligned_u64 *)((const u8 *)(src) + 56); \
+        *(unaligned_u64 *)((u8 *)(dst) + 54) = *(const unaligned_u64 *)((const u8 *)(src) + 54); \
+        *(unaligned_u64 *)((u8 *)(dst) + 62) = *(const unaligned_u64 *)((const u8 *)(src) + 62); \
+        *(unaligned_u64 *)((u8 *)(dst) + 70) = *(const unaligned_u64 *)((const u8 *)(src) + 70); \
+        *(unaligned_u64 *)((u8 *)(dst) + 78) = *(const unaligned_u64 *)((const u8 *)(src) + 78); \
+        break; \
+    } \
+    case 87: { \
+        *(unaligned_u64 *)((u8 *)(dst) + 0) = *(const unaligned_u64 *)((const u8 *)(src) + 0); \
+        *(unaligned_u64 *)((u8 *)(dst) + 8) = *(const unaligned_u64 *)((const u8 *)(src) + 8); \
+        *(unaligned_u64 *)((u8 *)(dst) + 16) = *(const unaligned_u64 *)((const u8 *)(src) + 16); \
+        *(unaligned_u64 *)((u8 *)(dst) + 24) = *(const unaligned_u64 *)((const u8 *)(src) + 24); \
+        *(unaligned_u64 *)((u8 *)(dst) + 32) = *(const unaligned_u64 *)((const u8 *)(src) + 32); \
+        *(unaligned_u64 *)((u8 *)(dst) + 40) = *(const unaligned_u64 *)((const u8 *)(src) + 40); \
+        *(unaligned_u64 *)((u8 *)(dst) + 48) = *(const unaligned_u64 *)((const u8 *)(src) + 48); \
+        *(unaligned_u64 *)((u8 *)(dst) + 56) = *(const unaligned_u64 *)((const u8 *)(src) + 56); \
+        *(unaligned_u64 *)((u8 *)(dst) + 55) = *(const unaligned_u64 *)((const u8 *)(src) + 55); \
+        *(unaligned_u64 *)((u8 *)(dst) + 63) = *(const unaligned_u64 *)((const u8 *)(src) + 63); \
+        *(unaligned_u64 *)((u8 *)(dst) + 71) = *(const unaligned_u64 *)((const u8 *)(src) + 71); \
+        *(unaligned_u64 *)((u8 *)(dst) + 79) = *(const unaligned_u64 *)((const u8 *)(src) + 79); \
+        break; \
+    } \
+    case 88: { \
+        *(unaligned_u64 *)((u8 *)(dst) + 0) = *(const unaligned_u64 *)((const u8 *)(src) + 0); \
+        *(unaligned_u64 *)((u8 *)(dst) + 8) = *(const unaligned_u64 *)((const u8 *)(src) + 8); \
+        *(unaligned_u64 *)((u8 *)(dst) + 16) = *(const unaligned_u64 *)((const u8 *)(src) + 16); \
+        *(unaligned_u64 *)((u8 *)(dst) + 24) = *(const unaligned_u64 *)((const u8 *)(src) + 24); \
+        *(unaligned_u64 *)((u8 *)(dst) + 32) = *(const unaligned_u64 *)((const u8 *)(src) + 32); \
+        *(unaligned_u64 *)((u8 *)(dst) + 40) = *(const unaligned_u64 *)((const u8 *)(src) + 40); \
+        *(unaligned_u64 *)((u8 *)(dst) + 48) = *(const unaligned_u64 *)((const u8 *)(src) + 48); \
+        *(unaligned_u64 *)((u8 *)(dst) + 56) = *(const unaligned_u64 *)((const u8 *)(src) + 56); \
+        *(unaligned_u64 *)((u8 *)(dst) + 56) = *(const unaligned_u64 *)((const u8 *)(src) + 56); \
+        *(unaligned_u64 *)((u8 *)(dst) + 64) = *(const unaligned_u64 *)((const u8 *)(src) + 64); \
+        *(unaligned_u64 *)((u8 *)(dst) + 72) = *(const unaligned_u64 *)((const u8 *)(src) + 72); \
+        *(unaligned_u64 *)((u8 *)(dst) + 80) = *(const unaligned_u64 *)((const u8 *)(src) + 80); \
+        break; \
+    } \
+    case 89: { \
+        *(unaligned_u64 *)((u8 *)(dst) + 0) = *(const unaligned_u64 *)((const u8 *)(src) + 0); \
+        *(unaligned_u64 *)((u8 *)(dst) + 8) = *(const unaligned_u64 *)((const u8 *)(src) + 8); \
+        *(unaligned_u64 *)((u8 *)(dst) + 16) = *(const unaligned_u64 *)((const u8 *)(src) + 16); \
+        *(unaligned_u64 *)((u8 *)(dst) + 24) = *(const unaligned_u64 *)((const u8 *)(src) + 24); \
+        *(unaligned_u64 *)((u8 *)(dst) + 32) = *(const unaligned_u64 *)((const u8 *)(src) + 32); \
+        *(unaligned_u64 *)((u8 *)(dst) + 40) = *(const unaligned_u64 *)((const u8 *)(src) + 40); \
+        *(unaligned_u64 *)((u8 *)(dst) + 48) = *(const unaligned_u64 *)((const u8 *)(src) + 48); \
+        *(unaligned_u64 *)((u8 *)(dst) + 56) = *(const unaligned_u64 *)((const u8 *)(src) + 56); \
+        *(unaligned_u64 *)((u8 *)(dst) + 57) = *(const unaligned_u64 *)((const u8 *)(src) + 57); \
+        *(unaligned_u64 *)((u8 *)(dst) + 65) = *(const unaligned_u64 *)((const u8 *)(src) + 65); \
+        *(unaligned_u64 *)((u8 *)(dst) + 73) = *(const unaligned_u64 *)((const u8 *)(src) + 73); \
+        *(unaligned_u64 *)((u8 *)(dst) + 81) = *(const unaligned_u64 *)((const u8 *)(src) + 81); \
+        break; \
+    } \
+    case 90: { \
+        *(unaligned_u64 *)((u8 *)(dst) + 0) = *(const unaligned_u64 *)((const u8 *)(src) + 0); \
+        *(unaligned_u64 *)((u8 *)(dst) + 8) = *(const unaligned_u64 *)((const u8 *)(src) + 8); \
+        *(unaligned_u64 *)((u8 *)(dst) + 16) = *(const unaligned_u64 *)((const u8 *)(src) + 16); \
+        *(unaligned_u64 *)((u8 *)(dst) + 24) = *(const unaligned_u64 *)((const u8 *)(src) + 24); \
+        *(unaligned_u64 *)((u8 *)(dst) + 32) = *(const unaligned_u64 *)((const u8 *)(src) + 32); \
+        *(unaligned_u64 *)((u8 *)(dst) + 40) = *(const unaligned_u64 *)((const u8 *)(src) + 40); \
+        *(unaligned_u64 *)((u8 *)(dst) + 48) = *(const unaligned_u64 *)((const u8 *)(src) + 48); \
+        *(unaligned_u64 *)((u8 *)(dst) + 56) = *(const unaligned_u64 *)((const u8 *)(src) + 56); \
+        *(unaligned_u64 *)((u8 *)(dst) + 58) = *(const unaligned_u64 *)((const u8 *)(src) + 58); \
+        *(unaligned_u64 *)((u8 *)(dst) + 66) = *(const unaligned_u64 *)((const u8 *)(src) + 66); \
+        *(unaligned_u64 *)((u8 *)(dst) + 74) = *(const unaligned_u64 *)((const u8 *)(src) + 74); \
+        *(unaligned_u64 *)((u8 *)(dst) + 82) = *(const unaligned_u64 *)((const u8 *)(src) + 82); \
+        break; \
+    } \
+    case 91: { \
+        *(unaligned_u64 *)((u8 *)(dst) + 0) = *(const unaligned_u64 *)((const u8 *)(src) + 0); \
+        *(unaligned_u64 *)((u8 *)(dst) + 8) = *(const unaligned_u64 *)((const u8 *)(src) + 8); \
+        *(unaligned_u64 *)((u8 *)(dst) + 16) = *(const unaligned_u64 *)((const u8 *)(src) + 16); \
+        *(unaligned_u64 *)((u8 *)(dst) + 24) = *(const unaligned_u64 *)((const u8 *)(src) + 24); \
+        *(unaligned_u64 *)((u8 *)(dst) + 32) = *(const unaligned_u64 *)((const u8 *)(src) + 32); \
+        *(unaligned_u64 *)((u8 *)(dst) + 40) = *(const unaligned_u64 *)((const u8 *)(src) + 40); \
+        *(unaligned_u64 *)((u8 *)(dst) + 48) = *(const unaligned_u64 *)((const u8 *)(src) + 48); \
+        *(unaligned_u64 *)((u8 *)(dst) + 56) = *(const unaligned_u64 *)((const u8 *)(src) + 56); \
+        *(unaligned_u64 *)((u8 *)(dst) + 59) = *(const unaligned_u64 *)((const u8 *)(src) + 59); \
+        *(unaligned_u64 *)((u8 *)(dst) + 67) = *(const unaligned_u64 *)((const u8 *)(src) + 67); \
+        *(unaligned_u64 *)((u8 *)(dst) + 75) = *(const unaligned_u64 *)((const u8 *)(src) + 75); \
+        *(unaligned_u64 *)((u8 *)(dst) + 83) = *(const unaligned_u64 *)((const u8 *)(src) + 83); \
+        break; \
+    } \
+    case 92: { \
+        *(unaligned_u64 *)((u8 *)(dst) + 0) = *(const unaligned_u64 *)((const u8 *)(src) + 0); \
+        *(unaligned_u64 *)((u8 *)(dst) + 8) = *(const unaligned_u64 *)((const u8 *)(src) + 8); \
+        *(unaligned_u64 *)((u8 *)(dst) + 16) = *(const unaligned_u64 *)((const u8 *)(src) + 16); \
+        *(unaligned_u64 *)((u8 *)(dst) + 24) = *(const unaligned_u64 *)((const u8 *)(src) + 24); \
+        *(unaligned_u64 *)((u8 *)(dst) + 32) = *(const unaligned_u64 *)((const u8 *)(src) + 32); \
+        *(unaligned_u64 *)((u8 *)(dst) + 40) = *(const unaligned_u64 *)((const u8 *)(src) + 40); \
+        *(unaligned_u64 *)((u8 *)(dst) + 48) = *(const unaligned_u64 *)((const u8 *)(src) + 48); \
+        *(unaligned_u64 *)((u8 *)(dst) + 56) = *(const unaligned_u64 *)((const u8 *)(src) + 56); \
+        *(unaligned_u64 *)((u8 *)(dst) + 60) = *(const unaligned_u64 *)((const u8 *)(src) + 60); \
+        *(unaligned_u64 *)((u8 *)(dst) + 68) = *(const unaligned_u64 *)((const u8 *)(src) + 68); \
+        *(unaligned_u64 *)((u8 *)(dst) + 76) = *(const unaligned_u64 *)((const u8 *)(src) + 76); \
+        *(unaligned_u64 *)((u8 *)(dst) + 84) = *(const unaligned_u64 *)((const u8 *)(src) + 84); \
+        break; \
+    } \
+    case 93: { \
+        *(unaligned_u64 *)((u8 *)(dst) + 0) = *(const unaligned_u64 *)((const u8 *)(src) + 0); \
+        *(unaligned_u64 *)((u8 *)(dst) + 8) = *(const unaligned_u64 *)((const u8 *)(src) + 8); \
+        *(unaligned_u64 *)((u8 *)(dst) + 16) = *(const unaligned_u64 *)((const u8 *)(src) + 16); \
+        *(unaligned_u64 *)((u8 *)(dst) + 24) = *(const unaligned_u64 *)((const u8 *)(src) + 24); \
+        *(unaligned_u64 *)((u8 *)(dst) + 32) = *(const unaligned_u64 *)((const u8 *)(src) + 32); \
+        *(unaligned_u64 *)((u8 *)(dst) + 40) = *(const unaligned_u64 *)((const u8 *)(src) + 40); \
+        *(unaligned_u64 *)((u8 *)(dst) + 48) = *(const unaligned_u64 *)((const u8 *)(src) + 48); \
+        *(unaligned_u64 *)((u8 *)(dst) + 56) = *(const unaligned_u64 *)((const u8 *)(src) + 56); \
+        *(unaligned_u64 *)((u8 *)(dst) + 61) = *(const unaligned_u64 *)((const u8 *)(src) + 61); \
+        *(unaligned_u64 *)((u8 *)(dst) + 69) = *(const unaligned_u64 *)((const u8 *)(src) + 69); \
+        *(unaligned_u64 *)((u8 *)(dst) + 77) = *(const unaligned_u64 *)((const u8 *)(src) + 77); \
+        *(unaligned_u64 *)((u8 *)(dst) + 85) = *(const unaligned_u64 *)((const u8 *)(src) + 85); \
+        break; \
+    } \
+    case 94: { \
+        *(unaligned_u64 *)((u8 *)(dst) + 0) = *(const unaligned_u64 *)((const u8 *)(src) + 0); \
+        *(unaligned_u64 *)((u8 *)(dst) + 8) = *(const unaligned_u64 *)((const u8 *)(src) + 8); \
+        *(unaligned_u64 *)((u8 *)(dst) + 16) = *(const unaligned_u64 *)((const u8 *)(src) + 16); \
+        *(unaligned_u64 *)((u8 *)(dst) + 24) = *(const unaligned_u64 *)((const u8 *)(src) + 24); \
+        *(unaligned_u64 *)((u8 *)(dst) + 32) = *(const unaligned_u64 *)((const u8 *)(src) + 32); \
+        *(unaligned_u64 *)((u8 *)(dst) + 40) = *(const unaligned_u64 *)((const u8 *)(src) + 40); \
+        *(unaligned_u64 *)((u8 *)(dst) + 48) = *(const unaligned_u64 *)((const u8 *)(src) + 48); \
+        *(unaligned_u64 *)((u8 *)(dst) + 56) = *(const unaligned_u64 *)((const u8 *)(src) + 56); \
+        *(unaligned_u64 *)((u8 *)(dst) + 62) = *(const unaligned_u64 *)((const u8 *)(src) + 62); \
+        *(unaligned_u64 *)((u8 *)(dst) + 70) = *(const unaligned_u64 *)((const u8 *)(src) + 70); \
+        *(unaligned_u64 *)((u8 *)(dst) + 78) = *(const unaligned_u64 *)((const u8 *)(src) + 78); \
+        *(unaligned_u64 *)((u8 *)(dst) + 86) = *(const unaligned_u64 *)((const u8 *)(src) + 86); \
+        break; \
+    } \
+    case 95: { \
+        *(unaligned_u64 *)((u8 *)(dst) + 0) = *(const unaligned_u64 *)((const u8 *)(src) + 0); \
+        *(unaligned_u64 *)((u8 *)(dst) + 8) = *(const unaligned_u64 *)((const u8 *)(src) + 8); \
+        *(unaligned_u64 *)((u8 *)(dst) + 16) = *(const unaligned_u64 *)((const u8 *)(src) + 16); \
+        *(unaligned_u64 *)((u8 *)(dst) + 24) = *(const unaligned_u64 *)((const u8 *)(src) + 24); \
+        *(unaligned_u64 *)((u8 *)(dst) + 32) = *(const unaligned_u64 *)((const u8 *)(src) + 32); \
+        *(unaligned_u64 *)((u8 *)(dst) + 40) = *(const unaligned_u64 *)((const u8 *)(src) + 40); \
+        *(unaligned_u64 *)((u8 *)(dst) + 48) = *(const unaligned_u64 *)((const u8 *)(src) + 48); \
+        *(unaligned_u64 *)((u8 *)(dst) + 56) = *(const unaligned_u64 *)((const u8 *)(src) + 56); \
+        *(unaligned_u64 *)((u8 *)(dst) + 63) = *(const unaligned_u64 *)((const u8 *)(src) + 63); \
+        *(unaligned_u64 *)((u8 *)(dst) + 71) = *(const unaligned_u64 *)((const u8 *)(src) + 71); \
+        *(unaligned_u64 *)((u8 *)(dst) + 79) = *(const unaligned_u64 *)((const u8 *)(src) + 79); \
+        *(unaligned_u64 *)((u8 *)(dst) + 87) = *(const unaligned_u64 *)((const u8 *)(src) + 87); \
+        break; \
+    } \
+    case 96: { \
+        *(unaligned_u64 *)((u8 *)(dst) + 0) = *(const unaligned_u64 *)((const u8 *)(src) + 0); \
+        *(unaligned_u64 *)((u8 *)(dst) + 8) = *(const unaligned_u64 *)((const u8 *)(src) + 8); \
+        *(unaligned_u64 *)((u8 *)(dst) + 16) = *(const unaligned_u64 *)((const u8 *)(src) + 16); \
+        *(unaligned_u64 *)((u8 *)(dst) + 24) = *(const unaligned_u64 *)((const u8 *)(src) + 24); \
+        *(unaligned_u64 *)((u8 *)(dst) + 32) = *(const unaligned_u64 *)((const u8 *)(src) + 32); \
+        *(unaligned_u64 *)((u8 *)(dst) + 40) = *(const unaligned_u64 *)((const u8 *)(src) + 40); \
+        *(unaligned_u64 *)((u8 *)(dst) + 48) = *(const unaligned_u64 *)((const u8 *)(src) + 48); \
+        *(unaligned_u64 *)((u8 *)(dst) + 56) = *(const unaligned_u64 *)((const u8 *)(src) + 56); \
+        *(unaligned_u64 *)((u8 *)(dst) + 64) = *(const unaligned_u64 *)((const u8 *)(src) + 64); \
+        *(unaligned_u64 *)((u8 *)(dst) + 72) = *(const unaligned_u64 *)((const u8 *)(src) + 72); \
+        *(unaligned_u64 *)((u8 *)(dst) + 80) = *(const unaligned_u64 *)((const u8 *)(src) + 80); \
+        *(unaligned_u64 *)((u8 *)(dst) + 88) = *(const unaligned_u64 *)((const u8 *)(src) + 88); \
+        break; \
+    } \
+    case 97: { \
+        *(unaligned_u64 *)((u8 *)(dst) + 0) = *(const unaligned_u64 *)((const u8 *)(src) + 0); \
+        *(unaligned_u64 *)((u8 *)(dst) + 8) = *(const unaligned_u64 *)((const u8 *)(src) + 8); \
+        *(unaligned_u64 *)((u8 *)(dst) + 16) = *(const unaligned_u64 *)((const u8 *)(src) + 16); \
+        *(unaligned_u64 *)((u8 *)(dst) + 24) = *(const unaligned_u64 *)((const u8 *)(src) + 24); \
+        *(unaligned_u64 *)((u8 *)(dst) + 32) = *(const unaligned_u64 *)((const u8 *)(src) + 32); \
+        *(unaligned_u64 *)((u8 *)(dst) + 40) = *(const unaligned_u64 *)((const u8 *)(src) + 40); \
+        *(unaligned_u64 *)((u8 *)(dst) + 48) = *(const unaligned_u64 *)((const u8 *)(src) + 48); \
+        *(unaligned_u64 *)((u8 *)(dst) + 56) = *(const unaligned_u64 *)((const u8 *)(src) + 56); \
+        *(unaligned_u64 *)((u8 *)(dst) + 64) = *(const unaligned_u64 *)((const u8 *)(src) + 64); \
+        *(unaligned_u64 *)((u8 *)(dst) + 72) = *(const unaligned_u64 *)((const u8 *)(src) + 72); \
+        *(unaligned_u64 *)((u8 *)(dst) + 80) = *(const unaligned_u64 *)((const u8 *)(src) + 80); \
+        *(unaligned_u64 *)((u8 *)(dst) + 88) = *(const unaligned_u64 *)((const u8 *)(src) + 88); \
+        *(unaligned_u64 *)((u8 *)(dst) + 65) = *(const unaligned_u64 *)((const u8 *)(src) + 65); \
+        *(unaligned_u64 *)((u8 *)(dst) + 73) = *(const unaligned_u64 *)((const u8 *)(src) + 73); \
+        *(unaligned_u64 *)((u8 *)(dst) + 81) = *(const unaligned_u64 *)((const u8 *)(src) + 81); \
+        *(unaligned_u64 *)((u8 *)(dst) + 89) = *(const unaligned_u64 *)((const u8 *)(src) + 89); \
+        break; \
+    } \
+    case 98: { \
+        *(unaligned_u64 *)((u8 *)(dst) + 0) = *(const unaligned_u64 *)((const u8 *)(src) + 0); \
+        *(unaligned_u64 *)((u8 *)(dst) + 8) = *(const unaligned_u64 *)((const u8 *)(src) + 8); \
+        *(unaligned_u64 *)((u8 *)(dst) + 16) = *(const unaligned_u64 *)((const u8 *)(src) + 16); \
+        *(unaligned_u64 *)((u8 *)(dst) + 24) = *(const unaligned_u64 *)((const u8 *)(src) + 24); \
+        *(unaligned_u64 *)((u8 *)(dst) + 32) = *(const unaligned_u64 *)((const u8 *)(src) + 32); \
+        *(unaligned_u64 *)((u8 *)(dst) + 40) = *(const unaligned_u64 *)((const u8 *)(src) + 40); \
+        *(unaligned_u64 *)((u8 *)(dst) + 48) = *(const unaligned_u64 *)((const u8 *)(src) + 48); \
+        *(unaligned_u64 *)((u8 *)(dst) + 56) = *(const unaligned_u64 *)((const u8 *)(src) + 56); \
+        *(unaligned_u64 *)((u8 *)(dst) + 64) = *(const unaligned_u64 *)((const u8 *)(src) + 64); \
+        *(unaligned_u64 *)((u8 *)(dst) + 72) = *(const unaligned_u64 *)((const u8 *)(src) + 72); \
+        *(unaligned_u64 *)((u8 *)(dst) + 80) = *(const unaligned_u64 *)((const u8 *)(src) + 80); \
+        *(unaligned_u64 *)((u8 *)(dst) + 88) = *(const unaligned_u64 *)((const u8 *)(src) + 88); \
+        *(unaligned_u64 *)((u8 *)(dst) + 66) = *(const unaligned_u64 *)((const u8 *)(src) + 66); \
+        *(unaligned_u64 *)((u8 *)(dst) + 74) = *(const unaligned_u64 *)((const u8 *)(src) + 74); \
+        *(unaligned_u64 *)((u8 *)(dst) + 82) = *(const unaligned_u64 *)((const u8 *)(src) + 82); \
+        *(unaligned_u64 *)((u8 *)(dst) + 90) = *(const unaligned_u64 *)((const u8 *)(src) + 90); \
+        break; \
+    } \
+    case 99: { \
+        *(unaligned_u64 *)((u8 *)(dst) + 0) = *(const unaligned_u64 *)((const u8 *)(src) + 0); \
+        *(unaligned_u64 *)((u8 *)(dst) + 8) = *(const unaligned_u64 *)((const u8 *)(src) + 8); \
+        *(unaligned_u64 *)((u8 *)(dst) + 16) = *(const unaligned_u64 *)((const u8 *)(src) + 16); \
+        *(unaligned_u64 *)((u8 *)(dst) + 24) = *(const unaligned_u64 *)((const u8 *)(src) + 24); \
+        *(unaligned_u64 *)((u8 *)(dst) + 32) = *(const unaligned_u64 *)((const u8 *)(src) + 32); \
+        *(unaligned_u64 *)((u8 *)(dst) + 40) = *(const unaligned_u64 *)((const u8 *)(src) + 40); \
+        *(unaligned_u64 *)((u8 *)(dst) + 48) = *(const unaligned_u64 *)((const u8 *)(src) + 48); \
+        *(unaligned_u64 *)((u8 *)(dst) + 56) = *(const unaligned_u64 *)((const u8 *)(src) + 56); \
+        *(unaligned_u64 *)((u8 *)(dst) + 64) = *(const unaligned_u64 *)((const u8 *)(src) + 64); \
+        *(unaligned_u64 *)((u8 *)(dst) + 72) = *(const unaligned_u64 *)((const u8 *)(src) + 72); \
+        *(unaligned_u64 *)((u8 *)(dst) + 80) = *(const unaligned_u64 *)((const u8 *)(src) + 80); \
+        *(unaligned_u64 *)((u8 *)(dst) + 88) = *(const unaligned_u64 *)((const u8 *)(src) + 88); \
+        *(unaligned_u64 *)((u8 *)(dst) + 67) = *(const unaligned_u64 *)((const u8 *)(src) + 67); \
+        *(unaligned_u64 *)((u8 *)(dst) + 75) = *(const unaligned_u64 *)((const u8 *)(src) + 75); \
+        *(unaligned_u64 *)((u8 *)(dst) + 83) = *(const unaligned_u64 *)((const u8 *)(src) + 83); \
+        *(unaligned_u64 *)((u8 *)(dst) + 91) = *(const unaligned_u64 *)((const u8 *)(src) + 91); \
+        break; \
+    } \
+    case 100: { \
+        *(unaligned_u64 *)((u8 *)(dst) + 0) = *(const unaligned_u64 *)((const u8 *)(src) + 0); \
+        *(unaligned_u64 *)((u8 *)(dst) + 8) = *(const unaligned_u64 *)((const u8 *)(src) + 8); \
+        *(unaligned_u64 *)((u8 *)(dst) + 16) = *(const unaligned_u64 *)((const u8 *)(src) + 16); \
+        *(unaligned_u64 *)((u8 *)(dst) + 24) = *(const unaligned_u64 *)((const u8 *)(src) + 24); \
+        *(unaligned_u64 *)((u8 *)(dst) + 32) = *(const unaligned_u64 *)((const u8 *)(src) + 32); \
+        *(unaligned_u64 *)((u8 *)(dst) + 40) = *(const unaligned_u64 *)((const u8 *)(src) + 40); \
+        *(unaligned_u64 *)((u8 *)(dst) + 48) = *(const unaligned_u64 *)((const u8 *)(src) + 48); \
+        *(unaligned_u64 *)((u8 *)(dst) + 56) = *(const unaligned_u64 *)((const u8 *)(src) + 56); \
+        *(unaligned_u64 *)((u8 *)(dst) + 64) = *(const unaligned_u64 *)((const u8 *)(src) + 64); \
+        *(unaligned_u64 *)((u8 *)(dst) + 72) = *(const unaligned_u64 *)((const u8 *)(src) + 72); \
+        *(unaligned_u64 *)((u8 *)(dst) + 80) = *(const unaligned_u64 *)((const u8 *)(src) + 80); \
+        *(unaligned_u64 *)((u8 *)(dst) + 88) = *(const unaligned_u64 *)((const u8 *)(src) + 88); \
+        *(unaligned_u64 *)((u8 *)(dst) + 68) = *(const unaligned_u64 *)((const u8 *)(src) + 68); \
+        *(unaligned_u64 *)((u8 *)(dst) + 76) = *(const unaligned_u64 *)((const u8 *)(src) + 76); \
+        *(unaligned_u64 *)((u8 *)(dst) + 84) = *(const unaligned_u64 *)((const u8 *)(src) + 84); \
+        *(unaligned_u64 *)((u8 *)(dst) + 92) = *(const unaligned_u64 *)((const u8 *)(src) + 92); \
+        break; \
+    } \
+    case 101: { \
+        *(unaligned_u64 *)((u8 *)(dst) + 0) = *(const unaligned_u64 *)((const u8 *)(src) + 0); \
+        *(unaligned_u64 *)((u8 *)(dst) + 8) = *(const unaligned_u64 *)((const u8 *)(src) + 8); \
+        *(unaligned_u64 *)((u8 *)(dst) + 16) = *(const unaligned_u64 *)((const u8 *)(src) + 16); \
+        *(unaligned_u64 *)((u8 *)(dst) + 24) = *(const unaligned_u64 *)((const u8 *)(src) + 24); \
+        *(unaligned_u64 *)((u8 *)(dst) + 32) = *(const unaligned_u64 *)((const u8 *)(src) + 32); \
+        *(unaligned_u64 *)((u8 *)(dst) + 40) = *(const unaligned_u64 *)((const u8 *)(src) + 40); \
+        *(unaligned_u64 *)((u8 *)(dst) + 48) = *(const unaligned_u64 *)((const u8 *)(src) + 48); \
+        *(unaligned_u64 *)((u8 *)(dst) + 56) = *(const unaligned_u64 *)((const u8 *)(src) + 56); \
+        *(unaligned_u64 *)((u8 *)(dst) + 64) = *(const unaligned_u64 *)((const u8 *)(src) + 64); \
+        *(unaligned_u64 *)((u8 *)(dst) + 72) = *(const unaligned_u64 *)((const u8 *)(src) + 72); \
+        *(unaligned_u64 *)((u8 *)(dst) + 80) = *(const unaligned_u64 *)((const u8 *)(src) + 80); \
+        *(unaligned_u64 *)((u8 *)(dst) + 88) = *(const unaligned_u64 *)((const u8 *)(src) + 88); \
+        *(unaligned_u64 *)((u8 *)(dst) + 69) = *(const unaligned_u64 *)((const u8 *)(src) + 69); \
+        *(unaligned_u64 *)((u8 *)(dst) + 77) = *(const unaligned_u64 *)((const u8 *)(src) + 77); \
+        *(unaligned_u64 *)((u8 *)(dst) + 85) = *(const unaligned_u64 *)((const u8 *)(src) + 85); \
+        *(unaligned_u64 *)((u8 *)(dst) + 93) = *(const unaligned_u64 *)((const u8 *)(src) + 93); \
+        break; \
+    } \
+    case 102: { \
+        *(unaligned_u64 *)((u8 *)(dst) + 0) = *(const unaligned_u64 *)((const u8 *)(src) + 0); \
+        *(unaligned_u64 *)((u8 *)(dst) + 8) = *(const unaligned_u64 *)((const u8 *)(src) + 8); \
+        *(unaligned_u64 *)((u8 *)(dst) + 16) = *(const unaligned_u64 *)((const u8 *)(src) + 16); \
+        *(unaligned_u64 *)((u8 *)(dst) + 24) = *(const unaligned_u64 *)((const u8 *)(src) + 24); \
+        *(unaligned_u64 *)((u8 *)(dst) + 32) = *(const unaligned_u64 *)((const u8 *)(src) + 32); \
+        *(unaligned_u64 *)((u8 *)(dst) + 40) = *(const unaligned_u64 *)((const u8 *)(src) + 40); \
+        *(unaligned_u64 *)((u8 *)(dst) + 48) = *(const unaligned_u64 *)((const u8 *)(src) + 48); \
+        *(unaligned_u64 *)((u8 *)(dst) + 56) = *(const unaligned_u64 *)((const u8 *)(src) + 56); \
+        *(unaligned_u64 *)((u8 *)(dst) + 64) = *(const unaligned_u64 *)((const u8 *)(src) + 64); \
+        *(unaligned_u64 *)((u8 *)(dst) + 72) = *(const unaligned_u64 *)((const u8 *)(src) + 72); \
+        *(unaligned_u64 *)((u8 *)(dst) + 80) = *(const unaligned_u64 *)((const u8 *)(src) + 80); \
+        *(unaligned_u64 *)((u8 *)(dst) + 88) = *(const unaligned_u64 *)((const u8 *)(src) + 88); \
+        *(unaligned_u64 *)((u8 *)(dst) + 70) = *(const unaligned_u64 *)((const u8 *)(src) + 70); \
+        *(unaligned_u64 *)((u8 *)(dst) + 78) = *(const unaligned_u64 *)((const u8 *)(src) + 78); \
+        *(unaligned_u64 *)((u8 *)(dst) + 86) = *(const unaligned_u64 *)((const u8 *)(src) + 86); \
+        *(unaligned_u64 *)((u8 *)(dst) + 94) = *(const unaligned_u64 *)((const u8 *)(src) + 94); \
+        break; \
+    } \
+    case 103: { \
+        *(unaligned_u64 *)((u8 *)(dst) + 0) = *(const unaligned_u64 *)((const u8 *)(src) + 0); \
+        *(unaligned_u64 *)((u8 *)(dst) + 8) = *(const unaligned_u64 *)((const u8 *)(src) + 8); \
+        *(unaligned_u64 *)((u8 *)(dst) + 16) = *(const unaligned_u64 *)((const u8 *)(src) + 16); \
+        *(unaligned_u64 *)((u8 *)(dst) + 24) = *(const unaligned_u64 *)((const u8 *)(src) + 24); \
+        *(unaligned_u64 *)((u8 *)(dst) + 32) = *(const unaligned_u64 *)((const u8 *)(src) + 32); \
+        *(unaligned_u64 *)((u8 *)(dst) + 40) = *(const unaligned_u64 *)((const u8 *)(src) + 40); \
+        *(unaligned_u64 *)((u8 *)(dst) + 48) = *(const unaligned_u64 *)((const u8 *)(src) + 48); \
+        *(unaligned_u64 *)((u8 *)(dst) + 56) = *(const unaligned_u64 *)((const u8 *)(src) + 56); \
+        *(unaligned_u64 *)((u8 *)(dst) + 64) = *(const unaligned_u64 *)((const u8 *)(src) + 64); \
+        *(unaligned_u64 *)((u8 *)(dst) + 72) = *(const unaligned_u64 *)((const u8 *)(src) + 72); \
+        *(unaligned_u64 *)((u8 *)(dst) + 80) = *(const unaligned_u64 *)((const u8 *)(src) + 80); \
+        *(unaligned_u64 *)((u8 *)(dst) + 88) = *(const unaligned_u64 *)((const u8 *)(src) + 88); \
+        *(unaligned_u64 *)((u8 *)(dst) + 71) = *(const unaligned_u64 *)((const u8 *)(src) + 71); \
+        *(unaligned_u64 *)((u8 *)(dst) + 79) = *(const unaligned_u64 *)((const u8 *)(src) + 79); \
+        *(unaligned_u64 *)((u8 *)(dst) + 87) = *(const unaligned_u64 *)((const u8 *)(src) + 87); \
+        *(unaligned_u64 *)((u8 *)(dst) + 95) = *(const unaligned_u64 *)((const u8 *)(src) + 95); \
+        break; \
+    } \
+    case 104: { \
+        *(unaligned_u64 *)((u8 *)(dst) + 0) = *(const unaligned_u64 *)((const u8 *)(src) + 0); \
+        *(unaligned_u64 *)((u8 *)(dst) + 8) = *(const unaligned_u64 *)((const u8 *)(src) + 8); \
+        *(unaligned_u64 *)((u8 *)(dst) + 16) = *(const unaligned_u64 *)((const u8 *)(src) + 16); \
+        *(unaligned_u64 *)((u8 *)(dst) + 24) = *(const unaligned_u64 *)((const u8 *)(src) + 24); \
+        *(unaligned_u64 *)((u8 *)(dst) + 32) = *(const unaligned_u64 *)((const u8 *)(src) + 32); \
+        *(unaligned_u64 *)((u8 *)(dst) + 40) = *(const unaligned_u64 *)((const u8 *)(src) + 40); \
+        *(unaligned_u64 *)((u8 *)(dst) + 48) = *(const unaligned_u64 *)((const u8 *)(src) + 48); \
+        *(unaligned_u64 *)((u8 *)(dst) + 56) = *(const unaligned_u64 *)((const u8 *)(src) + 56); \
+        *(unaligned_u64 *)((u8 *)(dst) + 64) = *(const unaligned_u64 *)((const u8 *)(src) + 64); \
+        *(unaligned_u64 *)((u8 *)(dst) + 72) = *(const unaligned_u64 *)((const u8 *)(src) + 72); \
+        *(unaligned_u64 *)((u8 *)(dst) + 80) = *(const unaligned_u64 *)((const u8 *)(src) + 80); \
+        *(unaligned_u64 *)((u8 *)(dst) + 88) = *(const unaligned_u64 *)((const u8 *)(src) + 88); \
+        *(unaligned_u64 *)((u8 *)(dst) + 72) = *(const unaligned_u64 *)((const u8 *)(src) + 72); \
+        *(unaligned_u64 *)((u8 *)(dst) + 80) = *(const unaligned_u64 *)((const u8 *)(src) + 80); \
+        *(unaligned_u64 *)((u8 *)(dst) + 88) = *(const unaligned_u64 *)((const u8 *)(src) + 88); \
+        *(unaligned_u64 *)((u8 *)(dst) + 96) = *(const unaligned_u64 *)((const u8 *)(src) + 96); \
+        break; \
+    } \
+    case 105: { \
+        *(unaligned_u64 *)((u8 *)(dst) + 0) = *(const unaligned_u64 *)((const u8 *)(src) + 0); \
+        *(unaligned_u64 *)((u8 *)(dst) + 8) = *(const unaligned_u64 *)((const u8 *)(src) + 8); \
+        *(unaligned_u64 *)((u8 *)(dst) + 16) = *(const unaligned_u64 *)((const u8 *)(src) + 16); \
+        *(unaligned_u64 *)((u8 *)(dst) + 24) = *(const unaligned_u64 *)((const u8 *)(src) + 24); \
+        *(unaligned_u64 *)((u8 *)(dst) + 32) = *(const unaligned_u64 *)((const u8 *)(src) + 32); \
+        *(unaligned_u64 *)((u8 *)(dst) + 40) = *(const unaligned_u64 *)((const u8 *)(src) + 40); \
+        *(unaligned_u64 *)((u8 *)(dst) + 48) = *(const unaligned_u64 *)((const u8 *)(src) + 48); \
+        *(unaligned_u64 *)((u8 *)(dst) + 56) = *(const unaligned_u64 *)((const u8 *)(src) + 56); \
+        *(unaligned_u64 *)((u8 *)(dst) + 64) = *(const unaligned_u64 *)((const u8 *)(src) + 64); \
+        *(unaligned_u64 *)((u8 *)(dst) + 72) = *(const unaligned_u64 *)((const u8 *)(src) + 72); \
+        *(unaligned_u64 *)((u8 *)(dst) + 80) = *(const unaligned_u64 *)((const u8 *)(src) + 80); \
+        *(unaligned_u64 *)((u8 *)(dst) + 88) = *(const unaligned_u64 *)((const u8 *)(src) + 88); \
+        *(unaligned_u64 *)((u8 *)(dst) + 73) = *(const unaligned_u64 *)((const u8 *)(src) + 73); \
+        *(unaligned_u64 *)((u8 *)(dst) + 81) = *(const unaligned_u64 *)((const u8 *)(src) + 81); \
+        *(unaligned_u64 *)((u8 *)(dst) + 89) = *(const unaligned_u64 *)((const u8 *)(src) + 89); \
+        *(unaligned_u64 *)((u8 *)(dst) + 97) = *(const unaligned_u64 *)((const u8 *)(src) + 97); \
+        break; \
+    } \
+    case 106: { \
+        *(unaligned_u64 *)((u8 *)(dst) + 0) = *(const unaligned_u64 *)((const u8 *)(src) + 0); \
+        *(unaligned_u64 *)((u8 *)(dst) + 8) = *(const unaligned_u64 *)((const u8 *)(src) + 8); \
+        *(unaligned_u64 *)((u8 *)(dst) + 16) = *(const unaligned_u64 *)((const u8 *)(src) + 16); \
+        *(unaligned_u64 *)((u8 *)(dst) + 24) = *(const unaligned_u64 *)((const u8 *)(src) + 24); \
+        *(unaligned_u64 *)((u8 *)(dst) + 32) = *(const unaligned_u64 *)((const u8 *)(src) + 32); \
+        *(unaligned_u64 *)((u8 *)(dst) + 40) = *(const unaligned_u64 *)((const u8 *)(src) + 40); \
+        *(unaligned_u64 *)((u8 *)(dst) + 48) = *(const unaligned_u64 *)((const u8 *)(src) + 48); \
+        *(unaligned_u64 *)((u8 *)(dst) + 56) = *(const unaligned_u64 *)((const u8 *)(src) + 56); \
+        *(unaligned_u64 *)((u8 *)(dst) + 64) = *(const unaligned_u64 *)((const u8 *)(src) + 64); \
+        *(unaligned_u64 *)((u8 *)(dst) + 72) = *(const unaligned_u64 *)((const u8 *)(src) + 72); \
+        *(unaligned_u64 *)((u8 *)(dst) + 80) = *(const unaligned_u64 *)((const u8 *)(src) + 80); \
+        *(unaligned_u64 *)((u8 *)(dst) + 88) = *(const unaligned_u64 *)((const u8 *)(src) + 88); \
+        *(unaligned_u64 *)((u8 *)(dst) + 74) = *(const unaligned_u64 *)((const u8 *)(src) + 74); \
+        *(unaligned_u64 *)((u8 *)(dst) + 82) = *(const unaligned_u64 *)((const u8 *)(src) + 82); \
+        *(unaligned_u64 *)((u8 *)(dst) + 90) = *(const unaligned_u64 *)((const u8 *)(src) + 90); \
+        *(unaligned_u64 *)((u8 *)(dst) + 98) = *(const unaligned_u64 *)((const u8 *)(src) + 98); \
+        break; \
+    } \
+    case 107: { \
+        *(unaligned_u64 *)((u8 *)(dst) + 0) = *(const unaligned_u64 *)((const u8 *)(src) + 0); \
+        *(unaligned_u64 *)((u8 *)(dst) + 8) = *(const unaligned_u64 *)((const u8 *)(src) + 8); \
+        *(unaligned_u64 *)((u8 *)(dst) + 16) = *(const unaligned_u64 *)((const u8 *)(src) + 16); \
+        *(unaligned_u64 *)((u8 *)(dst) + 24) = *(const unaligned_u64 *)((const u8 *)(src) + 24); \
+        *(unaligned_u64 *)((u8 *)(dst) + 32) = *(const unaligned_u64 *)((const u8 *)(src) + 32); \
+        *(unaligned_u64 *)((u8 *)(dst) + 40) = *(const unaligned_u64 *)((const u8 *)(src) + 40); \
+        *(unaligned_u64 *)((u8 *)(dst) + 48) = *(const unaligned_u64 *)((const u8 *)(src) + 48); \
+        *(unaligned_u64 *)((u8 *)(dst) + 56) = *(const unaligned_u64 *)((const u8 *)(src) + 56); \
+        *(unaligned_u64 *)((u8 *)(dst) + 64) = *(const unaligned_u64 *)((const u8 *)(src) + 64); \
+        *(unaligned_u64 *)((u8 *)(dst) + 72) = *(const unaligned_u64 *)((const u8 *)(src) + 72); \
+        *(unaligned_u64 *)((u8 *)(dst) + 80) = *(const unaligned_u64 *)((const u8 *)(src) + 80); \
+        *(unaligned_u64 *)((u8 *)(dst) + 88) = *(const unaligned_u64 *)((const u8 *)(src) + 88); \
+        *(unaligned_u64 *)((u8 *)(dst) + 75) = *(const unaligned_u64 *)((const u8 *)(src) + 75); \
+        *(unaligned_u64 *)((u8 *)(dst) + 83) = *(const unaligned_u64 *)((const u8 *)(src) + 83); \
+        *(unaligned_u64 *)((u8 *)(dst) + 91) = *(const unaligned_u64 *)((const u8 *)(src) + 91); \
+        *(unaligned_u64 *)((u8 *)(dst) + 99) = *(const unaligned_u64 *)((const u8 *)(src) + 99); \
+        break; \
+    } \
+    case 108: { \
+        *(unaligned_u64 *)((u8 *)(dst) + 0) = *(const unaligned_u64 *)((const u8 *)(src) + 0); \
+        *(unaligned_u64 *)((u8 *)(dst) + 8) = *(const unaligned_u64 *)((const u8 *)(src) + 8); \
+        *(unaligned_u64 *)((u8 *)(dst) + 16) = *(const unaligned_u64 *)((const u8 *)(src) + 16); \
+        *(unaligned_u64 *)((u8 *)(dst) + 24) = *(const unaligned_u64 *)((const u8 *)(src) + 24); \
+        *(unaligned_u64 *)((u8 *)(dst) + 32) = *(const unaligned_u64 *)((const u8 *)(src) + 32); \
+        *(unaligned_u64 *)((u8 *)(dst) + 40) = *(const unaligned_u64 *)((const u8 *)(src) + 40); \
+        *(unaligned_u64 *)((u8 *)(dst) + 48) = *(const unaligned_u64 *)((const u8 *)(src) + 48); \
+        *(unaligned_u64 *)((u8 *)(dst) + 56) = *(const unaligned_u64 *)((const u8 *)(src) + 56); \
+        *(unaligned_u64 *)((u8 *)(dst) + 64) = *(const unaligned_u64 *)((const u8 *)(src) + 64); \
+        *(unaligned_u64 *)((u8 *)(dst) + 72) = *(const unaligned_u64 *)((const u8 *)(src) + 72); \
+        *(unaligned_u64 *)((u8 *)(dst) + 80) = *(const unaligned_u64 *)((const u8 *)(src) + 80); \
+        *(unaligned_u64 *)((u8 *)(dst) + 88) = *(const unaligned_u64 *)((const u8 *)(src) + 88); \
+        *(unaligned_u64 *)((u8 *)(dst) + 76) = *(const unaligned_u64 *)((const u8 *)(src) + 76); \
+        *(unaligned_u64 *)((u8 *)(dst) + 84) = *(const unaligned_u64 *)((const u8 *)(src) + 84); \
+        *(unaligned_u64 *)((u8 *)(dst) + 92) = *(const unaligned_u64 *)((const u8 *)(src) + 92); \
+        *(unaligned_u64 *)((u8 *)(dst) + 100) = *(const unaligned_u64 *)((const u8 *)(src) + 100); \
+        break; \
+    } \
+    case 109: { \
+        *(unaligned_u64 *)((u8 *)(dst) + 0) = *(const unaligned_u64 *)((const u8 *)(src) + 0); \
+        *(unaligned_u64 *)((u8 *)(dst) + 8) = *(const unaligned_u64 *)((const u8 *)(src) + 8); \
+        *(unaligned_u64 *)((u8 *)(dst) + 16) = *(const unaligned_u64 *)((const u8 *)(src) + 16); \
+        *(unaligned_u64 *)((u8 *)(dst) + 24) = *(const unaligned_u64 *)((const u8 *)(src) + 24); \
+        *(unaligned_u64 *)((u8 *)(dst) + 32) = *(const unaligned_u64 *)((const u8 *)(src) + 32); \
+        *(unaligned_u64 *)((u8 *)(dst) + 40) = *(const unaligned_u64 *)((const u8 *)(src) + 40); \
+        *(unaligned_u64 *)((u8 *)(dst) + 48) = *(const unaligned_u64 *)((const u8 *)(src) + 48); \
+        *(unaligned_u64 *)((u8 *)(dst) + 56) = *(const unaligned_u64 *)((const u8 *)(src) + 56); \
+        *(unaligned_u64 *)((u8 *)(dst) + 64) = *(const unaligned_u64 *)((const u8 *)(src) + 64); \
+        *(unaligned_u64 *)((u8 *)(dst) + 72) = *(const unaligned_u64 *)((const u8 *)(src) + 72); \
+        *(unaligned_u64 *)((u8 *)(dst) + 80) = *(const unaligned_u64 *)((const u8 *)(src) + 80); \
+        *(unaligned_u64 *)((u8 *)(dst) + 88) = *(const unaligned_u64 *)((const u8 *)(src) + 88); \
+        *(unaligned_u64 *)((u8 *)(dst) + 77) = *(const unaligned_u64 *)((const u8 *)(src) + 77); \
+        *(unaligned_u64 *)((u8 *)(dst) + 85) = *(const unaligned_u64 *)((const u8 *)(src) + 85); \
+        *(unaligned_u64 *)((u8 *)(dst) + 93) = *(const unaligned_u64 *)((const u8 *)(src) + 93); \
+        *(unaligned_u64 *)((u8 *)(dst) + 101) = *(const unaligned_u64 *)((const u8 *)(src) + 101); \
+        break; \
+    } \
+    case 110: { \
+        *(unaligned_u64 *)((u8 *)(dst) + 0) = *(const unaligned_u64 *)((const u8 *)(src) + 0); \
+        *(unaligned_u64 *)((u8 *)(dst) + 8) = *(const unaligned_u64 *)((const u8 *)(src) + 8); \
+        *(unaligned_u64 *)((u8 *)(dst) + 16) = *(const unaligned_u64 *)((const u8 *)(src) + 16); \
+        *(unaligned_u64 *)((u8 *)(dst) + 24) = *(const unaligned_u64 *)((const u8 *)(src) + 24); \
+        *(unaligned_u64 *)((u8 *)(dst) + 32) = *(const unaligned_u64 *)((const u8 *)(src) + 32); \
+        *(unaligned_u64 *)((u8 *)(dst) + 40) = *(const unaligned_u64 *)((const u8 *)(src) + 40); \
+        *(unaligned_u64 *)((u8 *)(dst) + 48) = *(const unaligned_u64 *)((const u8 *)(src) + 48); \
+        *(unaligned_u64 *)((u8 *)(dst) + 56) = *(const unaligned_u64 *)((const u8 *)(src) + 56); \
+        *(unaligned_u64 *)((u8 *)(dst) + 64) = *(const unaligned_u64 *)((const u8 *)(src) + 64); \
+        *(unaligned_u64 *)((u8 *)(dst) + 72) = *(const unaligned_u64 *)((const u8 *)(src) + 72); \
+        *(unaligned_u64 *)((u8 *)(dst) + 80) = *(const unaligned_u64 *)((const u8 *)(src) + 80); \
+        *(unaligned_u64 *)((u8 *)(dst) + 88) = *(const unaligned_u64 *)((const u8 *)(src) + 88); \
+        *(unaligned_u64 *)((u8 *)(dst) + 78) = *(const unaligned_u64 *)((const u8 *)(src) + 78); \
+        *(unaligned_u64 *)((u8 *)(dst) + 86) = *(const unaligned_u64 *)((const u8 *)(src) + 86); \
+        *(unaligned_u64 *)((u8 *)(dst) + 94) = *(const unaligned_u64 *)((const u8 *)(src) + 94); \
+        *(unaligned_u64 *)((u8 *)(dst) + 102) = *(const unaligned_u64 *)((const u8 *)(src) + 102); \
+        break; \
+    } \
+    case 111: { \
+        *(unaligned_u64 *)((u8 *)(dst) + 0) = *(const unaligned_u64 *)((const u8 *)(src) + 0); \
+        *(unaligned_u64 *)((u8 *)(dst) + 8) = *(const unaligned_u64 *)((const u8 *)(src) + 8); \
+        *(unaligned_u64 *)((u8 *)(dst) + 16) = *(const unaligned_u64 *)((const u8 *)(src) + 16); \
+        *(unaligned_u64 *)((u8 *)(dst) + 24) = *(const unaligned_u64 *)((const u8 *)(src) + 24); \
+        *(unaligned_u64 *)((u8 *)(dst) + 32) = *(const unaligned_u64 *)((const u8 *)(src) + 32); \
+        *(unaligned_u64 *)((u8 *)(dst) + 40) = *(const unaligned_u64 *)((const u8 *)(src) + 40); \
+        *(unaligned_u64 *)((u8 *)(dst) + 48) = *(const unaligned_u64 *)((const u8 *)(src) + 48); \
+        *(unaligned_u64 *)((u8 *)(dst) + 56) = *(const unaligned_u64 *)((const u8 *)(src) + 56); \
+        *(unaligned_u64 *)((u8 *)(dst) + 64) = *(const unaligned_u64 *)((const u8 *)(src) + 64); \
+        *(unaligned_u64 *)((u8 *)(dst) + 72) = *(const unaligned_u64 *)((const u8 *)(src) + 72); \
+        *(unaligned_u64 *)((u8 *)(dst) + 80) = *(const unaligned_u64 *)((const u8 *)(src) + 80); \
+        *(unaligned_u64 *)((u8 *)(dst) + 88) = *(const unaligned_u64 *)((const u8 *)(src) + 88); \
+        *(unaligned_u64 *)((u8 *)(dst) + 79) = *(const unaligned_u64 *)((const u8 *)(src) + 79); \
+        *(unaligned_u64 *)((u8 *)(dst) + 87) = *(const unaligned_u64 *)((const u8 *)(src) + 87); \
+        *(unaligned_u64 *)((u8 *)(dst) + 95) = *(const unaligned_u64 *)((const u8 *)(src) + 95); \
+        *(unaligned_u64 *)((u8 *)(dst) + 103) = *(const unaligned_u64 *)((const u8 *)(src) + 103); \
+        break; \
+    } \
+    case 112: { \
+        *(unaligned_u64 *)((u8 *)(dst) + 0) = *(const unaligned_u64 *)((const u8 *)(src) + 0); \
+        *(unaligned_u64 *)((u8 *)(dst) + 8) = *(const unaligned_u64 *)((const u8 *)(src) + 8); \
+        *(unaligned_u64 *)((u8 *)(dst) + 16) = *(const unaligned_u64 *)((const u8 *)(src) + 16); \
+        *(unaligned_u64 *)((u8 *)(dst) + 24) = *(const unaligned_u64 *)((const u8 *)(src) + 24); \
+        *(unaligned_u64 *)((u8 *)(dst) + 32) = *(const unaligned_u64 *)((const u8 *)(src) + 32); \
+        *(unaligned_u64 *)((u8 *)(dst) + 40) = *(const unaligned_u64 *)((const u8 *)(src) + 40); \
+        *(unaligned_u64 *)((u8 *)(dst) + 48) = *(const unaligned_u64 *)((const u8 *)(src) + 48); \
+        *(unaligned_u64 *)((u8 *)(dst) + 56) = *(const unaligned_u64 *)((const u8 *)(src) + 56); \
+        *(unaligned_u64 *)((u8 *)(dst) + 64) = *(const unaligned_u64 *)((const u8 *)(src) + 64); \
+        *(unaligned_u64 *)((u8 *)(dst) + 72) = *(const unaligned_u64 *)((const u8 *)(src) + 72); \
+        *(unaligned_u64 *)((u8 *)(dst) + 80) = *(const unaligned_u64 *)((const u8 *)(src) + 80); \
+        *(unaligned_u64 *)((u8 *)(dst) + 88) = *(const unaligned_u64 *)((const u8 *)(src) + 88); \
+        *(unaligned_u64 *)((u8 *)(dst) + 80) = *(const unaligned_u64 *)((const u8 *)(src) + 80); \
+        *(unaligned_u64 *)((u8 *)(dst) + 88) = *(const unaligned_u64 *)((const u8 *)(src) + 88); \
+        *(unaligned_u64 *)((u8 *)(dst) + 96) = *(const unaligned_u64 *)((const u8 *)(src) + 96); \
+        *(unaligned_u64 *)((u8 *)(dst) + 104) = *(const unaligned_u64 *)((const u8 *)(src) + 104); \
+        break; \
+    } \
+    case 113: { \
+        *(unaligned_u64 *)((u8 *)(dst) + 0) = *(const unaligned_u64 *)((const u8 *)(src) + 0); \
+        *(unaligned_u64 *)((u8 *)(dst) + 8) = *(const unaligned_u64 *)((const u8 *)(src) + 8); \
+        *(unaligned_u64 *)((u8 *)(dst) + 16) = *(const unaligned_u64 *)((const u8 *)(src) + 16); \
+        *(unaligned_u64 *)((u8 *)(dst) + 24) = *(const unaligned_u64 *)((const u8 *)(src) + 24); \
+        *(unaligned_u64 *)((u8 *)(dst) + 32) = *(const unaligned_u64 *)((const u8 *)(src) + 32); \
+        *(unaligned_u64 *)((u8 *)(dst) + 40) = *(const unaligned_u64 *)((const u8 *)(src) + 40); \
+        *(unaligned_u64 *)((u8 *)(dst) + 48) = *(const unaligned_u64 *)((const u8 *)(src) + 48); \
+        *(unaligned_u64 *)((u8 *)(dst) + 56) = *(const unaligned_u64 *)((const u8 *)(src) + 56); \
+        *(unaligned_u64 *)((u8 *)(dst) + 64) = *(const unaligned_u64 *)((const u8 *)(src) + 64); \
+        *(unaligned_u64 *)((u8 *)(dst) + 72) = *(const unaligned_u64 *)((const u8 *)(src) + 72); \
+        *(unaligned_u64 *)((u8 *)(dst) + 80) = *(const unaligned_u64 *)((const u8 *)(src) + 80); \
+        *(unaligned_u64 *)((u8 *)(dst) + 88) = *(const unaligned_u64 *)((const u8 *)(src) + 88); \
+        *(unaligned_u64 *)((u8 *)(dst) + 81) = *(const unaligned_u64 *)((const u8 *)(src) + 81); \
+        *(unaligned_u64 *)((u8 *)(dst) + 89) = *(const unaligned_u64 *)((const u8 *)(src) + 89); \
+        *(unaligned_u64 *)((u8 *)(dst) + 97) = *(const unaligned_u64 *)((const u8 *)(src) + 97); \
+        *(unaligned_u64 *)((u8 *)(dst) + 105) = *(const unaligned_u64 *)((const u8 *)(src) + 105); \
+        break; \
+    } \
+    case 114: { \
+        *(unaligned_u64 *)((u8 *)(dst) + 0) = *(const unaligned_u64 *)((const u8 *)(src) + 0); \
+        *(unaligned_u64 *)((u8 *)(dst) + 8) = *(const unaligned_u64 *)((const u8 *)(src) + 8); \
+        *(unaligned_u64 *)((u8 *)(dst) + 16) = *(const unaligned_u64 *)((const u8 *)(src) + 16); \
+        *(unaligned_u64 *)((u8 *)(dst) + 24) = *(const unaligned_u64 *)((const u8 *)(src) + 24); \
+        *(unaligned_u64 *)((u8 *)(dst) + 32) = *(const unaligned_u64 *)((const u8 *)(src) + 32); \
+        *(unaligned_u64 *)((u8 *)(dst) + 40) = *(const unaligned_u64 *)((const u8 *)(src) + 40); \
+        *(unaligned_u64 *)((u8 *)(dst) + 48) = *(const unaligned_u64 *)((const u8 *)(src) + 48); \
+        *(unaligned_u64 *)((u8 *)(dst) + 56) = *(const unaligned_u64 *)((const u8 *)(src) + 56); \
+        *(unaligned_u64 *)((u8 *)(dst) + 64) = *(const unaligned_u64 *)((const u8 *)(src) + 64); \
+        *(unaligned_u64 *)((u8 *)(dst) + 72) = *(const unaligned_u64 *)((const u8 *)(src) + 72); \
+        *(unaligned_u64 *)((u8 *)(dst) + 80) = *(const unaligned_u64 *)((const u8 *)(src) + 80); \
+        *(unaligned_u64 *)((u8 *)(dst) + 88) = *(const unaligned_u64 *)((const u8 *)(src) + 88); \
+        *(unaligned_u64 *)((u8 *)(dst) + 82) = *(const unaligned_u64 *)((const u8 *)(src) + 82); \
+        *(unaligned_u64 *)((u8 *)(dst) + 90) = *(const unaligned_u64 *)((const u8 *)(src) + 90); \
+        *(unaligned_u64 *)((u8 *)(dst) + 98) = *(const unaligned_u64 *)((const u8 *)(src) + 98); \
+        *(unaligned_u64 *)((u8 *)(dst) + 106) = *(const unaligned_u64 *)((const u8 *)(src) + 106); \
+        break; \
+    } \
+    case 115: { \
+        *(unaligned_u64 *)((u8 *)(dst) + 0) = *(const unaligned_u64 *)((const u8 *)(src) + 0); \
+        *(unaligned_u64 *)((u8 *)(dst) + 8) = *(const unaligned_u64 *)((const u8 *)(src) + 8); \
+        *(unaligned_u64 *)((u8 *)(dst) + 16) = *(const unaligned_u64 *)((const u8 *)(src) + 16); \
+        *(unaligned_u64 *)((u8 *)(dst) + 24) = *(const unaligned_u64 *)((const u8 *)(src) + 24); \
+        *(unaligned_u64 *)((u8 *)(dst) + 32) = *(const unaligned_u64 *)((const u8 *)(src) + 32); \
+        *(unaligned_u64 *)((u8 *)(dst) + 40) = *(const unaligned_u64 *)((const u8 *)(src) + 40); \
+        *(unaligned_u64 *)((u8 *)(dst) + 48) = *(const unaligned_u64 *)((const u8 *)(src) + 48); \
+        *(unaligned_u64 *)((u8 *)(dst) + 56) = *(const unaligned_u64 *)((const u8 *)(src) + 56); \
+        *(unaligned_u64 *)((u8 *)(dst) + 64) = *(const unaligned_u64 *)((const u8 *)(src) + 64); \
+        *(unaligned_u64 *)((u8 *)(dst) + 72) = *(const unaligned_u64 *)((const u8 *)(src) + 72); \
+        *(unaligned_u64 *)((u8 *)(dst) + 80) = *(const unaligned_u64 *)((const u8 *)(src) + 80); \
+        *(unaligned_u64 *)((u8 *)(dst) + 88) = *(const unaligned_u64 *)((const u8 *)(src) + 88); \
+        *(unaligned_u64 *)((u8 *)(dst) + 83) = *(const unaligned_u64 *)((const u8 *)(src) + 83); \
+        *(unaligned_u64 *)((u8 *)(dst) + 91) = *(const unaligned_u64 *)((const u8 *)(src) + 91); \
+        *(unaligned_u64 *)((u8 *)(dst) + 99) = *(const unaligned_u64 *)((const u8 *)(src) + 99); \
+        *(unaligned_u64 *)((u8 *)(dst) + 107) = *(const unaligned_u64 *)((const u8 *)(src) + 107); \
+        break; \
+    } \
+    case 116: { \
+        *(unaligned_u64 *)((u8 *)(dst) + 0) = *(const unaligned_u64 *)((const u8 *)(src) + 0); \
+        *(unaligned_u64 *)((u8 *)(dst) + 8) = *(const unaligned_u64 *)((const u8 *)(src) + 8); \
+        *(unaligned_u64 *)((u8 *)(dst) + 16) = *(const unaligned_u64 *)((const u8 *)(src) + 16); \
+        *(unaligned_u64 *)((u8 *)(dst) + 24) = *(const unaligned_u64 *)((const u8 *)(src) + 24); \
+        *(unaligned_u64 *)((u8 *)(dst) + 32) = *(const unaligned_u64 *)((const u8 *)(src) + 32); \
+        *(unaligned_u64 *)((u8 *)(dst) + 40) = *(const unaligned_u64 *)((const u8 *)(src) + 40); \
+        *(unaligned_u64 *)((u8 *)(dst) + 48) = *(const unaligned_u64 *)((const u8 *)(src) + 48); \
+        *(unaligned_u64 *)((u8 *)(dst) + 56) = *(const unaligned_u64 *)((const u8 *)(src) + 56); \
+        *(unaligned_u64 *)((u8 *)(dst) + 64) = *(const unaligned_u64 *)((const u8 *)(src) + 64); \
+        *(unaligned_u64 *)((u8 *)(dst) + 72) = *(const unaligned_u64 *)((const u8 *)(src) + 72); \
+        *(unaligned_u64 *)((u8 *)(dst) + 80) = *(const unaligned_u64 *)((const u8 *)(src) + 80); \
+        *(unaligned_u64 *)((u8 *)(dst) + 88) = *(const unaligned_u64 *)((const u8 *)(src) + 88); \
+        *(unaligned_u64 *)((u8 *)(dst) + 84) = *(const unaligned_u64 *)((const u8 *)(src) + 84); \
+        *(unaligned_u64 *)((u8 *)(dst) + 92) = *(const unaligned_u64 *)((const u8 *)(src) + 92); \
+        *(unaligned_u64 *)((u8 *)(dst) + 100) = *(const unaligned_u64 *)((const u8 *)(src) + 100); \
+        *(unaligned_u64 *)((u8 *)(dst) + 108) = *(const unaligned_u64 *)((const u8 *)(src) + 108); \
+        break; \
+    } \
+    case 117: { \
+        *(unaligned_u64 *)((u8 *)(dst) + 0) = *(const unaligned_u64 *)((const u8 *)(src) + 0); \
+        *(unaligned_u64 *)((u8 *)(dst) + 8) = *(const unaligned_u64 *)((const u8 *)(src) + 8); \
+        *(unaligned_u64 *)((u8 *)(dst) + 16) = *(const unaligned_u64 *)((const u8 *)(src) + 16); \
+        *(unaligned_u64 *)((u8 *)(dst) + 24) = *(const unaligned_u64 *)((const u8 *)(src) + 24); \
+        *(unaligned_u64 *)((u8 *)(dst) + 32) = *(const unaligned_u64 *)((const u8 *)(src) + 32); \
+        *(unaligned_u64 *)((u8 *)(dst) + 40) = *(const unaligned_u64 *)((const u8 *)(src) + 40); \
+        *(unaligned_u64 *)((u8 *)(dst) + 48) = *(const unaligned_u64 *)((const u8 *)(src) + 48); \
+        *(unaligned_u64 *)((u8 *)(dst) + 56) = *(const unaligned_u64 *)((const u8 *)(src) + 56); \
+        *(unaligned_u64 *)((u8 *)(dst) + 64) = *(const unaligned_u64 *)((const u8 *)(src) + 64); \
+        *(unaligned_u64 *)((u8 *)(dst) + 72) = *(const unaligned_u64 *)((const u8 *)(src) + 72); \
+        *(unaligned_u64 *)((u8 *)(dst) + 80) = *(const unaligned_u64 *)((const u8 *)(src) + 80); \
+        *(unaligned_u64 *)((u8 *)(dst) + 88) = *(const unaligned_u64 *)((const u8 *)(src) + 88); \
+        *(unaligned_u64 *)((u8 *)(dst) + 85) = *(const unaligned_u64 *)((const u8 *)(src) + 85); \
+        *(unaligned_u64 *)((u8 *)(dst) + 93) = *(const unaligned_u64 *)((const u8 *)(src) + 93); \
+        *(unaligned_u64 *)((u8 *)(dst) + 101) = *(const unaligned_u64 *)((const u8 *)(src) + 101); \
+        *(unaligned_u64 *)((u8 *)(dst) + 109) = *(const unaligned_u64 *)((const u8 *)(src) + 109); \
+        break; \
+    } \
+    case 118: { \
+        *(unaligned_u64 *)((u8 *)(dst) + 0) = *(const unaligned_u64 *)((const u8 *)(src) + 0); \
+        *(unaligned_u64 *)((u8 *)(dst) + 8) = *(const unaligned_u64 *)((const u8 *)(src) + 8); \
+        *(unaligned_u64 *)((u8 *)(dst) + 16) = *(const unaligned_u64 *)((const u8 *)(src) + 16); \
+        *(unaligned_u64 *)((u8 *)(dst) + 24) = *(const unaligned_u64 *)((const u8 *)(src) + 24); \
+        *(unaligned_u64 *)((u8 *)(dst) + 32) = *(const unaligned_u64 *)((const u8 *)(src) + 32); \
+        *(unaligned_u64 *)((u8 *)(dst) + 40) = *(const unaligned_u64 *)((const u8 *)(src) + 40); \
+        *(unaligned_u64 *)((u8 *)(dst) + 48) = *(const unaligned_u64 *)((const u8 *)(src) + 48); \
+        *(unaligned_u64 *)((u8 *)(dst) + 56) = *(const unaligned_u64 *)((const u8 *)(src) + 56); \
+        *(unaligned_u64 *)((u8 *)(dst) + 64) = *(const unaligned_u64 *)((const u8 *)(src) + 64); \
+        *(unaligned_u64 *)((u8 *)(dst) + 72) = *(const unaligned_u64 *)((const u8 *)(src) + 72); \
+        *(unaligned_u64 *)((u8 *)(dst) + 80) = *(const unaligned_u64 *)((const u8 *)(src) + 80); \
+        *(unaligned_u64 *)((u8 *)(dst) + 88) = *(const unaligned_u64 *)((const u8 *)(src) + 88); \
+        *(unaligned_u64 *)((u8 *)(dst) + 86) = *(const unaligned_u64 *)((const u8 *)(src) + 86); \
+        *(unaligned_u64 *)((u8 *)(dst) + 94) = *(const unaligned_u64 *)((const u8 *)(src) + 94); \
+        *(unaligned_u64 *)((u8 *)(dst) + 102) = *(const unaligned_u64 *)((const u8 *)(src) + 102); \
+        *(unaligned_u64 *)((u8 *)(dst) + 110) = *(const unaligned_u64 *)((const u8 *)(src) + 110); \
+        break; \
+    } \
+    case 119: { \
+        *(unaligned_u64 *)((u8 *)(dst) + 0) = *(const unaligned_u64 *)((const u8 *)(src) + 0); \
+        *(unaligned_u64 *)((u8 *)(dst) + 8) = *(const unaligned_u64 *)((const u8 *)(src) + 8); \
+        *(unaligned_u64 *)((u8 *)(dst) + 16) = *(const unaligned_u64 *)((const u8 *)(src) + 16); \
+        *(unaligned_u64 *)((u8 *)(dst) + 24) = *(const unaligned_u64 *)((const u8 *)(src) + 24); \
+        *(unaligned_u64 *)((u8 *)(dst) + 32) = *(const unaligned_u64 *)((const u8 *)(src) + 32); \
+        *(unaligned_u64 *)((u8 *)(dst) + 40) = *(const unaligned_u64 *)((const u8 *)(src) + 40); \
+        *(unaligned_u64 *)((u8 *)(dst) + 48) = *(const unaligned_u64 *)((const u8 *)(src) + 48); \
+        *(unaligned_u64 *)((u8 *)(dst) + 56) = *(const unaligned_u64 *)((const u8 *)(src) + 56); \
+        *(unaligned_u64 *)((u8 *)(dst) + 64) = *(const unaligned_u64 *)((const u8 *)(src) + 64); \
+        *(unaligned_u64 *)((u8 *)(dst) + 72) = *(const unaligned_u64 *)((const u8 *)(src) + 72); \
+        *(unaligned_u64 *)((u8 *)(dst) + 80) = *(const unaligned_u64 *)((const u8 *)(src) + 80); \
+        *(unaligned_u64 *)((u8 *)(dst) + 88) = *(const unaligned_u64 *)((const u8 *)(src) + 88); \
+        *(unaligned_u64 *)((u8 *)(dst) + 87) = *(const unaligned_u64 *)((const u8 *)(src) + 87); \
+        *(unaligned_u64 *)((u8 *)(dst) + 95) = *(const unaligned_u64 *)((const u8 *)(src) + 95); \
+        *(unaligned_u64 *)((u8 *)(dst) + 103) = *(const unaligned_u64 *)((const u8 *)(src) + 103); \
+        *(unaligned_u64 *)((u8 *)(dst) + 111) = *(const unaligned_u64 *)((const u8 *)(src) + 111); \
+        break; \
+    } \
+    case 120: { \
+        *(unaligned_u64 *)((u8 *)(dst) + 0) = *(const unaligned_u64 *)((const u8 *)(src) + 0); \
+        *(unaligned_u64 *)((u8 *)(dst) + 8) = *(const unaligned_u64 *)((const u8 *)(src) + 8); \
+        *(unaligned_u64 *)((u8 *)(dst) + 16) = *(const unaligned_u64 *)((const u8 *)(src) + 16); \
+        *(unaligned_u64 *)((u8 *)(dst) + 24) = *(const unaligned_u64 *)((const u8 *)(src) + 24); \
+        *(unaligned_u64 *)((u8 *)(dst) + 32) = *(const unaligned_u64 *)((const u8 *)(src) + 32); \
+        *(unaligned_u64 *)((u8 *)(dst) + 40) = *(const unaligned_u64 *)((const u8 *)(src) + 40); \
+        *(unaligned_u64 *)((u8 *)(dst) + 48) = *(const unaligned_u64 *)((const u8 *)(src) + 48); \
+        *(unaligned_u64 *)((u8 *)(dst) + 56) = *(const unaligned_u64 *)((const u8 *)(src) + 56); \
+        *(unaligned_u64 *)((u8 *)(dst) + 64) = *(const unaligned_u64 *)((const u8 *)(src) + 64); \
+        *(unaligned_u64 *)((u8 *)(dst) + 72) = *(const unaligned_u64 *)((const u8 *)(src) + 72); \
+        *(unaligned_u64 *)((u8 *)(dst) + 80) = *(const unaligned_u64 *)((const u8 *)(src) + 80); \
+        *(unaligned_u64 *)((u8 *)(dst) + 88) = *(const unaligned_u64 *)((const u8 *)(src) + 88); \
+        *(unaligned_u64 *)((u8 *)(dst) + 88) = *(const unaligned_u64 *)((const u8 *)(src) + 88); \
+        *(unaligned_u64 *)((u8 *)(dst) + 96) = *(const unaligned_u64 *)((const u8 *)(src) + 96); \
+        *(unaligned_u64 *)((u8 *)(dst) + 104) = *(const unaligned_u64 *)((const u8 *)(src) + 104); \
+        *(unaligned_u64 *)((u8 *)(dst) + 112) = *(const unaligned_u64 *)((const u8 *)(src) + 112); \
+        break; \
+    } \
+    case 121: { \
+        *(unaligned_u64 *)((u8 *)(dst) + 0) = *(const unaligned_u64 *)((const u8 *)(src) + 0); \
+        *(unaligned_u64 *)((u8 *)(dst) + 8) = *(const unaligned_u64 *)((const u8 *)(src) + 8); \
+        *(unaligned_u64 *)((u8 *)(dst) + 16) = *(const unaligned_u64 *)((const u8 *)(src) + 16); \
+        *(unaligned_u64 *)((u8 *)(dst) + 24) = *(const unaligned_u64 *)((const u8 *)(src) + 24); \
+        *(unaligned_u64 *)((u8 *)(dst) + 32) = *(const unaligned_u64 *)((const u8 *)(src) + 32); \
+        *(unaligned_u64 *)((u8 *)(dst) + 40) = *(const unaligned_u64 *)((const u8 *)(src) + 40); \
+        *(unaligned_u64 *)((u8 *)(dst) + 48) = *(const unaligned_u64 *)((const u8 *)(src) + 48); \
+        *(unaligned_u64 *)((u8 *)(dst) + 56) = *(const unaligned_u64 *)((const u8 *)(src) + 56); \
+        *(unaligned_u64 *)((u8 *)(dst) + 64) = *(const unaligned_u64 *)((const u8 *)(src) + 64); \
+        *(unaligned_u64 *)((u8 *)(dst) + 72) = *(const unaligned_u64 *)((const u8 *)(src) + 72); \
+        *(unaligned_u64 *)((u8 *)(dst) + 80) = *(const unaligned_u64 *)((const u8 *)(src) + 80); \
+        *(unaligned_u64 *)((u8 *)(dst) + 88) = *(const unaligned_u64 *)((const u8 *)(src) + 88); \
+        *(unaligned_u64 *)((u8 *)(dst) + 89) = *(const unaligned_u64 *)((const u8 *)(src) + 89); \
+        *(unaligned_u64 *)((u8 *)(dst) + 97) = *(const unaligned_u64 *)((const u8 *)(src) + 97); \
+        *(unaligned_u64 *)((u8 *)(dst) + 105) = *(const unaligned_u64 *)((const u8 *)(src) + 105); \
+        *(unaligned_u64 *)((u8 *)(dst) + 113) = *(const unaligned_u64 *)((const u8 *)(src) + 113); \
+        break; \
+    } \
+    case 122: { \
+        *(unaligned_u64 *)((u8 *)(dst) + 0) = *(const unaligned_u64 *)((const u8 *)(src) + 0); \
+        *(unaligned_u64 *)((u8 *)(dst) + 8) = *(const unaligned_u64 *)((const u8 *)(src) + 8); \
+        *(unaligned_u64 *)((u8 *)(dst) + 16) = *(const unaligned_u64 *)((const u8 *)(src) + 16); \
+        *(unaligned_u64 *)((u8 *)(dst) + 24) = *(const unaligned_u64 *)((const u8 *)(src) + 24); \
+        *(unaligned_u64 *)((u8 *)(dst) + 32) = *(const unaligned_u64 *)((const u8 *)(src) + 32); \
+        *(unaligned_u64 *)((u8 *)(dst) + 40) = *(const unaligned_u64 *)((const u8 *)(src) + 40); \
+        *(unaligned_u64 *)((u8 *)(dst) + 48) = *(const unaligned_u64 *)((const u8 *)(src) + 48); \
+        *(unaligned_u64 *)((u8 *)(dst) + 56) = *(const unaligned_u64 *)((const u8 *)(src) + 56); \
+        *(unaligned_u64 *)((u8 *)(dst) + 64) = *(const unaligned_u64 *)((const u8 *)(src) + 64); \
+        *(unaligned_u64 *)((u8 *)(dst) + 72) = *(const unaligned_u64 *)((const u8 *)(src) + 72); \
+        *(unaligned_u64 *)((u8 *)(dst) + 80) = *(const unaligned_u64 *)((const u8 *)(src) + 80); \
+        *(unaligned_u64 *)((u8 *)(dst) + 88) = *(const unaligned_u64 *)((const u8 *)(src) + 88); \
+        *(unaligned_u64 *)((u8 *)(dst) + 90) = *(const unaligned_u64 *)((const u8 *)(src) + 90); \
+        *(unaligned_u64 *)((u8 *)(dst) + 98) = *(const unaligned_u64 *)((const u8 *)(src) + 98); \
+        *(unaligned_u64 *)((u8 *)(dst) + 106) = *(const unaligned_u64 *)((const u8 *)(src) + 106); \
+        *(unaligned_u64 *)((u8 *)(dst) + 114) = *(const unaligned_u64 *)((const u8 *)(src) + 114); \
+        break; \
+    } \
+    case 123: { \
+        *(unaligned_u64 *)((u8 *)(dst) + 0) = *(const unaligned_u64 *)((const u8 *)(src) + 0); \
+        *(unaligned_u64 *)((u8 *)(dst) + 8) = *(const unaligned_u64 *)((const u8 *)(src) + 8); \
+        *(unaligned_u64 *)((u8 *)(dst) + 16) = *(const unaligned_u64 *)((const u8 *)(src) + 16); \
+        *(unaligned_u64 *)((u8 *)(dst) + 24) = *(const unaligned_u64 *)((const u8 *)(src) + 24); \
+        *(unaligned_u64 *)((u8 *)(dst) + 32) = *(const unaligned_u64 *)((const u8 *)(src) + 32); \
+        *(unaligned_u64 *)((u8 *)(dst) + 40) = *(const unaligned_u64 *)((const u8 *)(src) + 40); \
+        *(unaligned_u64 *)((u8 *)(dst) + 48) = *(const unaligned_u64 *)((const u8 *)(src) + 48); \
+        *(unaligned_u64 *)((u8 *)(dst) + 56) = *(const unaligned_u64 *)((const u8 *)(src) + 56); \
+        *(unaligned_u64 *)((u8 *)(dst) + 64) = *(const unaligned_u64 *)((const u8 *)(src) + 64); \
+        *(unaligned_u64 *)((u8 *)(dst) + 72) = *(const unaligned_u64 *)((const u8 *)(src) + 72); \
+        *(unaligned_u64 *)((u8 *)(dst) + 80) = *(const unaligned_u64 *)((const u8 *)(src) + 80); \
+        *(unaligned_u64 *)((u8 *)(dst) + 88) = *(const unaligned_u64 *)((const u8 *)(src) + 88); \
+        *(unaligned_u64 *)((u8 *)(dst) + 91) = *(const unaligned_u64 *)((const u8 *)(src) + 91); \
+        *(unaligned_u64 *)((u8 *)(dst) + 99) = *(const unaligned_u64 *)((const u8 *)(src) + 99); \
+        *(unaligned_u64 *)((u8 *)(dst) + 107) = *(const unaligned_u64 *)((const u8 *)(src) + 107); \
+        *(unaligned_u64 *)((u8 *)(dst) + 115) = *(const unaligned_u64 *)((const u8 *)(src) + 115); \
+        break; \
+    } \
+    case 124: { \
+        *(unaligned_u64 *)((u8 *)(dst) + 0) = *(const unaligned_u64 *)((const u8 *)(src) + 0); \
+        *(unaligned_u64 *)((u8 *)(dst) + 8) = *(const unaligned_u64 *)((const u8 *)(src) + 8); \
+        *(unaligned_u64 *)((u8 *)(dst) + 16) = *(const unaligned_u64 *)((const u8 *)(src) + 16); \
+        *(unaligned_u64 *)((u8 *)(dst) + 24) = *(const unaligned_u64 *)((const u8 *)(src) + 24); \
+        *(unaligned_u64 *)((u8 *)(dst) + 32) = *(const unaligned_u64 *)((const u8 *)(src) + 32); \
+        *(unaligned_u64 *)((u8 *)(dst) + 40) = *(const unaligned_u64 *)((const u8 *)(src) + 40); \
+        *(unaligned_u64 *)((u8 *)(dst) + 48) = *(const unaligned_u64 *)((const u8 *)(src) + 48); \
+        *(unaligned_u64 *)((u8 *)(dst) + 56) = *(const unaligned_u64 *)((const u8 *)(src) + 56); \
+        *(unaligned_u64 *)((u8 *)(dst) + 64) = *(const unaligned_u64 *)((const u8 *)(src) + 64); \
+        *(unaligned_u64 *)((u8 *)(dst) + 72) = *(const unaligned_u64 *)((const u8 *)(src) + 72); \
+        *(unaligned_u64 *)((u8 *)(dst) + 80) = *(const unaligned_u64 *)((const u8 *)(src) + 80); \
+        *(unaligned_u64 *)((u8 *)(dst) + 88) = *(const unaligned_u64 *)((const u8 *)(src) + 88); \
+        *(unaligned_u64 *)((u8 *)(dst) + 92) = *(const unaligned_u64 *)((const u8 *)(src) + 92); \
+        *(unaligned_u64 *)((u8 *)(dst) + 100) = *(const unaligned_u64 *)((const u8 *)(src) + 100); \
+        *(unaligned_u64 *)((u8 *)(dst) + 108) = *(const unaligned_u64 *)((const u8 *)(src) + 108); \
+        *(unaligned_u64 *)((u8 *)(dst) + 116) = *(const unaligned_u64 *)((const u8 *)(src) + 116); \
+        break; \
+    } \
+    case 125: { \
+        *(unaligned_u64 *)((u8 *)(dst) + 0) = *(const unaligned_u64 *)((const u8 *)(src) + 0); \
+        *(unaligned_u64 *)((u8 *)(dst) + 8) = *(const unaligned_u64 *)((const u8 *)(src) + 8); \
+        *(unaligned_u64 *)((u8 *)(dst) + 16) = *(const unaligned_u64 *)((const u8 *)(src) + 16); \
+        *(unaligned_u64 *)((u8 *)(dst) + 24) = *(const unaligned_u64 *)((const u8 *)(src) + 24); \
+        *(unaligned_u64 *)((u8 *)(dst) + 32) = *(const unaligned_u64 *)((const u8 *)(src) + 32); \
+        *(unaligned_u64 *)((u8 *)(dst) + 40) = *(const unaligned_u64 *)((const u8 *)(src) + 40); \
+        *(unaligned_u64 *)((u8 *)(dst) + 48) = *(const unaligned_u64 *)((const u8 *)(src) + 48); \
+        *(unaligned_u64 *)((u8 *)(dst) + 56) = *(const unaligned_u64 *)((const u8 *)(src) + 56); \
+        *(unaligned_u64 *)((u8 *)(dst) + 64) = *(const unaligned_u64 *)((const u8 *)(src) + 64); \
+        *(unaligned_u64 *)((u8 *)(dst) + 72) = *(const unaligned_u64 *)((const u8 *)(src) + 72); \
+        *(unaligned_u64 *)((u8 *)(dst) + 80) = *(const unaligned_u64 *)((const u8 *)(src) + 80); \
+        *(unaligned_u64 *)((u8 *)(dst) + 88) = *(const unaligned_u64 *)((const u8 *)(src) + 88); \
+        *(unaligned_u64 *)((u8 *)(dst) + 93) = *(const unaligned_u64 *)((const u8 *)(src) + 93); \
+        *(unaligned_u64 *)((u8 *)(dst) + 101) = *(const unaligned_u64 *)((const u8 *)(src) + 101); \
+        *(unaligned_u64 *)((u8 *)(dst) + 109) = *(const unaligned_u64 *)((const u8 *)(src) + 109); \
+        *(unaligned_u64 *)((u8 *)(dst) + 117) = *(const unaligned_u64 *)((const u8 *)(src) + 117); \
+        break; \
+    } \
+    case 126: { \
+        *(unaligned_u64 *)((u8 *)(dst) + 0) = *(const unaligned_u64 *)((const u8 *)(src) + 0); \
+        *(unaligned_u64 *)((u8 *)(dst) + 8) = *(const unaligned_u64 *)((const u8 *)(src) + 8); \
+        *(unaligned_u64 *)((u8 *)(dst) + 16) = *(const unaligned_u64 *)((const u8 *)(src) + 16); \
+        *(unaligned_u64 *)((u8 *)(dst) + 24) = *(const unaligned_u64 *)((const u8 *)(src) + 24); \
+        *(unaligned_u64 *)((u8 *)(dst) + 32) = *(const unaligned_u64 *)((const u8 *)(src) + 32); \
+        *(unaligned_u64 *)((u8 *)(dst) + 40) = *(const unaligned_u64 *)((const u8 *)(src) + 40); \
+        *(unaligned_u64 *)((u8 *)(dst) + 48) = *(const unaligned_u64 *)((const u8 *)(src) + 48); \
+        *(unaligned_u64 *)((u8 *)(dst) + 56) = *(const unaligned_u64 *)((const u8 *)(src) + 56); \
+        *(unaligned_u64 *)((u8 *)(dst) + 64) = *(const unaligned_u64 *)((const u8 *)(src) + 64); \
+        *(unaligned_u64 *)((u8 *)(dst) + 72) = *(const unaligned_u64 *)((const u8 *)(src) + 72); \
+        *(unaligned_u64 *)((u8 *)(dst) + 80) = *(const unaligned_u64 *)((const u8 *)(src) + 80); \
+        *(unaligned_u64 *)((u8 *)(dst) + 88) = *(const unaligned_u64 *)((const u8 *)(src) + 88); \
+        *(unaligned_u64 *)((u8 *)(dst) + 94) = *(const unaligned_u64 *)((const u8 *)(src) + 94); \
+        *(unaligned_u64 *)((u8 *)(dst) + 102) = *(const unaligned_u64 *)((const u8 *)(src) + 102); \
+        *(unaligned_u64 *)((u8 *)(dst) + 110) = *(const unaligned_u64 *)((const u8 *)(src) + 110); \
+        *(unaligned_u64 *)((u8 *)(dst) + 118) = *(const unaligned_u64 *)((const u8 *)(src) + 118); \
+        break; \
+    } \
+    case 127: { \
+        *(unaligned_u64 *)((u8 *)(dst) + 0) = *(const unaligned_u64 *)((const u8 *)(src) + 0); \
+        *(unaligned_u64 *)((u8 *)(dst) + 8) = *(const unaligned_u64 *)((const u8 *)(src) + 8); \
+        *(unaligned_u64 *)((u8 *)(dst) + 16) = *(const unaligned_u64 *)((const u8 *)(src) + 16); \
+        *(unaligned_u64 *)((u8 *)(dst) + 24) = *(const unaligned_u64 *)((const u8 *)(src) + 24); \
+        *(unaligned_u64 *)((u8 *)(dst) + 32) = *(const unaligned_u64 *)((const u8 *)(src) + 32); \
+        *(unaligned_u64 *)((u8 *)(dst) + 40) = *(const unaligned_u64 *)((const u8 *)(src) + 40); \
+        *(unaligned_u64 *)((u8 *)(dst) + 48) = *(const unaligned_u64 *)((const u8 *)(src) + 48); \
+        *(unaligned_u64 *)((u8 *)(dst) + 56) = *(const unaligned_u64 *)((const u8 *)(src) + 56); \
+        *(unaligned_u64 *)((u8 *)(dst) + 64) = *(const unaligned_u64 *)((const u8 *)(src) + 64); \
+        *(unaligned_u64 *)((u8 *)(dst) + 72) = *(const unaligned_u64 *)((const u8 *)(src) + 72); \
+        *(unaligned_u64 *)((u8 *)(dst) + 80) = *(const unaligned_u64 *)((const u8 *)(src) + 80); \
+        *(unaligned_u64 *)((u8 *)(dst) + 88) = *(const unaligned_u64 *)((const u8 *)(src) + 88); \
+        *(unaligned_u64 *)((u8 *)(dst) + 95) = *(const unaligned_u64 *)((const u8 *)(src) + 95); \
+        *(unaligned_u64 *)((u8 *)(dst) + 103) = *(const unaligned_u64 *)((const u8 *)(src) + 103); \
+        *(unaligned_u64 *)((u8 *)(dst) + 111) = *(const unaligned_u64 *)((const u8 *)(src) + 111); \
+        *(unaligned_u64 *)((u8 *)(dst) + 119) = *(const unaligned_u64 *)((const u8 *)(src) + 119); \
+        break; \
+    } \
+    case 128: { \
+        *(unaligned_u64 *)((u8 *)(dst) + 0) = *(const unaligned_u64 *)((const u8 *)(src) + 0); \
+        *(unaligned_u64 *)((u8 *)(dst) + 8) = *(const unaligned_u64 *)((const u8 *)(src) + 8); \
+        *(unaligned_u64 *)((u8 *)(dst) + 16) = *(const unaligned_u64 *)((const u8 *)(src) + 16); \
+        *(unaligned_u64 *)((u8 *)(dst) + 24) = *(const unaligned_u64 *)((const u8 *)(src) + 24); \
+        *(unaligned_u64 *)((u8 *)(dst) + 32) = *(const unaligned_u64 *)((const u8 *)(src) + 32); \
+        *(unaligned_u64 *)((u8 *)(dst) + 40) = *(const unaligned_u64 *)((const u8 *)(src) + 40); \
+        *(unaligned_u64 *)((u8 *)(dst) + 48) = *(const unaligned_u64 *)((const u8 *)(src) + 48); \
+        *(unaligned_u64 *)((u8 *)(dst) + 56) = *(const unaligned_u64 *)((const u8 *)(src) + 56); \
+        *(unaligned_u64 *)((u8 *)(dst) + 64) = *(const unaligned_u64 *)((const u8 *)(src) + 64); \
+        *(unaligned_u64 *)((u8 *)(dst) + 72) = *(const unaligned_u64 *)((const u8 *)(src) + 72); \
+        *(unaligned_u64 *)((u8 *)(dst) + 80) = *(const unaligned_u64 *)((const u8 *)(src) + 80); \
+        *(unaligned_u64 *)((u8 *)(dst) + 88) = *(const unaligned_u64 *)((const u8 *)(src) + 88); \
+        *(unaligned_u64 *)((u8 *)(dst) + 96) = *(const unaligned_u64 *)((const u8 *)(src) + 96); \
+        *(unaligned_u64 *)((u8 *)(dst) + 104) = *(const unaligned_u64 *)((const u8 *)(src) + 104); \
+        *(unaligned_u64 *)((u8 *)(dst) + 112) = *(const unaligned_u64 *)((const u8 *)(src) + 112); \
+        *(unaligned_u64 *)((u8 *)(dst) + 120) = *(const unaligned_u64 *)((const u8 *)(src) + 120); \
+        break; \
+    }
+
+
+
+//typedef u64 unaligned_u64 __attribute__((aligned(1), may_alias));
 
 #ifndef OSTD_NO_MEMCPY
-void *memcpy(void *dst, const void * src, sys_uint n) {
-    for (sys_uint i = 0; i < n; i += 1)  *((u8*)dst + i) = *((const u8*)src + i);
+
+#define memcpy memcpy_ostd
+
+__attribute__((no_builtin("memcpy")))
+void *memcpy_ostd(void *restrict dst, const void *restrict src, sys_uint n) {
+    
+    switch (n) {
+    JUMP_TABLE(dst, src, n);
+    
+    default: {
+
+        //u64 allow_align = (n > 256) & 1;
+        //u64 need_align = ((u64)dst % 32 != 0) & 1;
+        //u64 do_align = (allow_align & need_align);
+        //
+        //u8 *aligned_dst = (u8*)(((~do_align & 1) * (u64)dst) + (do_align * (((u64)dst+31ull) & ~(31ull))));
+        //
+        //u64 align_diff = do_align * ((u64)aligned_dst - (u64)dst);
+        //n -= align_diff;
+        //switch (align_diff) {
+        //    JUMP_TABLE(dst, src, align_diff)
+        //}
+        //src = (u8*)src + align_diff;
+        
+        u8 *aligned_dst = dst;
+        //if (n > 256) {
+        //    aligned_dst = (u8*)(((u64)dst+31) & ~(31));
+        //    u64 align_diff = (u64)aligned_dst - (u64)dst;
+        //    n -= align_diff;
+        //    
+        //    switch (align_diff) {
+        //        JUMP_TABLE(dst, src, align_diff)
+        //    }
+        //    
+        //    src = (u8*)src + align_diff;
+        //}
+        
+        u64 rem = n;
+        
+        #pragma clang loop vectorize(enable)
+        while (rem >= 32) {
+            u64 i = n - rem;
+            *(unaligned_u64*)((u8*)aligned_dst + i) = *(unaligned_u64*)((u8*)src + i);
+            *(unaligned_u64*)((u8*)aligned_dst + i +  8) = *(unaligned_u64*)((u8*)src + i +  8);
+            *(unaligned_u64*)((u8*)aligned_dst + i + 16) = *(unaligned_u64*)((u8*)src + i + 16);
+            *(unaligned_u64*)((u8*)aligned_dst + i + 24) = *(unaligned_u64*)((u8*)src + i + 24);
+            //*(unaligned_u64*)((u8*)aligned_dst + i + 32) = *(unaligned_u64*)((u8*)src + i + 32);
+            //*(unaligned_u64*)((u8*)aligned_dst + i + 40) = *(unaligned_u64*)((u8*)src + i + 40);
+            //*(unaligned_u64*)((u8*)aligned_dst + i + 48) = *(unaligned_u64*)((u8*)src + i + 48);
+            //*(unaligned_u64*)((u8*)aligned_dst + i + 56) = *(unaligned_u64*)((u8*)src + i + 56);
+            //*(unaligned_u64*)((u8*)aligned_dst + i + 64) = *(unaligned_u64*)((u8*)src + i + 64);
+            //*(unaligned_u64*)((u8*)aligned_dst + i + 72) = *(unaligned_u64*)((u8*)src + i + 72);
+            //*(unaligned_u64*)((u8*)aligned_dst + i + 80) = *(unaligned_u64*)((u8*)src + i + 80);
+            //*(unaligned_u64*)((u8*)aligned_dst + i + 88) = *(unaligned_u64*)((u8*)src + i + 88);
+            //*(unaligned_u64*)((u8*)aligned_dst + i + 96) = *(unaligned_u64*)((u8*)src + i + 96);
+            //*(unaligned_u64*)((u8*)aligned_dst + i + 104) = *(unaligned_u64*)((u8*)src + i + 104);
+            //*(unaligned_u64*)((u8*)aligned_dst + i + 112) = *(unaligned_u64*)((u8*)src + i + 112);
+            //*(unaligned_u64*)((u8*)aligned_dst + i + 120) = *(unaligned_u64*)((u8*)src + i + 120);
+            
+            rem -= 32;
+        }
+        
+        __builtin_assume(rem < 32);
+        
+        u64 i = n - rem;
+        u8 *tail_dst = (u8*)aligned_dst + i;
+        u8 *tail_src = (u8*)src + i;
+        
+        
+        switch (rem) {
+    
+        JUMP_TABLE(tail_dst, tail_src, rem)
+        
+        default: return dst;
+        }
+        
+        return dst;
+    }
+    }
+    
     return dst;
 }
+
+#if defined(OSTD_SELF_CONTAINED)
+
+// Compilers are annoying.
+void *memcpy_no_inline(void *restrict dst, const void *restrict src, sys_uint n) __asm__("memcpy");
+
+void *memcpy_no_inline(void *restrict dst, const void *restrict src, sys_uint n) {
+    return memcpy_ostd(dst, src, n);
+}
+#endif // OSTD_SELF_CONTAINED
+
 #endif
 
 #ifndef OSTD_NO_MEMSET
-void *memset(void *dst, s32 c, sys_uint n) {
+
+#define memset memset_inline
+
+__attribute__((no_builtin("memset")))
+inline void *memset_inline(void *dst, s32 c, sys_uint n) {
     u8 *p = (u8*)dst;
     while (n--) *p++ = (u8)c;
     return dst;
 }
+
+#if defined(OSTD_SELF_CONTAINED)
+
+// Compilers are annoying.
+void *memset_no_inline(void *dst, s32 c, sys_uint n) __asm__("memset");
+
+void *memset_no_inline(void *dst, s32 c, sys_uint n) {
+    u8 *p = (u8*)dst;
+    while (n--) *p++ = (u8)c;
+    return dst;
+}
+#endif // OSTD_SELF_CONTAINED
+
 #endif
 
 #ifndef OSTD_NO_MEMMOVE
-void *memmove(void *dst, const void *src, sys_uint n) {
+inline void *memmove(void *dst, const void *src, sys_uint n) {
     if (!n) return dst;
     if ((sys_uint)dst > (sys_uint)src)
         for (s64 i = (s64)n-1; i >= 0; i -= 1)  *((u8*)dst + i) = *((const u8*)src + i);
@@ -483,7 +2226,7 @@ void *memmove(void *dst, const void *src, sys_uint n) {
 #endif
 
 
-int memcmp(const void* a, const void* b, sys_uint n) {
+inline int memcmp(const void* a, const void* b, sys_uint n) {
     const u8 *p1 = (const u8 *)a;
     const u8 *p2 = (const u8 *)b;
 
@@ -518,7 +2261,7 @@ u64 format_float(float64 x, int decimal_places, void *buffer, u64 buffer_size);
 #endif
 
 
-void __cpuid(int cpuInfo[4], int function_id);
+
 
 #define min(a, b) ((a) < (b) ? (a) : (b))
 #define max(a, b) ((a) > (b) ? (a) : (b))
@@ -543,7 +2286,6 @@ unit_local inline u64 align_next(u64 n, u64 align) {
 #define TiB(N) (1024ULL*1024ULL*1024ULL*1024ULL*N)
 
 #endif // _BASE_H
-
 
 
 
@@ -578,8 +2320,12 @@ unit_local inline bool strings_match(string a, string b) {
 
     if (a.count == 0 || b.count == 0) return false;
     if (a.data  == 0 || b.data  == 0) return false;
-
-    return memcmp(a.data, b.data, (sys_uint)a.count) == 0;
+    
+    for (u64 i = 0; i < a.count; i += 1) {
+        if (a.data[i] != b.data[i])
+            return false;
+    }
+    return true;
 }
 
 unit_local inline bool string_contains(string s, string sub) {

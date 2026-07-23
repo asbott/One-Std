@@ -72,7 +72,7 @@ OSTD_LIB void arena_pop(Arena *arena, u64 size);
 OSTD_LIB void arena_reset(Arena *arena);
 OSTD_LIB void free_arena(Arena arena);
 
-unit_local void* arena_allocator_proc(Allocator_Message msg, void *data, void *old, u64 old_n, u64 n, u64 alignment, u64 flags);
+OSTD_LIB void* arena_allocator_proc(Allocator_Message msg, void *data, void *old, u64 old_n, u64 n, u64 alignment, u64 flags);
 unit_local inline Allocator arena_allocator(Arena *a) { return (Allocator) { a, arena_allocator_proc }; }
 
 /////
@@ -82,12 +82,12 @@ unit_local inline Allocator arena_allocator(Arena *a) { return (Allocator) { a, 
 // todo(charlie) temporary storage might get bloated with large temporary allocations,
 // so we should provide a way to shrink temporary storage.
 
-OSTD_LIB Allocator get_temp(void);
-OSTD_LIB void reset_temporary_storage(void);
-OSTD_LIB void *tallocate(size_t n);
+inline Allocator get_temp(void);
+inline void reset_temporary_storage(void);
+inline void *tallocate(size_t n);
 
-OSTD_LIB u64 get_temp_position(void);
-OSTD_LIB void set_temp_position(u64 pos);
+inline u64 get_temp_position(void);
+inline void set_temp_position(u64 pos);
 
 /////
 // Allocation interface
@@ -155,15 +155,13 @@ typedef struct Arena_Backed_Array_Header {
     u64 signature;
 } Arena_Backed_Array_Header;
 
-#ifdef OSTD_IMPL
-
 typedef struct _Per_Thread_Temporary_Storage {
     Arena arena;
     Allocator a;
     bool initted;
 } _Per_Thread_Temporary_Storage;
 
-unit_local inline _Per_Thread_Temporary_Storage* _lazy_init_temporary_storage(void) {
+inline _Per_Thread_Temporary_Storage* _lazy_init_temporary_storage(void) {
     _Ostd_Thread_Storage *s = _ostd_get_thread_storage();
     assert(s->temp);
     assertmsg(sizeof(_Per_Thread_Temporary_Storage) < sizeof(s->temporary_storage_struct_backing), "refactor time");
@@ -182,22 +180,22 @@ unit_local inline _Per_Thread_Temporary_Storage* _lazy_init_temporary_storage(vo
     
     return s->temp;
 }
-Allocator get_temp(void) {
+inline Allocator get_temp(void) {
     return _lazy_init_temporary_storage()->a;
 }
-void reset_temporary_storage(void) {
+inline void reset_temporary_storage(void) {
     arena_reset(&_lazy_init_temporary_storage()->arena);
 }
-void *tallocate(size_t n) {
+inline void *tallocate(size_t n) {
     return allocate(_lazy_init_temporary_storage()->a, n);
 }
 
-u64 get_temp_position(void) {
+inline u64 get_temp_position(void) {
     Arena *arena = &_lazy_init_temporary_storage()->arena;
     
     return (u64)arena->position - (u64)arena->start;
 }
-void set_temp_position(u64 pos) {
+inline void set_temp_position(u64 pos) {
     Arena *arena = &_lazy_init_temporary_storage()->arena;
     
     u64 current_pos = (u64)arena->position - (u64)arena->start;
@@ -208,6 +206,9 @@ void set_temp_position(u64 pos) {
     
     arena_pop(arena, diff);
 }
+
+
+#ifdef OSTD_IMPL
 
 Arena make_arena(u64 reserved_size, u64 initial_allocated_size) {
     assert(reserved_size >= initial_allocated_size);

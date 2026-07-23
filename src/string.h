@@ -24,8 +24,12 @@ unit_local inline bool strings_match(string a, string b) {
 
     if (a.count == 0 || b.count == 0) return false;
     if (a.data  == 0 || b.data  == 0) return false;
-
-    return memcmp(a.data, b.data, (sys_uint)a.count) == 0;
+    
+    for (u64 i = 0; i < a.count; i += 1) {
+        if (a.data[i] != b.data[i])
+            return false;
+    }
+    return true;
 }
 
 unit_local inline bool string_contains(string s, string sub) {

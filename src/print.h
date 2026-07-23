@@ -204,46 +204,71 @@ u64 format_string_args(void *buffer, u64 buffer_size, string fmt, u64 arg_count,
             u8 small_str[64];
             string str = (string) { 0, small_str };
             
-            if (fmt.data[i+1] == '%') {
-                str = STR("%");
-                i += 1;
-            } else if (fmt.data[i+1] == 'u') {
-                str.count = format_unsigned_int(arg.int_val, base, str.data, 32);
-                i += 1;
-            } else if (fmt.data[i+1] == 'i') {
-                s64 signed_val;
-                if (arg.size == 1) {
-                    signed_val = (s64)(*(s8*)&arg.int_val);
-                } else if (arg.size == 2) {
-                    signed_val = (s64)(*(s16*)&arg.int_val);
-                } else if (arg.size == 4) {
-                    signed_val = (s64)(*(s32*)&arg.int_val);
-                } else {
-                    signed_val = *(s64*)&arg.int_val;
+            bool ok = true;
+            if (i + 2 < fmt.count && fmt.data[i+1] == '.') {
+                u64 n = 0;
+                string num_slice = STR("");
+                
+                while (i + 2 + n < fmt.count && (fmt.data[i + 2 + n] >= '0' && fmt.data[i + 2 + n] <= '9')) {
+                    n += 1;
+                    num_slice = string_slice(fmt, i + 2, n);
                 }
-                str.count = format_signed_int(signed_val, base, str.data, 32);
-                i += 1;
-            } else if (fmt.data[i+1] == 'x') {
-                str.count = format_unsigned_int(arg.int_val, 16, str.data, 32);
-                i += 1;
-            } else if (fmt.data[i+1] == 'f') {
-                // todo(charlie)
-                str.count = format_float(arg.flt_val, decimal_places, str.data, 32);
-                i += 1;
-            } else if (fmt.data[i+1] == 'b') {
-                str = arg.int_val ? STR("true") : STR("false");
-                i += 1;
-            } else if (fmt.data[i+1] == 's') {
-                str = arg.str_val;
-                i += 1;
-            } else {
-
-                char msg[] = "<Unknown format specifier '  '>";
+                
+                u64 new_decimal_places = string_to_unsigned_int(num_slice, 10, &ok);
+                
+                if (ok) {
+                    i += n + 1;
+                    decimal_places = new_decimal_places;
+                }
+            }
+            
+            if (!ok) {
+                char msg[] = "<Could not parse decimal places>";
                 memcpy(str.data, msg, sizeof(msg)-1);
-                str.count = sizeof(msg)-1;
-                str.data[str.count-4] = '%';
-                str.data[str.count-3] = fmt.data[i+1];
                 i += 1;
+            }
+            
+            if (ok) {
+                if (fmt.data[i+1] == '%') {
+                    str = STR("%");
+                    i += 1;
+                } else if (fmt.data[i+1] == 'u') {
+                    str.count = format_unsigned_int(arg.int_val, base, str.data, 32);
+                    i += 1;
+                } else if (fmt.data[i+1] == 'i') {
+                    s64 signed_val;
+                    if (arg.size == 1) {
+                        signed_val = (s64)(*(s8*)&arg.int_val);
+                    } else if (arg.size == 2) {
+                        signed_val = (s64)(*(s16*)&arg.int_val);
+                    } else if (arg.size == 4) {
+                        signed_val = (s64)(*(s32*)&arg.int_val);
+                    } else {
+                        signed_val = *(s64*)&arg.int_val;
+                    }
+                    str.count = format_signed_int(signed_val, base, str.data, 32);
+                    i += 1;
+                } else if (fmt.data[i+1] == 'x') {
+                    str.count = format_unsigned_int(arg.int_val, 16, str.data, 32);
+                    i += 1;
+                } else if (fmt.data[i+1] == 'f') {
+                    str.count = format_float(arg.flt_val, decimal_places, str.data, 32);
+                    i += 1;
+                } else if (fmt.data[i+1] == 'b') {
+                    str = arg.int_val ? STR("true") : STR("false");
+                    i += 1;
+                } else if (fmt.data[i+1] == 's') {
+                    str = arg.str_val;
+                    i += 1;
+                } else {
+    
+                    char msg[] = "<Unknown format specifier '  '>";
+                    memcpy(str.data, msg, sizeof(msg)-1);
+                    str.count = sizeof(msg)-1;
+                    str.data[str.count-4] = '%';
+                    str.data[str.count-3] = fmt.data[i+1];
+                    i += 1;
+                }
             }
 
             if (str.count) {

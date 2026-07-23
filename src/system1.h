@@ -750,18 +750,28 @@ unit_local bool _ostd_thread_storage_register_mutex_initted;
 unit_local u64 _ostd_main_thread_id;
 unit_local bool _ostd_main_thread_is_unknown = true;
 unit_local _Ostd_Thread_Storage _ostd_main_thread_storage;
-
+unit_local Thread_Key thread_storage_index_tls;
+volatile unit_local bool _thread_storage_index_initted = false;
+volatile unit_local u64 _thread_storage_index_init_lock = 0;
 
 
 unit_local _Ostd_Thread_Storage *_ostd_get_thread_storage_for(u64 thread_id) {
     if (!_ostd_main_thread_is_unknown && _ostd_main_thread_id == thread_id) {
         return &_ostd_main_thread_storage;
     }
-
-    for (u64 i = 0; i < _ostd_thread_storage_allocated_count; i += 1) {
-        _Ostd_Thread_Storage *s = &_ostd_thread_storage[i];
-        if (s->thread_id == thread_id) return s;
+    
+    if (_thread_storage_index_initted) {
+        u64 index = (u64)sys_thread_key_read(thread_storage_index_tls);
+        
+        assert(index < _ostd_thread_storage_allocated_count);
+        
+        return &_ostd_thread_storage[index];
     }
+    
+    //for (u64 i = 0; i < _ostd_thread_storage_allocated_count; i += 1) {
+    //    _Ostd_Thread_Storage *s = &_ostd_thread_storage[i];
+    //    if (s->thread_id == thread_id) return s;
+    //}
 
     if (_ostd_main_thread_is_unknown) {
         _ostd_main_thread_id = thread_id;
@@ -785,8 +795,29 @@ _Ostd_Thread_Storage *_ostd_get_thread_storage(void) {
     return _ostd_get_thread_storage_for(sys_get_current_thread_id());
 }
 
-unit_local void _ostd_register_thread_storage(u64 thread_id) {
-
+unit_local u32 _ostd_register_thread_storage(u64 thread_id) {
+    
+    if (!_thread_storage_index_initted) {
+        volatile u64 old = sys_atomic_add_64(&_thread_storage_index_init_lock, 1);
+        if (old != 0) {
+            while (_thread_storage_index_init_lock) {
+                // spineroo
+            }
+        }
+        
+        sys_memory_barrier();
+        
+        if (!_thread_storage_index_initted) {
+            bool ok = sys_thread_key_init(&thread_storage_index_tls);
+            assert(ok); (void)ok;
+            _thread_storage_index_initted = true;
+        }
+        
+        sys_memory_barrier();
+        
+        _thread_storage_index_init_lock = 0;
+    }
+    
     static u64 crazy_counter = 0;
     u64 me = sys_atomic_add_64(&crazy_counter, 1);
     
@@ -809,7 +840,9 @@ unit_local void _ostd_register_thread_storage(u64 thread_id) {
             s->logger = 0;
             s->logger_ud = 0;
             sys_mutex_release(_ostd_thread_storage_register_mutex);
-            return;
+            
+            sys_thread_key_write(thread_storage_index_tls, (void*)i);
+            return i;
         }
     }
 
@@ -836,7 +869,7 @@ unit_local void _ostd_register_thread_storage(u64 thread_id) {
     sys_mutex_release(_ostd_thread_storage_register_mutex);
 
     // scary
-    _ostd_register_thread_storage(thread_id);
+    return _ostd_register_thread_storage(thread_id);
 }
 
 #if (OS_FLAGS & OS_FLAG_HAS_WINDOW_SYSTEM)
@@ -4092,9 +4125,10 @@ void* sys_thread_key_read(Thread_Key key) {
 
 unit_local DWORD WINAPI _windows_thread_proc(LPVOID lpParameter) {
     Thread *t = (Thread*)lpParameter;
-
+    
+    
     _ostd_register_thread_storage(t->id);
-
+    
     DWORD ret = (DWORD)t->proc(t);
 
     _ostd_get_thread_storage()->taken = false;
@@ -5810,18 +5844,46 @@ unit_local u64 sys_get_argc(void) { return (u64)___argc; }
 unit_local string *sys_get_argv(void) { return ___argv; }
 
 #if defined(_WIN32)
-int _fltused = 0;
+__attribute__((used)) int _fltused = 0;
 
 #ifndef _WIN64
 #error Only x86_64 windows supported
 #endif
 
-__attribute__((naked))
+/*__attribute__((naked, used))
 void __chkstk(void) {
     __asm__ volatile(
-        "movq %rcx, %rax\n"
-        "ret\n"
+        // Windows x64 passes the allocation size in RAX. Probe each guard-page
+        // interval without changing RAX or RCX, as compiler-generated callers
+        // expect to subtract the preserved size after this returns.
+        "pushq %rcx\n"
+        "pushq %rax\n"
+        "cmpq $0x1000, %rax\n"
+        "leaq 24(%rsp), %rcx\n"
+        "jb 2f\n"
+        "1:\n"
+        "subq $0x1000, %rcx\n"
+        "orq $0, (%rcx)\n"
+        "subq $0x1000, %rax\n"
+        "cmpq $0x1000, %rax\n"
+        "ja 1b\n"
+        "2:\n"
+        "subq %rax, %rcx\n"
+        "orq $0, (%rcx)\n"
+        "popq %rax\n"
+        "popq %rcx\n"
+        "retq\n"
     );
+}*/
+
+// Just commit entire stack upfront
+#pragma comment(linker, "/STACK:0x100000,0x100000")
+
+__attribute__((naked, used))
+void __chkstk(void) {
+   __asm__ volatile(
+      "retq\n"
+   );
 }
 
 int ostd_main(void);
@@ -5850,7 +5912,7 @@ int __premain(void) {
         int len = WideCharToMultiByte(CP_UTF8, 0, wargv[i], -1, 0, 0, 0, 0);
         WideCharToMultiByte(CP_UTF8, 0, wargv[i], -1, pnext, len, 0, 0);
         argv[i] = (string) { (u64)(len-1), (u8*)pnext };
-        pnext += len-1;
+        pnext += len;
     }
     
     ___argc = argc;
@@ -5859,19 +5921,8 @@ int __premain(void) {
     return ostd_main();
 }
 
-__attribute__((naked))
 void mainCRTStartup(void) { 
-    __asm__ volatile(
-        // reserve the 32-byte shadow space
-        "subq $32, %rsp\n"
-        // call your C main()
-        "call __premain\n"
-        // restore RSP
-        "addq $32, %rsp\n"
-        // move return value into RCX and tail-jump to sys_exit
-        "movq %rax, %rcx\n"
-        "jmp sys_exit\n"
-    );
+    sys_exit(__premain());
 }
 
 
