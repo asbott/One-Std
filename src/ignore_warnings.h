@@ -1,5 +1,3 @@
-// I try to compile with -pedantic and -Weverything, but get really dumb warnings like these,
-// so I have to ignore them.
 #if defined(__GNUC__) || defined(__GNUG__)
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wattributes"

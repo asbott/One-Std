@@ -1,12 +1,10 @@
 // This file was generated from One-Std/src/memory.h
 // The following files were included & concatenated:
 // - C:\One-Std\src\base.h
-// - C:\One-Std\src\system1.h
+// - C:\One-Std\src\windows_loader.h
 // - C:\One-Std\src\string.h
 // - C:\One-Std\src\memory.h
-// - C:\One-Std\src\windows_loader.h
-// I try to compile with -pedantic and -Weverything, but get really dumb warnings like these,
-// so I have to ignore them.
+// - C:\One-Std\src\system_base.h
 #if defined(__GNUC__) || defined(__GNUG__)
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wattributes"
@@ -385,12 +383,22 @@ typedef u32 sys_uint;
 void __cpuid(int cpuInfo[4], int function_id);
 u64 __cdecl _xgetbv(unsigned int);
 
-#if COMPILER_FLAGS & COMPILER_FLAG_MSC
-#define debug_break(...) __debugbreak()
+#if COMPILER_FLAGS & COMPILER_FLAG_CLANG
+    #define debug_break(...) __builtin_trap()
+    #define cpu_hint_prefetch_L1(p) __builtin_prefetch(p, 0, 3)
+    #define cpu_hint_prefetch_L2(p) __builtin_prefetch(p, 0, 2)
+    #define cpu_hint_prefetch_L3(p) __builtin_prefetch(p, 0, 1)
+    #define cpu_hint_prefetch(p) __builtin_prefetch(p, 0, 0)
+#elif COMPILER_FLAGS & COMPILER_FLAG_MSC
+    #define debug_break(...) __debugbreak()
 #elif COMPILER_FLAGS & COMPILER_FLAG_GNU
-#define debug_break(...) __builtin_trap()
+    #define debug_break(...) __builtin_trap()
+    #define cpu_hint_prefetch_L1(p) __builtin_prefetch(p, 0, 3)
+    #define cpu_hint_prefetch_L2(p) __builtin_prefetch(p, 0, 2)
+    #define cpu_hint_prefetch_L3(p) __builtin_prefetch(p, 0, 1)
+    #define cpu_hint_prefetch(p) __builtin_prefetch(p, 0, 0)
 #else
-#define debug_break(...) *(volatile int*)0 = 1
+    #define debug_break(...) *(volatile int*)0 = 1
 #endif
 
 typedef struct string { 
@@ -406,45 +414,6 @@ Assert_Fail_Callback assert_fail_callback;
 
 #define STRINGIFY(x) #x
 #define TOSTRING(x) STRINGIFY(x)
-
-#define assertmsg_always(x, msg) assertmsgs_always(x, (STR(msg)))
-#define assertmsgs_always(x, msg)  do { \
-    if (!(x)) {\
-        sys_write_string(sys_get_stderr(), STR("\n========================================================\n"));\
-        sys_write_string(sys_get_stderr(), STR("==========!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!==========\n"));\
-        sys_write_string(sys_get_stderr(), STR("========================================================\n"));\
-        sys_write_string(sys_get_stderr(), STR("\nAssertion failed for expression: '"));\
-        sys_write_string(sys_get_stderr(), STR(#x));\
-        sys_write_string(sys_get_stderr(), STR("'.\n"));\
-        if (msg.data && msg.count) {\
-            sys_write_string(sys_get_stderr(), STR("\n\""));\
-            sys_write_string(sys_get_stderr(), msg);\
-            sys_write_string(sys_get_stderr(), STR("\"\n"));\
-        }\
-        sys_write_string(sys_get_stderr(), STR("\nIn File '"));\
-        sys_write_string(sys_get_stderr(), STR(__FILE__));\
-        sys_write_string(sys_get_stderr(), STR("' on line "));\
-        sys_write_string(sys_get_stderr(), STR(TOSTRING(__LINE__)));\
-        sys_write_string(sys_get_stderr(), STR("\n\nPrinting stack trace:\n"));\
-        sys_print_stack_trace(sys_get_stderr());\
-        sys_write_string(sys_get_stderr(), STR("\n\n========================================================\n"));\
-        sys_write_string(sys_get_stderr(), STR("==========!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!==========\n"));\
-        sys_write_string(sys_get_stderr(), STR("========================================================\n"));\
-        if (assert_fail_callback) assert_fail_callback(STR(#x), msg, STR(__FILE__), STR(__func__), __LINE__);\
-        debug_break();\
-    } \
-    } while(0)
-#define assert_always(x) assertmsg_always(x, "")
-
-#ifndef DISABLE_ASSERT
-    #define assertmsg(x, msg) assertmsgs(x, (STR(msg)))
-    #define assertmsgs(x, msg) assertmsgs_always(x, msg)
-    #define assert(x) assertmsg(x, "")
-#else
-    #define assertmsg(x, msg) (void)(x)
-    #define assertmsgs(x, msg) (void)(x)
-    #define assert(x) (void)(x)
-#endif
 
 #ifndef OSTD_LIB
     #define OSTD_LIB
@@ -2244,9 +2213,9 @@ inline int memcmp(const void* a, const void* b, sys_uint n) {
 
 
 // Forward decls
-u64 format_signed_int(s64 x, int base, void *buffer, u64 buffer_size);
-u64 format_unsigned_int(u64 x, int base, void *buffer, u64 buffer_size);
-u64 format_float(float64 x, int decimal_places, void *buffer, u64 buffer_size);
+//u64 format_signed_int(s64 x, int base, void *buffer, u64 buffer_size);
+//u64 format_unsigned_int(u64 x, int base, void *buffer, u64 buffer_size);
+//u64 format_float(float64 x, int decimal_places, void *buffer, u64 buffer_size);
 
 
 
@@ -2287,9 +2256,307 @@ unit_local inline u64 align_next(u64 n, u64 align) {
 #define GiB(N) (1024ULL*1024ULL*1024ULL*N)
 #define TiB(N) (1024ULL*1024ULL*1024ULL*1024ULL*N)
 
+// Keeping this here so we dont need to include entire math module for this
+unit_local inline float64 ___ln64(float64 x) {
+    u64 bx = *(u64 *)(&x);
+    u64 ex = bx >> 52;
+    s32 t = (s32)ex - 1023;
+    bx = 4607182418800017408ULL | (bx & 4503599627370495ULL);
+    x = *(float64 *)(&bx);
+    return -1.49278 + (2.11263 + (-0.729104 + 0.10969 * x) * x) * x + 0.6931471806 * t;
+}
+
+// todo(charlie) make a less naive and slow version of this !
+unit_local u64 _format_int(void *px, int base, bool _signed, void *buffer, u64 buffer_size) {
+    //assert(base >= 2 && base <= 36); // 0-z
+
+    if (!buffer) buffer_size = U64_MAX;
+
+    u8 digits[36];
+    memcpy(digits, "0123456789abcdefghijklmnopqrstuvxyz", 36);
+
+    void *tail = (u8*)buffer + buffer_size - 1;
+
+    u64 written = 0;
+
+    bool neg = false;
+
+    u64 abs_val;
+    if (_signed) {
+        s64 signed_val = *(s64*)px;
+        neg = signed_val < 0;
+        // todo(charlie), this shouldnt actually generate a mul but we may want to check
+        abs_val = (u64)(neg ? (signed_val*-1) : signed_val);
+    }
+    else {
+        abs_val = *(u64*)px;
+    }
+
+    if (abs_val == 0 && written < buffer_size) {
+        if (buffer) *(u8*)buffer = '0';
+        return 1;
+    }
+
+    u64 digit_count = (u64)(___ln64((float64)abs_val)/___ln64((float64)base));
+
+    u64 skip = 0;
+    if (digit_count > buffer_size) {
+        skip = digit_count-buffer_size+1;
+    }
+
+    while (abs_val != 0) {
+        u8 digit = digits[abs_val%(u64)base];
+
+        if (skip == 0 && written < buffer_size) {
+            if (buffer) *((u8*)tail - written) = digit;
+            written += 1;
+        }
+
+        abs_val /= (u64)base;
+        if (skip > 0) skip -= 1;
+    }
+
+    // Write the '-' if negative number
+    if (neg && written < buffer_size) {
+        if (buffer) *((u8*)tail - written) = '-';
+        written += 1;
+    }
+
+    // Since we wrote right-to-left, shift down to overwrite the bytes we did not touch
+    if (buffer) {
+        memmove(buffer, (u8*)tail - written + 1, (sys_uint)written);
+    }
+
+    return written;
+}
+u64 format_signed_int(s64 x, int base, void *buffer, u64 buffer_size) {
+    return _format_int(&x, base, true, buffer, buffer_size);
+}
+u64 format_unsigned_int(u64 x, int base, void *buffer, u64 buffer_size) {
+    return _format_int(&x, base, false, buffer, buffer_size);
+}
+
+u64 format_float(float64 x, int decimal_places, void *buffer, u64 buffer_size) {
+    //assert(decimal_places >= 0);
+
+    if (!buffer) buffer_size = U64_MAX;
+
+    u64 written = 0;
+
+    bool neg = x < 0.0;
+    if (neg) x = -x;
+
+    s64 integral_part = (s64)x;
+    float64 fractional_part = x - (float64)integral_part;
+
+    written += format_signed_int(integral_part, 10, buffer, buffer_size);
+
+    if (decimal_places > 0 && written < buffer_size) {
+        if (buffer) *((u8*)buffer + written) = '.';
+        written += 1;
+    }
+
+    for (int i = 0; i < decimal_places && written < buffer_size; i++) {
+        fractional_part *= 10.0;
+        u8 digit = (u8) fractional_part;
+        fractional_part -= digit;
+
+        *((u8*)buffer + written) = '0' + digit;
+        if (buffer) written += 1;
+    }
+
+    if (neg && written < buffer_size) {
+        memmove((u8*)buffer + 1, buffer, (sys_uint)written);
+        *((u8*)buffer) = '-';
+        if (buffer) written += 1;
+    }
+
+    return written;
+}
+
+u64 string_to_unsigned_int(string str, int base, bool *success)
+{
+    if (!str.data || !str.count) {
+        *success = false;
+        return 0;
+    }
+    
+    u64 value = 0;
+    if (base < 2 || base > 36) {
+        if (success) *success = false;
+        return 0;
+    }
+    
+    u8 *p = str.data;
+
+    while (*p == ' ' || *p == '\t' || *p == '\n' ||
+           *p == '\r' || *p == '\f' || *p == '\v') {
+        p++;
+    }
+
+    while (p) {
+        if (p == str.data+str.count) {
+            break;
+        }
+        u8 c = *p;
+
+        s64 digit = -1;
+
+        if (c >= '0' && c <= '9') {
+            digit = (s64)(c - '0');
+        } else if (c >= 'a' && c <= 'z') {
+            digit = 10 + (s64)(c - 'a');
+        } else if (c >= 'A' && c <= 'Z') {
+            digit = 10 + (s64)(c - 'A');
+        } else {
+            if (success) *success = false;
+            return 0;
+        }
+
+        if (digit < 0 || digit >= base) {
+            if (success) *success = false;
+            return 0;
+        }
+
+        value = (value * (u64)base) + (u64)digit;
+        
+        p += 1;
+    }
+
+    if (success) *success = true;
+    return value;
+}
+
+s64 string_to_signed_int(string str, int base, bool *success)
+{
+    if (!str.data || !str.count) {
+        *success = false;
+        return 0;
+    }
+    u8 *p = str.data;
+
+    while (*p == ' ' || *p == '\t' || *p == '\n' ||
+           *p == '\r' || *p == '\f' || *p == '\v') {
+        p++;
+    }
+
+    int sign = 1;
+    if (*p == '-') {
+        sign = -1;
+        p++;
+        str.data++;
+        str.count--;
+    } else if (*p == '+') {
+        p++;
+    }
+
+    u64 unsigned_val = string_to_unsigned_int(str, base, success);
+
+    s64 signed_val = (s64)unsigned_val;
+    if (sign < 0) {
+        signed_val = -signed_val;
+    }
+
+    return signed_val;
+}
+
+float64 string_to_float(string str, bool *success)
+{
+   u8 *p = str.data;
+   u8 *end = str.data + str.count;
+
+   while (p < end && (*p == ' ' || *p == '\t' || *p == '\n' ||
+          *p == '\r' || *p == '\f' || *p == '\v')) {
+      p++;
+   }
+
+   int sign = 1;
+   if (p < end && *p == '-') {
+      sign = -1;
+      p++;
+   } else if (p < end && *p == '+') {
+      p++;
+   }
+
+   float64 value = 0.0;
+   float64 fraction = 0.0;
+   float64 divisor = 1.0;
+   bool got_any_digits = false;
+
+   while (p < end && *p >= '0' && *p <= '9') {
+      value = (value * 10.0) + (float64)(*p - '0');
+      p++;
+      got_any_digits = true;
+   }
+
+   if (p < end && *p == '.') {
+      p++;
+      while (p < end && *p >= '0' && *p <= '9') {
+         fraction = (fraction * 10.0) + (float64)(*p - '0');
+         divisor *= 10.0;
+         p++;
+         got_any_digits = true;
+      }
+   }
+
+   if (!got_any_digits) {
+      if (success) *success = false;
+      return 0;
+   }
+
+   value = value + (fraction / divisor);
+
+   if (p < end && (*p == 'e' || *p == 'E')) {
+      p++;
+
+      int exponent_sign = 1;
+      if (p < end && *p == '-') {
+         exponent_sign = -1;
+         p++;
+      } else if (p < end && *p == '+') {
+         p++;
+      }
+
+      int exponent = 0;
+      bool got_exponent_digits = false;
+      while (p < end && *p >= '0' && *p <= '9') {
+         exponent = (exponent * 10) + (int)(*p - '0');
+         p++;
+         got_exponent_digits = true;
+      }
+
+      if (!got_exponent_digits) {
+         if (success) *success = false;
+         return 0;
+      }
+
+      if (exponent_sign > 0) {
+         while (exponent > 0) {
+            value *= 10.0;
+            exponent--;
+         }
+      } else {
+         while (exponent > 0) {
+            value /= 10.0;
+            exponent--;
+         }
+      }
+   }
+   
+   if (p != end) {
+      if (success) *success = false;
+      return 0;
+   }
+
+   if (sign < 0) {
+      value = -value;
+   }
+
+   if (success) *success = true;
+   return value;
+}
+
 #endif // _BASE_H
-
-
 
 /* End include: base.h */
 #endif // _BASE_H
@@ -2431,7 +2698,7 @@ OSTD_LIB u64 c_style_strcmp(const char *a, const char *b) {
 
 #ifndef _SYSTEM_1_H
 
-/* Begin include: system1.h */
+/* Begin include: system_base.h */
 #ifndef _SYSTEM_1_H
 #define _SYSTEM_1_H
 
@@ -2439,6 +2706,45 @@ OSTD_LIB u64 c_style_strcmp(const char *a, const char *b) {
 #endif // _BASE_H
 #ifndef _STRING_H
 #endif // _STRING_H
+
+#define assertmsg_always(x, msg) assertmsgs_always(x, (STR(msg)))
+#define assertmsgs_always(x, msg)  do { \
+    if (!(x)) {\
+        sys_write_string(sys_get_stderr(), STR("\n========================================================\n"));\
+        sys_write_string(sys_get_stderr(), STR("==========!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!==========\n"));\
+        sys_write_string(sys_get_stderr(), STR("========================================================\n"));\
+        sys_write_string(sys_get_stderr(), STR("\nAssertion failed for expression: '"));\
+        sys_write_string(sys_get_stderr(), STR(#x));\
+        sys_write_string(sys_get_stderr(), STR("'.\n"));\
+        if (msg.data && msg.count) {\
+            sys_write_string(sys_get_stderr(), STR("\n\""));\
+            sys_write_string(sys_get_stderr(), msg);\
+            sys_write_string(sys_get_stderr(), STR("\"\n"));\
+        }\
+        sys_write_string(sys_get_stderr(), STR("\nIn File '"));\
+        sys_write_string(sys_get_stderr(), STR(__FILE__));\
+        sys_write_string(sys_get_stderr(), STR("' on line "));\
+        sys_write_string(sys_get_stderr(), STR(TOSTRING(__LINE__)));\
+        sys_write_string(sys_get_stderr(), STR("\n\nPrinting stack trace:\n"));\
+        sys_print_stack_trace(sys_get_stderr());\
+        sys_write_string(sys_get_stderr(), STR("\n\n========================================================\n"));\
+        sys_write_string(sys_get_stderr(), STR("==========!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!==========\n"));\
+        sys_write_string(sys_get_stderr(), STR("========================================================\n"));\
+        if (assert_fail_callback) assert_fail_callback(STR(#x), msg, STR(__FILE__), STR(__func__), __LINE__);\
+        debug_break();\
+    } \
+    } while(0)
+#define assert_always(x) assertmsg_always(x, "")
+
+#ifndef DISABLE_ASSERT
+    #define assertmsg(x, msg) assertmsgs(x, (STR(msg)))
+    #define assertmsgs(x, msg) assertmsgs_always(x, msg)
+    #define assert(x) assertmsg(x, "")
+#else
+    #define assertmsg(x, msg) (void)(x)
+    #define assertmsgs(x, msg) (void)(x)
+    #define assert(x) (void)(x)
+#endif
 
 typedef void* File_Handle;
 
@@ -2454,6 +2760,7 @@ typedef enum System_Error {
     SYSTEM_ERROR_OUT_OF_MEMORY,
     SYSTEM_ERROR_BAD_STRING,
     SYSTEM_ERROR_OS_CALL_FAILED,
+    SYSTEM_ERROR_NOT_FOUND,
 } System_Error;
 
 typedef enum System_Log_Kind {
@@ -2742,6 +3049,13 @@ OSTD_LIB void sys_lock_uninit(Lock *lock);
 OSTD_LIB void sys_lock_wait(Lock *lock);
 OSTD_LIB bool sys_lock_is_locked(Lock *lock);
 
+OSTD_LIB bool sys_wait_on_address_8(void *address, void *compare_address, u64 timeout_ms);
+OSTD_LIB bool sys_wait_on_address_16(void *address, void *compare_address, u64 timeout_ms);
+OSTD_LIB bool sys_wait_on_address_32(void *address, void *compare_address, u64 timeout_ms);
+OSTD_LIB bool sys_wait_on_address_64(void *address, void *compare_address, u64 timeout_ms);
+OSTD_LIB void sys_wake_one_by_address(void *address);
+OSTD_LIB void sys_wake_all_by_address(void *address);
+
 
 ////////
 // Atomics
@@ -2936,6 +3250,7 @@ typedef struct _Ostd_Swappable_Page_Region {
     File_Handle f;
     void *fmapping;
     bool is_mapped_to_file;
+    u64 file_mapped_pages;
 } _Ostd_Swappable_Page_Region;
 
 struct _Per_Thread_Temporary_Storage;
@@ -3008,7 +3323,7 @@ void _ostd_log_os_call(string function, string message, string os_call, u64 resu
     
     _ostd_push_log(l);
 }
-void _ostd_log_error(string function, string message, u64 error, System_Log_Category category) {
+void _ostd_log_error(string function, string message, u64 error, u64 os_number, System_Log_Category category) {
     if (!_ostd_log_pipe && !_ostd_print_log_fn) return;
     System_Log l = (System_Log){0};
     l.category = category;
@@ -3021,6 +3336,7 @@ void _ostd_log_error(string function, string message, u64 error, System_Log_Cate
     memcpy(l.message, message.data, min(message.count, sizeof(l.message)));
     
     l.error = error;
+    l.os_number = os_number;
     
     _ostd_push_log(l);
 }
@@ -3039,7 +3355,7 @@ void _ostd_log_call(string function, System_Log_Category category) {
 
 #define log_ok(message, category) _ostd_log_ok(STR(__func__), STR(message), category)
 #define log_os_call(message, os_call, handle, category) _ostd_log_os_call(STR(__func__), STR(message), STR(os_call), GetLastError(), handle, category)
-#define log_error(message, error, category) _ostd_log_error(STR(__func__), STR(message), error, category)
+#define log_error(message, error, category) _ostd_log_error(STR(__func__), STR(message), error, GetLastError(), category)
 #define log_call(category) _ostd_log_call(STR(__func__), category)
 
 unit_local _Ostd_Internal_Block_Allocator *swappable_page_region_iba;
@@ -3331,187 +3647,20 @@ unit_local u32 _ostd_register_thread_storage(u64 thread_id) {
     #ifndef _WINDOWS_ /* This is defined in windows.h */
 
 /* Begin include: windows_loader.h */
-
 #ifndef _WINDOWS_LOADER_H
 #define _WINDOWS_LOADER_H
 
 #ifndef _BASE_H
 #endif // _BASE_H
 
+// Shared Win32
+
+// Macros
+
 #define WINVER 0x0A00
 #define _WIN32_WINNT 0x0A00
-
-
 #define DECLSPEC_ALIGN(x) __declspec(align(x))
 #define DECLSPEC_NOINITALL
-
-typedef void *HANDLE;
-typedef void* HWND;
-typedef unsigned long* PDWORD;
-typedef void* HMONITOR;
-typedef u32 HRESULT;
-typedef void* HDC;
-typedef HANDLE HINSTANCE;
-typedef HANDLE HICON;
-typedef HANDLE HBRUSH;
-typedef HANDLE HCURSOR;
-typedef HANDLE HMODULE;
-typedef HANDLE HMENU;
-typedef HANDLE HBITMAP;
-typedef HANDLE HGDIOBJ;
-typedef HANDLE HFONT;
-typedef HANDLE HPEN;
-typedef HANDLE HGLOBAL;
-typedef HANDLE HRGN;
-
-typedef unsigned long ULONG;
-typedef ULONG *PULONG;
-typedef unsigned short USHORT;
-typedef USHORT *PUSHORT;
-typedef unsigned char UCHAR;
-typedef UCHAR *PUCHAR;
-
-typedef unsigned long       DWORD;
-typedef int                 BOOL;
-typedef unsigned char       BYTE;
-typedef unsigned short      WORD;
-typedef float               FLOAT;
-typedef FLOAT               *PFLOAT;
-typedef BOOL                *PBOOL;
-typedef BOOL                *LPBOOL;
-typedef BYTE                *PBYTE;
-typedef BYTE                *LPBYTE;
-typedef int                 *PINT;
-typedef int                 *LPINT;
-typedef WORD                *PWORD;
-typedef WORD                *LPWORD;
-typedef long                *LPLONG;
-typedef DWORD               *PDWORD;
-typedef DWORD               *LPDWORD;
-typedef void                *LPVOID;
-typedef const void          *LPCVOID;
-typedef void                *PVOID;
-
-typedef u64 DWORDLONG;
-
-typedef u8 BOOLEAN;
-
-#if !defined(_M_IX86)
- typedef s64 LONGLONG; 
-#else
- typedef double LONGLONG;
-#endif
-
-#if !defined(_M_IX86)
- typedef u64 ULONGLONG;
-#else
- typedef double ULONGLONG;
-#endif
-typedef LONGLONG USN;
-
-typedef WORD ATOM;
-
-typedef s64 INT_PTR, *PINT_PTR;
-typedef u64 UINT_PTR, *PUINT_PTR;
-
-typedef s64 LONG_PTR, *PLONG_PTR;
-typedef u64 ULONG_PTR, *PULONG_PTR;
-
-
-typedef UINT_PTR            WPARAM;
-typedef LONG_PTR            LPARAM;
-typedef LONG_PTR            LRESULT;
-
-typedef int                 INT;
-typedef unsigned int        UINT;
-typedef unsigned int        *PUINT;
-
-typedef signed char         INT8, *PINT8;
-typedef signed short        INT16, *PINT16;
-typedef signed int          INT32, *PINT32;
-typedef s64      INT64, *PINT64;
-typedef unsigned char       UINT8, *PUINT8;
-typedef unsigned short      UINT16, *PUINT16;
-typedef unsigned int        UINT32, *PUINT32;
-typedef s64    UINT64, *PUINT64;
-
-typedef signed int LONG32, *PLONG32;
-
-typedef unsigned int ULONG32, *PULONG32;
-typedef unsigned int DWORD32, *PDWORD32;
-
-typedef LONG32 LONG;
-
-typedef s64 ULONG64, *PULONG64;
-typedef s64 DWORD64, *PDWORD64;
-
-typedef u64 LONG64;
-
-typedef char CHAR;
-typedef CHAR *PCHAR, *LPCH, *PCH;
-typedef const CHAR *LPCCH, *PCCH;
-
-typedef DWORD *DWORD_PTR;
-
-typedef CHAR *NPSTR, *LPSTR, *PSTR;
-typedef PSTR *PZPSTR;
-typedef const PSTR *PCZPSTR;
-typedef const CHAR *LPCSTR, *PCSTR;
-typedef PCSTR *PZPCSTR;
-typedef const PCSTR *PCZPCSTR;
-
-typedef CHAR *PZZSTR;
-typedef const CHAR *PCZZSTR;
-
-typedef  CHAR *PNZCH;
-typedef  const CHAR *PCNZCH;
-
-typedef unsigned short WCHAR;
-
-typedef WCHAR *NWPSTR, *LPWSTR, *PWSTR;
-typedef PWSTR *PZPWSTR;
-typedef const PWSTR *PCZPWSTR;
-typedef WCHAR *LPUWSTR, *PUWSTR;
-typedef const WCHAR *LPCWSTR, *PCWSTR;
-typedef PCWSTR *PZPCWSTR;
-typedef const PCWSTR *PCZPCWSTR;
-typedef const WCHAR *LPCUWSTR, *PCUWSTR;
-
-// what the fuck
-
-// who thought this was a good idea
-
-typedef WCHAR *PZZWSTR;
-typedef const WCHAR *PCZZWSTR;
-typedef WCHAR *PUZZWSTR;
-typedef const WCHAR *PCUZZWSTR;
-
-typedef  WCHAR *PNZWCH;
-typedef  const WCHAR *PCNZWCH;
-typedef  WCHAR *PUNZWCH;
-typedef  const WCHAR *PCUNZWCH;
-
-typedef const WCHAR *LPCWCH;
-
-typedef long long LONGLONG;
-
-typedef union _LARGE_INTEGER {
-  struct {
-    DWORD LowPart;
-    LONG  HighPart;
-  } DUMMYSTRUCTNAME;
-  struct {
-    DWORD LowPart;
-    LONG  HighPart;
-  } u;
-  LONGLONG QuadPart;
-} LARGE_INTEGER, *PLARGE_INTEGER;
-
-typedef LARGE_INTEGER LARGE_INTEGER;
-
-typedef LRESULT (*WNDPROC)( HWND unnamedParam1, UINT unnamedParam2, WPARAM unnamedParam3, LPARAM unnamedParam4);
-
-
 // #Portability x64
 #define CONTEXT_AMD64   0x00100000L
 
@@ -3520,7 +3669,6 @@ typedef LRESULT (*WNDPROC)( HWND unnamedParam1, UINT unnamedParam2, WPARAM unnam
 #define CONTEXT_SEGMENTS        (CONTEXT_AMD64 | 0x00000004L)
 #define CONTEXT_FLOATING_POINT  (CONTEXT_AMD64 | 0x00000008L)
 #define CONTEXT_DEBUG_REGISTERS (CONTEXT_AMD64 | 0x00000010L)
-
 #define CONTEXT_FULL            (CONTEXT_CONTROL | CONTEXT_INTEGER | \
     CONTEXT_FLOATING_POINT)
 
@@ -3529,12 +3677,7 @@ typedef LRESULT (*WNDPROC)( HWND unnamedParam1, UINT unnamedParam2, WPARAM unnam
     CONTEXT_DEBUG_REGISTERS)
 
 #define CONTEXT_XSTATE          (CONTEXT_AMD64 | 0x00000040L)
-
-
-
-
 #define WINAPI __stdcall
-
 #if COMPILER_FLAGS & COMPILER_FLAG_GNU
 #define WINDOWS_IMPORT extern __attribute__((dllimport))
 #elif COMPILER_FLAGS & COMPILER_FLAG_MSC
@@ -3544,491 +3687,14 @@ typedef LRESULT (*WNDPROC)( HWND unnamedParam1, UINT unnamedParam2, WPARAM unnam
 #define WINDOWS_IMPORT
 #endif
 
-typedef struct tagRECT {
-    LONG left;
-    LONG top;
-    LONG right;
-    LONG bottom;
-} RECT, *PRECT, *NPRECT, *LPRECT;
-typedef const RECT* LPCRECT;
-
-// ?!?!?!?!?!?!??!?!?!?!?!??!?!?!?!?!?!?!?!??!?!!??!?!?!?!?
-typedef struct _POINTL {
-  LONG x;
-  LONG y;
-} POINTL, *PPOINTL;
-typedef struct tagPOINT {
-  LONG x;
-  LONG y;
-} POINT, *PPOINT, *NPPOINT, *LPPOINT;
-
-#ifdef __clang__
-#pragma clang diagnostic push
-#pragma clang diagnostic ignored "-Wmicrosoft-anon-tag"
-#endif // __clang__
-typedef struct _SYSTEM_INFO {
-    union _SYSTEM_INFO_DUMMYUNION {
-        DWORD dwOemId;
-        struct _SYSTEM_INFO_DUMMYSTRUCT {
-            WORD wProcessorArchitecture;
-            WORD wReserved;
-        } ;
-    } ;
-    DWORD dwPageSize;
-    LPVOID lpMinimumApplicationAddress;
-    LPVOID lpMaximumApplicationAddress;
-    DWORD_PTR dwActiveProcessorMask;
-    DWORD dwNumberOfProcessors;
-    DWORD dwProcessorType;
-    DWORD dwAllocationGranularity;
-    WORD wProcessorLevel;
-    WORD wProcessorRevision;
-} SYSTEM_INFO, *LPSYSTEM_INFO;
-#ifdef __clang__
-#pragma clang diagnostic pop
-#endif //__clang__
-
-typedef struct _MEMORY_BASIC_INFORMATION {
-    void*  BaseAddress;
-    void*  AllocationBase;
-    u32  AllocationProtect;
-    u16   PartitionId;
-    size_t RegionSize;
-    u32  State;
-    u32  Protect;
-    u32  Type;
-} MEMORY_BASIC_INFORMATION, *PMEMORY_BASIC_INFORMATION;
-
-typedef struct DECLSPEC_ALIGN(16) _M128A {
-    unsigned long long Low;
-    long long High;
-} M128A, *PM128A;
-
-typedef struct DECLSPEC_ALIGN(16) _XMM_SAVE_AREA32
-{
-    WORD   ControlWord;
-    WORD   StatusWord;
-    BYTE  TagWord;
-    BYTE  Reserved1;
-    WORD   ErrorOpcode;
-    DWORD ErrorOffset;
-    WORD   ErrorSelector;
-    WORD   Reserved2;
-    DWORD DataOffset;
-    WORD   DataSelector;
-    WORD   Reserved3;
-    DWORD MxCsr;
-    DWORD MxCsr_Mask;
-    M128A FloatRegisters[8];
-
-    #if defined(_WIN64)
-
-    M128A XmmRegisters[16];
-    BYTE  Reserved4[96];
-
-    #else
-
-    M128A XmmRegisters[8];
-    BYTE  Reserved4[224];
-
-    #endif
-
-} XMM_SAVE_AREA32;
-typedef struct DECLSPEC_ALIGN(16) _CONTEXT {
-
-    //
-    // Register parameter home addresses.
-    //
-    // N.B. These fields are for convience - they could be used to extend the
-    //      context record in the future.
-    //
-
-    DWORD64 P1Home;
-    DWORD64 P2Home;
-    DWORD64 P3Home;
-    DWORD64 P4Home;
-    DWORD64 P5Home;
-    DWORD64 P6Home;
-
-    //
-    // Control flags.
-    //
-
-    DWORD ContextFlags;
-    DWORD MxCsr;
-
-    //
-    // Segment Registers and processor flags.
-    //
-
-    WORD   SegCs;
-    WORD   SegDs;
-    WORD   SegEs;
-    WORD   SegFs;
-    WORD   SegGs;
-    WORD   SegSs;
-    DWORD EFlags;
-
-    //
-    // Debug registers
-    //
-
-    DWORD64 Dr0;
-    DWORD64 Dr1;
-    DWORD64 Dr2;
-    DWORD64 Dr3;
-    DWORD64 Dr6;
-    DWORD64 Dr7;
-
-    //
-    // Integer registers.
-    //
-
-    DWORD64 Rax;
-    DWORD64 Rcx;
-    DWORD64 Rdx;
-    DWORD64 Rbx;
-    DWORD64 Rsp;
-    DWORD64 Rbp;
-    DWORD64 Rsi;
-    DWORD64 Rdi;
-    DWORD64 R8;
-    DWORD64 R9;
-    DWORD64 R10;
-    DWORD64 R11;
-    DWORD64 R12;
-    DWORD64 R13;
-    DWORD64 R14;
-    DWORD64 R15;
-
-    //
-    // Program counter.
-    //
-
-    DWORD64 Rip;
-
-    //
-    // Floating point state.
-    //
-
-    union {
-        XMM_SAVE_AREA32 FltSave;
-        struct {
-            M128A Header[2];
-            M128A Legacy[8];
-            M128A Xmm0;
-            M128A Xmm1;
-            M128A Xmm2;
-            M128A Xmm3;
-            M128A Xmm4;
-            M128A Xmm5;
-            M128A Xmm6;
-            M128A Xmm7;
-            M128A Xmm8;
-            M128A Xmm9;
-            M128A Xmm10;
-            M128A Xmm11;
-            M128A Xmm12;
-            M128A Xmm13;
-            M128A Xmm14;
-            M128A Xmm15;
-        } DUMMYSTRUCTNAME;
-    } DUMMYUNIONNAME;
-
-    //
-    // Vector registers.
-    //
-
-    M128A VectorRegister[26];
-    DWORD64 VectorControl;
-
-    //
-    // Special debug control registers.
-    //
-
-    DWORD64 DebugControl;
-    DWORD64 LastBranchToRip;
-    DWORD64 LastBranchFromRip;
-    DWORD64 LastExceptionToRip;
-    DWORD64 LastExceptionFromRip;
-} CONTEXT, *PCONTEXT;
-
-typedef enum {
-    AddrMode1616,
-    AddrMode1632,
-    AddrModeReal,
-    AddrModeFlat
-} ADDRESS_MODE;
-typedef struct _tagADDRESS64 {
-    DWORD64       Offset;
-    WORD          Segment;
-    ADDRESS_MODE  Mode;
-} ADDRESS64, *LPADDRESS64;
-
-typedef struct _KDHELP64 {
-
-    DWORD64   Thread;
-    DWORD   ThCallbackStack;
-    DWORD   ThCallbackBStore;
-    DWORD   NextCallback;
-    DWORD   FramePointer;
-    DWORD64   KiCallUserMode;
-    DWORD64   KeUserCallbackDispatcher;
-    DWORD64   SystemRangeStart;
-    DWORD64   KiUserExceptionDispatcher;
-    DWORD64   StackBase;
-    DWORD64   StackLimit;
-    DWORD     BuildVersion;
-    DWORD     RetpolineStubFunctionTableSize;
-    DWORD64   RetpolineStubFunctionTable;
-    DWORD     RetpolineStubOffset;
-    DWORD     RetpolineStubSize;
-    DWORD64   Reserved0[2];
-
-} KDHELP64, *PKDHELP64;
-
-typedef struct _tagSTACKFRAME64 {
-    ADDRESS64   AddrPC;               // program counter
-    ADDRESS64   AddrReturn;           // return address
-    ADDRESS64   AddrFrame;            // frame pointer
-    ADDRESS64   AddrStack;            // stack pointer
-    ADDRESS64   AddrBStore;           // backing store pointer
-    PVOID       FuncTableEntry;       // pointer to pdata/fpo or NULL
-    DWORD64     Params[4];            // possible arguments to the function
-    BOOL        Far;                  // WOW far call
-    BOOL        Virtual;              // is this a virtual frame?
-    DWORD64     Reserved[3];
-    KDHELP64    KdHelp;
-} STACKFRAME64, *LPSTACKFRAME64;
-
-typedef struct _SYMBOL_INFO {
-    ULONG       SizeOfStruct;
-    ULONG       TypeIndex;        // Type Index of symbol
-    ULONG64     Reserved[2];
-    ULONG       Index;
-    ULONG       Size;
-    ULONG64     ModBase;          // Base Address of module comtaining this symbol
-    ULONG       Flags;
-    ULONG64     Value;            // Value of symbol, ValuePresent should be 1
-    ULONG64     Address;          // Address of symbol including base address of module
-    ULONG       Register;         // register holding value or pointer to value
-    ULONG       Scope;            // scope of the symbol
-    ULONG       Tag;              // pdb classification
-    ULONG       NameLen;          // Actual length of name
-    ULONG       MaxNameLen;
-    CHAR        Name[1];          // Name of symbol
-} SYMBOL_INFO, *PSYMBOL_INFO;
-
-typedef struct _IMAGEHLP_LINE64 {
-    DWORD    SizeOfStruct;           // set to sizeof(IMAGEHLP_LINE64)
-    PVOID    Key;                    // internal
-    DWORD    LineNumber;             // line number in file
-    PCHAR    FileName;               // full filename
-    DWORD64  Address;                // first instruction of line
-} IMAGEHLP_LINE64, *PIMAGEHLP_LINE64;
-
-#ifdef __clang__
-#pragma clang diagnostic push
-#pragma clang diagnostic ignored "-Wmicrosoft-anon-tag"
-#endif // __clang__
-typedef struct _OVERLAPPED {
-    ULONG_PTR Internal;
-    ULONG_PTR InternalHigh;
-    union _OVERLAPPED_DUMMYUNION {
-        struct _OVERLAPPED_DUMMYSTRUCT {
-            DWORD Offset;
-            DWORD OffsetHigh;
-        } ;
-        PVOID Pointer;
-    } ;
-
-    HANDLE hEvent;
-} OVERLAPPED, *LPOVERLAPPED;
-#ifdef __clang__
-#pragma clang diagnostic pop
-#endif //__clang__
-
-typedef struct tagMSG {
-  HWND   hwnd;
-  UINT   message;
-  WPARAM wParam;
-  LPARAM lParam;
-  DWORD  time;
-  POINT  pt;
-  DWORD  lPrivate;
-} MSG, *PMSG, *NPMSG, *LPMSG;
-
 #define CCHDEVICENAME 32
 #define CCHFORMNAME 32
-
-#ifdef __clang__
-#pragma clang diagnostic push
-#pragma clang diagnostic ignored "-Wmicrosoft-anon-tag"
-#endif // __clang__
-typedef struct _devicemodeW {
-  WCHAR dmDeviceName[CCHDEVICENAME];
-  WORD  dmSpecVersion;
-  WORD  dmDriverVersion;
-  WORD  dmSize;
-  WORD  dmDriverExtra;
-  DWORD dmFields;
-  union {
-    struct {
-      short dmOrientation;
-      short dmPaperSize;
-      short dmPaperLength;
-      short dmPaperWidth;
-      short dmScale;
-      short dmCopies;
-      short dmDefaultSource;
-      short dmPrintQuality;
-    } DUMMYSTRUCTNAME;
-    POINTL dmPosition;
-    struct {
-      POINTL dmPosition;
-      DWORD  dmDisplayOrientation;
-      DWORD  dmDisplayFixedOutput;
-    } DUMMYSTRUCTNAME2;
-  } DUMMYUNIONNAME;
-  short dmColor;
-  short dmDuplex;
-  short dmYResolution;
-  short dmTTOption;
-  short dmCollate;
-  WCHAR dmFormName[CCHFORMNAME];
-  WORD  dmLogPixels;
-  DWORD dmBitsPerPel;
-  DWORD dmPelsWidth;
-  DWORD dmPelsHeight;
-  union {
-    DWORD dmDisplayFlags;
-    DWORD dmNup;
-  } DUMMYUNIONNAME2;
-  DWORD dmDisplayFrequency;
-  DWORD dmICMMethod;
-  DWORD dmICMIntent;
-  DWORD dmMediaType;
-  DWORD dmDitherType;
-  DWORD dmReserved1;
-  DWORD dmReserved2;
-  DWORD dmPanningWidth;
-  DWORD dmPanningHeight;
-} DEVMODEW, *PDEVMODEW, *NPDEVMODEW, *LPDEVMODEW;
-#ifdef __clang__
-#pragma clang diagnostic pop
-#endif //__clang__
-
-typedef struct tagMONITORINFO {
-    DWORD cbSize;
-    RECT  rcMonitor;
-    RECT  rcWork;
-    DWORD dwFlags;
-} MONITORINFO, *LPMONITORINFO;
-
-typedef struct tagMONITORINFOEXW {
-    DWORD cbSize;
-    RECT  rcMonitor;
-    RECT  rcWork;
-    DWORD dwFlags;
-    WCHAR szDevice[CCHDEVICENAME];
-} MONITORINFOEXW, *LPMONITORINFOEXW;
-
-typedef struct _DISPLAY_DEVICEW {
-  DWORD cb;
-  WCHAR DeviceName[32];
-  WCHAR DeviceString[128];
-  DWORD StateFlags;
-  WCHAR DeviceID[128];
-  WCHAR DeviceKey[128];
-} DISPLAY_DEVICEW, *PDISPLAY_DEVICEW, *LPDISPLAY_DEVICEW;
-
-typedef struct tagWNDCLASSEXW {
-  UINT      cbSize;
-  UINT      style;
-  WNDPROC   lpfnWndProc;
-  int       cbClsExtra;
-  int       cbWndExtra;
-  HINSTANCE hInstance;
-  HICON     hIcon;
-  HCURSOR   hCursor;
-  HBRUSH    hbrBackground;
-  LPCWSTR   lpszMenuName;
-  LPCWSTR   lpszClassName;
-  HICON     hIconSm;
-} WNDCLASSEXW, *PWNDCLASSEXW, *NPWNDCLASSEXW, *LPWNDCLASSEXW;
-
-typedef struct _SECURITY_ATTRIBUTES {
-  DWORD  nLength;
-  LPVOID lpSecurityDescriptor;
-  BOOL   bInheritHandle;
-} SECURITY_ATTRIBUTES, *PSECURITY_ATTRIBUTES, *LPSECURITY_ATTRIBUTES;
-
-typedef struct _GUID {
-  unsigned long  Data1;
-  unsigned short Data2;
-  unsigned short Data3;
-  unsigned char  Data4[8];
-} GUID;
-typedef struct tagRGBQUAD {
-  BYTE rgbBlue;
-  BYTE rgbGreen;
-  BYTE rgbRed;
-  BYTE rgbReserved;
-} RGBQUAD;
-typedef struct tagBITMAPINFOHEADER {
-  DWORD biSize;
-  LONG  biWidth;
-  LONG  biHeight;
-  WORD  biPlanes;
-  WORD  biBitCount;
-  DWORD biCompression;
-  DWORD biSizeImage;
-  LONG  biXPelsPerMeter;
-  LONG  biYPelsPerMeter;
-  DWORD biClrUsed;
-  DWORD biClrImportant;
-} BITMAPINFOHEADER, *LPBITMAPINFOHEADER, *PBITMAPINFOHEADER;
-typedef struct tagBITMAPINFO {
-  BITMAPINFOHEADER bmiHeader;
-  RGBQUAD          bmiColors[1];
-} BITMAPINFO, *LPBITMAPINFO, *PBITMAPINFO;
-
-typedef struct _STARTUPINFOA {
-  DWORD  cb;
-  LPSTR  lpReserved;
-  LPSTR  lpDesktop;
-  LPSTR  lpTitle;
-  DWORD  dwX;
-  DWORD  dwY;
-  DWORD  dwXSize;
-  DWORD  dwYSize;
-  DWORD  dwXCountChars;
-  DWORD  dwYCountChars;
-  DWORD  dwFillAttribute;
-  DWORD  dwFlags;
-  WORD   wShowWindow;
-  WORD   cbReserved2;
-  LPBYTE lpReserved2;
-  HANDLE hStdInput;
-  HANDLE hStdOutput;
-  HANDLE hStdError;
-} STARTUPINFOA, *LPSTARTUPINFOA;
-
-typedef struct _PROCESS_INFORMATION {
-  HANDLE hProcess;
-  HANDLE hThread;
-  DWORD  dwProcessId;
-  DWORD  dwThreadId;
-} PROCESS_INFORMATION, *PPROCESS_INFORMATION, *LPPROCESS_INFORMATION;
-
 #define MEM_COMMIT 0x00001000
 #define MEM_RESERVE 0x00002000
 #define MEM_DECOMMIT 0x00004000
 #define MEM_RELEASE 0x00008000
-
 #define PAGE_NOACCESS  0x01
 #define PAGE_READWRITE 0x04
-
 #define IMAGE_FILE_MACHINE_UNKNOWN           0
 #define IMAGE_FILE_MACHINE_TARGET_HOST       0x0001  // Useful for indicating we want to interact with the host and not a WoW guest.
 #define IMAGE_FILE_MACHINE_I386              0x014c  // Intel 386.
@@ -4061,36 +3727,29 @@ typedef struct _PROCESS_INFORMATION {
 #define IMAGE_FILE_MACHINE_M32R              0x9041  // M32R little-endian
 #define IMAGE_FILE_MACHINE_ARM64             0xAA64  // ARM64 Little-Endian
 #define IMAGE_FILE_MACHINE_CEE               0xC0EE
-
 #define ENUM_CURRENT_SETTINGS       ((DWORD)-1)
 #define ENUM_REGISTRY_SETTINGS      ((DWORD)-2)
-
 #define MONITOR_DEFAULTTONULL       0x00000000
 #define MONITOR_DEFAULTTOPRIMARY    0x00000001
 #define MONITOR_DEFAULTTONEAREST    0x00000002
-
 #define MONITORINFOF_PRIMARY        0x00000001
-
 #define CP_ACP                    0           // default to ANSI code page
 #define CP_OEMCP                  1           // default to OEM  code page
 #define CP_MACCP                  2           // default to MAC  code page
 #define CP_THREAD_ACP             3           // current thread's ANSI code page
 #define CP_SYMBOL                 42          // SYMBOL translations
-
 #define CP_UTF7                   65000       // UTF-7 translation
 #define CP_UTF8                   65001       // UTF-8 translation
-
-typedef void* DPI_AWARENESS_CONTEXT;
 #define DPI_AWARENESS_CONTEXT_UNAWARE              ((DPI_AWARENESS_CONTEXT)-1)
 #define DPI_AWARENESS_CONTEXT_SYSTEM_AWARE         ((DPI_AWARENESS_CONTEXT)-2)
 #define DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE    ((DPI_AWARENESS_CONTEXT)-3)
 #define DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2 ((DPI_AWARENESS_CONTEXT)-4)
 #define DPI_AWARENESS_CONTEXT_UNAWARE_GDISCALED    ((DPI_AWARENESS_CONTEXT)-5)
-
 /*
  * Window Styles
  */
 #define WS_OVERLAPPED       0x00000000L
+
 #define WS_POPUP            0x80000000L
 #define WS_CHILD            0x40000000L
 #define WS_MINIMIZE         0x20000000L
@@ -4108,16 +3767,12 @@ typedef void* DPI_AWARENESS_CONTEXT;
 #define WS_THICKFRAME       0x00040000L
 #define WS_GROUP            0x00020000L
 #define WS_TABSTOP          0x00010000L
-
 #define WS_MINIMIZEBOX      0x00020000L
 #define WS_MAXIMIZEBOX      0x00010000L
-
-
 #define WS_TILED            WS_OVERLAPPED
 #define WS_ICONIC           WS_MINIMIZE
 #define WS_SIZEBOX          WS_THICKFRAME
 #define WS_TILEDWINDOW      WS_OVERLAPPEDWINDOW
-
 /*
  * Common Window Styles
  */
@@ -4133,11 +3788,11 @@ typedef void* DPI_AWARENESS_CONTEXT;
                              WS_SYSMENU)
 
 #define WS_CHILDWINDOW      (WS_CHILD)
-
 /*
  * Extended Window Styles
  */
 #define WS_EX_DLGMODALFRAME     0x00000001L
+
 #define WS_EX_NOPARENTNOTIFY    0x00000004L
 #define WS_EX_TOPMOST           0x00000008L
 #define WS_EX_ACCEPTFILES       0x00000010L
@@ -4150,6 +3805,7 @@ typedef void* DPI_AWARENESS_CONTEXT;
 #define WS_EX_CONTEXTHELP       0x00000400L
 
 #endif /* WINVER >= 0x0400 */
+
 #if(WINVER >= 0x0400)
 
 #define WS_EX_RIGHT             0x00001000L
@@ -4174,7 +3830,6 @@ typedef void* DPI_AWARENESS_CONTEXT;
 
 #endif /* _WIN32_WINNT >= 0x0500 */
 
-
 #if(WINVER >= 0x0500)
 #define WS_EX_NOINHERITLAYOUT   0x00100000L // Disable inheritence of mirroring by children
 #endif /* WINVER >= 0x0500 */
@@ -4190,15 +3845,16 @@ typedef void* DPI_AWARENESS_CONTEXT;
 #if(_WIN32_WINNT >= 0x0501)
 #define WS_EX_COMPOSITED        0x02000000L
 #endif /* _WIN32_WINNT >= 0x0501 */
+
 #if(_WIN32_WINNT >= 0x0500)
 #define WS_EX_NOACTIVATE        0x08000000L
 #endif /* _WIN32_WINNT >= 0x0500 */
-
 
 /*
  * Class styles
  */
 #define CS_VREDRAW          0x0001
+
 #define CS_HREDRAW          0x0002
 #define CS_DBLCLKS          0x0008
 #define CS_OWNDC            0x0020
@@ -4209,7 +3865,6 @@ typedef void* DPI_AWARENESS_CONTEXT;
 #define CS_BYTEALIGNCLIENT  0x1000
 #define CS_BYTEALIGNWINDOW  0x2000
 #define CS_GLOBALCLASS      0x4000
-
 #define CS_IME              0x00010000
 #if(_WIN32_WINNT >= 0x0501)
 #define CS_DROPSHADOW       0x00020000
@@ -4230,27 +3885,25 @@ typedef void* DPI_AWARENESS_CONTEXT;
 #define SW_SHOWDEFAULT      10
 #define SW_FORCEMINIMIZE    11
 #define SW_MAX              11
-
 #define CW_USEDEFAULT       ((int)0x80000000)
-
 /*
  * Window Messages
  */
 
 #define WM_NULL                         0x0000
+
 #define WM_CREATE                       0x0001
 #define WM_DESTROY                      0x0002
 #define WM_MOVE                         0x0003
 #define WM_SIZE                         0x0005
-
 #define WM_ACTIVATE                     0x0006
 /*
  * WM_ACTIVATE state values
  */
 #define     WA_INACTIVE     0
+
 #define     WA_ACTIVE       1
 #define     WA_CLICKACTIVE  2
-
 #define WM_SETFOCUS                     0x0007
 #define WM_KILLFOCUS                    0x0008
 #define WM_ENABLE                       0x000A
@@ -4265,6 +3918,7 @@ typedef void* DPI_AWARENESS_CONTEXT;
 #define WM_QUERYOPEN                    0x0013
 #define WM_ENDSESSION                   0x0016
 #endif
+
 #define WM_QUIT                         0x0012
 #define WM_ERASEBKGND                   0x0014
 #define WM_SYSCOLORCHANGE               0x0015
@@ -4273,7 +3927,6 @@ typedef void* DPI_AWARENESS_CONTEXT;
 #if(WINVER >= 0x0400)
 #define WM_SETTINGCHANGE                WM_WININICHANGE
 #endif /* WINVER >= 0x0400 */
-
 
 #define WM_DEVMODECHANGE                0x001B
 #define WM_ACTIVATEAPP                  0x001C
@@ -4284,21 +3937,7 @@ typedef void* DPI_AWARENESS_CONTEXT;
 #define WM_MOUSEACTIVATE                0x0021
 #define WM_CHILDACTIVATE                0x0022
 #define WM_QUEUESYNC                    0x0023
-
 #define WM_GETMINMAXINFO                0x0024
-
-/*
- * Struct pointed to by WM_GETMINMAXINFO lParam
- */
-typedef struct tagMINMAXINFO {
-    POINT ptReserved;
-    POINT ptMaxSize;
-    POINT ptMaxPosition;
-    POINT ptMinTrackSize;
-    POINT ptMaxTrackSize;
-} MINMAXINFO, *PMINMAXINFO, *LPMINMAXINFO;
-
-
 #define WM_PAINTICON                    0x0026
 #define WM_ICONERASEBKGND               0x0027
 #define WM_NEXTDLGCTL                   0x0028
@@ -4319,44 +3958,23 @@ typedef struct tagMINMAXINFO {
 #define WM_GETOBJECT                    0x003D
 #endif
 #endif /* WINVER >= 0x0500 */
+
 #define WM_COMPACTING                   0x0041
 #define WM_COMMNOTIFY                   0x0044  /* no longer suported */
 #define WM_WINDOWPOSCHANGING            0x0046
 #define WM_WINDOWPOSCHANGED             0x0047
-
 #define WM_POWER                        0x0048
 /*
  * wParam for WM_POWER window message and DRV_POWER driver notification
  */
 #define PWR_OK              1
+
 #define PWR_FAIL            (-1)
 #define PWR_SUSPENDREQUEST  1
 #define PWR_SUSPENDRESUME   2
 #define PWR_CRITICALRESUME  3
-
 #define WM_COPYDATA                     0x004A
 #define WM_CANCELJOURNAL                0x004B
-
-
-
-/*
- * lParam of WM_COPYDATA message points to...
- */
-typedef struct tagCOPYDATASTRUCT {
-    ULONG_PTR dwData;
-    DWORD cbData;
-    PVOID lpData;
-} COPYDATASTRUCT, *PCOPYDATASTRUCT;
-
-#if(WINVER >= 0x0400)
-typedef struct tagMDINEXTMENU
-{
-    HMENU   hmenuIn;
-    HMENU   hmenuNext;
-    HWND    hwndNext;
-} MDINEXTMENU, * PMDINEXTMENU, * LPMDINEXTMENU;
-#endif /* WINVER >= 0x0400 */
-
 #if(WINVER >= 0x0400)
 #define WM_NOTIFY                       0x004E
 #define WM_INPUTLANGCHANGEREQUEST       0x0050
@@ -4389,6 +4007,7 @@ typedef struct tagMDINEXTMENU
 #ifndef _WIN32_WCE
 #define WM_SYNCPAINT                    0x0088
 #endif
+
 #define WM_NCMOUSEMOVE                  0x00A0
 #define WM_NCLBUTTONDOWN                0x00A1
 #define WM_NCLBUTTONUP                  0x00A2
@@ -4399,15 +4018,11 @@ typedef struct tagMDINEXTMENU
 #define WM_NCMBUTTONDOWN                0x00A7
 #define WM_NCMBUTTONUP                  0x00A8
 #define WM_NCMBUTTONDBLCLK              0x00A9
-
-
-
 #if(_WIN32_WINNT >= 0x0500)
 #define WM_NCXBUTTONDOWN                0x00AB
 #define WM_NCXBUTTONUP                  0x00AC
 #define WM_NCXBUTTONDBLCLK              0x00AD
 #endif /* _WIN32_WINNT >= 0x0500 */
-
 
 #if(_WIN32_WINNT >= 0x0501)
 #define WM_INPUT_DEVICE_CHANGE          0x00FE
@@ -4453,6 +4068,7 @@ typedef struct tagMDINEXTMENU
 #define WM_GESTURE                      0x0119
 #define WM_GESTURENOTIFY                0x011A
 #endif /* WINVER >= 0x0601 */
+
 #define WM_MENUSELECT                   0x011F
 #define WM_MENUCHAR                     0x0120
 #define WM_ENTERIDLE                    0x0121
@@ -4499,7 +4115,6 @@ typedef struct tagMDINEXTMENU
 #define WM_CTLCOLORSCROLLBAR            0x0137
 #define WM_CTLCOLORSTATIC               0x0138
 #define MN_GETHMENU                     0x01E1
-
 #define WM_MOUSEFIRST                   0x0200
 #define WM_MOUSEMOVE                    0x0200
 #define WM_LBUTTONDOWN                  0x0201
@@ -4514,11 +4129,13 @@ typedef struct tagMDINEXTMENU
 #if (_WIN32_WINNT >= 0x0400) || (_WIN32_WINDOWS > 0x0400)
 #define WM_MOUSEWHEEL                   0x020A
 #endif
+
 #if (_WIN32_WINNT >= 0x0500)
 #define WM_XBUTTONDOWN                  0x020B
 #define WM_XBUTTONUP                    0x020C
 #define WM_XBUTTONDBLCLK                0x020D
 #endif
+
 #if (_WIN32_WINNT >= 0x0600)
 #define WM_MOUSEHWHEEL                  0x020E
 #endif
@@ -4532,7 +4149,6 @@ typedef struct tagMDINEXTMENU
 #else
 #define WM_MOUSELAST                    0x0209
 #endif /* (_WIN32_WINNT >= 0x0600) */
-
 
 #if(_WIN32_WINNT >= 0x0400)
 /* Value for rolling one detent */
@@ -4557,58 +4173,11 @@ typedef struct tagMDINEXTMENU
 #define WM_PARENTNOTIFY                 0x0210
 #define WM_ENTERMENULOOP                0x0211
 #define WM_EXITMENULOOP                 0x0212
-
 #if(WINVER >= 0x0400)
 #define WM_NEXTMENU                     0x0213
 #define WM_SIZING                       0x0214
 #define WM_CAPTURECHANGED               0x0215
 #define WM_MOVING                       0x0216
-#endif /* WINVER >= 0x0400 */
-
-#if(WINVER >= 0x0400)
-
-
-#define WM_POWERBROADCAST               0x0218
-
-#ifndef _WIN32_WCE
-#define PBT_APMQUERYSUSPEND             0x0000
-#define PBT_APMQUERYSTANDBY             0x0001
-
-#define PBT_APMQUERYSUSPENDFAILED       0x0002
-#define PBT_APMQUERYSTANDBYFAILED       0x0003
-
-#define PBT_APMSUSPEND                  0x0004
-#define PBT_APMSTANDBY                  0x0005
-
-#define PBT_APMRESUMECRITICAL           0x0006
-#define PBT_APMRESUMESUSPEND            0x0007
-#define PBT_APMRESUMESTANDBY            0x0008
-
-#define PBTF_APMRESUMEFROMFAILURE       0x00000001
-
-#define PBT_APMBATTERYLOW               0x0009
-#define PBT_APMPOWERSTATUSCHANGE        0x000A
-
-#define PBT_APMOEMEVENT                 0x000B
-
-
-#define PBT_APMRESUMEAUTOMATIC          0x0012
-#if (_WIN32_WINNT >= 0x0502)
-#ifndef PBT_POWERSETTINGCHANGE
-#define PBT_POWERSETTINGCHANGE          0x8013
-
-typedef struct {
-    GUID PowerSetting;
-    DWORD DataLength;
-    UCHAR Data[1];
-} POWERBROADCAST_SETTING, *PPOWERBROADCAST_SETTING;
-
-
-#endif // PBT_POWERSETTINGCHANGE
-
-#endif // (_WIN32_WINNT >= 0x0502)
-#endif
-
 #endif /* WINVER >= 0x0400 */
 
 #if(WINVER >= 0x0400)
@@ -4625,20 +4194,16 @@ typedef struct {
 #define WM_MDICASCADE                   0x0227
 #define WM_MDIICONARRANGE               0x0228
 #define WM_MDIGETACTIVE                 0x0229
-
-
 #define WM_MDISETMENU                   0x0230
 #define WM_ENTERSIZEMOVE                0x0231
 #define WM_EXITSIZEMOVE                 0x0232
 #define WM_DROPFILES                    0x0233
 #define WM_MDIREFRESHMENU               0x0234
-
 #if(WINVER >= 0x0602)
 #define WM_POINTERDEVICECHANGE          0x238
 #define WM_POINTERDEVICEINRANGE         0x239
 #define WM_POINTERDEVICEOUTOFRANGE      0x23A
 #endif /* WINVER >= 0x0602 */
-
 
 #if(WINVER >= 0x0601)
 #define WM_TOUCH                        0x0240
@@ -4664,7 +4229,6 @@ typedef struct {
 #define WM_POINTERROUTEDRELEASED        0x0253
 #endif /* WINVER >= 0x0602 */
 
-
 #if(WINVER >= 0x0400)
 #define WM_IME_SETCONTEXT               0x0281
 #define WM_IME_NOTIFY                   0x0282
@@ -4673,9 +4237,11 @@ typedef struct {
 #define WM_IME_SELECT                   0x0285
 #define WM_IME_CHAR                     0x0286
 #endif /* WINVER >= 0x0400 */
+
 #if(WINVER >= 0x0500)
 #define WM_IME_REQUEST                  0x0288
 #endif /* WINVER >= 0x0500 */
+
 #if(WINVER >= 0x0400)
 #define WM_IME_KEYDOWN                  0x0290
 #define WM_IME_KEYUP                    0x0291
@@ -4685,6 +4251,7 @@ typedef struct {
 #define WM_MOUSEHOVER                   0x02A1
 #define WM_MOUSELEAVE                   0x02A3
 #endif
+
 #if(WINVER >= 0x0500)
 #define WM_NCMOUSEHOVER                 0x02A0
 #define WM_NCMOUSELEAVE                 0x02A2
@@ -4700,6 +4267,7 @@ typedef struct {
 #if(WINVER >= 0x0601)
 #define WM_DPICHANGED                   0x02E0
 #endif /* WINVER >= 0x0601 */
+
 #if(WINVER >= 0x0605)
 #define WM_DPICHANGED_BEFOREPARENT      0x02E2
 #define WM_DPICHANGED_AFTERPARENT       0x02E3
@@ -4725,7 +4293,6 @@ typedef struct {
 #define WM_PALETTEISCHANGING            0x0310
 #define WM_PALETTECHANGED               0x0311
 #define WM_HOTKEY                       0x0312
-
 #if(WINVER >= 0x0400)
 #define WM_PRINT                        0x0317
 #define WM_PRINTCLIENT                  0x0318
@@ -4738,7 +4305,6 @@ typedef struct {
 #if(_WIN32_WINNT >= 0x0501)
 #define WM_THEMECHANGED                 0x031A
 #endif /* _WIN32_WINNT >= 0x0501 */
-
 
 #if(_WIN32_WINNT >= 0x0501)
 #define WM_CLIPBOARDUPDATE              0x031D
@@ -4756,14 +4322,12 @@ typedef struct {
 #define WM_DWMSENDICONICLIVEPREVIEWBITMAP   0x0326
 #endif /* _WIN32_WINNT >= 0x0601 */
 
-
 #if(WINVER >= 0x0600)
 #define WM_GETTITLEBARINFOEX            0x033F
 #endif /* WINVER >= 0x0600 */
 
 #if(WINVER >= 0x0400)
 #endif /* WINVER >= 0x0400 */
-
 
 #if(WINVER >= 0x0400)
 #define WM_HANDHELDFIRST                0x0358
@@ -4775,12 +4339,9 @@ typedef struct {
 
 #define WM_PENWINFIRST                  0x0380
 #define WM_PENWINLAST                   0x038F
-
-
 #if(WINVER >= 0x0400)
 #define WM_APP                          0x8000
 #endif /* WINVER >= 0x0400 */
-
 
 /*
  * NOTE: All Message Numbers below 0x0400 are RESERVED.
@@ -4861,65 +4422,43 @@ typedef struct {
  * WM_MOUSEACTIVATE Return Codes
  */
 #define MA_ACTIVATE         1
+
 #define MA_ACTIVATEANDEAT   2
 #define MA_NOACTIVATE       3
 #define MA_NOACTIVATEANDEAT 4
-
 /*
  * WM_SETICON / WM_GETICON Type Codes
  */
 #define ICON_SMALL          0
+
 #define ICON_BIG            1
 #if(_WIN32_WINNT >= 0x0501)
 #define ICON_SMALL2         2
 #endif /* _WIN32_WINNT >= 0x0501 */
 
-
-
 /*
  * WM_SIZE message wParam values
  */
 #define SIZE_RESTORED       0
+
 #define SIZE_MINIMIZED      1
 #define SIZE_MAXIMIZED      2
 #define SIZE_MAXSHOW        3
 #define SIZE_MAXHIDE        4
-
 /*
  * Obsolete constant names
  */
 #define SIZENORMAL          SIZE_RESTORED
+
 #define SIZEICONIC          SIZE_MINIMIZED
 #define SIZEFULLSCREEN      SIZE_MAXIMIZED
 #define SIZEZOOMSHOW        SIZE_MAXSHOW
 #define SIZEZOOMHIDE        SIZE_MAXHIDE
-
-
-/*
- * WM_WINDOWPOSCHANGING/CHANGED struct pointed to by lParam
- */
-typedef struct tagWINDOWPOS {
-    HWND    hwnd;
-    HWND    hwndInsertAfter;
-    int     x;
-    int     y;
-    int     cx;
-    int     cy;
-    UINT    flags;
-} WINDOWPOS, *LPWINDOWPOS, *PWINDOWPOS;
-
-/*
- * WM_NCCALCSIZE parameter structure
- */
-typedef struct tagNCCALCSIZE_PARAMS {
-    RECT       rgrc[3];
-    PWINDOWPOS lppos;
-} NCCALCSIZE_PARAMS, *LPNCCALCSIZE_PARAMS;
-
 /*
  * WM_NCCALCSIZE "window valid rect" return values
  */
 #define WVR_ALIGNTOP        0x0010
+
 #define WVR_ALIGNLEFT       0x0020
 #define WVR_ALIGNBOTTOM     0x0040
 #define WVR_ALIGNRIGHT      0x0080
@@ -4927,9 +4466,8 @@ typedef struct tagNCCALCSIZE_PARAMS {
 #define WVR_VREDRAW         0x0200
 #define WVR_REDRAW         (WVR_HREDRAW | \
                             WVR_VREDRAW)
+
 #define WVR_VALIDRECTS      0x0400
-
-
 #ifndef NOKEYSTATES
 
 /*
@@ -4947,6 +4485,899 @@ typedef struct tagNCCALCSIZE_PARAMS {
 
 #endif /* !NOKEYSTATES */
 
+#define PM_NOREMOVE         0x0000
+#define PM_REMOVE           0x0001
+#define PM_NOYIELD          0x0002
+#define HWND_BOTTOM ((HWND)1)
+#define HWND_NOTOPMOST ((HWND)-2)
+#define HWND_TOP ((HWND)0)
+#define HWND_TOPMOST ((HWND)-1)
+/*
+ * SetWindowPos Flags
+ */
+#define SWP_NOSIZE          0x0001
+
+#define SWP_NOMOVE          0x0002
+#define SWP_NOZORDER        0x0004
+#define SWP_NOREDRAW        0x0008
+#define SWP_NOACTIVATE      0x0010
+#define SWP_FRAMECHANGED    0x0020  /* The frame changed: send WM_NCCALCSIZE */
+#define SWP_SHOWWINDOW      0x0040
+#define SWP_HIDEWINDOW      0x0080
+#define SWP_NOCOPYBITS      0x0100
+#define SWP_NOOWNERZORDER   0x0200  /* Don't do owner Z ordering */
+#define SWP_NOSENDCHANGING  0x0400  /* Don't send WM_WINDOWPOSCHANGING */
+#define SWP_DRAWFRAME       SWP_FRAMECHANGED
+#define SWP_NOREPOSITION    SWP_NOOWNERZORDER
+#if(WINVER >= 0x0400)
+#define SWP_DEFERERASE      0x2000 // same as SWP_DEFERDRAWING
+#define SWP_ASYNCWINDOWPOS  0x4000 // same as SWP_CREATESPB
+#endif /* WINVER >= 0x0400 */
+
+#define FILE_READ_DATA            ( 0x0001 )    // file & pipe
+#define FILE_LIST_DIRECTORY       ( 0x0001 )    // directory
+#define FILE_WRITE_DATA           ( 0x0002 )    // file & pipe
+#define FILE_ADD_FILE             ( 0x0002 )    // directory
+#define FILE_APPEND_DATA          ( 0x0004 )    // file
+#define FILE_ADD_SUBDIRECTORY     ( 0x0004 )    // directory
+#define FILE_CREATE_PIPE_INSTANCE ( 0x0004 )    // named pipe
+#define FILE_READ_EA              ( 0x0008 )    // file & directory
+#define FILE_WRITE_EA             ( 0x0010 )    // file & directory
+#define FILE_EXECUTE              ( 0x0020 )    // file
+#define FILE_TRAVERSE             ( 0x0020 )    // directory
+#define FILE_DELETE_CHILD         ( 0x0040 )    // directory
+#define FILE_READ_ATTRIBUTES      ( 0x0080 )    // all
+#define FILE_WRITE_ATTRIBUTES     ( 0x0100 )    // all
+#define FILE_ALL_ACCESS (STANDARD_RIGHTS_REQUIRED | SYNCHRONIZE | 0x1FF)
+#define FILE_GENERIC_READ         (STANDARD_RIGHTS_READ     |\
+                                   FILE_READ_DATA           |\
+                                   FILE_READ_ATTRIBUTES     |\
+                                   FILE_READ_EA             |\
+                                   SYNCHRONIZE)
+
+#define FILE_GENERIC_WRITE        (STANDARD_RIGHTS_WRITE    |\
+                                   FILE_WRITE_DATA          |\
+                                   FILE_WRITE_ATTRIBUTES    |\
+                                   FILE_WRITE_EA            |\
+                                   FILE_APPEND_DATA         |\
+                                   SYNCHRONIZE)
+
+#define FILE_GENERIC_EXECUTE      (STANDARD_RIGHTS_EXECUTE  |\
+                                   FILE_READ_ATTRIBUTES     |\
+                                   FILE_EXECUTE             |\
+                                   SYNCHRONIZE)
+
+// end_access
+#define FILE_SHARE_READ                 0x00000001
+
+#define FILE_SHARE_WRITE                0x00000002
+#define FILE_SHARE_DELETE               0x00000004
+#define FILE_ATTRIBUTE_READONLY             0x00000001
+#define FILE_ATTRIBUTE_HIDDEN               0x00000002
+#define FILE_ATTRIBUTE_SYSTEM               0x00000004
+#define FILE_ATTRIBUTE_DIRECTORY            0x00000010
+#define FILE_ATTRIBUTE_ARCHIVE              0x00000020
+#define FILE_ATTRIBUTE_DEVICE               0x00000040
+#define FILE_ATTRIBUTE_NORMAL               0x00000080
+#define FILE_ATTRIBUTE_TEMPORARY            0x00000100
+#define FILE_ATTRIBUTE_SPARSE_FILE          0x00000200
+#define FILE_ATTRIBUTE_REPARSE_POINT        0x00000400
+#define FILE_ATTRIBUTE_COMPRESSED           0x00000800
+#define FILE_ATTRIBUTE_OFFLINE              0x00001000
+#define FILE_ATTRIBUTE_NOT_CONTENT_INDEXED  0x00002000
+#define FILE_ATTRIBUTE_ENCRYPTED            0x00004000
+#define FILE_ATTRIBUTE_INTEGRITY_STREAM     0x00008000
+#define FILE_ATTRIBUTE_VIRTUAL              0x00010000
+#define FILE_ATTRIBUTE_NO_SCRUB_DATA        0x00020000
+#define FILE_ATTRIBUTE_EA                   0x00040000
+#define FILE_ATTRIBUTE_PINNED               0x00080000
+#define FILE_ATTRIBUTE_UNPINNED             0x00100000
+#define FILE_ATTRIBUTE_RECALL_ON_OPEN       0x00040000
+#define FILE_ATTRIBUTE_RECALL_ON_DATA_ACCESS 0x00400000
+#define TREE_CONNECT_ATTRIBUTE_PRIVACY      0x00004000
+#define TREE_CONNECT_ATTRIBUTE_INTEGRITY    0x00008000
+#define TREE_CONNECT_ATTRIBUTE_GLOBAL       0x00000004
+#define TREE_CONNECT_ATTRIBUTE_PINNED       0x00000002
+#define FILE_ATTRIBUTE_STRICTLY_SEQUENTIAL  0x20000000
+#define FILE_NOTIFY_CHANGE_FILE_NAME    0x00000001
+#define FILE_NOTIFY_CHANGE_DIR_NAME     0x00000002
+#define FILE_NOTIFY_CHANGE_NAME         0x00000003
+#define FILE_NOTIFY_CHANGE_ATTRIBUTES   0x00000004
+#define FILE_NOTIFY_CHANGE_SIZE         0x00000008
+#define FILE_NOTIFY_CHANGE_LAST_WRITE   0x00000010
+#define FILE_NOTIFY_CHANGE_LAST_ACCESS  0x00000020
+#define FILE_NOTIFY_CHANGE_CREATION     0x00000040
+#define FILE_NOTIFY_CHANGE_SECURITY     0x00000100
+#define FILE_ACTION_ADDED                   0x00000001
+#define FILE_ACTION_REMOVED                 0x00000002
+#define FILE_ACTION_MODIFIED                0x00000003
+#define FILE_ACTION_RENAMED_OLD_NAME        0x00000004
+#define FILE_ACTION_RENAMED_NEW_NAME        0x00000005
+#define MAILSLOT_NO_MESSAGE             ((DWORD)-1)
+#define MAILSLOT_WAIT_FOREVER           ((DWORD)-1)
+#define FILE_CASE_SENSITIVE_SEARCH          0x00000001
+#define FILE_CASE_PRESERVED_NAMES           0x00000002
+#define FILE_UNICODE_ON_DISK                0x00000004
+#define FILE_PERSISTENT_ACLS                0x00000008
+#define FILE_FILE_COMPRESSION               0x00000010
+#define FILE_VOLUME_QUOTAS                  0x00000020
+#define FILE_SUPPORTS_SPARSE_FILES          0x00000040
+#define FILE_SUPPORTS_REPARSE_POINTS        0x00000080
+#define FILE_SUPPORTS_REMOTE_STORAGE        0x00000100
+#define FILE_RETURNS_CLEANUP_RESULT_INFO    0x00000200
+#define FILE_SUPPORTS_POSIX_UNLINK_RENAME   0x00000400
+#define FILE_VOLUME_IS_COMPRESSED           0x00008000
+#define FILE_SUPPORTS_OBJECT_IDS            0x00010000
+#define FILE_SUPPORTS_ENCRYPTION            0x00020000
+#define FILE_NAMED_STREAMS                  0x00040000
+#define FILE_READ_ONLY_VOLUME               0x00080000
+#define FILE_SEQUENTIAL_WRITE_ONCE          0x00100000
+#define FILE_SUPPORTS_TRANSACTIONS          0x00200000
+#define FILE_SUPPORTS_HARD_LINKS            0x00400000
+#define FILE_SUPPORTS_EXTENDED_ATTRIBUTES   0x00800000
+#define FILE_SUPPORTS_OPEN_BY_FILE_ID       0x01000000
+#define FILE_SUPPORTS_USN_JOURNAL           0x02000000
+#define FILE_SUPPORTS_INTEGRITY_STREAMS     0x04000000
+#define FILE_SUPPORTS_BLOCK_REFCOUNTING     0x08000000
+#define FILE_SUPPORTS_SPARSE_VDL            0x10000000
+#define FILE_DAX_VOLUME                     0x20000000
+#define FILE_SUPPORTS_GHOSTING              0x40000000
+#define FILE_INVALID_FILE_ID               ((LONGLONG)-1LL)
+#define DELETE                           (0x00010000L)
+#define READ_CONTROL                     (0x00020000L)
+#define WRITE_DAC                        (0x00040000L)
+#define WRITE_OWNER                      (0x00080000L)
+#define SYNCHRONIZE                      (0x00100000L)
+#define STANDARD_RIGHTS_REQUIRED         (0x000F0000L)
+#define STANDARD_RIGHTS_READ             (READ_CONTROL)
+#define STANDARD_RIGHTS_WRITE            (READ_CONTROL)
+#define STANDARD_RIGHTS_EXECUTE          (READ_CONTROL)
+#define STANDARD_RIGHTS_ALL              (0x001F0000L)
+#define SPECIFIC_RIGHTS_ALL              (0x0000FFFFL)
+#define CREATE_ALWAYS 2
+#define CREATE_NEW 1
+#define OPEN_ALWAYS 4
+#define OPEN_EXISTING 3
+#define TRUNCATE_EXISTING 5
+#define INVALID_HANDLE_VALUE ((HANDLE)-1)
+#define BI_RGB        0L
+#define BI_RLE8       1L
+#define BI_RLE4       2L
+#define BI_BITFIELDS  3L
+#define BI_JPEG       4L
+#define BI_PNG        5L
+#define DIB_RGB_COLORS      0 /* color table in RGBs */
+#define DIB_PAL_COLORS      1 /* color table in palette indices */
+#define SRCCOPY             (DWORD)0x00CC0020 /* dest = source                   */
+#define SRCPAINT            (DWORD)0x00EE0086 /* dest = source OR dest           */
+#define SRCAND              (DWORD)0x008800C6 /* dest = source AND dest          */
+#define SRCINVERT           (DWORD)0x00660046 /* dest = source XOR dest          */
+#define SRCERASE            (DWORD)0x00440328 /* dest = source AND (NOT dest )   */
+#define NOTSRCCOPY          (DWORD)0x00330008 /* dest = (NOT source)             */
+#define NOTSRCERASE         (DWORD)0x001100A6 /* dest = (NOT src) AND (NOT dest) */
+#define MERGECOPY           (DWORD)0x00C000CA /* dest = (source AND pattern)     */
+#define MERGEPAINT          (DWORD)0x00BB0226 /* dest = (NOT source) OR dest     */
+#define PATCOPY             (DWORD)0x00F00021 /* dest = pattern                  */
+#define PATPAINT            (DWORD)0x00FB0A09 /* dest = DPSnoo                   */
+#define PATINVERT           (DWORD)0x005A0049 /* dest = pattern XOR dest         */
+#define DSTINVERT           (DWORD)0x00550009 /* dest = (NOT dest)               */
+#define BLACKNESS           (DWORD)0x00000042 /* dest = BLACK                    */
+#define WHITENESS           (DWORD)0x00FF0062 /* dest = WHITE                    */
+#define MONITOR_DEFAULTTONULL       0x00000000
+#define MONITOR_DEFAULTTOPRIMARY    0x00000001
+#define MONITOR_DEFAULTTONEAREST    0x00000002
+
+// Types
+
+typedef void *HANDLE;
+typedef void * HWND;
+typedef unsigned long * PDWORD;
+typedef void * HMONITOR;
+typedef u32 HRESULT;
+typedef void * HDC;
+typedef HANDLE HINSTANCE;
+typedef HANDLE HICON;
+typedef HANDLE HBRUSH;
+typedef HANDLE HCURSOR;
+typedef HANDLE HMODULE;
+typedef HANDLE HMENU;
+typedef HANDLE HBITMAP;
+typedef HANDLE HGDIOBJ;
+typedef HANDLE HFONT;
+typedef HANDLE HPEN;
+typedef HANDLE HGLOBAL;
+typedef HANDLE HRGN;
+typedef unsigned long ULONG;
+typedef ULONG *PULONG;
+typedef unsigned short USHORT;
+typedef USHORT *PUSHORT;
+typedef unsigned char UCHAR;
+typedef UCHAR *PUCHAR;
+typedef unsigned long DWORD;
+typedef int BOOL;
+typedef unsigned char BYTE;
+typedef unsigned short WORD;
+typedef float FLOAT;
+typedef FLOAT *PFLOAT;
+typedef BOOL *PBOOL;
+typedef BOOL *LPBOOL;
+typedef BYTE *PBYTE;
+typedef BYTE *LPBYTE;
+typedef int *PINT;
+typedef int *LPINT;
+typedef WORD *PWORD;
+typedef WORD *LPWORD;
+typedef long *LPLONG;
+typedef DWORD *PDWORD;
+typedef DWORD *LPDWORD;
+typedef void *LPVOID;
+typedef const void *LPCVOID;
+typedef void *PVOID;
+typedef u64 DWORDLONG;
+typedef u8 BOOLEAN;
+#if !defined(_M_IX86)
+typedef s64 LONGLONG;
+#else
+typedef double LONGLONG;
+#endif
+
+#if !defined(_M_IX86)
+typedef u64 ULONGLONG;
+#else
+typedef double ULONGLONG;
+#endif
+
+typedef LONGLONG USN;
+typedef WORD ATOM;
+typedef s64 INT_PTR, *PINT_PTR;
+typedef u64 UINT_PTR, *PUINT_PTR;
+typedef s64 LONG_PTR, *PLONG_PTR;
+typedef u64 ULONG_PTR, *PULONG_PTR;
+typedef UINT_PTR WPARAM;
+typedef LONG_PTR LPARAM;
+typedef LONG_PTR LRESULT;
+typedef int INT;
+typedef unsigned int UINT;
+typedef unsigned int *PUINT;
+typedef signed char INT8, *PINT8;
+typedef signed short INT16, *PINT16;
+typedef signed int INT32, *PINT32;
+typedef s64 INT64, *PINT64;
+typedef unsigned char UINT8, *PUINT8;
+typedef unsigned short UINT16, *PUINT16;
+typedef unsigned int UINT32, *PUINT32;
+typedef s64 UINT64, *PUINT64;
+typedef signed int LONG32, *PLONG32;
+typedef unsigned int ULONG32, *PULONG32;
+typedef unsigned int DWORD32, *PDWORD32;
+typedef LONG32 LONG;
+typedef s64 ULONG64, *PULONG64;
+typedef s64 DWORD64, *PDWORD64;
+typedef u64 LONG64;
+typedef char CHAR;
+typedef CHAR *PCHAR, *LPCH, *PCH;
+typedef const CHAR *LPCCH, *PCCH;
+typedef DWORD *DWORD_PTR;
+typedef CHAR *NPSTR, *LPSTR, *PSTR;
+typedef PSTR *PZPSTR;
+typedef const PSTR *PCZPSTR;
+typedef const CHAR *LPCSTR, *PCSTR;
+typedef PCSTR *PZPCSTR;
+typedef const PCSTR *PCZPCSTR;
+typedef CHAR *PZZSTR;
+typedef const CHAR *PCZZSTR;
+typedef CHAR *PNZCH;
+typedef const CHAR *PCNZCH;
+typedef unsigned short WCHAR;
+typedef WCHAR *NWPSTR, *LPWSTR, *PWSTR;
+typedef PWSTR *PZPWSTR;
+typedef const PWSTR *PCZPWSTR;
+typedef WCHAR *LPUWSTR, *PUWSTR;
+typedef const WCHAR *LPCWSTR, *PCWSTR;
+typedef PCWSTR *PZPCWSTR;
+typedef const PCWSTR *PCZPCWSTR;
+typedef const WCHAR *LPCUWSTR, *PCUWSTR;
+
+typedef WCHAR *PZZWSTR;
+
+typedef const WCHAR *PCZZWSTR;
+typedef WCHAR *PUZZWSTR;
+typedef const WCHAR *PCUZZWSTR;
+typedef WCHAR *PNZWCH;
+typedef const WCHAR *PCNZWCH;
+typedef WCHAR *PUNZWCH;
+typedef const WCHAR *PCUNZWCH;
+typedef const WCHAR *LPCWCH;
+typedef long long LONGLONG;
+
+typedef WORD   SECURITY_DESCRIPTOR_CONTROL, *PSECURITY_DESCRIPTOR_CONTROL;
+typedef PVOID PSID;  
+typedef struct _ACL {
+    BYTE  AclRevision;
+    BYTE  Sbz1;
+    WORD   AclSize;
+    WORD   AceCount;
+    WORD   Sbz2;
+} ACL;
+typedef ACL *PACL;
+
+typedef union _LARGE_INTEGER {
+    struct {
+        DWORD LowPart;
+        LONG HighPart;
+    } DUMMYSTRUCTNAME;
+    struct {
+        DWORD LowPart;
+        LONG HighPart;
+    } u;
+    LONGLONG QuadPart;
+} LARGE_INTEGER, *PLARGE_INTEGER;
+
+typedef LARGE_INTEGER LARGE_INTEGER;
+typedef LRESULT (*WNDPROC)( HWND unnamedParam1, UINT unnamedParam2, WPARAM unnamedParam3, LPARAM unnamedParam4);
+typedef struct tagRECT {
+    LONG left;
+    LONG top;
+    LONG right;
+    LONG bottom;
+} RECT, *PRECT, *NPRECT, *LPRECT;
+
+typedef const RECT * LPCRECT;
+ //?!?!?!?!?!?!??!?!?!?!?!??!?!?!?!?!?!?!?!??!?!!??!?!?!?!?
+typedef struct _POINTL {
+    LONG x;
+    LONG y;
+} POINTL, *PPOINTL;
+
+typedef struct tagPOINT {
+    LONG x;
+    LONG y;
+} POINT, *PPOINT, *NPPOINT, *LPPOINT;
+
+typedef struct _SYSTEM_INFO {
+    union _SYSTEM_INFO_DUMMYUNION {
+        DWORD dwOemId;
+        struct _SYSTEM_INFO_DUMMYSTRUCT {
+            WORD wProcessorArchitecture;
+            WORD wReserved;
+        }DUMMYSTRUCTNAME;
+    }DUMMYUNIONNAME;
+    DWORD dwPageSize;
+    LPVOID lpMinimumApplicationAddress;
+    LPVOID lpMaximumApplicationAddress;
+    DWORD_PTR dwActiveProcessorMask;
+    DWORD dwNumberOfProcessors;
+    DWORD dwProcessorType;
+    DWORD dwAllocationGranularity;
+    WORD wProcessorLevel;
+    WORD wProcessorRevision;
+} SYSTEM_INFO, *LPSYSTEM_INFO;
+
+typedef struct _SECURITY_DESCRIPTOR {
+   BYTE  Revision;
+   BYTE  Sbz1;
+   SECURITY_DESCRIPTOR_CONTROL Control;
+   PSID Owner;
+   PSID Group;
+   PACL Sacl;
+   PACL Dacl;
+
+   } SECURITY_DESCRIPTOR, *PISECURITY_DESCRIPTOR, *PSECURITY_DESCRIPTOR;
+
+typedef struct _MEMORY_BASIC_INFORMATION {
+    void * BaseAddress;
+    void * AllocationBase;
+    u32 AllocationProtect;
+    u16 PartitionId;
+    size_t RegionSize;
+    u32 State;
+    u32 Protect;
+    u32 Type;
+} MEMORY_BASIC_INFORMATION, *PMEMORY_BASIC_INFORMATION;
+
+typedef struct DECLSPEC_ALIGN(16) _M128A {
+    unsigned long long Low;
+    long long High;
+} M128A, *PM128A;
+
+typedef struct DECLSPEC_ALIGN(16) _XMM_SAVE_AREA32
+{
+    WORD ControlWord;
+    WORD StatusWord;
+    BYTE TagWord;
+    BYTE Reserved1;
+    WORD ErrorOpcode;
+    DWORD ErrorOffset;
+    WORD ErrorSelector;
+    WORD Reserved2;
+    DWORD DataOffset;
+    WORD DataSelector;
+    WORD Reserved3;
+    DWORD MxCsr;
+    DWORD MxCsr_Mask;
+    M128A FloatRegisters[8];
+
+    #if defined(_WIN64)
+
+    M128A XmmRegisters[16];
+    BYTE Reserved4[96];
+
+    #else
+
+    M128A XmmRegisters[8];
+    BYTE Reserved4[224];
+
+    #endif
+
+} XMM_SAVE_AREA32;
+
+typedef struct DECLSPEC_ALIGN(16) _CONTEXT {
+
+ //
+ //Register parameter home addresses.
+ //
+ //N.B. These fields are for convience - they could be used to extend the
+ //context record in the future.
+ //
+
+    DWORD64 P1Home;
+    DWORD64 P2Home;
+    DWORD64 P3Home;
+    DWORD64 P4Home;
+    DWORD64 P5Home;
+    DWORD64 P6Home;
+
+ //
+ //Control flags.
+ //
+
+    DWORD ContextFlags;
+    DWORD MxCsr;
+
+ //
+ //Segment Registers and processor flags.
+ //
+
+    WORD SegCs;
+    WORD SegDs;
+    WORD SegEs;
+    WORD SegFs;
+    WORD SegGs;
+    WORD SegSs;
+    DWORD EFlags;
+
+ //
+ //Debug registers
+ //
+
+    DWORD64 Dr0;
+    DWORD64 Dr1;
+    DWORD64 Dr2;
+    DWORD64 Dr3;
+    DWORD64 Dr6;
+    DWORD64 Dr7;
+
+ //
+ //Integer registers.
+ //
+
+    DWORD64 Rax;
+    DWORD64 Rcx;
+    DWORD64 Rdx;
+    DWORD64 Rbx;
+    DWORD64 Rsp;
+    DWORD64 Rbp;
+    DWORD64 Rsi;
+    DWORD64 Rdi;
+    DWORD64 R8;
+    DWORD64 R9;
+    DWORD64 R10;
+    DWORD64 R11;
+    DWORD64 R12;
+    DWORD64 R13;
+    DWORD64 R14;
+    DWORD64 R15;
+
+ //
+ //Program counter.
+ //
+
+    DWORD64 Rip;
+
+ //
+ //Floating point state.
+ //
+
+    union {
+        XMM_SAVE_AREA32 FltSave;
+        struct {
+            M128A Header[2];
+            M128A Legacy[8];
+            M128A Xmm0;
+            M128A Xmm1;
+            M128A Xmm2;
+            M128A Xmm3;
+            M128A Xmm4;
+            M128A Xmm5;
+            M128A Xmm6;
+            M128A Xmm7;
+            M128A Xmm8;
+            M128A Xmm9;
+            M128A Xmm10;
+            M128A Xmm11;
+            M128A Xmm12;
+            M128A Xmm13;
+            M128A Xmm14;
+            M128A Xmm15;
+        } DUMMYSTRUCTNAME;
+    } DUMMYUNIONNAME;
+
+ //
+ //Vector registers.
+ //
+
+    M128A VectorRegister[26];
+    DWORD64 VectorControl;
+
+ //
+ //Special debug control registers.
+ //
+
+    DWORD64 DebugControl;
+    DWORD64 LastBranchToRip;
+    DWORD64 LastBranchFromRip;
+    DWORD64 LastExceptionToRip;
+    DWORD64 LastExceptionFromRip;
+} CONTEXT, *PCONTEXT;
+
+typedef enum {
+    AddrMode1616,
+    AddrMode1632,
+    AddrModeReal,
+    AddrModeFlat
+} ADDRESS_MODE;
+
+typedef struct _tagADDRESS64 {
+    DWORD64 Offset;
+    WORD Segment;
+    ADDRESS_MODE Mode;
+} ADDRESS64, *LPADDRESS64;
+
+typedef struct _KDHELP64 {
+
+    DWORD64 Thread;
+    DWORD ThCallbackStack;
+    DWORD ThCallbackBStore;
+    DWORD NextCallback;
+    DWORD FramePointer;
+    DWORD64 KiCallUserMode;
+    DWORD64 KeUserCallbackDispatcher;
+    DWORD64 SystemRangeStart;
+    DWORD64 KiUserExceptionDispatcher;
+    DWORD64 StackBase;
+    DWORD64 StackLimit;
+    DWORD BuildVersion;
+    DWORD RetpolineStubFunctionTableSize;
+    DWORD64 RetpolineStubFunctionTable;
+    DWORD RetpolineStubOffset;
+    DWORD RetpolineStubSize;
+    DWORD64 Reserved0[2];
+
+} KDHELP64, *PKDHELP64;
+
+typedef struct _tagSTACKFRAME64 {
+    ADDRESS64 AddrPC; //program counter
+    ADDRESS64 AddrReturn; //return address
+    ADDRESS64 AddrFrame; //frame pointer
+    ADDRESS64 AddrStack; //stack pointer
+    ADDRESS64 AddrBStore; //backing store pointer
+    PVOID FuncTableEntry; //pointer to pdata/fpo or NULL
+    DWORD64 Params[4]; //possible arguments to the function
+    BOOL Far; //WOW far call
+    BOOL Virtual; //is this a virtual frame?
+    DWORD64 Reserved[3];
+    KDHELP64 KdHelp;
+} STACKFRAME64, *LPSTACKFRAME64;
+
+typedef struct _SYMBOL_INFO {
+    ULONG SizeOfStruct;
+    ULONG TypeIndex; //Type Index of symbol
+    ULONG64 Reserved[2];
+    ULONG Index;
+    ULONG Size;
+    ULONG64 ModBase; //Base Address of module comtaining this symbol
+    ULONG Flags;
+    ULONG64 Value; //Value of symbol, ValuePresent should be 1
+    ULONG64 Address; //Address of symbol including base address of module
+    ULONG Register; //register holding value or pointer to value
+    ULONG Scope; //scope of the symbol
+    ULONG Tag; //pdb classification
+    ULONG NameLen; //Actual length of name
+    ULONG MaxNameLen;
+    CHAR Name[1]; //Name of symbol
+} SYMBOL_INFO, *PSYMBOL_INFO;
+
+typedef struct _IMAGEHLP_LINE64 {
+    DWORD SizeOfStruct; //set to sizeof(IMAGEHLP_LINE64)
+    PVOID Key; //internal
+    DWORD LineNumber; //line number in file
+    PCHAR FileName; //full filename
+    DWORD64 Address; //first instruction of line
+} IMAGEHLP_LINE64, *PIMAGEHLP_LINE64;
+
+typedef struct _OVERLAPPED {
+    ULONG_PTR Internal;
+    ULONG_PTR InternalHigh;
+    union _OVERLAPPED_DUMMYUNION {
+        u64 Offset;
+        PVOID Pointer;
+    } v;
+
+    HANDLE hEvent;
+} OVERLAPPED, *LPOVERLAPPED;
+
+typedef struct tagMSG {
+    HWND hwnd;
+    UINT message;
+    WPARAM wParam;
+    LPARAM lParam;
+    DWORD time;
+    POINT pt;
+    DWORD lPrivate;
+} MSG, *PMSG, *NPMSG, *LPMSG;
+
+typedef struct _devicemodeW {
+    WCHAR dmDeviceName[CCHDEVICENAME];
+    WORD dmSpecVersion;
+    WORD dmDriverVersion;
+    WORD dmSize;
+    WORD dmDriverExtra;
+    DWORD dmFields;
+    union {
+        struct {
+            short dmOrientation;
+            short dmPaperSize;
+            short dmPaperLength;
+            short dmPaperWidth;
+            short dmScale;
+            short dmCopies;
+            short dmDefaultSource;
+            short dmPrintQuality;
+        } DUMMYSTRUCTNAME;
+        POINTL dmPosition;
+        struct {
+            POINTL dmPosition;
+            DWORD dmDisplayOrientation;
+            DWORD dmDisplayFixedOutput;
+        } DUMMYSTRUCTNAME2;
+    } DUMMYUNIONNAME;
+    short dmColor;
+    short dmDuplex;
+    short dmYResolution;
+    short dmTTOption;
+    short dmCollate;
+    WCHAR dmFormName[CCHFORMNAME];
+    WORD dmLogPixels;
+    DWORD dmBitsPerPel;
+    DWORD dmPelsWidth;
+    DWORD dmPelsHeight;
+    union {
+        DWORD dmDisplayFlags;
+        DWORD dmNup;
+    } DUMMYUNIONNAME2;
+    DWORD dmDisplayFrequency;
+    DWORD dmICMMethod;
+    DWORD dmICMIntent;
+    DWORD dmMediaType;
+    DWORD dmDitherType;
+    DWORD dmReserved1;
+    DWORD dmReserved2;
+    DWORD dmPanningWidth;
+    DWORD dmPanningHeight;
+} DEVMODEW, *PDEVMODEW, *NPDEVMODEW, *LPDEVMODEW;
+
+typedef struct tagMONITORINFO {
+    DWORD cbSize;
+    RECT rcMonitor;
+    RECT rcWork;
+    DWORD dwFlags;
+} MONITORINFO, *LPMONITORINFO;
+
+typedef struct tagMONITORINFOEXW {
+    DWORD cbSize;
+    RECT rcMonitor;
+    RECT rcWork;
+    DWORD dwFlags;
+    WCHAR szDevice[CCHDEVICENAME];
+} MONITORINFOEXW, *LPMONITORINFOEXW;
+
+typedef struct _DISPLAY_DEVICEW {
+    DWORD cb;
+    WCHAR DeviceName[32];
+    WCHAR DeviceString[128];
+    DWORD StateFlags;
+    WCHAR DeviceID[128];
+    WCHAR DeviceKey[128];
+} DISPLAY_DEVICEW, *PDISPLAY_DEVICEW, *LPDISPLAY_DEVICEW;
+
+typedef struct tagWNDCLASSEXW {
+    UINT cbSize;
+    UINT style;
+    WNDPROC lpfnWndProc;
+    int cbClsExtra;
+    int cbWndExtra;
+    HINSTANCE hInstance;
+    HICON hIcon;
+    HCURSOR hCursor;
+    HBRUSH hbrBackground;
+    LPCWSTR lpszMenuName;
+    LPCWSTR lpszClassName;
+    HICON hIconSm;
+} WNDCLASSEXW, *PWNDCLASSEXW, *NPWNDCLASSEXW, *LPWNDCLASSEXW;
+
+typedef struct _SECURITY_ATTRIBUTES {
+    DWORD nLength;
+    LPVOID lpSecurityDescriptor;
+    BOOL bInheritHandle;
+} SECURITY_ATTRIBUTES, *PSECURITY_ATTRIBUTES, *LPSECURITY_ATTRIBUTES;
+
+typedef struct _GUID {
+    unsigned long Data1;
+    unsigned short Data2;
+    unsigned short Data3;
+    unsigned char Data4[8];
+} GUID;
+
+typedef struct tagRGBQUAD {
+    BYTE rgbBlue;
+    BYTE rgbGreen;
+    BYTE rgbRed;
+    BYTE rgbReserved;
+} RGBQUAD;
+
+typedef struct tagBITMAPINFOHEADER {
+    DWORD biSize;
+    LONG biWidth;
+    LONG biHeight;
+    WORD biPlanes;
+    WORD biBitCount;
+    DWORD biCompression;
+    DWORD biSizeImage;
+    LONG biXPelsPerMeter;
+    LONG biYPelsPerMeter;
+    DWORD biClrUsed;
+    DWORD biClrImportant;
+} BITMAPINFOHEADER, *LPBITMAPINFOHEADER, *PBITMAPINFOHEADER;
+
+typedef struct tagBITMAPINFO {
+    BITMAPINFOHEADER bmiHeader;
+    RGBQUAD bmiColors[1];
+} BITMAPINFO, *LPBITMAPINFO, *PBITMAPINFO;
+
+typedef struct _STARTUPINFOA {
+    DWORD cb;
+    LPSTR lpReserved;
+    LPSTR lpDesktop;
+    LPSTR lpTitle;
+    DWORD dwX;
+    DWORD dwY;
+    DWORD dwXSize;
+    DWORD dwYSize;
+    DWORD dwXCountChars;
+    DWORD dwYCountChars;
+    DWORD dwFillAttribute;
+    DWORD dwFlags;
+    WORD wShowWindow;
+    WORD cbReserved2;
+    LPBYTE lpReserved2;
+    HANDLE hStdInput;
+    HANDLE hStdOutput;
+    HANDLE hStdError;
+} STARTUPINFOA, *LPSTARTUPINFOA;
+
+typedef struct _PROCESS_INFORMATION {
+    HANDLE hProcess;
+    HANDLE hThread;
+    DWORD dwProcessId;
+    DWORD dwThreadId;
+} PROCESS_INFORMATION, *PPROCESS_INFORMATION, *LPPROCESS_INFORMATION;
+
+typedef void * DPI_AWARENESS_CONTEXT;
+/*
+* Struct pointed to by WM_GETMINMAXINFO lParam
+*/
+typedef struct tagMINMAXINFO {
+    POINT ptReserved;
+    POINT ptMaxSize;
+    POINT ptMaxPosition;
+    POINT ptMinTrackSize;
+    POINT ptMaxTrackSize;
+} MINMAXINFO, *PMINMAXINFO, *LPMINMAXINFO;
+
+/*
+* lParam of WM_COPYDATA message points to...
+*/
+typedef struct tagCOPYDATASTRUCT {
+    ULONG_PTR dwData;
+    DWORD cbData;
+    PVOID lpData;
+} COPYDATASTRUCT, *PCOPYDATASTRUCT;
+
+#if(WINVER >= 0x0400)
+typedef struct tagMDINEXTMENU
+{
+    HMENU hmenuIn;
+    HMENU hmenuNext;
+    HWND hwndNext;
+} MDINEXTMENU, * PMDINEXTMENU, * LPMDINEXTMENU;
+#endif /* WINVER >= 0x0400 */
+
+#if(WINVER >= 0x0400)
+
+
+#define WM_POWERBROADCAST               0x0218
+
+#ifndef _WIN32_WCE
+#define PBT_APMQUERYSUSPEND             0x0000
+#define PBT_APMQUERYSTANDBY             0x0001
+
+#define PBT_APMQUERYSUSPENDFAILED       0x0002
+#define PBT_APMQUERYSTANDBYFAILED       0x0003
+
+#define PBT_APMSUSPEND                  0x0004
+#define PBT_APMSTANDBY                  0x0005
+
+#define PBT_APMRESUMECRITICAL           0x0006
+#define PBT_APMRESUMESUSPEND            0x0007
+#define PBT_APMRESUMESTANDBY            0x0008
+
+#define PBTF_APMRESUMEFROMFAILURE       0x00000001
+
+#define PBT_APMBATTERYLOW               0x0009
+#define PBT_APMPOWERSTATUSCHANGE        0x000A
+
+#define PBT_APMOEMEVENT                 0x000B
+
+
+#define PBT_APMRESUMEAUTOMATIC          0x0012
+#if (_WIN32_WINNT >= 0x0502)
+#ifndef PBT_POWERSETTINGCHANGE
+#define PBT_POWERSETTINGCHANGE          0x8013
+
+typedef struct {
+    GUID PowerSetting;
+    DWORD DataLength;
+    UCHAR Data[1];
+} POWERBROADCAST_SETTING, *PPOWERBROADCAST_SETTING;
+
+
+#endif //PBT_POWERSETTINGCHANGE
+
+#endif //(_WIN32_WINNT >= 0x0502)
+#endif
+
+#endif /* WINVER >= 0x0400 */
+
+/*
+* WM_WINDOWPOSCHANGING/CHANGED struct pointed to by lParam
+*/
+typedef struct tagWINDOWPOS {
+    HWND hwnd;
+    HWND hwndInsertAfter;
+    int x;
+    int y;
+    int cx;
+    int cy;
+    UINT flags;
+} WINDOWPOS, *LPWINDOWPOS, *PWINDOWPOS;
+
+/*
+* WM_NCCALCSIZE parameter structure
+*/
+typedef struct tagNCCALCSIZE_PARAMS {
+    RECT rgrc[3];
+    PWINDOWPOS lppos;
+} NCCALCSIZE_PARAMS, *LPNCCALCSIZE_PARAMS;
 
 #if(_WIN32_WINNT >= 0x0400)
 #ifndef NOTRACKMOUSEEVENT
@@ -4968,7 +5399,7 @@ typedef struct tagNCCALCSIZE_PARAMS {
 typedef struct tagTRACKMOUSEEVENT {
     DWORD cbSize;
     DWORD dwFlags;
-    HWND  hwndTrack;
+    HWND hwndTrack;
     DWORD dwHoverTime;
 } TRACKMOUSEEVENT, *LPTRACKMOUSEEVENT;
 
@@ -4980,1300 +5411,95 @@ typedef struct tagTRACKMOUSEEVENT {
 #endif /* !NOTRACKMOUSEEVENT */
 #endif /* _WIN32_WINNT >= 0x0400 */
 
-#define PM_NOREMOVE         0x0000
-#define PM_REMOVE           0x0001
-#define PM_NOYIELD          0x0002
-
-#define HWND_BOTTOM ((HWND)1)
-#define HWND_NOTOPMOST ((HWND)-2)
-#define HWND_TOP ((HWND)0)
-#define HWND_TOPMOST ((HWND)-1)
-
-/*
- * SetWindowPos Flags
- */
-#define SWP_NOSIZE          0x0001
-#define SWP_NOMOVE          0x0002
-#define SWP_NOZORDER        0x0004
-#define SWP_NOREDRAW        0x0008
-#define SWP_NOACTIVATE      0x0010
-#define SWP_FRAMECHANGED    0x0020  /* The frame changed: send WM_NCCALCSIZE */
-#define SWP_SHOWWINDOW      0x0040
-#define SWP_HIDEWINDOW      0x0080
-#define SWP_NOCOPYBITS      0x0100
-#define SWP_NOOWNERZORDER   0x0200  /* Don't do owner Z ordering */
-#define SWP_NOSENDCHANGING  0x0400  /* Don't send WM_WINDOWPOSCHANGING */
-
-#define SWP_DRAWFRAME       SWP_FRAMECHANGED
-#define SWP_NOREPOSITION    SWP_NOOWNERZORDER
-
-#if(WINVER >= 0x0400)
-#define SWP_DEFERERASE      0x2000 // same as SWP_DEFERDRAWING
-#define SWP_ASYNCWINDOWPOS  0x4000 // same as SWP_CREATESPB
-#endif /* WINVER >= 0x0400 */
-
-#define FILE_READ_DATA            ( 0x0001 )    // file & pipe
-#define FILE_LIST_DIRECTORY       ( 0x0001 )    // directory
-
-#define FILE_WRITE_DATA           ( 0x0002 )    // file & pipe
-#define FILE_ADD_FILE             ( 0x0002 )    // directory
-
-#define FILE_APPEND_DATA          ( 0x0004 )    // file
-#define FILE_ADD_SUBDIRECTORY     ( 0x0004 )    // directory
-#define FILE_CREATE_PIPE_INSTANCE ( 0x0004 )    // named pipe
-
-
-#define FILE_READ_EA              ( 0x0008 )    // file & directory
-
-#define FILE_WRITE_EA             ( 0x0010 )    // file & directory
-
-#define FILE_EXECUTE              ( 0x0020 )    // file
-#define FILE_TRAVERSE             ( 0x0020 )    // directory
-
-#define FILE_DELETE_CHILD         ( 0x0040 )    // directory
-
-#define FILE_READ_ATTRIBUTES      ( 0x0080 )    // all
-
-#define FILE_WRITE_ATTRIBUTES     ( 0x0100 )    // all
-
-#define FILE_ALL_ACCESS (STANDARD_RIGHTS_REQUIRED | SYNCHRONIZE | 0x1FF)
-
-#define FILE_GENERIC_READ         (STANDARD_RIGHTS_READ     |\
-                                   FILE_READ_DATA           |\
-                                   FILE_READ_ATTRIBUTES     |\
-                                   FILE_READ_EA             |\
-                                   SYNCHRONIZE)
-
-
-#define FILE_GENERIC_WRITE        (STANDARD_RIGHTS_WRITE    |\
-                                   FILE_WRITE_DATA          |\
-                                   FILE_WRITE_ATTRIBUTES    |\
-                                   FILE_WRITE_EA            |\
-                                   FILE_APPEND_DATA         |\
-                                   SYNCHRONIZE)
-
-
-#define FILE_GENERIC_EXECUTE      (STANDARD_RIGHTS_EXECUTE  |\
-                                   FILE_READ_ATTRIBUTES     |\
-                                   FILE_EXECUTE             |\
-                                   SYNCHRONIZE)
-
-// end_access
-#define FILE_SHARE_READ                 0x00000001  
-#define FILE_SHARE_WRITE                0x00000002  
-#define FILE_SHARE_DELETE               0x00000004  
-#define FILE_ATTRIBUTE_READONLY             0x00000001  
-#define FILE_ATTRIBUTE_HIDDEN               0x00000002  
-#define FILE_ATTRIBUTE_SYSTEM               0x00000004  
-#define FILE_ATTRIBUTE_DIRECTORY            0x00000010  
-#define FILE_ATTRIBUTE_ARCHIVE              0x00000020  
-#define FILE_ATTRIBUTE_DEVICE               0x00000040  
-#define FILE_ATTRIBUTE_NORMAL               0x00000080  
-#define FILE_ATTRIBUTE_TEMPORARY            0x00000100  
-#define FILE_ATTRIBUTE_SPARSE_FILE          0x00000200  
-#define FILE_ATTRIBUTE_REPARSE_POINT        0x00000400  
-#define FILE_ATTRIBUTE_COMPRESSED           0x00000800  
-#define FILE_ATTRIBUTE_OFFLINE              0x00001000  
-#define FILE_ATTRIBUTE_NOT_CONTENT_INDEXED  0x00002000  
-#define FILE_ATTRIBUTE_ENCRYPTED            0x00004000  
-#define FILE_ATTRIBUTE_INTEGRITY_STREAM     0x00008000  
-#define FILE_ATTRIBUTE_VIRTUAL              0x00010000  
-#define FILE_ATTRIBUTE_NO_SCRUB_DATA        0x00020000  
-#define FILE_ATTRIBUTE_EA                   0x00040000  
-#define FILE_ATTRIBUTE_PINNED               0x00080000  
-#define FILE_ATTRIBUTE_UNPINNED             0x00100000  
-#define FILE_ATTRIBUTE_RECALL_ON_OPEN       0x00040000  
-#define FILE_ATTRIBUTE_RECALL_ON_DATA_ACCESS 0x00400000 
-#define TREE_CONNECT_ATTRIBUTE_PRIVACY      0x00004000  
-#define TREE_CONNECT_ATTRIBUTE_INTEGRITY    0x00008000  
-#define TREE_CONNECT_ATTRIBUTE_GLOBAL       0x00000004  
-#define TREE_CONNECT_ATTRIBUTE_PINNED       0x00000002  
-#define FILE_ATTRIBUTE_STRICTLY_SEQUENTIAL  0x20000000  
-#define FILE_NOTIFY_CHANGE_FILE_NAME    0x00000001   
-#define FILE_NOTIFY_CHANGE_DIR_NAME     0x00000002   
-#define FILE_NOTIFY_CHANGE_ATTRIBUTES   0x00000004   
-#define FILE_NOTIFY_CHANGE_SIZE         0x00000008   
-#define FILE_NOTIFY_CHANGE_LAST_WRITE   0x00000010   
-#define FILE_NOTIFY_CHANGE_LAST_ACCESS  0x00000020   
-#define FILE_NOTIFY_CHANGE_CREATION     0x00000040   
-#define FILE_NOTIFY_CHANGE_SECURITY     0x00000100   
-#define FILE_ACTION_ADDED                   0x00000001   
-#define FILE_ACTION_REMOVED                 0x00000002   
-#define FILE_ACTION_MODIFIED                0x00000003   
-#define FILE_ACTION_RENAMED_OLD_NAME        0x00000004   
-#define FILE_ACTION_RENAMED_NEW_NAME        0x00000005   
-#define MAILSLOT_NO_MESSAGE             ((DWORD)-1) 
-#define MAILSLOT_WAIT_FOREVER           ((DWORD)-1) 
-#define FILE_CASE_SENSITIVE_SEARCH          0x00000001  
-#define FILE_CASE_PRESERVED_NAMES           0x00000002  
-#define FILE_UNICODE_ON_DISK                0x00000004  
-#define FILE_PERSISTENT_ACLS                0x00000008  
-#define FILE_FILE_COMPRESSION               0x00000010  
-#define FILE_VOLUME_QUOTAS                  0x00000020  
-#define FILE_SUPPORTS_SPARSE_FILES          0x00000040  
-#define FILE_SUPPORTS_REPARSE_POINTS        0x00000080  
-#define FILE_SUPPORTS_REMOTE_STORAGE        0x00000100  
-#define FILE_RETURNS_CLEANUP_RESULT_INFO    0x00000200  
-#define FILE_SUPPORTS_POSIX_UNLINK_RENAME   0x00000400  
-
-
-
-
-#define FILE_VOLUME_IS_COMPRESSED           0x00008000  
-#define FILE_SUPPORTS_OBJECT_IDS            0x00010000  
-#define FILE_SUPPORTS_ENCRYPTION            0x00020000  
-#define FILE_NAMED_STREAMS                  0x00040000  
-#define FILE_READ_ONLY_VOLUME               0x00080000  
-#define FILE_SEQUENTIAL_WRITE_ONCE          0x00100000  
-#define FILE_SUPPORTS_TRANSACTIONS          0x00200000  
-#define FILE_SUPPORTS_HARD_LINKS            0x00400000  
-#define FILE_SUPPORTS_EXTENDED_ATTRIBUTES   0x00800000  
-#define FILE_SUPPORTS_OPEN_BY_FILE_ID       0x01000000  
-#define FILE_SUPPORTS_USN_JOURNAL           0x02000000  
-#define FILE_SUPPORTS_INTEGRITY_STREAMS     0x04000000  
-#define FILE_SUPPORTS_BLOCK_REFCOUNTING     0x08000000  
-#define FILE_SUPPORTS_SPARSE_VDL            0x10000000  
-#define FILE_DAX_VOLUME                     0x20000000  
-#define FILE_SUPPORTS_GHOSTING              0x40000000  
-
-#define FILE_INVALID_FILE_ID               ((LONGLONG)-1LL) 
-
-#define DELETE                           (0x00010000L)
-#define READ_CONTROL                     (0x00020000L)
-#define WRITE_DAC                        (0x00040000L)
-#define WRITE_OWNER                      (0x00080000L)
-#define SYNCHRONIZE                      (0x00100000L)
-
-#define STANDARD_RIGHTS_REQUIRED         (0x000F0000L)
-
-#define STANDARD_RIGHTS_READ             (READ_CONTROL)
-#define STANDARD_RIGHTS_WRITE            (READ_CONTROL)
-#define STANDARD_RIGHTS_EXECUTE          (READ_CONTROL)
-
-#define STANDARD_RIGHTS_ALL              (0x001F0000L)
-
-#define SPECIFIC_RIGHTS_ALL              (0x0000FFFFL)
-
-#define CREATE_ALWAYS 2
-#define CREATE_NEW 1
-#define OPEN_ALWAYS 4
-#define OPEN_EXISTING 3
-#define TRUNCATE_EXISTING 5
-
-#define INVALID_HANDLE_VALUE ((HANDLE)-1)
-
-#define BI_RGB        0L
-#define BI_RLE8       1L
-#define BI_RLE4       2L
-#define BI_BITFIELDS  3L
-#define BI_JPEG       4L
-#define BI_PNG        5L
-
-#define DIB_RGB_COLORS      0 /* color table in RGBs */
-#define DIB_PAL_COLORS      1 /* color table in palette indices */
-
-#define SRCCOPY             (DWORD)0x00CC0020 /* dest = source                   */
-#define SRCPAINT            (DWORD)0x00EE0086 /* dest = source OR dest           */
-#define SRCAND              (DWORD)0x008800C6 /* dest = source AND dest          */
-#define SRCINVERT           (DWORD)0x00660046 /* dest = source XOR dest          */
-#define SRCERASE            (DWORD)0x00440328 /* dest = source AND (NOT dest )   */
-#define NOTSRCCOPY          (DWORD)0x00330008 /* dest = (NOT source)             */
-#define NOTSRCERASE         (DWORD)0x001100A6 /* dest = (NOT src) AND (NOT dest) */
-#define MERGECOPY           (DWORD)0x00C000CA /* dest = (source AND pattern)     */
-#define MERGEPAINT          (DWORD)0x00BB0226 /* dest = (NOT source) OR dest     */
-#define PATCOPY             (DWORD)0x00F00021 /* dest = pattern                  */
-#define PATPAINT            (DWORD)0x00FB0A09 /* dest = DPSnoo                   */
-#define PATINVERT           (DWORD)0x005A0049 /* dest = pattern XOR dest         */
-#define DSTINVERT           (DWORD)0x00550009 /* dest = (NOT dest)               */
-#define BLACKNESS           (DWORD)0x00000042 /* dest = BLACK                    */
-#define WHITENESS           (DWORD)0x00FF0062 /* dest = WHITE                    */
-
-#define MONITOR_DEFAULTTONULL       0x00000000
-#define MONITOR_DEFAULTTOPRIMARY    0x00000001
-#define MONITOR_DEFAULTTONEAREST    0x00000002
-
-WINDOWS_IMPORT void WINAPI GetSystemInfo(LPSYSTEM_INFO lpSystemInfo);
-
-WINDOWS_IMPORT void* WINAPI VirtualAlloc(void *lpAddress, size_t dwSize, u32 flAllocationType, u32 flProtect);
-WINDOWS_IMPORT s32 WINAPI VirtualFree(void *lpAddress, size_t dwSize, u32 dwFreeType);
-
-WINDOWS_IMPORT size_t WINAPI VirtualQuery(void* lpAddress, PMEMORY_BASIC_INFORMATION lpBuffer, u32 dwLength);
-
-WINDOWS_IMPORT void* WINAPI GetStdHandle(u32 nStdHandle);
-WINDOWS_IMPORT BOOL WINAPI SetStdHandle( DWORD nStdHandle, HANDLE hHandle);
-
-WINDOWS_IMPORT s32 WINAPI WriteFile(HANDLE hFile, LPCVOID lpBuffer, DWORD nNumberOfBytesToWrite, LPDWORD lpNumberOfBytesWritten, LPOVERLAPPED lpOverlapped);
-WINDOWS_IMPORT BOOL WINAPI ReadFile( HANDLE hFile, LPVOID lpBuffer, DWORD nNumberOfBytesToRead, LPDWORD lpNumberOfBytesRead, LPOVERLAPPED lpOverlapped);
-
-WINDOWS_IMPORT void* WINAPI GetCurrentProcess(void);
-WINDOWS_IMPORT void* WINAPI GetCurrentThread(void);
-WINDOWS_IMPORT BOOL WINAPI SymInitialize(HANDLE hProcess, PCSTR UserSearchPath, BOOL fInvadeProcess);
-WINDOWS_IMPORT int WINAPI SymCleanup(HANDLE hProcess);
-WINDOWS_IMPORT BOOL WINAPI SymFromAddr(HANDLE hProcess, DWORD64 Address, PDWORD64 Displacement, PSYMBOL_INFO Symbol);
-WINDOWS_IMPORT int WINAPI SymGetLineFromAddr64(HANDLE hProcess, DWORD64 dwAddr, PDWORD pdwDisplacement, PIMAGEHLP_LINE64 Line);
-WINDOWS_IMPORT HANDLE WINAPI SymFunctionTableAccess64(HANDLE hProcess, DWORD64 AddrBase);
-WINDOWS_IMPORT DWORD64 WINAPI SymGetModuleBase64(HANDLE hProcess, DWORD64 Address);
-typedef BOOL (__stdcall *PREAD_PROCESS_MEMORY_ROUTINE64)( HANDLE hProcess, DWORD64 qwBaseAddress,  PVOID lpBuffer, DWORD nSize, LPDWORD lpNumberOfBytesRead);
+typedef BOOL (__stdcall *PREAD_PROCESS_MEMORY_ROUTINE64)( HANDLE hProcess, DWORD64 qwBaseAddress, PVOID lpBuffer, DWORD nSize, LPDWORD lpNumberOfBytesRead);
 typedef PVOID (__stdcall *PFUNCTION_TABLE_ACCESS_ROUTINE64)( HANDLE ahProcess, DWORD64 AddrBase);
 typedef DWORD64 (__stdcall *PGET_MODULE_BASE_ROUTINE64)( HANDLE hProcess, DWORD64 Address);
 typedef DWORD64 (__stdcall *PTRANSLATE_ADDRESS_ROUTINE64)( HANDLE hProcess, HANDLE hThread, LPADDRESS64 lpaddr);
-WINDOWS_IMPORT BOOL WINAPI StackWalk64( DWORD MachineType, HANDLE hProcess, HANDLE hThread, LPSTACKFRAME64 StackFrame, PVOID ContextRecord, PREAD_PROCESS_MEMORY_ROUTINE64 ReadMemoryRoutine, PFUNCTION_TABLE_ACCESS_ROUTINE64 FunctionTableAccessRoutine, PGET_MODULE_BASE_ROUTINE64 GetModuleBaseRoutine, PTRANSLATE_ADDRESS_ROUTINE64 TranslateAddress);
-WINDOWS_IMPORT void WINAPI RtlCaptureContext(PCONTEXT ContextRecord);
-
-WINDOWS_IMPORT BOOL WINAPI GetMonitorInfoW( HMONITOR hMonitor, LPMONITORINFO lpmi);
-WINDOWS_IMPORT BOOL WINAPI EnumDisplaySettingsW( LPCWSTR lpszDeviceName, DWORD iModeNum, DEVMODEW *lpDevMode);
-
-WINDOWS_IMPORT BOOL WINAPI EnumDisplayDevicesW( LPCWSTR lpDevice, DWORD iDevNum, PDISPLAY_DEVICEW lpDisplayDevice, DWORD dwFlags);
-
-
-
-WINDOWS_IMPORT HMONITOR WINAPI MonitorFromWindow( HWND hwnd, DWORD dwFlags);
-
-WINDOWS_IMPORT int WINAPI WideCharToMultiByte( UINT CodePage, DWORD dwFlags, LPCWCH lpWideCharStr, int cchWideChar, LPSTR lpMultiByteStr, int cbMultiByte, LPCCH lpDefaultChar, LPBOOL lpUsedDefaultChar);
-
 typedef BOOL (*MONITORENUMPROC)( HMONITOR unnamedParam1, HDC unnamedParam2, LPRECT unnamedParam3, LPARAM unnamedParam4);
-WINDOWS_IMPORT BOOL WINAPI EnumDisplayMonitors( HDC hdc, LPCRECT lprcClip, MONITORENUMPROC lpfnEnum, LPARAM dwData);
 
-WINDOWS_IMPORT HMODULE WINAPI GetModuleHandleA(LPCSTR lpModuleName);
-WINDOWS_IMPORT HMODULE WINAPI GetModuleHandleW(LPCWSTR lpModuleName);
+// Kernel32
 
-WINDOWS_IMPORT ATOM WINAPI RegisterClassExW(const WNDCLASSEXW *unnamedParam1);
+// Macros
 
-WINDOWS_IMPORT BOOL WINAPI AdjustWindowRectEx( LPRECT lpRect, DWORD  dwStyle, BOOL   bMenu, DWORD  dwExStyle);
-
-WINDOWS_IMPORT DWORD WINAPI GetLastError(void);
-WINDOWS_IMPORT void WINAPI SetLastError(DWORD);
-
-WINDOWS_IMPORT HWND WINAPI CreateWindowExW(
-    DWORD     dwExStyle,
-    LPCWSTR   lpClassName,
-    LPCWSTR   lpWindowName,
-    DWORD     dwStyle,
-    int       X,
-    int       Y,
-    int       nWidth,
-    int       nHeight,
-    HWND      hWndParent,
-    HMENU     hMenu,
-    HINSTANCE hInstance,
-    LPVOID    lpParam
-);
-WINDOWS_IMPORT BOOL WINAPI UpdateWindow(HWND hWnd);
-WINDOWS_IMPORT BOOL WINAPI ShowWindow( HWND hWnd, int  nCmdShow);
-
-WINDOWS_IMPORT int WINAPI MultiByteToWideChar( UINT CodePage, DWORD dwFlags, LPCCH lpMultiByteStr, int cbMultiByte, LPWSTR lpWideCharStr, int cchWideChar);
-
-WINDOWS_IMPORT BOOL WINAPI PeekMessageW( LPMSG lpMsg, HWND  hWnd, UINT  wMsgFilterMin, UINT  wMsgFilterMax, UINT  wRemoveMsg);
-
-WINDOWS_IMPORT BOOL WINAPI TranslateMessage(const MSG *lpMsg);
-
-WINDOWS_IMPORT LRESULT WINAPI DispatchMessageW(const MSG *lpMsg);
-
-WINDOWS_IMPORT LRESULT WINAPI DefWindowProcW(HWND hWnd,UINT Msg,WPARAM wParam,LPARAM lParam);
-
-WINDOWS_IMPORT BOOL WINAPI DestroyWindow(HWND hWnd);
-
-WINDOWS_IMPORT LONG WINAPI GetWindowLongW( HWND hWnd, int nIndex);
-WINDOWS_IMPORT LONG WINAPI SetWindowLongW(HWND hWnd, int nIndex, LONG dwNewLong);
-WINDOWS_IMPORT BOOL WINAPI SetWindowPos( HWND hWnd, HWND hWndInsertAfter, int X, int Y, int cx, int cy, UINT uFlags);
-
-WINDOWS_IMPORT BOOL WINAPI CreatePipe( HANDLE* hReadPipe, HANDLE* hWritePipe, LPSECURITY_ATTRIBUTES lpPipeAttributes, DWORD nSize);
-
-WINDOWS_IMPORT BOOL WINAPI CloseHandle(HANDLE hObject);
-
-WINDOWS_IMPORT HANDLE WINAPI CreateFileW( LPCWSTR lpFileName, DWORD dwDesiredAccess, DWORD dwShareMode, LPSECURITY_ATTRIBUTES lpSecurityAttributes, DWORD dwCreationDisposition, DWORD dwFlagsAndAttributes, HANDLE hTemplateFile);
-
-WINDOWS_IMPORT BOOL WINAPI GetFileSizeEx( HANDLE hFile, PLARGE_INTEGER lpFileSize);
-
-WINDOWS_IMPORT BOOL WINAPI QueryPerformanceFrequency(LARGE_INTEGER *lpFrequency);
-WINDOWS_IMPORT BOOL WINAPI QueryPerformanceCounter(LARGE_INTEGER *lpPerformanceCount);
-
-WINDOWS_IMPORT DWORD_PTR WINAPI SetThreadAffinityMask( HANDLE hThread, DWORD_PTR dwThreadAffinityMask);
-
-WINDOWS_IMPORT BOOL WINAPI GetClientRect( HWND hWnd, LPRECT lpRect);
-
-WINDOWS_IMPORT HBITMAP WINAPI CreateDIBSection( HDC hdc, BITMAPINFO  *pbmi, UINT usage, void **ppvBits, HANDLE hSection, DWORD offset);
-
-WINDOWS_IMPORT HDC WINAPI GetDC(HWND hWnd);
-
-WINDOWS_IMPORT int WINAPI StretchDIBits( HDC hdc, int xDest, int yDest, int DestWidth, int DestHeight, int xSrc, int ySrc, int SrcWidth, int SrcHeight, PVOID lpBits, PBITMAPINFO lpbmi, UINT iUsage, DWORD rop);
-
-WINDOWS_IMPORT BOOL WINAPI DeleteObject(HGDIOBJ ho);
-
-WINDOWS_IMPORT HMONITOR WINAPI MonitorFromWindow(HWND hwnd,DWORD dwFlags);
-
-WINDOWS_IMPORT HMODULE WINAPI LoadLibraryA(LPCSTR lpLibFileName);
-WINDOWS_IMPORT void* WINAPI GetProcAddress(HMODULE hModule,LPCSTR  lpProcName);
-
-WINDOWS_IMPORT u32 WINAPI timeBeginPeriod(UINT uPeriod);
-WINDOWS_IMPORT u32 WINAPI timeEndPeriod(UINT uPeriod);
-
-WINDOWS_IMPORT BOOL WINAPI SetPriorityClass(HANDLE hProcess,DWORD  dwPriorityClass);
-
-WINDOWS_IMPORT BOOL WINAPI SetThreadPriority(HANDLE hThread,int    nPriority);
-
-WINDOWS_IMPORT HMODULE WINAPI LoadLibraryA(LPCSTR lpLibFileName);
-
-WINDOWS_IMPORT BOOL WINAPI CreateProcessA( LPCSTR lpApplicationName, LPSTR lpCommandLine, LPSECURITY_ATTRIBUTES lpProcessAttributes, LPSECURITY_ATTRIBUTES lpThreadAttributes, BOOL bInheritHandles, DWORD dwCreationFlags, LPVOID lpEnvironment, LPCSTR lpCurrentDirectory, LPSTARTUPINFOA lpStartupInfo, LPPROCESS_INFORMATION lpProcessInformation);
-
-WINDOWS_IMPORT DWORD WINAPI WaitForSingleObject(HANDLE hHandle,DWORD  dwMilliseconds);
-
-WINDOWS_IMPORT BOOL WINAPI GetExitCodeProcess(HANDLE  hProcess,LPDWORD lpExitCode);
-
-typedef enum DXGI_FORMAT {
-  DXGI_FORMAT_UNKNOWN = 0,
-  DXGI_FORMAT_R32G32B32A32_TYPELESS = 1,
-  DXGI_FORMAT_R32G32B32A32_FLOAT = 2,
-  DXGI_FORMAT_R32G32B32A32_UINT = 3,
-  DXGI_FORMAT_R32G32B32A32_SINT = 4,
-  DXGI_FORMAT_R32G32B32_TYPELESS = 5,
-  DXGI_FORMAT_R32G32B32_FLOAT = 6,
-  DXGI_FORMAT_R32G32B32_UINT = 7,
-  DXGI_FORMAT_R32G32B32_SINT = 8,
-  DXGI_FORMAT_R16G16B16A16_TYPELESS = 9,
-  DXGI_FORMAT_R16G16B16A16_FLOAT = 10,
-  DXGI_FORMAT_R16G16B16A16_UNORM = 11,
-  DXGI_FORMAT_R16G16B16A16_UINT = 12,
-  DXGI_FORMAT_R16G16B16A16_SNORM = 13,
-  DXGI_FORMAT_R16G16B16A16_SINT = 14,
-  DXGI_FORMAT_R32G32_TYPELESS = 15,
-  DXGI_FORMAT_R32G32_FLOAT = 16,
-  DXGI_FORMAT_R32G32_UINT = 17,
-  DXGI_FORMAT_R32G32_SINT = 18,
-  DXGI_FORMAT_R32G8X24_TYPELESS = 19,
-  DXGI_FORMAT_D32_FLOAT_S8X24_UINT = 20,
-  DXGI_FORMAT_R32_FLOAT_X8X24_TYPELESS = 21,
-  DXGI_FORMAT_X32_TYPELESS_G8X24_UINT = 22,
-  DXGI_FORMAT_R10G10B10A2_TYPELESS = 23,
-  DXGI_FORMAT_R10G10B10A2_UNORM = 24,
-  DXGI_FORMAT_R10G10B10A2_UINT = 25,
-  DXGI_FORMAT_R11G11B10_FLOAT = 26,
-  DXGI_FORMAT_R8G8B8A8_TYPELESS = 27,
-  DXGI_FORMAT_R8G8B8A8_UNORM = 28,
-  DXGI_FORMAT_R8G8B8A8_UNORM_SRGB = 29,
-  DXGI_FORMAT_R8G8B8A8_UINT = 30,
-  DXGI_FORMAT_R8G8B8A8_SNORM = 31,
-  DXGI_FORMAT_R8G8B8A8_SINT = 32,
-  DXGI_FORMAT_R16G16_TYPELESS = 33,
-  DXGI_FORMAT_R16G16_FLOAT = 34,
-  DXGI_FORMAT_R16G16_UNORM = 35,
-  DXGI_FORMAT_R16G16_UINT = 36,
-  DXGI_FORMAT_R16G16_SNORM = 37,
-  DXGI_FORMAT_R16G16_SINT = 38,
-  DXGI_FORMAT_R32_TYPELESS = 39,
-  DXGI_FORMAT_D32_FLOAT = 40,
-  DXGI_FORMAT_R32_FLOAT = 41,
-  DXGI_FORMAT_R32_UINT = 42,
-  DXGI_FORMAT_R32_SINT = 43,
-  DXGI_FORMAT_R24G8_TYPELESS = 44,
-  DXGI_FORMAT_D24_UNORM_S8_UINT = 45,
-  DXGI_FORMAT_R24_UNORM_X8_TYPELESS = 46,
-  DXGI_FORMAT_X24_TYPELESS_G8_UINT = 47,
-  DXGI_FORMAT_R8G8_TYPELESS = 48,
-  DXGI_FORMAT_R8G8_UNORM = 49,
-  DXGI_FORMAT_R8G8_UINT = 50,
-  DXGI_FORMAT_R8G8_SNORM = 51,
-  DXGI_FORMAT_R8G8_SINT = 52,
-  DXGI_FORMAT_R16_TYPELESS = 53,
-  DXGI_FORMAT_R16_FLOAT = 54,
-  DXGI_FORMAT_D16_UNORM = 55,
-  DXGI_FORMAT_R16_UNORM = 56,
-  DXGI_FORMAT_R16_UINT = 57,
-  DXGI_FORMAT_R16_SNORM = 58,
-  DXGI_FORMAT_R16_SINT = 59,
-  DXGI_FORMAT_R8_TYPELESS = 60,
-  DXGI_FORMAT_R8_UNORM = 61,
-  DXGI_FORMAT_R8_UINT = 62,
-  DXGI_FORMAT_R8_SNORM = 63,
-  DXGI_FORMAT_R8_SINT = 64,
-  DXGI_FORMAT_A8_UNORM = 65,
-  DXGI_FORMAT_R1_UNORM = 66,
-  DXGI_FORMAT_R9G9B9E5_SHAREDEXP = 67,
-  DXGI_FORMAT_R8G8_B8G8_UNORM = 68,
-  DXGI_FORMAT_G8R8_G8B8_UNORM = 69,
-  DXGI_FORMAT_BC1_TYPELESS = 70,
-  DXGI_FORMAT_BC1_UNORM = 71,
-  DXGI_FORMAT_BC1_UNORM_SRGB = 72,
-  DXGI_FORMAT_BC2_TYPELESS = 73,
-  DXGI_FORMAT_BC2_UNORM = 74,
-  DXGI_FORMAT_BC2_UNORM_SRGB = 75,
-  DXGI_FORMAT_BC3_TYPELESS = 76,
-  DXGI_FORMAT_BC3_UNORM = 77,
-  DXGI_FORMAT_BC3_UNORM_SRGB = 78,
-  DXGI_FORMAT_BC4_TYPELESS = 79,
-  DXGI_FORMAT_BC4_UNORM = 80,
-  DXGI_FORMAT_BC4_SNORM = 81,
-  DXGI_FORMAT_BC5_TYPELESS = 82,
-  DXGI_FORMAT_BC5_UNORM = 83,
-  DXGI_FORMAT_BC5_SNORM = 84,
-  DXGI_FORMAT_B5G6R5_UNORM = 85,
-  DXGI_FORMAT_B5G5R5A1_UNORM = 86,
-  DXGI_FORMAT_B8G8R8A8_UNORM = 87,
-  DXGI_FORMAT_B8G8R8X8_UNORM = 88,
-  DXGI_FORMAT_R10G10B10_XR_BIAS_A2_UNORM = 89,
-  DXGI_FORMAT_B8G8R8A8_TYPELESS = 90,
-  DXGI_FORMAT_B8G8R8A8_UNORM_SRGB = 91,
-  DXGI_FORMAT_B8G8R8X8_TYPELESS = 92,
-  DXGI_FORMAT_B8G8R8X8_UNORM_SRGB = 93,
-  DXGI_FORMAT_BC6H_TYPELESS = 94,
-  DXGI_FORMAT_BC6H_UF16 = 95,
-  DXGI_FORMAT_BC6H_SF16 = 96,
-  DXGI_FORMAT_BC7_TYPELESS = 97,
-  DXGI_FORMAT_BC7_UNORM = 98,
-  DXGI_FORMAT_BC7_UNORM_SRGB = 99,
-  DXGI_FORMAT_AYUV = 100,
-  DXGI_FORMAT_Y410 = 101,
-  DXGI_FORMAT_Y416 = 102,
-  DXGI_FORMAT_NV12 = 103,
-  DXGI_FORMAT_P010 = 104,
-  DXGI_FORMAT_P016 = 105,
-  DXGI_FORMAT_420_OPAQUE = 106,
-  DXGI_FORMAT_YUY2 = 107,
-  DXGI_FORMAT_Y210 = 108,
-  DXGI_FORMAT_Y216 = 109,
-  DXGI_FORMAT_NV11 = 110,
-  DXGI_FORMAT_AI44 = 111,
-  DXGI_FORMAT_IA44 = 112,
-  DXGI_FORMAT_P8 = 113,
-  DXGI_FORMAT_A8P8 = 114,
-  DXGI_FORMAT_B4G4R4A4_UNORM = 115,
-  DXGI_FORMAT_P208 = 130,
-  DXGI_FORMAT_V208 = 131,
-  DXGI_FORMAT_V408 = 132,
-  DXGI_FORMAT_SAMPLER_FEEDBACK_MIN_MIP_OPAQUE,
-  DXGI_FORMAT_SAMPLER_FEEDBACK_MIP_REGION_USED_OPAQUE,
- 
-} DXGI_FORMAT ;
-#define  DXGI_FORMAT_FORCE_UINT 0xffffffff
-
-typedef enum DXGI_MODE_ROTATION { 
-  DXGI_MODE_ROTATION_UNSPECIFIED  = 0,
-  DXGI_MODE_ROTATION_IDENTITY     = 1,
-  DXGI_MODE_ROTATION_ROTATE90     = 2,
-  DXGI_MODE_ROTATION_ROTATE180    = 3,
-  DXGI_MODE_ROTATION_ROTATE270    = 4
-} DXGI_MODE_ROTATION;
-
-typedef struct DXGI_OUTPUT_DESC
-    {
-    WCHAR DeviceName[ 32 ];
-    RECT DesktopCoordinates;
-    BOOL AttachedToDesktop;
-    DXGI_MODE_ROTATION Rotation;
-    HMONITOR Monitor;
-    } 	DXGI_OUTPUT_DESC;
-
-typedef struct DXGI_RATIONAL
-{
-    UINT Numerator;
-    UINT Denominator;
-} DXGI_RATIONAL;
-
-typedef enum DXGI_MODE_SCANLINE_ORDER { 
-  DXGI_MODE_SCANLINE_ORDER_UNSPECIFIED        = 0,
-  DXGI_MODE_SCANLINE_ORDER_PROGRESSIVE        = 1,
-  DXGI_MODE_SCANLINE_ORDER_UPPER_FIELD_FIRST  = 2,
-  DXGI_MODE_SCANLINE_ORDER_LOWER_FIELD_FIRST  = 3
-} DXGI_MODE_SCANLINE_ORDER;
-
-typedef enum DXGI_MODE_SCALING { 
-  DXGI_MODE_SCALING_UNSPECIFIED  = 0,
-  DXGI_MODE_SCALING_CENTERED     = 1,
-  DXGI_MODE_SCALING_STRETCHED    = 2
-} DXGI_MODE_SCALING;
-typedef struct DXGI_MODE_DESC
-{
-    UINT Width;
-    UINT Height;
-    DXGI_RATIONAL RefreshRate;
-    DXGI_FORMAT Format;
-    DXGI_MODE_SCANLINE_ORDER ScanlineOrdering;
-    DXGI_MODE_SCALING Scaling;
-} DXGI_MODE_DESC;
-
-
-typedef struct DXGI_GAMMA_CONTROL_CAPABILITIES
-{
-    BOOL ScaleAndOffsetSupported;
-    float MaxConvertedValue;
-    float MinConvertedValue;
-    UINT NumGammaControlPoints;
-    float ControlPointPositions[1025];
-} DXGI_GAMMA_CONTROL_CAPABILITIES;
-
-
-typedef struct DXGI_RGB {
-    float Red;
-    float Green;
-    float Blue;
-} DXGI_RGB;
-typedef struct DXGI_GAMMA_CONTROL
-{
-    DXGI_RGB Scale;
-    DXGI_RGB Offset;
-    DXGI_RGB GammaCurve[ 1025 ];
-} DXGI_GAMMA_CONTROL;
-
-typedef struct DXGI_FRAME_STATISTICS
-    {
-    UINT PresentCount;
-    UINT PresentRefreshCount;
-    UINT SyncRefreshCount;
-    LARGE_INTEGER SyncQPCTime;
-    LARGE_INTEGER SyncGPUTime;
-    } 	DXGI_FRAME_STATISTICS;
-
-typedef struct LUID {
-    DWORD LowPart;
-    LONG HighPart;
-} LUID;
-typedef struct DXGI_ADAPTER_DESC
-    {
-    WCHAR Description[ 128 ];
-    UINT VendorId;
-    UINT DeviceId;
-    UINT SubSysId;
-    UINT Revision;
-    size_t DedicatedVideoMemory;
-    size_t DedicatedSystemMemory;
-    size_t SharedSystemMemory;
-    LUID AdapterLuid;
-    } 	DXGI_ADAPTER_DESC;
-
-typedef struct DXGI_SAMPLE_DESC {
-  UINT Count;
-  UINT Quality;
-} DXGI_SAMPLE_DESC;
-typedef enum DXGI_SWAP_EFFECT {
-  DXGI_SWAP_EFFECT_DISCARD = 0,
-  DXGI_SWAP_EFFECT_SEQUENTIAL = 1,
-  DXGI_SWAP_EFFECT_FLIP_SEQUENTIAL = 3,
-  DXGI_SWAP_EFFECT_FLIP_DISCARD = 4
-} DXGI_SWAP_EFFECT;
-#define DXGI_CPU_ACCESS_NONE    ( 0 )
-#define DXGI_CPU_ACCESS_DYNAMIC    ( 1 )
-#define DXGI_CPU_ACCESS_READ_WRITE    ( 2 )
-#define DXGI_CPU_ACCESS_SCRATCH    ( 3 )
-#define DXGI_CPU_ACCESS_FIELD        15
-#define DXGI_USAGE_SHADER_INPUT             ( 1L << (0 + 4) )
-#define DXGI_USAGE_RENDER_TARGET_OUTPUT     ( 1L << (1 + 4) )
-#define DXGI_USAGE_BACK_BUFFER              ( 1L << (2 + 4) )
-#define DXGI_USAGE_SHARED                   ( 1L << (3 + 4) )
-#define DXGI_USAGE_READ_ONLY                ( 1L << (4 + 4) )
-#define DXGI_USAGE_DISCARD_ON_PRESENT       ( 1L << (5 + 4) )
-#define DXGI_USAGE_UNORDERED_ACCESS         ( 1L << (6 + 4) )
-typedef UINT DXGI_USAGE;
-typedef struct DXGI_SWAP_CHAIN_DESC {
-  DXGI_MODE_DESC   BufferDesc;
-  DXGI_SAMPLE_DESC SampleDesc;
-  DXGI_USAGE       BufferUsage;
-  UINT             BufferCount;
-  HWND             OutputWindow;
-  BOOL             Windowed;
-  DXGI_SWAP_EFFECT SwapEffect;
-  UINT             Flags;
-} DXGI_SWAP_CHAIN_DESC;
-
-typedef struct IUnknownVtbl {
-    HRESULT (*QueryInterface)(void *This, const GUID *riid, void **ppvObject);
-    ULONG (*AddRef)(void *This);
-    ULONG (*Release)(void *This);
-} IUnknownVtbl;
-typedef struct IDXGIObjectVtbl {
-    IUnknownVtbl parent; // Inherits from IUnknown
-
-    HRESULT (*SetPrivateData)(void *This, const GUID *Name, UINT DataSize, const void *pData);
-    HRESULT (*SetPrivateDataInterface)(void *This, const GUID *Name, const void *pUnknown);
-    HRESULT (*GetPrivateData)(void *This, const GUID *Name, UINT *pDataSize, void *pData);
-    HRESULT (*GetParent)(void *This, const GUID *riid, void **ppParent);
-} IDXGIObjectVtbl;
-
-typedef struct IDXGIObject {
-    const IDXGIObjectVtbl *lpVtbl;
-} IDXGIObject;
-
-
-typedef struct IDXGIOutputVtbl {
-    IUnknownVtbl parent; // Inherits from IUnknown
-
-    HRESULT (*SetPrivateData)(void *This, const GUID *Name, UINT DataSize, const void *pData);
-    HRESULT (*SetPrivateDataInterface)(void *This, const GUID *Name, const void *pUnknown);
-    HRESULT (*GetPrivateData)(void *This, const GUID *Name, UINT *pDataSize, void *pData);
-    HRESULT (*GetParent)(void *This, const GUID *riid, void **ppParent);
-
-    HRESULT (*GetDesc)(void *This, DXGI_OUTPUT_DESC *pDesc);
-    HRESULT (*GetDisplayModeList)(void *This, DXGI_FORMAT EnumFormat, UINT Flags, UINT *pNumModes, DXGI_MODE_DESC *pDesc);
-    HRESULT (*FindClosestMatchingMode)(void *This, const DXGI_MODE_DESC *pModeToMatch, DXGI_MODE_DESC *pClosestMatch, void *pConcernedDevice);
-    HRESULT (*WaitForVBlank)(void *This);
-    HRESULT (*TakeOwnership)(void *This, void *pDevice, BOOL Exclusive);
-    void (*ReleaseOwnership)(void *This);
-    HRESULT (*GetGammaControlCapabilities)(void *This, DXGI_GAMMA_CONTROL_CAPABILITIES *pGammaCaps);
-    HRESULT (*SetGammaControl)(void *This, const DXGI_GAMMA_CONTROL *pArray);
-    HRESULT (*GetGammaControl)(void *This, DXGI_GAMMA_CONTROL *pArray);
-    HRESULT (*SetDisplaySurface)(void *This, void *pScanoutSurface);
-    HRESULT (*GetDisplaySurfaceData)(void *This, void *pDestination);
-    HRESULT (*GetFrameStatistics)(void *This, DXGI_FRAME_STATISTICS *pStats);
-} IDXGIOutputVtbl;
-
-typedef struct IDXGIOutput {
-    const IDXGIOutputVtbl *lpVtbl;
-} IDXGIOutput;
-
-typedef struct IDXGIAdapterVtbl {
-    IUnknownVtbl parent; // Inherits from IUnknown
-
-    HRESULT (*SetPrivateData)(void *This, const GUID *Name, UINT DataSize, const void *pData);
-    HRESULT (*SetPrivateDataInterface)(void *This, const GUID *Name, const void *pUnknown);
-    HRESULT (*GetPrivateData)(void *This, const GUID *Name, UINT *pDataSize, void *pData);
-    HRESULT (*GetParent)(void *This, const GUID *riid, void **ppParent);
-
-    HRESULT (*EnumOutputs)(void *This, UINT Output, IDXGIOutput **ppOutput);
-    HRESULT (*GetDesc)(void *This, DXGI_ADAPTER_DESC *pDesc);
-    HRESULT (*CheckInterfaceSupport)(void *This, const GUID *InterfaceName, LARGE_INTEGER *pUMDVersion);
-} IDXGIAdapterVtbl;
-
-typedef struct IDXGIAdapter {
-    const IDXGIAdapterVtbl *lpVtbl;
-} IDXGIAdapter;
-
-struct IDXGISwapChain;
-typedef struct IDXGIFactoryVtbl {
-    IUnknownVtbl parent; // Inherits from IUnknown
-
-    HRESULT (*SetPrivateData)(void *This, const GUID *Name, UINT DataSize, const void *pData);
-    HRESULT (*SetPrivateDataInterface)(void *This, const GUID *Name, const void *pUnknown);
-    HRESULT (*GetPrivateData)(void *This, const GUID *Name, UINT *pDataSize, void *pData);
-    HRESULT (*GetParent)(void *This, const GUID *riid, void **ppParent);
-
-    HRESULT (*EnumAdapters)(void *This, UINT Adapter, IDXGIAdapter **ppAdapter);
-    HRESULT (*MakeWindowAssociation)(void *This, HWND WindowHandle, UINT Flags);
-    HRESULT (*GetWindowAssociation)(void *This, HWND *pWindowHandle);
-    HRESULT (*CreateSwapChain)(void *This, void *pDevice, const DXGI_SWAP_CHAIN_DESC *pDesc, struct IDXGISwapChain **ppSwapChain);
-    HRESULT (*CreateSoftwareAdapter)(void *This, HMODULE Module, IDXGIAdapter **ppAdapter);
-} IDXGIFactoryVtbl;
-
-typedef struct IDXGIFactory {
-    const IDXGIFactoryVtbl *lpVtbl;
-} IDXGIFactory;
-
-typedef GUID IID;
-extern const IID IID_IDXGIFactory;
-#define DEFINE_GUID(name, l, w1, w2, b1, b2, b3, b4, b5, b6, b7, b8) \
-    const GUID name = { l, w1, w2, { b1, b2, b3, b4, b5, b6, b7, b8 } }
-DEFINE_GUID(IID_IDXGIFactory,0x7b7166ec,0x21c7,0x44ae,0xb2,0x1a,0xc9,0xae,0x32,0x1a,0xe3,0x69);
-unit_local const HRESULT DXGI_ERROR_NOT_FOUND = 0x887A0002;
-
-
-WINDOWS_IMPORT HRESULT WINAPI CreateDXGIFactory(const GUID *riid, void **ppFactory);
-
-
-
-
-
-
-
-#define WSABASEERR 10000
-#define WSAEINTR                         10004L
-#define WSAEBADF                         10009L
-#define WSAEACCES                        10013L
-#define WSAEFAULT                        10014L
-#define WSAEINVAL                        10022L
-#define WSAEMFILE                        10024L
-#define WSAEWOULDBLOCK                   10035L
-#define WSAEINPROGRESS                   10036L
-#define WSAEALREADY                      10037L
-#define WSAENOTSOCK                      10038L
-#define WSAEDESTADDRREQ                  10039L
-#define WSAEMSGSIZE                      10040L
-#define WSAEPROTOTYPE                    10041L
-#define WSAENOPROTOOPT                   10042L
-#define WSAEPROTONOSUPPORT               10043L
-#define WSAESOCKTNOSUPPORT               10044L
-#define WSAEOPNOTSUPP                    10045L
-#define WSAEPFNOSUPPORT                  10046L
-#define WSAEAFNOSUPPORT                  10047L
-#define WSAEADDRINUSE                    10048L
-#define WSAEADDRNOTAVAIL                 10049L
-#define WSAENETDOWN                      10050L
-#define WSAENETUNREACH                   10051L
-#define WSAENETRESET                     10052L
-#define WSAECONNABORTED                  10053L
-#define WSAECONNRESET                    10054L
-#define WSAENOBUFS                       10055L
-#define WSAEISCONN                       10056L
-#define WSAENOTCONN                      10057L
-#define WSAESHUTDOWN                     10058L
-#define WSAETOOMANYREFS                  10059L
-#define WSAETIMEDOUT                     10060L
-#define WSAECONNREFUSED                  10061L
-#define WSAELOOP                         10062L
-#define WSAENAMETOOLONG                  10063L
-#define WSAEHOSTDOWN                     10064L
-#define WSAEHOSTUNREACH                  10065L
-#define WSAENOTEMPTY                     10066L
-#define WSAEPROCLIM                      10067L
-#define WSAEUSERS                        10068L
-#define WSAEDQUOT                        10069L
-#define WSAESTALE                        10070L
-#define WSAEREMOTE                       10071L
-#define WSASYSNOTREADY                   10091L
-#define WSAVERNOTSUPPORTED               10092L
-#define WSANOTINITIALISED                10093L
-#define WSAEDISCON                       10101L
-#define WSAENOMORE                       10102L
-#define WSAECANCELLED                    10103L
-#define WSAEINVALIDPROCTABLE             10104L
-#define WSAEINVALIDPROVIDER              10105L
-#define WSAEPROVIDERFAILEDINIT           10106L
-#define WSASYSCALLFAILURE                10107L
-#define WSASERVICE_NOT_FOUND             10108L
-#define WSATYPE_NOT_FOUND                10109L
-#define WSA_E_NO_MORE                    10110L
-#define WSA_E_CANCELLED                  10111L
-#define WSAEREFUSED                      10112L
-#define WSAHOST_NOT_FOUND                11001L
-#define WSATRY_AGAIN                     11002L
-#define WSANO_RECOVERY                   11003L
-#define WSANO_DATA                       11004L
-#define WSA_QOS_RECEIVERS                11005L
-#define WSA_QOS_SENDERS                  11006L
-#define WSA_QOS_NO_SENDERS               11007L
-#define WSA_QOS_NO_RECEIVERS             11008L
-#define WSA_QOS_REQUEST_CONFIRMED        11009L
-#define WSA_QOS_ADMISSION_FAILURE        11010L
-#define WSA_QOS_POLICY_FAILURE           11011L
-#define WSA_QOS_BAD_STYLE                11012L
-#define WSA_QOS_BAD_OBJECT               11013L
-#define WSA_QOS_TRAFFIC_CTRL_ERROR       11014L
-#define WSA_QOS_GENERIC_ERROR            11015L
-#define WSA_QOS_ESERVICETYPE             11016L
-#define WSA_QOS_EFLOWSPEC                11017L
-#define WSA_QOS_EPROVSPECBUF             11018L
-#define WSA_QOS_EFILTERSTYLE             11019L
-#define WSA_QOS_EFILTERTYPE              11020L
-#define WSA_QOS_EFILTERCOUNT             11021L
-#define WSA_QOS_EOBJLENGTH               11022L
-#define WSA_QOS_EFLOWCOUNT               11023L
-#define WSA_QOS_EUNKOWNPSOBJ             11024L
-#define WSA_QOS_EPOLICYOBJ               11025L
-#define WSA_QOS_EFLOWDESC                11026L
-#define WSA_QOS_EPSFLOWSPEC              11027L
-#define WSA_QOS_EPSFILTERSPEC            11028L
-#define WSA_QOS_ESDMODEOBJ               11029L
-#define WSA_QOS_ESHAPERATEOBJ            11030L
-#define WSA_QOS_RESERVED_PETYPE          11031L
-#define WSA_SECURE_HOST_NOT_FOUND        11032L
-#define WSA_IPSEC_NAME_POLICY_ERROR      11033L
-
-#define WSADESCRIPTION_LEN      256
-#define WSASYS_STATUS_LEN       128
-
-typedef UINT_PTR        SOCKET;
-
-typedef struct WSAData {
-        WORD                    wVersion;
-        WORD                    wHighVersion;
-#ifdef _WIN64
-        unsigned short          iMaxSockets;
-        unsigned short          iMaxUdpDg;
-        char *              lpVendorInfo;
-        char                    szDescription[WSADESCRIPTION_LEN+1];
-        char                    szSystemStatus[WSASYS_STATUS_LEN+1];
-#else
-        char                    szDescription[WSADESCRIPTION_LEN+1];
-        char                    szSystemStatus[WSASYS_STATUS_LEN+1];
-        unsigned short          iMaxSockets;
-        unsigned short          iMaxUdpDg;
-        char *              lpVendorInfo;
-#endif
-} WSADATA;
-
-typedef WSADATA *LPWSADATA;
-
-WINDOWS_IMPORT int WINAPI WSAStartup( WORD      wVersionRequired, LPWSADATA lpWSAData);
-
-/*
- * Address families.
- */
-#define AF_UNSPEC       0               /* unspecified */
-#define AF_UNIX         1               /* local to host (pipes, portals) */
-#define AF_INET         2               /* internetwork: UDP, TCP, etc. */
-#define AF_IMPLINK      3               /* arpanet imp addresses */
-#define AF_PUP          4               /* pup protocols: e.g. BSP */
-#define AF_CHAOS        5               /* mit CHAOS protocols */
-#define AF_IPX          6               /* IPX and SPX */
-#define AF_NS           6               /* XEROX NS protocols */
-#define AF_ISO          7               /* ISO protocols */
-#define AF_OSI          AF_ISO          /* OSI is ISO */
-#define AF_ECMA         8               /* european computer manufacturers */
-#define AF_DATAKIT      9               /* datakit protocols */
-#define AF_CCITT        10              /* CCITT protocols, X.25 etc */
-#define AF_SNA          11              /* IBM SNA */
-#define AF_DECnet       12              /* DECnet */
-#define AF_DLI          13              /* Direct data link interface */
-#define AF_LAT          14              /* LAT */
-#define AF_HYLINK       15              /* NSC Hyperchannel */
-#define AF_APPLETALK    16              /* AppleTalk */
-#define AF_NETBIOS      17              /* NetBios-style addresses */
-#define AF_VOICEVIEW    18              /* VoiceView */
-#define AF_FIREFOX      19              /* FireFox */
-#define AF_UNKNOWN1     20              /* Somebody is using this! */
-#define AF_BAN          21              /* Banyan */
-
-#define AF_MAX          22
-
-/*
- * Types
- */
-#define SOCK_STREAM     1               /* stream socket */
-#define SOCK_DGRAM      2               /* datagram socket */
-#define SOCK_RAW        3               /* raw-protocol interface */
-#define SOCK_RDM        4               /* reliably-delivered message */
-#define SOCK_SEQPACKET  5               /* sequenced packet stream */
-
-
-#define IPPROTO_IP              0               /* dummy for IP */
-#define IPPROTO_ICMP            1               /* control message protocol */
-#define IPPROTO_IGMP            2               /* group management protocol */
-#define IPPROTO_GGP             3               /* gateway^2 (deprecated) */
-#define IPPROTO_TCP             6               /* tcp */
-#define IPPROTO_PUP             12              /* pup */
-#define IPPROTO_UDP             17              /* user datagram protocol */
-#define IPPROTO_IDP             22              /* xns idp */
-#define IPPROTO_ND              77              /* UNOFFICIAL net disk proto */
-
-#define IPPROTO_RAW             255             /* raw IP packet */
-#define IPPROTO_MAX             256
-
-
-
-
-
-           
-typedef struct in_addr {
-        union {
-                struct { UCHAR s_b1,s_b2,s_b3,s_b4; } S_un_b;
-                struct { USHORT s_w1,s_w2; } S_un_w;
-                ULONG S_addr;
-        } S_un;
-#define s_addr  S_un.S_addr /* can be used for most tcp & ip code */
-#define s_host  S_un.S_un_b.s_b2    // host on imp
-#define s_net   S_un.S_un_b.s_b1    // network
-#define s_imp   S_un.S_un_w.s_w2    // imp
-#define s_impno S_un.S_un_b.s_b4    // imp #
-#define s_lh    S_un.S_un_b.s_b3    // logical host
-} IN_ADDR, *PIN_ADDR,  *LPIN_ADDR;
-
-    
-#define INVALID_SOCKET  (SOCKET)(~0)
-#define SOCKET_ERROR            (-1)
-    
-  typedef struct sockaddr_in SOCKADDR_IN;
-typedef struct sockaddr_in *PSOCKADDR_IN;
-typedef struct sockaddr_in *LPSOCKADDR_IN;
-
-typedef USHORT ADDRESS_FAMILY;
-
-typedef struct sockaddr_in {
-
-#if(_WIN32_WINNT < 0x0600)
-    short   sin_family;
-#else //(_WIN32_WINNT < 0x0600)
-    ADDRESS_FAMILY sin_family;
-#endif //(_WIN32_WINNT < 0x0600)
-
-    USHORT sin_port;
-    IN_ADDR sin_addr;
-    CHAR sin_zero[8];
-} SOCKADDR_IN, *PSOCKADDR_IN;
-
-struct sockaddr {
-        USHORT sa_family;              /* address family */
-        char    sa_data[14];            /* up to 14 bytes of direct address */
-};
-
-
-WINDOWS_IMPORT
-SOCKET
-WINAPI
-socket(
-    int af,
-    int type,
-    int protocol
-    );
-    
-WINDOWS_IMPORT
-USHORT
-WINAPI
-htons(
-    USHORT hostshort
-    );
-WINDOWS_IMPORT
-USHORT
-WINAPI
-htonl(
-   USHORT hostlong
-    );
-        
-WINDOWS_IMPORT
-int
-WINAPI
-bind(
-     SOCKET s,
-    const struct sockaddr * name,
-     int namelen
-    );
-    
-WINDOWS_IMPORT
-int
-WINAPI
-WSAGetLastError(
-    void
-    );    
-
-WINDOWS_IMPORT
-int
-WINAPI
-listen(
-     SOCKET s,
-     int backlog
-    );
-
-WINDOWS_IMPORT
-SOCKET
-WINAPI
-accept(
-    SOCKET s,
-    struct sockaddr * addr,
-    int * addrlen
-    );
-    
-
-WINDOWS_IMPORT
-unsigned long
-WINAPI
-inet_addr(
-     const char * cp
-    );
-    
-#define INADDR_NONE             0xffffffff
-
-
-WINDOWS_IMPORT
-int
-WINAPI
-connect(
-    SOCKET s,
-    const struct sockaddr * name,
-    int namelen
-    );
-
-
-WINDOWS_IMPORT
-int
-WINAPI
-send(
-    SOCKET s,
-    const char * buf,
-    int len,
-    int flags
-    );
-    
-WINDOWS_IMPORT
-int
-WINAPI
-recv(
-    SOCKET s,
-    char * buf,
-    int len,
-    int flags
-    );
-
-
-
-WINDOWS_IMPORT
-int
-WINAPI
-closesocket(
-    SOCKET s
-    );
-
-WINDOWS_IMPORT
-int
-WINAPI
-ioctlsocket(
-     SOCKET s,
-     long cmd,
-    unsigned long * argp
-    );
-    
-
-#define IOCPARM_MASK    0x7f            /* parameters must be < 128 bytes */
-#define IOC_VOID        0x20000000      /* no parameters */
-#define IOC_OUT         0x40000000      /* copy out parameters */
-#define IOC_IN          0x80000000      /* copy in parameters */
-#define IOC_INOUT       (IOC_IN|IOC_OUT)
-#define _IO(x,y)        (IOC_VOID|((x)<<8)|(y))
-
-#define _IOR(x,y,t)     (IOC_OUT|(((long)sizeof(t)&IOCPARM_MASK)<<16)|((x)<<8)|(y))
-
-#define _IOW(x,y,t)     (IOC_IN|(((long)sizeof(t)&IOCPARM_MASK)<<16)|((x)<<8)|(y))
-#define FIONREAD    _IOR('f', 127, unsigned long) /* get # bytes to read */
-#define FIONBIO     _IOW('f', 126, unsigned long) /* set/clear non-blocking i/o */
-#define FIOASYNC    _IOW('f', 125, unsigned long) /* set/clear async i/o */
-
-#define NO_ERROR 0L                                                 // dderror
-
-int setsockopt (
-                           SOCKET s,
-                           int level,
-                           int optname,
-                           const char * optval,
-                           int optlen);
-                           
-#define SOL_SOCKET      0xffff          /* options for socket level */
-
-#define SO_SNDBUF       0x1001          /* send buffer size */
-#define SO_RCVBUF       0x1002          /* receive buffer size */
-#define SO_SNDLOWAT     0x1003          /* send low-water mark */
-#define SO_RCVLOWAT     0x1004          /* receive low-water mark */
-#define SO_SNDTIMEO     0x1005          /* send timeout */
-#define SO_RCVTIMEO     0x1006          /* receive timeout */
-#define SO_ERROR        0x1007          /* get error status and clear */
-#define SO_TYPE         0x1008          /* get socket type */
-
-#define FD_SETSIZE      64
-
-#define FD_CLR(fd, set) do { \
-    u_int __i; \
-    for (__i = 0; __i < ((fd_set *)(set))->fd_count ; __i++) { \
-        if (((fd_set *)(set))->fd_array[__i] == fd) { \
-            while (__i < ((fd_set *)(set))->fd_count-1) { \
-                ((fd_set *)(set))->fd_array[__i] = \
-                    ((fd_set *)(set))->fd_array[__i+1]; \
-                __i++; \
-            } \
-            ((fd_set *)(set))->fd_count--; \
-            break; \
-        } \
-    } \
-} while(0)
-
-#define FD_SET(fd, set) do { \
-    if (((fd_set *)(set))->fd_count < FD_SETSIZE) \
-        ((fd_set *)(set))->fd_array[((fd_set *)(set))->fd_count++]=(fd);\
-} while(0)
-
-#define FD_ZERO(set) (((fd_set *)(set))->fd_count=0)
-
-#define FD_ISSET(fd, set) __WSAFDIsSet((SOCKET)(fd), (fd_set *)(set))
-
-/*
- * Structure used in select() call, taken from the BSD file sys/time.h.
- */
-struct timeval {
-        long    tv_sec;         /* seconds */
-        long    tv_usec;        /* and microseconds */
-};
-
-/*
- * Operations on timevals.
- *
- * NB: timercmp does not work for >= or <=.
- */
-#define timerisset(tvp)         ((tvp)->tv_sec || (tvp)->tv_usec)
-#define timercmp(tvp, uvp, cmp) \
-        ((tvp)->tv_sec cmp (uvp)->tv_sec || \
-         (tvp)->tv_sec == (uvp)->tv_sec && (tvp)->tv_usec cmp (uvp)->tv_usec)
-#define timerclear(tvp)         (tvp)->tv_sec = (tvp)->tv_usec = 0
-
-typedef struct fd_set {
-        unsigned int   fd_count;               /* how many are SET? */
-        SOCKET  fd_array[FD_SETSIZE];   /* an array of SOCKETs */
-} fd_set;
-
-WINDOWS_IMPORT
-int
-WINAPI
-select(
-    int nfds,
-    fd_set * readfds,
-    fd_set * writefds,
-    fd_set * exceptfds,
-    const struct timeval * timeout
-    );
-    
-#endif // _WINDOWS_LOADER_H
-
-typedef struct _FILETIME {
-  DWORD dwLowDateTime;
-  DWORD dwHighDateTime;
-} FILETIME, *PFILETIME, *LPFILETIME;
-
-WINDOWS_IMPORT BOOL WINAPI FindClose(
-  HANDLE hFindFile
-);
-
-typedef struct _WIN32_FIND_DATAW {
-  DWORD    dwFileAttributes;
-  FILETIME ftCreationTime;
-  FILETIME ftLastAccessTime;
-  FILETIME ftLastWriteTime;
-  DWORD    nFileSizeHigh;
-  DWORD    nFileSizeLow;
-  DWORD    dwReserved0;
-  DWORD    dwReserved1;
-  WCHAR    cFileName[260];
-  WCHAR    cAlternateFileName[14];
-  DWORD    dwFileType; // Obsolete. Do not use.
-  DWORD    dwCreatorType; // Obsolete. Do not use
-  WORD     wFinderFlags; // Obsolete. Do not use
-} WIN32_FIND_DATAW, *PWIN32_FIND_DATAW, *LPWIN32_FIND_DATAW;
-
-WINDOWS_IMPORT HANDLE WINAPI FindFirstFileW(
-  LPCWSTR            lpFileName,
-  LPWIN32_FIND_DATAW lpFindFileData
-);
-
-WINDOWS_IMPORT BOOL WINAPI FindNextFileW(
-  HANDLE             hFindFile,
-  LPWIN32_FIND_DATAW lpFindFileData
-);
-
-WINDOWS_IMPORT DWORD WINAPI GetFileAttributesW(
-  LPCWSTR lpFileName
-);
-
-WINDOWS_IMPORT BOOL WINAPI RemoveDirectoryW(
-  LPCWSTR lpPathName
-);
-
-WINDOWS_IMPORT BOOL WINAPI DeleteFileW(
-  LPCWSTR lpFileName
-);
+#define ERROR_NO_SUCH_DEVICE 0x1B1
+#define ERROR_DEV_NOT_EXIST  0x37
+#define ERROR_IO_DEVICE      0x45D
+#define ERROR_NOT_READY      0x15
 
 // end_access
-#define FILE_SHARE_READ                 0x00000001  
-#define FILE_SHARE_WRITE                0x00000002  
-#define FILE_SHARE_DELETE               0x00000004  
-#define FILE_ATTRIBUTE_READONLY             0x00000001  
-#define FILE_ATTRIBUTE_HIDDEN               0x00000002  
-#define FILE_ATTRIBUTE_SYSTEM               0x00000004  
-#define FILE_ATTRIBUTE_DIRECTORY            0x00000010  
-#define FILE_ATTRIBUTE_ARCHIVE              0x00000020  
-#define FILE_ATTRIBUTE_DEVICE               0x00000040  
-#define FILE_ATTRIBUTE_NORMAL               0x00000080  
-#define FILE_ATTRIBUTE_TEMPORARY            0x00000100  
-#define FILE_ATTRIBUTE_SPARSE_FILE          0x00000200  
-#define FILE_ATTRIBUTE_REPARSE_POINT        0x00000400  
-#define FILE_ATTRIBUTE_COMPRESSED           0x00000800  
-#define FILE_ATTRIBUTE_OFFLINE              0x00001000  
-#define FILE_ATTRIBUTE_NOT_CONTENT_INDEXED  0x00002000  
-#define FILE_ATTRIBUTE_ENCRYPTED            0x00004000  
-#define FILE_ATTRIBUTE_INTEGRITY_STREAM     0x00008000  
-#define FILE_ATTRIBUTE_VIRTUAL              0x00010000  
-#define FILE_ATTRIBUTE_NO_SCRUB_DATA        0x00020000  
-#define FILE_ATTRIBUTE_EA                   0x00040000  
-#define FILE_ATTRIBUTE_PINNED               0x00080000  
-#define FILE_ATTRIBUTE_UNPINNED             0x00100000  
-#define FILE_ATTRIBUTE_RECALL_ON_OPEN       0x00040000  
-#define FILE_ATTRIBUTE_RECALL_ON_DATA_ACCESS 0x00400000 
-#define TREE_CONNECT_ATTRIBUTE_PRIVACY      0x00004000  
-#define TREE_CONNECT_ATTRIBUTE_INTEGRITY    0x00008000  
-#define TREE_CONNECT_ATTRIBUTE_GLOBAL       0x00000004  
-#define TREE_CONNECT_ATTRIBUTE_PINNED       0x00000002  
-#define FILE_ATTRIBUTE_STRICTLY_SEQUENTIAL  0x20000000  
-#define FILE_NOTIFY_CHANGE_FILE_NAME    0x00000001   
-#define FILE_NOTIFY_CHANGE_DIR_NAME     0x00000002   
-#define FILE_NOTIFY_CHANGE_ATTRIBUTES   0x00000004   
-#define FILE_NOTIFY_CHANGE_SIZE         0x00000008   
-#define FILE_NOTIFY_CHANGE_LAST_WRITE   0x00000010   
-#define FILE_NOTIFY_CHANGE_LAST_ACCESS  0x00000020   
-#define FILE_NOTIFY_CHANGE_CREATION     0x00000040   
-#define FILE_NOTIFY_CHANGE_SECURITY     0x00000100   
-#define FILE_ACTION_ADDED                   0x00000001   
-#define FILE_ACTION_REMOVED                 0x00000002   
-#define FILE_ACTION_MODIFIED                0x00000003   
-#define FILE_ACTION_RENAMED_OLD_NAME        0x00000004   
-#define FILE_ACTION_RENAMED_NEW_NAME        0x00000005   
-#define MAILSLOT_NO_MESSAGE             ((DWORD)-1) 
-#define MAILSLOT_WAIT_FOREVER           ((DWORD)-1) 
-#define FILE_CASE_SENSITIVE_SEARCH          0x00000001  
-#define FILE_CASE_PRESERVED_NAMES           0x00000002  
-#define FILE_UNICODE_ON_DISK                0x00000004  
-#define FILE_PERSISTENT_ACLS                0x00000008  
-#define FILE_FILE_COMPRESSION               0x00000010  
-#define FILE_VOLUME_QUOTAS                  0x00000020  
-#define FILE_SUPPORTS_SPARSE_FILES          0x00000040  
-#define FILE_SUPPORTS_REPARSE_POINTS        0x00000080  
-#define FILE_SUPPORTS_REMOTE_STORAGE        0x00000100  
-#define FILE_RETURNS_CLEANUP_RESULT_INFO    0x00000200  
-#define FILE_SUPPORTS_POSIX_UNLINK_RENAME   0x00000400  
+#define FILE_SHARE_READ                 0x00000001
 
-
-
-
-#define FILE_VOLUME_IS_COMPRESSED           0x00008000  
-#define FILE_SUPPORTS_OBJECT_IDS            0x00010000  
-#define FILE_SUPPORTS_ENCRYPTION            0x00020000  
-#define FILE_NAMED_STREAMS                  0x00040000  
-#define FILE_READ_ONLY_VOLUME               0x00080000  
-#define FILE_SEQUENTIAL_WRITE_ONCE          0x00100000  
-#define FILE_SUPPORTS_TRANSACTIONS          0x00200000  
-#define FILE_SUPPORTS_HARD_LINKS            0x00400000  
-#define FILE_SUPPORTS_EXTENDED_ATTRIBUTES   0x00800000  
-#define FILE_SUPPORTS_OPEN_BY_FILE_ID       0x01000000  
-#define FILE_SUPPORTS_USN_JOURNAL           0x02000000  
-#define FILE_SUPPORTS_INTEGRITY_STREAMS     0x04000000  
-#define FILE_SUPPORTS_BLOCK_REFCOUNTING     0x08000000  
-#define FILE_SUPPORTS_SPARSE_VDL            0x10000000  
-#define FILE_DAX_VOLUME                     0x20000000  
-#define FILE_SUPPORTS_GHOSTING              0x40000000  
-
-
-WINDOWS_IMPORT DWORD WINAPI TlsAlloc(void);
-WINDOWS_IMPORT LPVOID WINAPI TlsGetValue(
-  DWORD dwTlsIndex
-);
-WINDOWS_IMPORT BOOL WINAPI TlsSetValue(
-  DWORD  dwTlsIndex,
-  LPVOID lpTlsValue
-);
-
-WINDOWS_IMPORT DWORD WINAPI GetCurrentThreadId(void);
-
-typedef DWORD (__stdcall *LPTHREAD_START_ROUTINE) (LPVOID lpThreadParameter);  
-
-WINDOWS_IMPORT HANDLE WINAPI CreateThread(LPSECURITY_ATTRIBUTES lpThreadAttributes, size_t dwStackSize, LPTHREAD_START_ROUTINE lpStartAddress, LPVOID lpParameter, DWORD dwCreationFlags, LPDWORD lpThreadId);
-
-WINDOWS_IMPORT DWORD WINAPI ResumeThread(HANDLE hThread);
-
-typedef struct CRITICAL_SECTION {
-  u8 _[40]; // todo(charlie) #portability 32-bit
-} CRITICAL_SECTION, *LPCRITICAL_SECTION, *PCRITICAL_SECTION;
-
-WINDOWS_IMPORT void WINAPI InitializeCriticalSection(
-  LPCRITICAL_SECTION lpCriticalSection
-);
-
-WINDOWS_IMPORT void WINAPI EnterCriticalSection(
-  LPCRITICAL_SECTION lpCriticalSection
-);
-
-WINDOWS_IMPORT void WINAPI LeaveCriticalSection(
-  LPCRITICAL_SECTION lpCriticalSection
-);
-
-WINDOWS_IMPORT void WINAPI DeleteCriticalSection(
-  LPCRITICAL_SECTION lpCriticalSection
-);
-
-WINDOWS_IMPORT BOOL WINAPI CreateDirectoryW(
-  LPCWSTR               lpPathName,
-  LPSECURITY_ATTRIBUTES lpSecurityAttributes
-);
-
-
+#define FILE_SHARE_WRITE                0x00000002
+#define FILE_SHARE_DELETE               0x00000004
+#define FILE_ATTRIBUTE_READONLY             0x00000001
+#define FILE_ATTRIBUTE_HIDDEN               0x00000002
+#define FILE_ATTRIBUTE_SYSTEM               0x00000004
+#define FILE_ATTRIBUTE_DIRECTORY            0x00000010
+#define FILE_ATTRIBUTE_ARCHIVE              0x00000020
+#define FILE_ATTRIBUTE_DEVICE               0x00000040
+#define FILE_ATTRIBUTE_NORMAL               0x00000080
+#define FILE_ATTRIBUTE_TEMPORARY            0x00000100
+#define FILE_ATTRIBUTE_SPARSE_FILE          0x00000200
+#define FILE_ATTRIBUTE_REPARSE_POINT        0x00000400
+#define FILE_ATTRIBUTE_COMPRESSED           0x00000800
+#define FILE_ATTRIBUTE_OFFLINE              0x00001000
+#define FILE_ATTRIBUTE_NOT_CONTENT_INDEXED  0x00002000
+#define FILE_ATTRIBUTE_ENCRYPTED            0x00004000
+#define FILE_ATTRIBUTE_INTEGRITY_STREAM     0x00008000
+#define FILE_ATTRIBUTE_VIRTUAL              0x00010000
+#define FILE_ATTRIBUTE_NO_SCRUB_DATA        0x00020000
+#define FILE_ATTRIBUTE_EA                   0x00040000
+#define FILE_ATTRIBUTE_PINNED               0x00080000
+#define FILE_ATTRIBUTE_UNPINNED             0x00100000
+#define FILE_ATTRIBUTE_RECALL_ON_OPEN       0x00040000
+#define FILE_ATTRIBUTE_RECALL_ON_DATA_ACCESS 0x00400000
+#define TREE_CONNECT_ATTRIBUTE_PRIVACY      0x00004000
+#define TREE_CONNECT_ATTRIBUTE_INTEGRITY    0x00008000
+#define TREE_CONNECT_ATTRIBUTE_GLOBAL       0x00000004
+#define TREE_CONNECT_ATTRIBUTE_PINNED       0x00000002
+#define FILE_ATTRIBUTE_STRICTLY_SEQUENTIAL  0x20000000
+#define FILE_NOTIFY_CHANGE_FILE_NAME    0x00000001
+#define FILE_NOTIFY_CHANGE_DIR_NAME     0x00000002
+#define FILE_NOTIFY_CHANGE_ATTRIBUTES   0x00000004
+#define FILE_NOTIFY_CHANGE_SIZE         0x00000008
+#define FILE_NOTIFY_CHANGE_LAST_WRITE   0x00000010
+#define FILE_NOTIFY_CHANGE_LAST_ACCESS  0x00000020
+#define FILE_NOTIFY_CHANGE_CREATION     0x00000040
+#define FILE_NOTIFY_CHANGE_SECURITY     0x00000100
+#define FILE_ACTION_ADDED                   0x00000001
+#define FILE_ACTION_REMOVED                 0x00000002
+#define FILE_ACTION_MODIFIED                0x00000003
+#define FILE_ACTION_RENAMED_OLD_NAME        0x00000004
+#define FILE_ACTION_RENAMED_NEW_NAME        0x00000005
+#define MAILSLOT_NO_MESSAGE             ((DWORD)-1)
+#define MAILSLOT_WAIT_FOREVER           ((DWORD)-1)
+#define FILE_CASE_SENSITIVE_SEARCH          0x00000001
+#define FILE_CASE_PRESERVED_NAMES           0x00000002
+#define FILE_UNICODE_ON_DISK                0x00000004
+#define FILE_PERSISTENT_ACLS                0x00000008
+#define FILE_FILE_COMPRESSION               0x00000010
+#define FILE_VOLUME_QUOTAS                  0x00000020
+#define FILE_SUPPORTS_SPARSE_FILES          0x00000040
+#define FILE_SUPPORTS_REPARSE_POINTS        0x00000080
+#define FILE_SUPPORTS_REMOTE_STORAGE        0x00000100
+#define FILE_RETURNS_CLEANUP_RESULT_INFO    0x00000200
+#define FILE_SUPPORTS_POSIX_UNLINK_RENAME   0x00000400
+#define FILE_VOLUME_IS_COMPRESSED           0x00008000
+#define FILE_SUPPORTS_OBJECT_IDS            0x00010000
+#define FILE_SUPPORTS_ENCRYPTION            0x00020000
+#define FILE_NAMED_STREAMS                  0x00040000
+#define FILE_READ_ONLY_VOLUME               0x00080000
+#define FILE_SEQUENTIAL_WRITE_ONCE          0x00100000
+#define FILE_SUPPORTS_TRANSACTIONS          0x00200000
+#define FILE_SUPPORTS_HARD_LINKS            0x00400000
+#define FILE_SUPPORTS_EXTENDED_ATTRIBUTES   0x00800000
+#define FILE_SUPPORTS_OPEN_BY_FILE_ID       0x01000000
+#define FILE_SUPPORTS_USN_JOURNAL           0x02000000
+#define FILE_SUPPORTS_INTEGRITY_STREAMS     0x04000000
+#define FILE_SUPPORTS_BLOCK_REFCOUNTING     0x08000000
+#define FILE_SUPPORTS_SPARSE_VDL            0x10000000
+#define FILE_DAX_VOLUME                     0x20000000
+#define FILE_SUPPORTS_GHOSTING              0x40000000
 #define SO_DEBUG        0x0001          /* turn on debugging info recording */
 #define SO_ACCEPTCONN   0x0002          /* socket has had listen() */
 #define SO_REUSEADDR    0x0004          /* allow local address reuse */
@@ -6283,50 +5509,7 @@ WINDOWS_IMPORT BOOL WINAPI CreateDirectoryW(
 #define SO_USELOOPBACK  0x0040          /* bypass hardware when possible */
 #define SO_LINGER       0x0080          /* linger on close if data present */
 #define SO_OOBINLINE    0x0100          /* leave received OOB data in line */
-
-WINDOWS_IMPORT void WINAPI ExitProcess(UINT uExitCode);
-
-WINDOWS_IMPORT void WINAPI ExitThread(DWORD dwExitCode);
-
-WINDOWS_IMPORT BOOL WINAPI GetExitCodeThread(HANDLE hThread, LPDWORD lpExitCode);
-
-WINDOWS_IMPORT DWORD WINAPI GetFullPathNameA( LPCSTR lpFileName, DWORD  nBufferLength, LPSTR  lpBuffer, LPSTR  *lpFilePart);
-
-WINDOWS_IMPORT LPWSTR  WINAPI GetCommandLineW(void);
-WINDOWS_IMPORT LPCSTR  WINAPI GetCommandLineA(void);
-WINDOWS_IMPORT LPWSTR* WINAPI CommandLineToArgvW(LPCWSTR, int*);
-
-WINDOWS_IMPORT HANDLE WINAPI CreateSemaphoreA( LPSECURITY_ATTRIBUTES lpSemaphoreAttributes, LONG lInitialCount, LONG lMaximumCount, LPCSTR lpName);
-
-WINDOWS_IMPORT BOOL WINAPI ReleaseSemaphore( HANDLE hSemaphore, LONG   lReleaseCount, LPLONG lpPreviousCount);
-
-typedef struct {
-  LARGE_INTEGER VolumeSerialNumber;
-  LARGE_INTEGER NumberSectors;
-  LARGE_INTEGER TotalClusters;
-  LARGE_INTEGER FreeClusters;
-  LARGE_INTEGER TotalReserved;
-  ULONG         BytesPerSector;
-  ULONG         BytesPerCluster;
-  ULONG         BytesPerFileRecordSegment;
-  ULONG         ClustersPerFileRecordSegment;
-  LARGE_INTEGER MftValidDataLength;
-  LARGE_INTEGER MftStartLcn;
-  LARGE_INTEGER Mft2StartLcn;
-  LARGE_INTEGER MftZoneStart;
-  LARGE_INTEGER MftZoneEnd;
-} NTFS_VOLUME_DATA_BUFFER, *PNTFS_VOLUME_DATA_BUFFER;
-
-WINDOWS_IMPORT BOOL WINAPI DeviceIoControl( HANDLE hDevice, DWORD dwIoControlCode, LPVOID lpInBuffer, DWORD nInBufferSize, LPVOID lpOutBuffer, DWORD nOutBufferSize, LPDWORD lpBytesReturned, LPOVERLAPPED lpOverlapped);
-
-typedef struct {
-  DWORDLONG StartFileReferenceNumber;
-  USN       LowUsn;
-  USN       HighUsn;
-} MFT_ENUM_DATA_V0, *PMFT_ENUM_DATA_V0;
-
 #define DEVICE_TYPE DWORD
-
 #define FILE_DEVICE_BEEP                0x00000001
 #define FILE_DEVICE_CD_ROM              0x00000002
 #define FILE_DEVICE_CD_ROM_FILE_SYSTEM  0x00000003
@@ -6412,9 +5595,7 @@ typedef struct {
 #define FILE_DEVICE_HOLOGRAPHIC         0x0000005b
 #define FILE_DEVICE_SDFXHCI             0x0000005c
 #define FILE_DEVICE_UCMUCSI             0x0000005d
-
 #define DEVICE_TYPE_FROM_CTL_CODE(ctrlCode)     (((DWORD)(ctrlCode & 0xffff0000)) >> 16)
-
 //
 // Macro to extract buffering method out of the device io control code
 //
@@ -6425,10 +5606,10 @@ typedef struct {
 //
 
 #define METHOD_BUFFERED                 0
+
 #define METHOD_IN_DIRECT                1
 #define METHOD_OUT_DIRECT               2
 #define METHOD_NEITHER                  3
-
 //
 // Define some easier to comprehend aliases:
 //   METHOD_DIRECT_TO_HARDWARE (writes, aka METHOD_IN_DIRECT)
@@ -6436,17 +5617,17 @@ typedef struct {
 //
 
 #define METHOD_DIRECT_TO_HARDWARE       METHOD_IN_DIRECT
-#define METHOD_DIRECT_FROM_HARDWARE     METHOD_OUT_DIRECT
 
+#define METHOD_DIRECT_FROM_HARDWARE     METHOD_OUT_DIRECT
 #define FILE_ANY_ACCESS                 0
 #define FILE_SPECIAL_ACCESS    (FILE_ANY_ACCESS)
 #define FILE_READ_ACCESS          ( 0x0001 )    // file & pipe
 #define FILE_WRITE_ACCESS         ( 0x0002 )    // file & pipe
-
 //
 // _WIN32_WINNT version constants
 //
 #define _WIN32_WINNT_NT4                    0x0400
+
 #define _WIN32_WINNT_WIN2K                  0x0500
 #define _WIN32_WINNT_WINXP                  0x0501
 #define _WIN32_WINNT_WS03                   0x0502
@@ -6459,11 +5640,11 @@ typedef struct {
 #define _WIN32_WINNT_WINBLUE                0x0603
 #define _WIN32_WINNT_WINTHRESHOLD           0x0A00 /* ABRACADABRA_THRESHOLD*/
 #define _WIN32_WINNT_WIN10                  0x0A00 /* ABRACADABRA_THRESHOLD*/
-
 //
 // _WIN32_IE_ version constants
 //
 #define _WIN32_IE_IE20                      0x0200
+
 #define _WIN32_IE_IE30                      0x0300
 #define _WIN32_IE_IE302                     0x0302
 #define _WIN32_IE_IE40                      0x0400
@@ -6479,12 +5660,12 @@ typedef struct {
 #define _WIN32_IE_IE90                      0x0900
 #define _WIN32_IE_IE100                     0x0A00
 #define _WIN32_IE_IE110                     0x0A00  /* ABRACADABRA_THRESHOLD */
-
 //
 // IE <-> OS version mapping
 //
 // NT4 supports IE versions 2.0 -> 6.0 SP1
 #define _WIN32_IE_NT4                       _WIN32_IE_IE20
+
 #define _WIN32_IE_NT4SP1                    _WIN32_IE_IE20
 #define _WIN32_IE_NT4SP2                    _WIN32_IE_IE20
 #define _WIN32_IE_NT4SP3                    _WIN32_IE_IE302
@@ -6493,12 +5674,16 @@ typedef struct {
 #define _WIN32_IE_NT4SP6                    _WIN32_IE_IE50
 // Win98 supports IE versions 4.01 -> 6.0 SP1
 #define _WIN32_IE_WIN98                     _WIN32_IE_IE401
+
 // Win98SE supports IE versions 5.0 -> 6.0 SP1
 #define _WIN32_IE_WIN98SE                   _WIN32_IE_IE50
+
 // WinME supports IE versions 5.5 -> 6.0 SP1
 #define _WIN32_IE_WINME                     _WIN32_IE_IE55
+
 // Win2k supports IE versions 5.01 -> 6.0 SP1
 #define _WIN32_IE_WIN2K                     _WIN32_IE_IE501
+
 #define _WIN32_IE_WIN2KSP1                  _WIN32_IE_IE501
 #define _WIN32_IE_WIN2KSP2                  _WIN32_IE_IE501
 #define _WIN32_IE_WIN2KSP3                  _WIN32_IE_IE501
@@ -6515,48 +5700,40 @@ typedef struct {
 #define _WIN32_IE_WINBLUE                   _WIN32_IE_IE100
 #define _WIN32_IE_WINTHRESHOLD              _WIN32_IE_IE110  /* ABRACADABRA_THRESHOLD */
 #define _WIN32_IE_WIN10                     _WIN32_IE_IE110  /* ABRACADABRA_THRESHOLD */
-
-
 //
 // NTDDI version constants
 //
 #define NTDDI_WIN2K                         0x05000000
+
 #define NTDDI_WIN2KSP1                      0x05000100
 #define NTDDI_WIN2KSP2                      0x05000200
 #define NTDDI_WIN2KSP3                      0x05000300
 #define NTDDI_WIN2KSP4                      0x05000400
-
 #define NTDDI_WINXP                         0x05010000
 #define NTDDI_WINXPSP1                      0x05010100
 #define NTDDI_WINXPSP2                      0x05010200
 #define NTDDI_WINXPSP3                      0x05010300
 #define NTDDI_WINXPSP4                      0x05010400
-
 #define NTDDI_WS03                          0x05020000
 #define NTDDI_WS03SP1                       0x05020100
 #define NTDDI_WS03SP2                       0x05020200
 #define NTDDI_WS03SP3                       0x05020300
 #define NTDDI_WS03SP4                       0x05020400
-
 #define NTDDI_WIN6                          0x06000000
 #define NTDDI_WIN6SP1                       0x06000100
 #define NTDDI_WIN6SP2                       0x06000200
 #define NTDDI_WIN6SP3                       0x06000300
 #define NTDDI_WIN6SP4                       0x06000400
-
 #define NTDDI_VISTA                         NTDDI_WIN6
 #define NTDDI_VISTASP1                      NTDDI_WIN6SP1
 #define NTDDI_VISTASP2                      NTDDI_WIN6SP2
 #define NTDDI_VISTASP3                      NTDDI_WIN6SP3
 #define NTDDI_VISTASP4                      NTDDI_WIN6SP4
-
 #define NTDDI_LONGHORN  NTDDI_VISTA
-
 #define NTDDI_WS08                          NTDDI_WIN6SP1
 #define NTDDI_WS08SP2                       NTDDI_WIN6SP2
 #define NTDDI_WS08SP3                       NTDDI_WIN6SP3
 #define NTDDI_WS08SP4                       NTDDI_WIN6SP4
-
 #define NTDDI_WIN7                          0x06010000
 #define NTDDI_WIN8                          0x06020000
 #define NTDDI_WINBLUE                       0x06030000
@@ -6570,28 +5747,25 @@ typedef struct {
 #define NTDDI_WIN10_RS5                     0x0A000006  /* ABRACADABRA_WIN10_RS5 */
 #define NTDDI_WIN10_19H1                    0x0A000007  /* ABRACADABRA_WIN10_19H1*/
 #define NTDDI_WIN10_VB                      0x0A000008  /* ABRACADABRA_WIN10_VB */
-
 #define WDK_NTDDI_VERSION                   NTDDI_WIN10_VB /* ABRACADABRA_WIN10_VB */
-
-
 //
 // masks for version macros
 //
 #define OSVERSION_MASK      0xFFFF0000
+
 #define SPVERSION_MASK      0x0000FF00
 #define SUBVERSION_MASK     0x000000FF
-
-
 //
 // macros to extract various version fields from the NTDDI version
 //
 #define OSVER(Version)  ((Version) & OSVERSION_MASK)
+
 #define SPVER(Version)  (((Version) & SPVERSION_MASK) >> 8)
 #define SUBVER(Version) (((Version) & SUBVERSION_MASK) )
-
 #define CTL_CODE( DeviceType, Function, Method, Access ) (                 \
     ((DeviceType) << 16) | ((Access) << 14) | ((Function) << 2) | (Method) \
 )
+
 #define FSCTL_REQUEST_OPLOCK_LEVEL_1    CTL_CODE(FILE_DEVICE_FILE_SYSTEM,  0, METHOD_BUFFERED, FILE_ANY_ACCESS)
 #define FSCTL_REQUEST_OPLOCK_LEVEL_2    CTL_CODE(FILE_DEVICE_FILE_SYSTEM,  1, METHOD_BUFFERED, FILE_ANY_ACCESS)
 #define FSCTL_REQUEST_BATCH_OPLOCK      CTL_CODE(FILE_DEVICE_FILE_SYSTEM,  2, METHOD_BUFFERED, FILE_ANY_ACCESS)
@@ -6603,22 +5777,24 @@ typedef struct {
 #define FSCTL_DISMOUNT_VOLUME           CTL_CODE(FILE_DEVICE_FILE_SYSTEM,  8, METHOD_BUFFERED, FILE_ANY_ACCESS)
 // decommissioned fsctl value                                              9
 #define FSCTL_IS_VOLUME_MOUNTED         CTL_CODE(FILE_DEVICE_FILE_SYSTEM, 10, METHOD_BUFFERED, FILE_ANY_ACCESS)
+
 #define FSCTL_IS_PATHNAME_VALID         CTL_CODE(FILE_DEVICE_FILE_SYSTEM, 11, METHOD_BUFFERED, FILE_ANY_ACCESS) // PATHNAME_BUFFER,
 #define FSCTL_MARK_VOLUME_DIRTY         CTL_CODE(FILE_DEVICE_FILE_SYSTEM, 12, METHOD_BUFFERED, FILE_ANY_ACCESS)
 // decommissioned fsctl value                                             13
 #define FSCTL_QUERY_RETRIEVAL_POINTERS  CTL_CODE(FILE_DEVICE_FILE_SYSTEM, 14,  METHOD_NEITHER, FILE_ANY_ACCESS)
+
 #define FSCTL_GET_COMPRESSION           CTL_CODE(FILE_DEVICE_FILE_SYSTEM, 15, METHOD_BUFFERED, FILE_ANY_ACCESS)
 #define FSCTL_SET_COMPRESSION           CTL_CODE(FILE_DEVICE_FILE_SYSTEM, 16, METHOD_BUFFERED, FILE_READ_DATA | FILE_WRITE_DATA)
 // decommissioned fsctl value                                             17
 // decommissioned fsctl value                                             18
 #define FSCTL_SET_BOOTLOADER_ACCESSED   CTL_CODE(FILE_DEVICE_FILE_SYSTEM, 19,  METHOD_NEITHER, FILE_ANY_ACCESS)
+
 #define FSCTL_MARK_AS_SYSTEM_HIVE       FSCTL_SET_BOOTLOADER_ACCESSED
 #define FSCTL_OPLOCK_BREAK_ACK_NO_2     CTL_CODE(FILE_DEVICE_FILE_SYSTEM, 20, METHOD_BUFFERED, FILE_ANY_ACCESS)
 #define FSCTL_INVALIDATE_VOLUMES        CTL_CODE(FILE_DEVICE_FILE_SYSTEM, 21, METHOD_BUFFERED, FILE_ANY_ACCESS)
 #define FSCTL_QUERY_FAT_BPB             CTL_CODE(FILE_DEVICE_FILE_SYSTEM, 22, METHOD_BUFFERED, FILE_ANY_ACCESS) // FSCTL_QUERY_FAT_BPB_BUFFER
 #define FSCTL_REQUEST_FILTER_OPLOCK     CTL_CODE(FILE_DEVICE_FILE_SYSTEM, 23, METHOD_BUFFERED, FILE_ANY_ACCESS)
 #define FSCTL_FILESYSTEM_GET_STATISTICS CTL_CODE(FILE_DEVICE_FILE_SYSTEM, 24, METHOD_BUFFERED, FILE_ANY_ACCESS) // FILESYSTEM_STATISTICS
-
 #if (_WIN32_WINNT >= _WIN32_WINNT_NT4)
 #define FSCTL_GET_NTFS_VOLUME_DATA      CTL_CODE(FILE_DEVICE_FILE_SYSTEM, 25, METHOD_BUFFERED, FILE_ANY_ACCESS) // NTFS_VOLUME_DATA_BUFFER
 #define FSCTL_GET_NTFS_FILE_RECORD      CTL_CODE(FILE_DEVICE_FILE_SYSTEM, 26, METHOD_BUFFERED, FILE_ANY_ACCESS) // NTFS_FILE_RECORD_INPUT_BUFFER, NTFS_FILE_RECORD_OUTPUT_BUFFER
@@ -6787,7 +5963,6 @@ typedef struct {
 
 #endif /*_WIN32_WINNT >= _WIN32_WINNT_WIN8 */
 
-
 #if (_WIN32_WINNT >= _WIN32_WINNT_WIN8)
 #define FSCTL_RKF_INTERNAL                  CTL_CODE(FILE_DEVICE_FILE_SYSTEM, 171, METHOD_NEITHER, FILE_ANY_ACCESS) // Resume Key Filter
 
@@ -6810,11 +5985,13 @@ typedef struct {
 #define FSCTL_QUERY_REGION_INFO             CTL_CODE(FILE_DEVICE_FILE_SYSTEM, 188, METHOD_BUFFERED, FILE_ANY_ACCESS)
 #define FSCTL_USN_TRACK_MODIFIED_RANGES     CTL_CODE(FILE_DEVICE_FILE_SYSTEM, 189, METHOD_BUFFERED, FILE_ANY_ACCESS) // USN_TRACK_MODIFIED_RANGES
 #endif /* (_WIN32_WINNT >= _WIN32_WINNT_WINBLUE) */
+
 #if (_WIN32_WINNT >= _WIN32_WINNT_WINBLUE)
 #define FSCTL_QUERY_SHARED_VIRTUAL_DISK_SUPPORT CTL_CODE(FILE_DEVICE_FILE_SYSTEM, 192, METHOD_BUFFERED, FILE_ANY_ACCESS)
 #define FSCTL_SVHDX_SYNC_TUNNEL_REQUEST         CTL_CODE(FILE_DEVICE_FILE_SYSTEM, 193, METHOD_BUFFERED, FILE_ANY_ACCESS)
 #define FSCTL_SVHDX_SET_INITIATOR_INFORMATION   CTL_CODE(FILE_DEVICE_FILE_SYSTEM, 194, METHOD_BUFFERED, FILE_ANY_ACCESS)
 #endif /* (_WIN32_WINNT >= _WIN32_WINNT_WINBLUE) */
+
 #if (_WIN32_WINNT >= _WIN32_WINNT_WIN7)
 #define FSCTL_SET_EXTERNAL_BACKING              CTL_CODE(FILE_DEVICE_FILE_SYSTEM, 195, METHOD_BUFFERED, FILE_SPECIAL_ACCESS)
 #define FSCTL_GET_EXTERNAL_BACKING              CTL_CODE(FILE_DEVICE_FILE_SYSTEM, 196, METHOD_BUFFERED, FILE_ANY_ACCESS)
@@ -6825,23 +6002,29 @@ typedef struct {
 #define FSCTL_REMOVE_OVERLAY                    CTL_CODE(FILE_DEVICE_FILE_SYSTEM, 205, METHOD_BUFFERED, FILE_WRITE_DATA)
 #define FSCTL_UPDATE_OVERLAY                    CTL_CODE(FILE_DEVICE_FILE_SYSTEM, 206, METHOD_BUFFERED, FILE_WRITE_DATA)
 #endif /* (_WIN32_WINNT >= _WIN32_WINNT_WIN7) */
+
 #if (_WIN32_WINNT >= _WIN32_WINNT_WIN8)
 #define FSCTL_SHUFFLE_FILE                      CTL_CODE(FILE_DEVICE_FILE_SYSTEM, 208, METHOD_BUFFERED, FILE_READ_ACCESS | FILE_WRITE_ACCESS) // SHUFFLE_FILE_DATA
 #endif /*_WIN32_WINNT >= _WIN32_WINNT_WIN8 */
+
 #if (_WIN32_WINNT >= _WIN32_WINNT_WINBLUE)
 #define FSCTL_DUPLICATE_EXTENTS_TO_FILE         CTL_CODE(FILE_DEVICE_FILE_SYSTEM, 209, METHOD_BUFFERED, FILE_WRITE_DATA )
 #endif /* (_WIN32_WINNT >= _WIN32_WINNT_WINBLUE) */
+
 #if (_WIN32_WINNT >= _WIN32_WINNT_WINBLUE)
 #define FSCTL_SPARSE_OVERALLOCATE               CTL_CODE(FILE_DEVICE_FILE_SYSTEM, 211, METHOD_BUFFERED, FILE_SPECIAL_ACCESS)
 #define FSCTL_STORAGE_QOS_CONTROL               CTL_CODE(FILE_DEVICE_FILE_SYSTEM, 212, METHOD_BUFFERED, FILE_ANY_ACCESS)
 #endif /* (_WIN32_WINNT >= _WIN32_WINNT_WINBLUE) */
+
 #if (_WIN32_WINNT >= _WIN32_WINNT_WINTHRESHOLD)
 #define FSCTL_INITIATE_FILE_METADATA_OPTIMIZATION       CTL_CODE(FILE_DEVICE_FILE_SYSTEM, 215, METHOD_BUFFERED, FILE_SPECIAL_ACCESS)
 #define FSCTL_QUERY_FILE_METADATA_OPTIMIZATION          CTL_CODE(FILE_DEVICE_FILE_SYSTEM, 216, METHOD_BUFFERED, FILE_SPECIAL_ACCESS)
 #endif /* (_WIN32_WINNT >= _WIN32_WINNT_WINTHRESHOLD) */
+
 #if (_WIN32_WINNT >= _WIN32_WINNT_WINBLUE)
 #define FSCTL_SVHDX_ASYNC_TUNNEL_REQUEST         CTL_CODE(FILE_DEVICE_FILE_SYSTEM, 217, METHOD_BUFFERED, FILE_ANY_ACCESS)
 #endif /* (_WIN32_WINNT >= _WIN32_WINNT_WINBLUE) */
+
 #if (_WIN32_WINNT >= _WIN32_WINNT_WIN7)
 #define FSCTL_GET_WOF_VERSION                    CTL_CODE(FILE_DEVICE_FILE_SYSTEM, 218, METHOD_BUFFERED, FILE_ANY_ACCESS)
 #endif
@@ -6854,9 +6037,11 @@ typedef struct {
 #define FSCTL_CLEAN_VOLUME_METADATA              CTL_CODE(FILE_DEVICE_FILE_SYSTEM, 223, METHOD_BUFFERED, FILE_ANY_ACCESS)
 #define FSCTL_SET_INTEGRITY_INFORMATION_EX       CTL_CODE(FILE_DEVICE_FILE_SYSTEM, 224, METHOD_BUFFERED, FILE_ANY_ACCESS) // FSCTL_SET_INTEGRITY_INFORMATION_BUFFER_EX
 #endif /* (_WIN32_WINNT >= _WIN32_WINNT_WINTHRESHOLD) */
+
 #if (_WIN32_WINNT >= _WIN32_WINNT_WIN7)
 #define FSCTL_SUSPEND_OVERLAY                    CTL_CODE(FILE_DEVICE_FILE_SYSTEM, 225, METHOD_BUFFERED, FILE_ANY_ACCESS)
 #endif
+
 #if (_WIN32_WINNT >= _WIN32_WINNT_WINTHRESHOLD)
 #define FSCTL_VIRTUAL_STORAGE_QUERY_PROPERTY     CTL_CODE(FILE_DEVICE_FILE_SYSTEM, 226, METHOD_BUFFERED, FILE_ANY_ACCESS)
 #define FSCTL_FILESYSTEM_GET_STATISTICS_EX       CTL_CODE(FILE_DEVICE_FILE_SYSTEM, 227, METHOD_BUFFERED, FILE_ANY_ACCESS) // FILESYSTEM_STATISTICS_EX
@@ -6884,9 +6069,11 @@ typedef struct {
 #define FSCTL_GHOST_FILE_EXTENTS                 CTL_CODE(FILE_DEVICE_FILE_SYSTEM, 235, METHOD_BUFFERED, FILE_WRITE_ACCESS) // FSCTL_GHOST_FILE_EXTENTS_INPUT_BUFFER
 #define FSCTL_QUERY_GHOSTED_FILE_EXTENTS         CTL_CODE(FILE_DEVICE_FILE_SYSTEM, 236, METHOD_BUFFERED, FILE_ANY_ACCESS)
 #endif
+
 #if (_WIN32_WINNT >= _WIN32_WINNT_WIN10_TH2)
 #define FSCTL_UNMAP_SPACE                        CTL_CODE(FILE_DEVICE_FILE_SYSTEM, 237, METHOD_BUFFERED, FILE_ANY_ACCESS)
 #endif
+
 #if (_WIN32_WINNT >= _WIN32_WINNT_WINTHRESHOLD)
 #define FSCTL_HCS_SYNC_NO_WRITE_TUNNEL_REQUEST   CTL_CODE(FILE_DEVICE_FILE_SYSTEM, 238, METHOD_BUFFERED, FILE_ANY_ACCESS)
 #endif
@@ -6901,15 +6088,18 @@ typedef struct {
 #define FSCTL_QUERY_VOLUME_NUMA_INFO            CTL_CODE(FILE_DEVICE_FILE_SYSTEM, 245, METHOD_BUFFERED, FILE_ANY_ACCESS)
 
 #endif
+
 #if (_WIN32_WINNT >= _WIN32_WINNT_WIN10_RS2)
 
 #define FSCTL_REFS_DEALLOCATE_RANGES            CTL_CODE(FILE_DEVICE_FILE_SYSTEM, 246, METHOD_BUFFERED, FILE_ANY_ACCESS)
 #endif
+
 #if (_WIN32_WINNT >= _WIN32_WINNT_WIN10_TH2)
 #define FSCTL_QUERY_REFS_SMR_VOLUME_INFO         CTL_CODE(FILE_DEVICE_FILE_SYSTEM, 247, METHOD_BUFFERED, FILE_ANY_ACCESS)
 #define FSCTL_SET_REFS_SMR_VOLUME_GC_PARAMETERS  CTL_CODE(FILE_DEVICE_FILE_SYSTEM, 248, METHOD_BUFFERED, FILE_ANY_ACCESS)
 #define FSCTL_SET_REFS_FILE_STRICTLY_SEQUENTIAL  CTL_CODE(FILE_DEVICE_FILE_SYSTEM, 249, METHOD_BUFFERED, FILE_ANY_ACCESS)
 #endif
+
 #if (_WIN32_WINNT >= _WIN32_WINNT_WIN10_RS3)
 #define FSCTL_DUPLICATE_EXTENTS_TO_FILE_EX      CTL_CODE(FILE_DEVICE_FILE_SYSTEM, 250, METHOD_BUFFERED, FILE_WRITE_DATA)
 #define FSCTL_QUERY_BAD_RANGES                  CTL_CODE(FILE_DEVICE_FILE_SYSTEM, 251, METHOD_BUFFERED, FILE_ANY_ACCESS)
@@ -6917,12 +6107,15 @@ typedef struct {
 #define FSCTL_DELETE_CORRUPTED_REFS_CONTAINER   CTL_CODE(FILE_DEVICE_FILE_SYSTEM, 253, METHOD_BUFFERED, FILE_ANY_ACCESS)
 #define FSCTL_SCRUB_UNDISCOVERABLE_ID           CTL_CODE(FILE_DEVICE_FILE_SYSTEM, 254, METHOD_BUFFERED, FILE_ANY_ACCESS)
 #endif /* (_WIN32_WINNT >= _WIN32_WINNT_WIN10_RS3) */
+
 #if (_WIN32_WINNT >= _WIN32_WINNT_WIN10_RS4)
 #define FSCTL_NOTIFY_DATA_CHANGE                CTL_CODE(FILE_DEVICE_FILE_SYSTEM, 255, METHOD_BUFFERED, FILE_ANY_ACCESS)
 #endif /* (_WIN32_WINNT >= _WIN32_WINNT_WIN10_RS4) */
+
 #if (_WIN32_WINNT >= _WIN32_WINNT_WIN10_RS1)
 #define FSCTL_START_VIRTUALIZATION_INSTANCE_EX  CTL_CODE(FILE_DEVICE_FILE_SYSTEM, 256, METHOD_BUFFERED, FILE_ANY_ACCESS)
 #endif /* (_WIN32_WINNT >= _WIN32_WINNT_WIN10_RS1) */
+
 #if (_WIN32_WINNT >= _WIN32_WINNT_WIN10_RS4)
 #define FSCTL_ENCRYPTION_KEY_CONTROL            CTL_CODE(FILE_DEVICE_FILE_SYSTEM, 257, METHOD_BUFFERED, FILE_ANY_ACCESS)  // protect/unprotect under DPL
 #define FSCTL_VIRTUAL_STORAGE_SET_BEHAVIOR      CTL_CODE(FILE_DEVICE_FILE_SYSTEM, 258, METHOD_BUFFERED, FILE_ANY_ACCESS)
@@ -6931,6 +6124,7 @@ typedef struct {
 #if (_WIN32_WINNT >= _WIN32_WINNT_WIN10_RS1)
 #define FSCTL_SET_REPARSE_POINT_EX              CTL_CODE(FILE_DEVICE_FILE_SYSTEM, 259, METHOD_BUFFERED, FILE_SPECIAL_ACCESS) // REPARSE_DATA_BUFFER_EX
 #endif /* (_WIN32_WINNT >= _WIN32_WINNT_WIN10_RS1) */
+
 #if (_WIN32_WINNT >= _WIN32_WINNT_WIN10_RS5)
 #define FSCTL_REARRANGE_FILE                    CTL_CODE(FILE_DEVICE_FILE_SYSTEM, 264, METHOD_BUFFERED, FILE_READ_ACCESS | FILE_WRITE_ACCESS) // REARRANGE_FILE_DATA
 #define FSCTL_VIRTUAL_STORAGE_PASSTHROUGH       CTL_CODE(FILE_DEVICE_FILE_SYSTEM, 265, METHOD_BUFFERED, FILE_ANY_ACCESS)
@@ -6939,193 +6133,28 @@ typedef struct {
 #define FSCTL_ENABLE_PER_IO_FLAGS               CTL_CODE(FILE_DEVICE_FILE_SYSTEM, 267, METHOD_BUFFERED, FILE_ANY_ACCESS)
 #endif /* _WIN64 */
 #endif /* (_WIN32_WINNT >= _WIN32_WINNT_WIN10_RS5) */
+
 //
 // AVIO IOCTLS.
 //
 
-#ifdef __clang__
-#pragma clang diagnostic pop
-#endif
+
+
+
 
 #define IOCTL_AVIO_ALLOCATE_STREAM      CTL_CODE(FILE_DEVICE_AVIO, 1, METHOD_BUFFERED, FILE_SPECIAL_ACCESS)
+
 #define IOCTL_AVIO_FREE_STREAM          CTL_CODE(FILE_DEVICE_AVIO, 2, METHOD_BUFFERED, FILE_SPECIAL_ACCESS)
 #define IOCTL_AVIO_MODIFY_STREAM        CTL_CODE(FILE_DEVICE_AVIO, 3, METHOD_BUFFERED, FILE_SPECIAL_ACCESS)
-
-typedef struct {
-
-    DWORD RecordLength;
-    WORD   MajorVersion;
-    WORD   MinorVersion;
-    DWORDLONG FileReferenceNumber;
-    DWORDLONG ParentFileReferenceNumber;
-    USN Usn;
-    LARGE_INTEGER TimeStamp;
-    DWORD Reason;
-    DWORD SourceInfo;
-    DWORD SecurityId;
-    DWORD FileAttributes;
-    WORD   FileNameLength;
-    WORD   FileNameOffset;
-    WCHAR FileName[1];
-
-} USN_RECORD_V2, *PUSN_RECORD_V2;
-
-
 //
 //  These are the generic rights.
 //
 
 #define GENERIC_READ                     (0x80000000L)
+
 #define GENERIC_WRITE                    (0x40000000L)
 #define GENERIC_EXECUTE                  (0x20000000L)
 #define GENERIC_ALL                      (0x10000000L)
-typedef HANDLE HKEY;
-
-typedef struct _SHELLEXECUTEINFOA {
-  DWORD     cbSize;
-  ULONG     fMask;
-  HWND      hwnd;
-  LPCSTR    lpVerb;
-  LPCSTR    lpFile;
-  LPCSTR    lpParameters;
-  LPCSTR    lpDirectory;
-  int       nShow;
-  HINSTANCE hInstApp;
-  void      *lpIDList;
-  LPCSTR    lpClass;
-  HKEY      hkeyClass;
-  DWORD     dwHotKey;
-  union {
-    HANDLE hIcon;
-    HANDLE hMonitor;
-  } DUMMYUNIONNAME;
-  HANDLE    hProcess;
-} SHELLEXECUTEINFOA, *LPSHELLEXECUTEINFOA;
-
-WINDOWS_IMPORT BOOL WINAPI ShellExecuteExA(SHELLEXECUTEINFOA *pExecInfo);
-
-WINDOWS_IMPORT BOOL WINAPI OpenProcessToken( HANDLE ProcessHandle, DWORD DesiredAccess, HANDLE* TokenHandle);
-
-typedef enum _TOKEN_INFORMATION_CLASS {
-  TokenUser = 1,
-  TokenGroups,
-  TokenPrivileges,
-  TokenOwner,
-  TokenPrimaryGroup,
-  TokenDefaultDacl,
-  TokenSource,
-  TokenType,
-  TokenImpersonationLevel,
-  TokenStatistics,
-  TokenRestrictedSids,
-  TokenSessionId,
-  TokenGroupsAndPrivileges,
-  TokenSessionReference,
-  TokenSandBoxInert,
-  TokenAuditPolicy,
-  TokenOrigin,
-  TokenElevationType,
-  TokenLinkedToken,
-  TokenElevation,
-  TokenHasRestrictions,
-  TokenAccessInformation,
-  TokenVirtualizationAllowed,
-  TokenVirtualizationEnabled,
-  TokenIntegrityLevel,
-  TokenUIAccess,
-  TokenMandatoryPolicy,
-  TokenLogonSid,
-  TokenIsAppContainer,
-  TokenCapabilities,
-  TokenAppContainerSid,
-  TokenAppContainerNumber,
-  TokenUserClaimAttributes,
-  TokenDeviceClaimAttributes,
-  TokenRestrictedUserClaimAttributes,
-  TokenRestrictedDeviceClaimAttributes,
-  TokenDeviceGroups,
-  TokenRestrictedDeviceGroups,
-  TokenSecurityAttributes,
-  TokenIsRestricted,
-  TokenProcessTrustLevel,
-  TokenPrivateNameSpace,
-  TokenSingletonAttributes,
-  TokenBnoIsolation,
-  TokenChildProcessFlags,
-  TokenIsLessPrivilegedAppContainer,
-  TokenIsSandboxed,
-  TokenIsAppSilo,
-  TokenLoggingInformation,
-  TokenLearningMode,
-  MaxTokenInfoClass
-} TOKEN_INFORMATION_CLASS, *PTOKEN_INFORMATION_CLASS;
-
-typedef struct _TOKEN_ELEVATION {
-    DWORD TokenIsElevated;
-} TOKEN_ELEVATION, *PTOKEN_ELEVATION;
-
-#define TOKEN_ASSIGN_PRIMARY    (0x0001)
-#define TOKEN_DUPLICATE         (0x0002)
-#define TOKEN_IMPERSONATE       (0x0004)
-#define TOKEN_QUERY             (0x0008)
-#define TOKEN_QUERY_SOURCE      (0x0010)
-#define TOKEN_ADJUST_PRIVILEGES (0x0020)
-#define TOKEN_ADJUST_GROUPS     (0x0040)
-#define TOKEN_ADJUST_DEFAULT    (0x0080)
-#define TOKEN_ADJUST_SESSIONID  (0x0100)
-
-#define TOKEN_ALL_ACCESS_P (STANDARD_RIGHTS_REQUIRED  |\
-                          TOKEN_ASSIGN_PRIMARY      |\
-                          TOKEN_DUPLICATE           |\
-                          TOKEN_IMPERSONATE         |\
-                          TOKEN_QUERY               |\
-                          TOKEN_QUERY_SOURCE        |\
-                          TOKEN_ADJUST_PRIVILEGES   |\
-                          TOKEN_ADJUST_GROUPS       |\
-                          TOKEN_ADJUST_DEFAULT )
-
-#if ((defined(_WIN32_WINNT) && (_WIN32_WINNT > 0x0400)) || (!defined(_WIN32_WINNT)))
-#define TOKEN_ALL_ACCESS  (TOKEN_ALL_ACCESS_P |\
-                          TOKEN_ADJUST_SESSIONID )
-#else
-#define TOKEN_ALL_ACCESS  (TOKEN_ALL_ACCESS_P)
-#endif
-
-#define TOKEN_READ       (STANDARD_RIGHTS_READ      |\
-                          TOKEN_QUERY)
-
-
-#define TOKEN_WRITE      (STANDARD_RIGHTS_WRITE     |\
-                          TOKEN_ADJUST_PRIVILEGES   |\
-                          TOKEN_ADJUST_GROUPS       |\
-                          TOKEN_ADJUST_DEFAULT)
-
-#define TOKEN_EXECUTE    (STANDARD_RIGHTS_EXECUTE)
-
-#define TOKEN_TRUST_CONSTRAINT_MASK    (STANDARD_RIGHTS_READ  | \
-                                       TOKEN_QUERY  |\
-                                       TOKEN_QUERY_SOURCE )
-
-WINDOWS_IMPORT BOOL WINAPI GetTokenInformation( HANDLE TokenHandle, TOKEN_INFORMATION_CLASS TokenInformationClass, LPVOID TokenInformation, DWORD TokenInformationLength, PDWORD ReturnLength);
-
-#define SEE_MASK_DEFAULT           0x00000000
-#define SEE_MASK_CLASSNAME         0x00000001   // SHELLEXECUTEINFO.lpClass is valid
-#define SEE_MASK_CLASSKEY          0x00000003   // SHELLEXECUTEINFO.hkeyClass is valid
-// Note SEE_MASK_INVOKEIDLIST(0xC) implies SEE_MASK_IDLIST(0x04)
-#define SEE_MASK_IDLIST            0x00000004   // SHELLEXECUTEINFO.lpIDList is valid
-#define SEE_MASK_INVOKEIDLIST      0x0000000c   // enable IContextMenu based verbs
-#define SEE_MASK_HOTKEY            0x00000020   // SHELLEXECUTEINFO.dwHotKey is valid
-#define SEE_MASK_NOCLOSEPROCESS    0x00000040   // SHELLEXECUTEINFO.hProcess
-#define SEE_MASK_CONNECTNETDRV     0x00000080   // enables re-connecting disconnected network drives
-#define SEE_MASK_NOASYNC           0x00000100   // block on the call until the invoke has completed, use for callers that exit after calling ShellExecuteEx()
-#define SEE_MASK_FLAG_DDEWAIT      SEE_MASK_NOASYNC // Use SEE_MASK_NOASYNC instead of SEE_MASK_FLAG_DDEWAIT as it more accuratly describes the behavior
-#define SEE_MASK_DOENVSUBST        0x00000200   // indicates that SHELLEXECUTEINFO.lpFile contains env vars that should be expanded
-#define SEE_MASK_FLAG_NO_UI        0x00000400   // disable UI including error messages
-#define SEE_MASK_UNICODE           0x00004000
-#define SEE_MASK_NO_CONSOLE        0x00008000
-#define SEE_MASK_ASYNCOK           0x00100000
-
-#define FILE_FLAG_WRITE_THROUGH         0x80000000
 #define FILE_FLAG_OVERLAPPED            0x40000000
 #define FILE_FLAG_NO_BUFFERING          0x20000000
 #define FILE_FLAG_RANDOM_ACCESS         0x10000000
@@ -7137,52 +6166,49 @@ WINDOWS_IMPORT BOOL WINAPI GetTokenInformation( HANDLE TokenHandle, TOKEN_INFORM
 #define FILE_FLAG_OPEN_REPARSE_POINT    0x00200000
 #define FILE_FLAG_OPEN_NO_RECALL        0x00100000
 #define FILE_FLAG_FIRST_PIPE_INSTANCE   0x00080000
-
-#define PAGE_NOACCESS           0x01    
-#define PAGE_READONLY           0x02    
-#define PAGE_READWRITE          0x04    
-#define PAGE_WRITECOPY          0x08    
-#define PAGE_EXECUTE            0x10    
-#define PAGE_EXECUTE_READ       0x20    
-#define PAGE_EXECUTE_READWRITE  0x40    
-#define PAGE_EXECUTE_WRITECOPY  0x80    
-#define PAGE_GUARD             0x100    
-#define PAGE_NOCACHE           0x200    
-#define PAGE_WRITECOMBINE      0x400    
-#define PAGE_ENCLAVE_THREAD_CONTROL 0x80000000  
-#define PAGE_REVERT_TO_FILE_MAP     0x80000000  
-#define PAGE_TARGETS_NO_UPDATE      0x40000000  
-#define PAGE_TARGETS_INVALID        0x40000000  
-#define PAGE_ENCLAVE_UNVALIDATED    0x20000000  
-#define PAGE_ENCLAVE_DECOMMIT       0x10000000  
-#define MEM_COMMIT                      0x00001000  
-#define MEM_RESERVE                     0x00002000  
-#define MEM_REPLACE_PLACEHOLDER         0x00004000  
-#define MEM_RESERVE_PLACEHOLDER         0x00040000  
-#define MEM_RESET                       0x00080000  
-#define MEM_TOP_DOWN                    0x00100000  
-#define MEM_WRITE_WATCH                 0x00200000  
-#define MEM_PHYSICAL                    0x00400000  
-#define MEM_ROTATE                      0x00800000  
-#define MEM_DIFFERENT_IMAGE_BASE_OK     0x00800000  
-#define MEM_RESET_UNDO                  0x01000000  
-#define MEM_LARGE_PAGES                 0x20000000  
-#define MEM_4MB_PAGES                   0x80000000  
-#define MEM_64K_PAGES                   (MEM_LARGE_PAGES | MEM_PHYSICAL)  
-#define MEM_UNMAP_WITH_TRANSIENT_BOOST  0x00000001  
-#define MEM_COALESCE_PLACEHOLDERS       0x00000001  
-#define MEM_PRESERVE_PLACEHOLDER        0x00000002  
-#define MEM_DECOMMIT                    0x00004000  
-#define MEM_RELEASE                     0x00008000  
-#define MEM_FREE                        0x00010000  
-
+#define PAGE_NOACCESS           0x01
+#define PAGE_READONLY           0x02
+#define PAGE_READWRITE          0x04
+#define PAGE_WRITECOPY          0x08
+#define PAGE_EXECUTE            0x10
+#define PAGE_EXECUTE_READ       0x20
+#define PAGE_EXECUTE_READWRITE  0x40
+#define PAGE_EXECUTE_WRITECOPY  0x80
+#define PAGE_GUARD             0x100
+#define PAGE_NOCACHE           0x200
+#define PAGE_WRITECOMBINE      0x400
+#define PAGE_ENCLAVE_THREAD_CONTROL 0x80000000
+#define PAGE_REVERT_TO_FILE_MAP     0x80000000
+#define PAGE_TARGETS_NO_UPDATE      0x40000000
+#define PAGE_TARGETS_INVALID        0x40000000
+#define PAGE_ENCLAVE_UNVALIDATED    0x20000000
+#define PAGE_ENCLAVE_DECOMMIT       0x10000000
+#define MEM_COMMIT                      0x00001000
+#define MEM_RESERVE                     0x00002000
+#define MEM_REPLACE_PLACEHOLDER         0x00004000
+#define MEM_RESERVE_PLACEHOLDER         0x00040000
+#define MEM_RESET                       0x00080000
+#define MEM_TOP_DOWN                    0x00100000
+#define MEM_WRITE_WATCH                 0x00200000
+#define MEM_PHYSICAL                    0x00400000
+#define MEM_ROTATE                      0x00800000
+#define MEM_DIFFERENT_IMAGE_BASE_OK     0x00800000
+#define MEM_RESET_UNDO                  0x01000000
+#define MEM_LARGE_PAGES                 0x20000000
+#define MEM_4MB_PAGES                   0x80000000
+#define MEM_64K_PAGES                   (MEM_LARGE_PAGES | MEM_PHYSICAL)
+#define MEM_UNMAP_WITH_TRANSIENT_BOOST  0x00000001
+#define MEM_COALESCE_PLACEHOLDERS       0x00000001
+#define MEM_PRESERVE_PLACEHOLDER        0x00000002
+#define MEM_DECOMMIT                    0x00004000
+#define MEM_RELEASE                     0x00008000
+#define MEM_FREE                        0x00010000
 #define SECTION_QUERY                0x0001
 #define SECTION_MAP_WRITE            0x0002
 #define SECTION_MAP_READ             0x0004
 #define SECTION_MAP_EXECUTE          0x0008
 #define SECTION_EXTEND_SIZE          0x0010
 #define SECTION_MAP_EXECUTE_EXPLICIT 0x0020 // not included in SECTION_ALL_ACCESS
-
 #define SECTION_ALL_ACCESS (STANDARD_RIGHTS_REQUIRED|SECTION_QUERY|\
                             SECTION_MAP_WRITE |      \
                             SECTION_MAP_READ |       \
@@ -7197,101 +6223,8 @@ WINDOWS_IMPORT BOOL WINAPI GetTokenInformation( HANDLE TokenHandle, TOKEN_INFORM
 #define FILE_MAP_RESERVE          0x80000000
 #define FILE_MAP_TARGETS_INVALID  0x40000000
 #define FILE_MAP_LARGE_PAGES      0x20000000
-
 #define SE_CREATE_TOKEN_NAME                         (L"SeCreateTokenPrivilege")
-#define SE_ASSIGNPRIMARYTOKEN_NAME                   (L"SeAssignPrimaryTokenPrivilege")
-#define SE_LOCK_MEMORY_NAME                          (L"SeLockMemoryPrivilege")
-#define SE_INCREASE_QUOTA_NAME                       (L"SeIncreaseQuotaPrivilege")
-#define SE_UNSOLICITED_INPUT_NAME                    (L"SeUnsolicitedInputPrivilege")
-#define SE_MACHINE_ACCOUNT_NAME                      (L"SeMachineAccountPrivilege")
-#define SE_TCB_NAME                                  (L"SeTcbPrivilege")
-#define SE_SECURITY_NAME                             (L"SeSecurityPrivilege")
-#define SE_TAKE_OWNERSHIP_NAME                       (L"SeTakeOwnershipPrivilege")
-#define SE_LOAD_DRIVER_NAME                          (L"SeLoadDriverPrivilege")
-#define SE_SYSTEM_PROFILE_NAME                       (L"SeSystemProfilePrivilege")
-#define SE_SYSTEMTIME_NAME                           (L"SeSystemtimePrivilege")
-#define SE_PROF_SINGLE_PROCESS_NAME                  (L"SeProfileSingleProcessPrivilege")
-#define SE_INC_BASE_PRIORITY_NAME                    (L"SeIncreaseBasePriorityPrivilege")
-#define SE_CREATE_PAGEFILE_NAME                      (L"SeCreatePagefilePrivilege")
-#define SE_CREATE_PERMANENT_NAME                     (L"SeCreatePermanentPrivilege")
-#define SE_BACKUP_NAME                               (L"SeBackupPrivilege")
-#define SE_RESTORE_NAME                              (L"SeRestorePrivilege")
-#define SE_SHUTDOWN_NAME                             (L"SeShutdownPrivilege")
-#define SE_DEBUG_NAME                                (L"SeDebugPrivilege")
-#define SE_AUDIT_NAME                                (L"SeAuditPrivilege")
-#define SE_SYSTEM_ENVIRONMENT_NAME                   (L"SeSystemEnvironmentPrivilege")
-#define SE_CHANGE_NOTIFY_NAME                        (L"SeChangeNotifyPrivilege")
-#define SE_REMOTE_SHUTDOWN_NAME                      (L"SeRemoteShutdownPrivilege")
-#define SE_UNDOCK_NAME                               (L"SeUndockPrivilege")
-#define SE_SYNC_AGENT_NAME                           (L"SeSyncAgentPrivilege")
-#define SE_ENABLE_DELEGATION_NAME                    (L"SeEnableDelegationPrivilege")
-#define SE_MANAGE_VOLUME_NAME                        (L"SeManageVolumePrivilege")
-#define SE_IMPERSONATE_NAME                          (L"SeImpersonatePrivilege")
-#define SE_CREATE_GLOBAL_NAME                        (L"SeCreateGlobalPrivilege")
-#define SE_TRUSTED_CREDMAN_ACCESS_NAME               (L"SeTrustedCredManAccessPrivilege")
-#define SE_RELABEL_NAME                              (L"SeRelabelPrivilege")
-#define SE_INC_WORKING_SET_NAME                      (L"SeIncreaseWorkingSetPrivilege")
-#define SE_TIME_ZONE_NAME                            (L"SeTimeZonePrivilege")
-#define SE_CREATE_SYMBOLIC_LINK_NAME                 (L"SeCreateSymbolicLinkPrivilege")
-#define SE_DELEGATE_SESSION_USER_IMPERSONATE_NAME    (L"SeDelegateSessionUserImpersonatePrivilege")
-
-#define SE_PRIVILEGE_ENABLED_BY_DEFAULT (0x00000001L)
-#define SE_PRIVILEGE_ENABLED            (0x00000002L)
-#define SE_PRIVILEGE_REMOVED            (0X00000004L)
-#define SE_PRIVILEGE_USED_FOR_ACCESS    (0x80000000L)
-
-#define SE_PRIVILEGE_VALID_ATTRIBUTES   (SE_PRIVILEGE_ENABLED_BY_DEFAULT | \
-                                         SE_PRIVILEGE_ENABLED            | \
-                                         SE_PRIVILEGE_REMOVED            | \
-                                         SE_PRIVILEGE_USED_FOR_ACCESS)
-
-
-#define ANYSIZE_ARRAY 1 
-
-typedef struct {
-    LUID Luid;
-    DWORD Attributes;
-    } LUID_AND_ATTRIBUTES, * PLUID_AND_ATTRIBUTES;
-typedef LUID_AND_ATTRIBUTES LUID_AND_ATTRIBUTES_ARRAY[ANYSIZE_ARRAY];
-typedef LUID_AND_ATTRIBUTES_ARRAY *PLUID_AND_ATTRIBUTES_ARRAY;
-
-typedef struct  {
-    DWORD PrivilegeCount;
-    LUID_AND_ATTRIBUTES Privileges[ANYSIZE_ARRAY];
-} TOKEN_PRIVILEGES, *PTOKEN_PRIVILEGES;
-
-WINDOWS_IMPORT BOOL WINAPI SetFilePointerEx( HANDLE hFile, LARGE_INTEGER liDistanceToMove, LARGE_INTEGER* lpNewFilePointer, DWORD dwMoveMethod);
-
-WINDOWS_IMPORT HANDLE WINAPI CreateFileMappingW(HANDLE hFile,LPSECURITY_ATTRIBUTES lpFileMappingAttributes,DWORD flProtect,DWORD dwMaximumSizeHigh,DWORD dwMaximumSizeLow,LPCWSTR lpName);
-
-WINDOWS_IMPORT PVOID WINAPI MapViewOfFile(HANDLE hFileMappingObject,DWORD dwDesiredAccess,DWORD dwFileOffsetHigh,DWORD dwFileOffsetLow,size_t dwNumberOfBytesToMap);
-
-WINDOWS_IMPORT BOOL WINAPI LookupPrivilegeValueW(LPCWSTR lpSystemName,LPCWSTR lpName,LUID *lpLuid);
-
-WINDOWS_IMPORT BOOL WINAPI AdjustTokenPrivileges(HANDLE TokenHandle,BOOL DisableAllPrivileges,TOKEN_PRIVILEGES *NewState,DWORD BufferLength,PTOKEN_PRIVILEGES PreviousState,PDWORD ReturnLength);
-
-WINDOWS_IMPORT BOOL WINAPI GetVolumePathNameW( LPCWSTR lpszFileName, LPWSTR lpszVolumePathName, DWORD cchBufferLength);
-
-WINDOWS_IMPORT BOOL WINAPI GetVolumeNameForVolumeMountPointW( LPCWSTR lpszVolumeMountPoint, LPWSTR  lpszVolumeName, DWORD   cchBufferLength
-);
-
-typedef struct _DISK_PERFORMANCE {
-  LARGE_INTEGER BytesRead;
-  LARGE_INTEGER BytesWritten;
-  LARGE_INTEGER ReadTime;
-  LARGE_INTEGER WriteTime;
-  LARGE_INTEGER IdleTime;
-  DWORD         ReadCount;
-  DWORD         WriteCount;
-  DWORD         QueueDepth;
-  DWORD         SplitCount;
-  LARGE_INTEGER QueryTime;
-  DWORD         StorageDeviceNumber;
-  WCHAR         StorageManagerName[8];
-} DISK_PERFORMANCE, *PDISK_PERFORMANCE;
-
 #define IOCTL_STORAGE_BASE FILE_DEVICE_MASS_STORAGE
-
 #define IOCTL_DISK_BASE                 FILE_DEVICE_DISK
 #define IOCTL_DISK_GET_DRIVE_GEOMETRY   CTL_CODE(IOCTL_DISK_BASE, 0x0000, METHOD_BUFFERED, FILE_ANY_ACCESS)
 #define IOCTL_DISK_GET_PARTITION_INFO   CTL_CODE(IOCTL_DISK_BASE, 0x0001, METHOD_BUFFERED, FILE_READ_ACCESS)
@@ -7311,55 +6244,21 @@ typedef struct _DISK_PERFORMANCE {
 #define IOCTL_DISK_REQUEST_STRUCTURE    CTL_CODE(IOCTL_DISK_BASE, 0x000f, METHOD_BUFFERED, FILE_ANY_ACCESS)
 #define IOCTL_DISK_REQUEST_DATA         CTL_CODE(IOCTL_DISK_BASE, 0x0010, METHOD_BUFFERED, FILE_ANY_ACCESS)
 #define IOCTL_DISK_PERFORMANCE_OFF      CTL_CODE(IOCTL_DISK_BASE, 0x0018, METHOD_BUFFERED, FILE_ANY_ACCESS)
-
 #define IOCTL_SERIAL_LSRMST_INSERT      CTL_CODE(FILE_DEVICE_SERIAL_PORT,31,METHOD_BUFFERED,FILE_ANY_ACCESS)
-
 #define IOCTL_SERENUM_EXPOSE_HARDWARE   CTL_CODE(FILE_DEVICE_SERENUM,128,METHOD_BUFFERED,FILE_ANY_ACCESS)
 #define IOCTL_SERENUM_REMOVE_HARDWARE   CTL_CODE(FILE_DEVICE_SERENUM,129,METHOD_BUFFERED,FILE_ANY_ACCESS)
 #define IOCTL_SERENUM_PORT_DESC         CTL_CODE(FILE_DEVICE_SERENUM,130,METHOD_BUFFERED,FILE_ANY_ACCESS)
 #define IOCTL_SERENUM_GET_PORT_NAME     CTL_CODE(FILE_DEVICE_SERENUM,131,METHOD_BUFFERED,FILE_ANY_ACCESS)
-
 #define IOCTL_STORAGE_GET_DEVICE_TELEMETRY      CTL_CODE(IOCTL_STORAGE_BASE, 0x0470, METHOD_BUFFERED, FILE_READ_ACCESS | FILE_WRITE_ACCESS)
 #define IOCTL_STORAGE_DEVICE_TELEMETRY_NOTIFY   CTL_CODE(IOCTL_STORAGE_BASE, 0x0471, METHOD_BUFFERED, FILE_READ_ACCESS | FILE_WRITE_ACCESS)
 #define IOCTL_STORAGE_DEVICE_TELEMETRY_QUERY_CAPS CTL_CODE(IOCTL_STORAGE_BASE, 0x0472, METHOD_BUFFERED, FILE_READ_ACCESS | FILE_WRITE_ACCESS)
 #define IOCTL_STORAGE_GET_DEVICE_TELEMETRY_RAW  CTL_CODE(IOCTL_STORAGE_BASE, 0x0473, METHOD_BUFFERED, FILE_READ_ACCESS | FILE_WRITE_ACCESS)
-
-
 #define IOCTL_STORAGE_SET_TEMPERATURE_THRESHOLD     CTL_CODE(IOCTL_STORAGE_BASE, 0x0480, METHOD_BUFFERED, FILE_READ_ACCESS | FILE_WRITE_ACCESS)
-
 #define IOCTL_STORAGE_PROTOCOL_COMMAND              CTL_CODE(IOCTL_STORAGE_BASE, 0x04F0, METHOD_BUFFERED, FILE_READ_ACCESS | FILE_WRITE_ACCESS)
-
 #define IOCTL_STORAGE_QUERY_PROPERTY                CTL_CODE(IOCTL_STORAGE_BASE, 0x0500, METHOD_BUFFERED, FILE_ANY_ACCESS)
 #define IOCTL_STORAGE_MANAGE_DATA_SET_ATTRIBUTES    CTL_CODE(IOCTL_STORAGE_BASE, 0x0501, METHOD_BUFFERED, FILE_WRITE_ACCESS)
 #define IOCTL_STORAGE_GET_LB_PROVISIONING_MAP_RESOURCES  CTL_CODE(IOCTL_STORAGE_BASE, 0x0502, METHOD_BUFFERED, FILE_READ_ACCESS)
-
 #define IOCTL_STORAGE_SET_PROPERTY                  CTL_CODE(IOCTL_STORAGE_BASE, 0x0503, METHOD_BUFFERED, FILE_WRITE_ACCESS)
-
-typedef struct _GLYPHMETRICS {
-    UINT    gmBlackBoxX;
-    UINT    gmBlackBoxY;
-    POINT   gmptGlyphOrigin;
-    short   gmCellIncX;
-    short   gmCellIncY;
-} GLYPHMETRICS, *LPGLYPHMETRICS;
-
-typedef struct _FIXED {
-#ifndef _MAC
-    WORD    fract;
-    short   value;
-#else
-    short   value;
-    WORD    fract;
-#endif
-} FIXED;
-
-typedef struct _MAT2 {
-  FIXED eM11;
-  FIXED eM12;
-  FIXED eM21;
-  FIXED eM22;
-} MAT2, *LPMAT2;
-
 #define FW_DONTCARE         0
 #define FW_THIN             100
 #define FW_EXTRALIGHT       200
@@ -7370,13 +6269,11 @@ typedef struct _MAT2 {
 #define FW_BOLD             700
 #define FW_EXTRABOLD        800
 #define FW_HEAVY            900
-
 #define FW_ULTRALIGHT       FW_EXTRALIGHT
 #define FW_REGULAR          FW_NORMAL
 #define FW_DEMIBOLD         FW_SEMIBOLD
 #define FW_ULTRABOLD        FW_EXTRABOLD
 #define FW_BLACK            FW_HEAVY
-
 #define ANSI_CHARSET            0
 #define DEFAULT_CHARSET         1
 #define SYMBOL_CHARSET          2
@@ -7386,7 +6283,6 @@ typedef struct _MAT2 {
 #define GB2312_CHARSET          134
 #define CHINESEBIG5_CHARSET     136
 #define OEM_CHARSET             255
-
 #define JOHAB_CHARSET           130
 #define HEBREW_CHARSET          177
 #define ARABIC_CHARSET          178
@@ -7396,7 +6292,6 @@ typedef struct _MAT2 {
 #define THAI_CHARSET            222
 #define EASTEUROPE_CHARSET      238
 #define RUSSIAN_CHARSET         204
-
 #define OUT_DEFAULT_PRECIS          0
 #define OUT_STRING_PRECIS           1
 #define OUT_CHARACTER_PRECIS        2
@@ -7408,7 +6303,6 @@ typedef struct _MAT2 {
 #define OUT_OUTLINE_PRECIS          8
 #define OUT_SCREEN_OUTLINE_PRECIS   9
 #define OUT_PS_ONLY_PRECIS          10
-
 #define CLIP_DEFAULT_PRECIS     0
 #define CLIP_CHARACTER_PRECIS   1
 #define CLIP_STROKE_PRECIS      2
@@ -7418,8 +6312,8 @@ typedef struct _MAT2 {
 #if (_WIN32_WINNT >= _WIN32_WINNT_LONGHORN)
 #define CLIP_DFA_DISABLE        (4<<4)
 #endif // (_WIN32_WINNT >= _WIN32_WINNT_LONGHORN)
-#define CLIP_EMBEDDED           (8<<4)
 
+#define CLIP_EMBEDDED           (8<<4)
 #define DEFAULT_QUALITY         0
 #define DRAFT_QUALITY           1
 #define PROOF_QUALITY           2
@@ -7481,22 +6375,973 @@ typedef struct _MAT2 {
 #define FS_SYMBOL               0x80000000L
 #endif /* WINVER >= 0x0400 */
 
+#define STATUS_WAIT_0                           ((DWORD   )0x00000000L)
+#define STATUS_ABANDONED_WAIT_0          ((DWORD   )0x00000080L)
+#define STATUS_USER_APC                  ((DWORD   )0x000000C0L)
+#define STATUS_TIMEOUT                   ((DWORD   )0x00000102L)
+#define STATUS_PENDING                   ((DWORD   )0x00000103L)
+#define DBG_EXCEPTION_HANDLED            ((DWORD   )0x00010001L)
+#define DBG_CONTINUE                     ((DWORD   )0x00010002L)
+#define STATUS_SEGMENT_NOTIFICATION      ((DWORD   )0x40000005L)
+#define STATUS_FATAL_APP_EXIT            ((DWORD   )0x40000015L)
+#define DBG_REPLY_LATER                  ((DWORD   )0x40010001L)
+#define DBG_TERMINATE_THREAD             ((DWORD   )0x40010003L)
+#define DBG_TERMINATE_PROCESS            ((DWORD   )0x40010004L)
+#define DBG_CONTROL_C                    ((DWORD   )0x40010005L)
+#define DBG_PRINTEXCEPTION_C             ((DWORD   )0x40010006L)
+#define DBG_RIPEXCEPTION                 ((DWORD   )0x40010007L)
+#define DBG_CONTROL_BREAK                ((DWORD   )0x40010008L)
+#define DBG_COMMAND_EXCEPTION            ((DWORD   )0x40010009L)
+#define DBG_PRINTEXCEPTION_WIDE_C        ((DWORD   )0x4001000AL)
+#define STATUS_GUARD_PAGE_VIOLATION      ((DWORD   )0x80000001L)
+#define STATUS_DATATYPE_MISALIGNMENT     ((DWORD   )0x80000002L)
+#define STATUS_BREAKPOINT                ((DWORD   )0x80000003L)
+#define STATUS_SINGLE_STEP               ((DWORD   )0x80000004L)
+#define STATUS_LONGJUMP                  ((DWORD   )0x80000026L)
+#define STATUS_UNWIND_CONSOLIDATE        ((DWORD   )0x80000029L)
+#define DBG_EXCEPTION_NOT_HANDLED        ((DWORD   )0x80010001L)
+#define STATUS_ACCESS_VIOLATION          ((DWORD   )0xC0000005L)
+#define STATUS_IN_PAGE_ERROR             ((DWORD   )0xC0000006L)
+#define STATUS_INVALID_PARAMETER         ((DWORD   )0xC000000DL)
+#define STATUS_NO_MEMORY                 ((DWORD   )0xC0000017L)
+#define STATUS_ILLEGAL_INSTRUCTION       ((DWORD   )0xC000001DL)
+#define STATUS_NONCONTINUABLE_EXCEPTION  ((DWORD   )0xC0000025L)
+#define STATUS_INVALID_DISPOSITION       ((DWORD   )0xC0000026L)
+#define STATUS_ARRAY_BOUNDS_EXCEEDED     ((DWORD   )0xC000008CL)
+#define STATUS_FLOAT_DENORMAL_OPERAND    ((DWORD   )0xC000008DL)
+#define STATUS_FLOAT_DIVIDE_BY_ZERO      ((DWORD   )0xC000008EL)
+#define STATUS_FLOAT_INEXACT_RESULT      ((DWORD   )0xC000008FL)
+#define STATUS_FLOAT_INVALID_OPERATION   ((DWORD   )0xC0000090L)
+#define STATUS_FLOAT_OVERFLOW            ((DWORD   )0xC0000091L)
+#define STATUS_FLOAT_STACK_CHECK         ((DWORD   )0xC0000092L)
+#define STATUS_FLOAT_UNDERFLOW           ((DWORD   )0xC0000093L)
+#define STATUS_INTEGER_DIVIDE_BY_ZERO    ((DWORD   )0xC0000094L)
+#define STATUS_INTEGER_OVERFLOW          ((DWORD   )0xC0000095L)
+#define STATUS_PRIVILEGED_INSTRUCTION    ((DWORD   )0xC0000096L)
+#define STATUS_STACK_OVERFLOW            ((DWORD   )0xC00000FDL)
+#define STATUS_DLL_NOT_FOUND             ((DWORD   )0xC0000135L)
+#define STATUS_ORDINAL_NOT_FOUND         ((DWORD   )0xC0000138L)
+#define STATUS_ENTRYPOINT_NOT_FOUND      ((DWORD   )0xC0000139L)
+#define STATUS_CONTROL_C_EXIT            ((DWORD   )0xC000013AL)
+#define STATUS_DLL_INIT_FAILED           ((DWORD   )0xC0000142L)
+#define STATUS_POSSIBLE_DEADLOCK         ((DWORD   )0xC0000194L)
+#define STATUS_CONTROL_STACK_VIOLATION   ((DWORD   )0xC00001B2L)
+#define STATUS_FLOAT_MULTIPLE_FAULTS     ((DWORD   )0xC00002B4L)
+#define STATUS_FLOAT_MULTIPLE_TRAPS      ((DWORD   )0xC00002B5L)
+#define STATUS_REG_NAT_CONSUMPTION       ((DWORD   )0xC00002C9L)
+#define STATUS_HEAP_CORRUPTION           ((DWORD   )0xC0000374L)
+#define STATUS_STACK_BUFFER_OVERRUN      ((DWORD   )0xC0000409L)
+#define STATUS_INVALID_CRUNTIME_PARAMETER ((DWORD   )0xC0000417L)
+#define STATUS_ASSERTION_FAILURE         ((DWORD   )0xC0000420L)
+#define STATUS_ENCLAVE_VIOLATION         ((DWORD   )0xC00004A2L)
+#define STATUS_INTERRUPTED               ((DWORD   )0xC0000515L)
+#define STATUS_THREAD_NOT_RUNNING        ((DWORD   )0xC0000516L)
+#define STATUS_ALREADY_REGISTERED        ((DWORD   )0xC0000718L)
+#define STILL_ACTIVE                        STATUS_PENDING
+#define EXCEPTION_ACCESS_VIOLATION          STATUS_ACCESS_VIOLATION
+#define EXCEPTION_DATATYPE_MISALIGNMENT     STATUS_DATATYPE_MISALIGNMENT
+#define EXCEPTION_BREAKPOINT                STATUS_BREAKPOINT
+#define EXCEPTION_SINGLE_STEP               STATUS_SINGLE_STEP
+#define EXCEPTION_ARRAY_BOUNDS_EXCEEDED     STATUS_ARRAY_BOUNDS_EXCEEDED
+#define EXCEPTION_FLT_DENORMAL_OPERAND      STATUS_FLOAT_DENORMAL_OPERAND
+#define EXCEPTION_FLT_DIVIDE_BY_ZERO        STATUS_FLOAT_DIVIDE_BY_ZERO
+#define EXCEPTION_FLT_INEXACT_RESULT        STATUS_FLOAT_INEXACT_RESULT
+#define EXCEPTION_FLT_INVALID_OPERATION     STATUS_FLOAT_INVALID_OPERATION
+#define EXCEPTION_FLT_OVERFLOW              STATUS_FLOAT_OVERFLOW
+#define EXCEPTION_FLT_STACK_CHECK           STATUS_FLOAT_STACK_CHECK
+#define EXCEPTION_FLT_UNDERFLOW             STATUS_FLOAT_UNDERFLOW
+#define EXCEPTION_INT_DIVIDE_BY_ZERO        STATUS_INTEGER_DIVIDE_BY_ZERO
+#define EXCEPTION_INT_OVERFLOW              STATUS_INTEGER_OVERFLOW
+#define EXCEPTION_PRIV_INSTRUCTION          STATUS_PRIVILEGED_INSTRUCTION
+#define EXCEPTION_IN_PAGE_ERROR             STATUS_IN_PAGE_ERROR
+#define EXCEPTION_ILLEGAL_INSTRUCTION       STATUS_ILLEGAL_INSTRUCTION
+#define EXCEPTION_NONCONTINUABLE_EXCEPTION  STATUS_NONCONTINUABLE_EXCEPTION
+#define EXCEPTION_STACK_OVERFLOW            STATUS_STACK_OVERFLOW
+#define EXCEPTION_INVALID_DISPOSITION       STATUS_INVALID_DISPOSITION
+#define EXCEPTION_GUARD_PAGE                STATUS_GUARD_PAGE_VIOLATION
+#define EXCEPTION_INVALID_HANDLE            STATUS_INVALID_HANDLE
+#define EXCEPTION_POSSIBLE_DEADLOCK         STATUS_POSSIBLE_DEADLOCK
+#define CONTROL_C_EXIT                      STATUS_CONTROL_C_EXIT
+#define MB_ABORTRETRYIGNORE 0x00000002L
+#define MB_CANCELTRYCONTINUE 0x00000006L
+#define MB_HELP 0x00004000L
+#define MB_OK 0x00000000L
+#define MB_OKCANCEL 0x00000001L
+#define MB_RETRYCANCEL 0x00000005L
+#define MB_YESNO 0x00000004L
+#define MB_YESNOCANCEL 0x00000003L
+#define MB_ICONEXCLAMATION 0x00000030L
+#define MB_ICONWARNING 0x00000030L
+#define MB_ICONINFORMATION 0x00000040L
+#define MB_ICONASTERISK 0x00000040L
+#define MB_ICONQUESTION 0x00000020L
+#define MB_ICONSTOP 0x00000010L
+#define MB_ICONERROR 0x00000010L
+#define MB_ICONHAND 0x00000010L
+#define MAKEINTRESOURCEA(i) ((LPSTR)((ULONG_PTR)((WORD)(i))))
+#define IDI_MAINICON 101
+#define IMAGE_ICON 1
+#define LR_DEFAULTSIZE 0x00000040
+#define ICON_BIG 1
+#define ICON_SMALL 0
+#define WM_SETICON 0x0080
+#define STD_INPUT_HANDLE  ((DWORD)-10)
+#define STD_OUTPUT_HANDLE ((DWORD)-11)
+#define STD_ERROR_HANDLE  ((DWORD)-12)
+#define BIF_RETURNONLYFSDIRS 0x00000001
+#define BIF_DONTGOBELOWDOMAIN 0x00000002
+#define BIF_STATUSTEXT 0x00000004
+#define BIF_RETURNFSANCESTORS 0x00000008
+#define BIF_EDITBOX 0x00000010
+#define BIF_VALIDATE 0x00000020
+#define BIF_NEWDIALOGSTYLE 0x00000040
+#define BIF_USENEWUI (BIF_NEWDIALOGSTYLE | BIF_EDITBOX)
+#define BIF_BROWSEINCLUDEURLS 0x00000080
+#define BIF_UAHINT 0x00000100
+#define BIF_NONEWFOLDERBUTTON 0x00000200
+#define BIF_NOTRANSLATETARGETS 0x00000400
+#define MEM_EXTENDED_PARAMETER_GRAPHICS 0x01
+#define MEM_EXTENDED_PARAMETER_NONPAGED 0x02
+#define MEM_EXTENDED_PARAMETER_ZERO_PAGES_OPTIONAL 0x04
+#define MEM_EXTENDED_PARAMETER_NONPAGED_LARGE 0x08
+#define MEM_EXTENDED_PARAMETER_NONPAGED_HUGE 0x10
+#define MEM_EXTENDED_PARAMETER_SOFT_FAULT_PAGES 0x20
+#define MEM_EXTENDED_PARAMETER_EC_CODE 0x40
+#define MEM_EXTENDED_PARAMETER_IMAGE_NO_HPAT 0x80
+#define MEM_EXTENDED_PARAMETER_TYPE_BITS 8
+#define THREAD_MODE_BACKGROUND_BEGIN 0x00010000
+#define THREAD_MODE_BACKGROUND_END 0x00020000
+//
+// Each file name entry may be one, both, or neither of
+// these.
+//
+#define FILE_LAYOUT_NAME_ENTRY_PRIMARY                                  (0x00000001)
+
+#define FILE_LAYOUT_NAME_ENTRY_DOS                                      (0x00000002)
+//
+// This attribute/stream is known to the filesystem to be immovable.
+//
+#define STREAM_LAYOUT_ENTRY_IMMOVABLE                                   (0x00000001)
+
+//
+// This attribute/stream is currently pinned by another application.
+// It is unmovable for the duration of the pin.
+//
+#define STREAM_LAYOUT_ENTRY_PINNED                                      (0x00000002)
+
+//
+// This attribute is resident.
+//
+#define STREAM_LAYOUT_ENTRY_RESIDENT                                    (0x00000004)
+
+//
+// This attribute has no clusters allocated to it.
+//
+#define STREAM_LAYOUT_ENTRY_NO_CLUSTERS_ALLOCATED                       (0x00000008)
+
+//
+// This layout entry contains the information (data) for the attribute
+//
+#define STREAM_LAYOUT_ENTRY_HAS_INFORMATION                             (0x00000010)
+
+#define STREAM_EXTENT_ENTRY_AS_RETRIEVAL_POINTERS                       (0x00000001)
+#define STREAM_EXTENT_ENTRY_ALL_EXTENTS                                 (0x00000002)
+#define QUERY_FILE_LAYOUT_RESTART                                       (0x00000001)
+//
+//  Request that the API call retrieve name information for the
+//  objects on the volume.
+//
+#define QUERY_FILE_LAYOUT_INCLUDE_NAMES                                 (0x00000002)
+
+//
+//  Request that the API call include streams of the file.
+//
+#define QUERY_FILE_LAYOUT_INCLUDE_STREAMS                               (0x00000004)
+
+//
+//  Include extent information with the attribute entries, where applicable.
+//  Use of this flag requires the _INCLUDE_STREAMS flag.
+//
+#define QUERY_FILE_LAYOUT_INCLUDE_EXTENTS                               (0x00000008)
+
+//
+//  Include extra information, such as modification times and security
+//  IDs, with each returned file layout entry.
+//
+#define QUERY_FILE_LAYOUT_INCLUDE_EXTRA_INFO                            (0x00000010)
+
+//
+//  Include unallocated attributes in the enumeration, which in NTFS means one
+//  of three cases:
+//      1. Resident attributes.
+//      2. Nonresident attributes of length 0.
+//      3. Compressed or sparse nonresident attributes with no physical
+//         allocation (consisting only of a sparse hole).
+//  This flag may only be used when no cluster ranges are specified (i.e.
+//  on a whole-volume query).
+//
+#define QUERY_FILE_LAYOUT_INCLUDE_STREAMS_WITH_NO_CLUSTERS_ALLOCATED    (0x00000020)
+
+//
+//  Request the full path to the file be included in the file name.
+//  This flag must be used with QUERY_FILE_LAYOUT_INCLUDE_NAMES
+//
+#define QUERY_FILE_LAYOUT_INCLUDE_FULL_PATH_IN_NAMES                    (0x00000040)
+
+//
+//  Enable QueryFileLayout to include information on attribute streams.
+//  Additionally, individual stream information flags must be enabled for
+//  information on a given stream to be returned.
+//
+#define QUERY_FILE_LAYOUT_INCLUDE_STREAM_INFORMATION                    (0x00000080)
+
+//
+//  Have QueryFileLayout include information (defined by DesiredStorageClass in StreamInformation)
+//  on DSC streams.
+//  This flag must be used in conjunction with QUERY_FILE_LAYOUT_INCLUDE_STREAM_INFORMATION
+//
+#define QUERY_FILE_LAYOUT_INCLUDE_STREAM_INFORMATION_FOR_DSC_ATTRIBUTE  (0x00000100)
+
+//
+//  Have QueryFileLayout include information on TxF streams.
+//  This flag must be used in conjunction with QUERY_FILE_LAYOUT_INCLUDE_STREAM_INFORMATION
+//
+#define QUERY_FILE_LAYOUT_INCLUDE_STREAM_INFORMATION_FOR_TXF_ATTRIBUTE  (0x00000200)
+
+//
+//  Have QueryFileLayout include information on EFS streams.
+//  This flag must be used in conjunction with QUERY_FILE_LAYOUT_INCLUDE_STREAM_INFORMATION
+//
+#define QUERY_FILE_LAYOUT_INCLUDE_STREAM_INFORMATION_FOR_EFS_ATTRIBUTE  (0x00000400)
+
+//
+//  We can ask (politely) QueryFileLayout to only return files that have
+//  a given set of attributes present. This flag must be used with at least
+//  one attribute type flag or Query File Layout will return no files.
+//
+#define QUERY_FILE_LAYOUT_INCLUDE_ONLY_FILES_WITH_SPECIFIC_ATTRIBUTES   (0x00000800)
+
+//
+//  Have QueryFileLayout include files with a DSC attribute in the output buffer.
+//  This must be used in conjunction with QUERY_FILE_LAYOUT_INCLUDE_ONLY_FILES_WITH_SPECIFIC_ATTRIBUTES
+//
+#define QUERY_FILE_LAYOUT_INCLUDE_FILES_WITH_DSC_ATTRIBUTE              (0x00001000)
+
+//
+//  Have QueryFileLayout include information (defined by DataStream in StreamInformation) on $DATA streams.
+//  This flag must be used in conjunction with QUERY_FILE_LAYOUT_INCLUDE_STREAM_INFORMATION
+//
+#define QUERY_FILE_LAYOUT_INCLUDE_STREAM_INFORMATION_FOR_DATA_ATTRIBUTE (0x00002000)
+
+//
+//  Have QueryFileLayout include information (defined by Reparse in StreamInformation) on $REPARSE_POINT streams.
+//  This flag must be used in conjunction with QUERY_FILE_LAYOUT_INCLUDE_STREAM_INFORMATION
+//
+#define QUERY_FILE_LAYOUT_INCLUDE_STREAM_INFORMATION_FOR_REPARSE_ATTRIBUTE  (0x00004000)
+
+//
+//  Have QueryFileLayout include information (defined by Ea as in StreamInformation) on $EA streams.
+//  This flag must be used in conjunction with QUERY_FILE_LAYOUT_INCLUDE_STREAM_INFORMATION
+//
+#define QUERY_FILE_LAYOUT_INCLUDE_STREAM_INFORMATION_FOR_EA_ATTRIBUTE   (0x00008000)
+
+
+// Types
+
+typedef struct LUID {
+    DWORD LowPart;
+    LONG HighPart;
+} LUID;
+
+
+
+typedef struct _FILETIME {
+    DWORD dwLowDateTime;
+    DWORD dwHighDateTime;
+} FILETIME, *PFILETIME, *LPFILETIME;
+
+typedef struct _WIN32_FIND_DATAW {
+    DWORD dwFileAttributes;
+    FILETIME ftCreationTime;
+    FILETIME ftLastAccessTime;
+    FILETIME ftLastWriteTime;
+    DWORD nFileSizeHigh;
+    DWORD nFileSizeLow;
+    DWORD dwReserved0;
+    DWORD dwReserved1;
+    WCHAR cFileName[260];
+    WCHAR cAlternateFileName[14];
+    DWORD dwFileType; //Obsolete. Do not use.
+    DWORD dwCreatorType; //Obsolete. Do not use
+    WORD wFinderFlags; //Obsolete. Do not use
+} WIN32_FIND_DATAW, *PWIN32_FIND_DATAW, *LPWIN32_FIND_DATAW;
+
+typedef DWORD (__stdcall *LPTHREAD_START_ROUTINE) (LPVOID lpThreadParameter);
+typedef struct CRITICAL_SECTION {
+    u8 _[40]; //todo(charlie) #portability 32-bit
+} CRITICAL_SECTION, *LPCRITICAL_SECTION, *PCRITICAL_SECTION;
+
+typedef struct {
+    LARGE_INTEGER VolumeSerialNumber;
+    LARGE_INTEGER NumberSectors;
+    LARGE_INTEGER TotalClusters;
+    LARGE_INTEGER FreeClusters;
+    LARGE_INTEGER TotalReserved;
+    ULONG BytesPerSector;
+    ULONG BytesPerCluster;
+    ULONG BytesPerFileRecordSegment;
+    ULONG ClustersPerFileRecordSegment;
+    LARGE_INTEGER MftValidDataLength;
+    LARGE_INTEGER MftStartLcn;
+    LARGE_INTEGER Mft2StartLcn;
+    LARGE_INTEGER MftZoneStart;
+    LARGE_INTEGER MftZoneEnd;
+} NTFS_VOLUME_DATA_BUFFER, *PNTFS_VOLUME_DATA_BUFFER;
+
+typedef struct {
+    DWORDLONG StartFileReferenceNumber;
+    USN LowUsn;
+    USN HighUsn;
+} MFT_ENUM_DATA_V0, *PMFT_ENUM_DATA_V0;
+
+typedef struct {
+
+    DWORD RecordLength;
+    WORD MajorVersion;
+    WORD MinorVersion;
+    DWORDLONG FileReferenceNumber;
+    DWORDLONG ParentFileReferenceNumber;
+    USN Usn;
+    LARGE_INTEGER TimeStamp;
+    DWORD Reason;
+    DWORD SourceInfo;
+    DWORD SecurityId;
+    DWORD FileAttributes;
+    WORD FileNameLength;
+    WORD FileNameOffset;
+    WCHAR FileName[1];
+
+} USN_RECORD_V2, *PUSN_RECORD_V2;
+
+typedef HANDLE HKEY;
+typedef struct _DISK_PERFORMANCE {
+    LARGE_INTEGER BytesRead;
+    LARGE_INTEGER BytesWritten;
+    LARGE_INTEGER ReadTime;
+    LARGE_INTEGER WriteTime;
+    LARGE_INTEGER IdleTime;
+    DWORD ReadCount;
+    DWORD WriteCount;
+    DWORD QueueDepth;
+    DWORD SplitCount;
+    LARGE_INTEGER QueryTime;
+    DWORD StorageDeviceNumber;
+    WCHAR StorageManagerName[8];
+} DISK_PERFORMANCE, *PDISK_PERFORMANCE;
+
+typedef struct _GLYPHMETRICS {
+    UINT gmBlackBoxX;
+    UINT gmBlackBoxY;
+    POINT gmptGlyphOrigin;
+    short gmCellIncX;
+    short gmCellIncY;
+} GLYPHMETRICS, *LPGLYPHMETRICS;
+
+typedef struct _FIXED {
+#ifndef _MAC
+    WORD fract;
+    short value;
+#else
+    short value;
+    WORD fract;
+#endif
+} FIXED;
+
+typedef struct _MAT2 {
+    FIXED eM11;
+    FIXED eM12;
+    FIXED eM21;
+    FIXED eM22;
+} MAT2, *LPMAT2;
+
+typedef void (WINAPI *LPOVERLAPPED_COMPLETION_ROUTINE)( DWORD dwErrorCode, DWORD dwNumberOfBytesTransfered, LPOVERLAPPED lpOverlapped);
+typedef enum _READ_DIRECTORY_NOTIFY_INFORMATION_CLASS {
+    ReadDirectoryNotifyInformation = 1,
+    ReadDirectoryNotifyExtendedInformation,
+    ReadDirectoryNotifyFullInformation,
+    ReadDirectoryNotifyMaximumInformation
+} READ_DIRECTORY_NOTIFY_INFORMATION_CLASS, *PREAD_DIRECTORY_NOTIFY_INFORMATION_CLASS;
+
+typedef struct _FILE_NOTIFY_INFORMATION {
+    DWORD NextEntryOffset;
+    DWORD Action;
+    DWORD FileNameLength;
+    WCHAR FileName[1];
+} FILE_NOTIFY_INFORMATION, *PFILE_NOTIFY_INFORMATION;
+
+typedef struct _FILE_NOTIFY_EXTENDED_INFORMATION {
+    DWORD NextEntryOffset;
+    DWORD Action;
+    LARGE_INTEGER CreationTime;
+    LARGE_INTEGER LastModificationTime;
+    LARGE_INTEGER LastChangeTime;
+    LARGE_INTEGER LastAccessTime;
+    LARGE_INTEGER AllocatedLength;
+    LARGE_INTEGER FileSize;
+    DWORD FileAttributes;
+    union {
+        DWORD ReparsePointTag;
+        DWORD EaSize;
+    } DUMMYUNIONNAME;
+    LARGE_INTEGER FileId;
+    LARGE_INTEGER ParentFileId;
+    DWORD FileNameLength;
+    WCHAR FileName[1];
+} FILE_NOTIFY_EXTENDED_INFORMATION, *PFILE_NOTIFY_EXTENDED_INFORMATION;
+
+typedef struct {
+    USN StartUsn;
+    DWORD ReasonMask;
+    DWORD ReturnOnlyOnClose;
+    DWORDLONG Timeout;
+    DWORDLONG BytesToWaitFor;
+    DWORDLONG UsnJournalID;
+} READ_USN_JOURNAL_DATA_V0, *PREAD_USN_JOURNAL_DATA_V0;
+
+typedef struct {
+    DWORDLONG UsnJournalID;
+    USN FirstUsn;
+    USN NextUsn;
+    USN LowestValidUsn;
+    USN MaxUsn;
+    DWORDLONG MaximumSize;
+    DWORDLONG AllocationDelta;
+} USN_JOURNAL_DATA_V0, *PUSN_JOURNAL_DATA_V0;
+
+typedef struct _EXCEPTION_RECORD {
+    DWORD ExceptionCode;
+    DWORD ExceptionFlags;
+    struct _EXCEPTION_RECORD *ExceptionRecord;
+    PVOID ExceptionAddress;
+    DWORD NumberParameters;
+    ULONG_PTR ExceptionInformation[15];
+} EXCEPTION_RECORD;
+
+typedef struct _EXCEPTION_POINTERS {
+    EXCEPTION_RECORD *ExceptionRecord;
+    PCONTEXT ContextRecord;
+} EXCEPTION_POINTERS, *PEXCEPTION_POINTERS;
+
+typedef LONG (*PVECTORED_EXCEPTION_HANDLER)(EXCEPTION_POINTERS *ExceptionInfo);
+typedef struct _MEM_ADDRESS_REQUIREMENTS {
+    PVOID LowestStartingAddress;
+    PVOID HighestEndingAddress;
+    size_t Alignment;
+} MEM_ADDRESS_REQUIREMENTS, *PMEM_ADDRESS_REQUIREMENTS;
+
+typedef enum MEM_EXTENDED_PARAMETER_TYPE {
+    MemExtendedParameterInvalidType = 0,
+    MemExtendedParameterAddressRequirements,
+    MemExtendedParameterNumaNode,
+    MemExtendedParameterPartitionHandle,
+    MemExtendedParameterUserPhysicalHandle,
+    MemExtendedParameterAttributeFlags,
+    MemExtendedParameterImageMachine,
+    MemExtendedParameterMax
+} MEM_EXTENDED_PARAMETER_TYPE, *PMEM_EXTENDED_PARAMETER_TYPE;
+
+typedef struct DECLSPEC_ALIGN(8) MEM_EXTENDED_PARAMETER {
+    struct {
+        DWORD64 Type;
+        DWORD64 Reserved;
+    } DUMMYUNIONNAME1;
+    union {
+        DWORD64 ULong64;
+        PVOID Pointer;
+        size_t Size;
+        HANDLE Handle;
+        DWORD ULong;
+    } DUMMYUNIONNAME2;
+} MEM_EXTENDED_PARAMETER, *PMEM_EXTENDED_PARAMETER;
+
+typedef enum _PRIORITY_HINT {
+    IoPriorityHintVeryLow = 0,
+    IoPriorityHintLow,
+    IoPriorityHintNormal,
+    MaximumIoPriorityHintType
+} PRIORITY_HINT;
+
+typedef struct _FILE_IO_PRIORITY_HINT_INFO {
+    PRIORITY_HINT PriorityHint;
+} FILE_IO_PRIORITY_HINT_INFO, *PFILE_IO_PRIORITY_HINT_INFO;
+
+typedef enum _FILE_INFO_BY_HANDLE_CLASS {
+    FileBasicInfo,
+    FileStandardInfo,
+    FileNameInfo,
+    FileRenameInfo,
+    FileDispositionInfo,
+    FileAllocationInfo,
+    FileEndOfFileInfo,
+    FileStreamInfo,
+    FileCompressionInfo,
+    FileAttributeTagInfo,
+    FileIdBothDirectoryInfo,
+    FileIdBothDirectoryRestartInfo,
+    FileIoPriorityHintInfo,
+    FileRemoteProtocolInfo,
+    FileFullDirectoryInfo,
+    FileFullDirectoryRestartInfo,
+#if (NTDDI_VERSION >= NTDDI_WIN8)
+    FileStorageInfo,
+    FileAlignmentInfo,
+    FileIdInfo,
+    FileIdExtdDirectoryInfo,
+    FileIdExtdDirectoryRestartInfo,
+#endif
+#if (NTDDI_VERSION >= NTDDI_WIN10_RS1)
+    FileDispositionInfoEx,
+    FileRenameInfoEx,
+#endif
+#if (NTDDI_VERSION >= NTDDI_WIN10_19H1)
+    FileCaseSensitiveInfo,
+    FileNormalizedNameInfo,
+#endif
+    MaximumFileInfoByHandleClass
+} FILE_INFO_BY_HANDLE_CLASS, *PFILE_INFO_BY_HANDLE_CLASS;
+
+typedef enum _STORAGE_PROPERTY_ID {
+    StorageDeviceProperty = 0,
+    StorageAdapterProperty,
+    StorageDeviceIdProperty,
+    StorageDeviceUniqueIdProperty,
+    StorageDeviceWriteCacheProperty,
+    StorageMiniportProperty,
+    StorageAccessAlignmentProperty,
+    StorageDeviceSeekPenaltyProperty,
+    StorageDeviceTrimProperty,
+    StorageDeviceWriteAggregationProperty,
+    StorageDeviceDeviceTelemetryProperty,
+    StorageDeviceLBProvisioningProperty,
+    StorageDevicePowerProperty,
+    StorageDeviceCopyOffloadProperty,
+    StorageDeviceResiliencyProperty,
+    StorageDeviceMediumProductType,
+    StorageAdapterRpmbProperty,
+    StorageAdapterCryptoProperty,
+    StorageDeviceIoCapabilityProperty = 48,
+    StorageAdapterProtocolSpecificProperty,
+    StorageDeviceProtocolSpecificProperty,
+    StorageAdapterTemperatureProperty,
+    StorageDeviceTemperatureProperty,
+    StorageAdapterPhysicalTopologyProperty,
+    StorageDevicePhysicalTopologyProperty,
+    StorageDeviceAttributesProperty,
+    StorageDeviceManagementStatus,
+    StorageAdapterSerialNumberProperty,
+    StorageDeviceLocationProperty,
+    StorageDeviceNumaProperty,
+    StorageDeviceZonedDeviceProperty,
+    StorageDeviceUnsafeShutdownCount,
+    StorageDeviceEnduranceProperty,
+    StorageDeviceLedStateProperty,
+    StorageDeviceSelfEncryptionProperty = 64,
+    StorageFruIdProperty,
+    StorageStackProperty,
+    StorageAdapterProtocolSpecificPropertyEx,
+    StorageDeviceProtocolSpecificPropertyEx,
+    StorageHwCryptoProperty
+} STORAGE_PROPERTY_ID, *PSTORAGE_PROPERTY_ID;
+
+ //StorageDeviceSeekPenaltyProperty
+typedef struct _DEVICE_SEEK_PENALTY_DESCRIPTOR {
+    DWORD Version;
+    DWORD Size;
+    BOOLEAN IncursSeekPenalty;
+} DEVICE_SEEK_PENALTY_DESCRIPTOR, *PDEVICE_SEEK_PENALTY_DESCRIPTOR;
+
+ //StorageDeviceIoCapabilityProperty
+typedef struct _STORAGE_DEVICE_IO_CAPABILITY_DESCRIPTOR {
+    DWORD Version;
+    DWORD Size;
+    DWORD LunMaxIoCount;
+    DWORD AdapterMaxIoCount;
+} STORAGE_DEVICE_IO_CAPABILITY_DESCRIPTOR, *PSTORAGE_DEVICE_IO_CAPABILITY_DESCRIPTOR;
+
+typedef enum _STORAGE_QUERY_TYPE {
+    PropertyStandardQuery = 0,
+    PropertyExistsQuery,
+    PropertyMaskQuery,
+    PropertyQueryMaxDefined
+} STORAGE_QUERY_TYPE, *PSTORAGE_QUERY_TYPE;
+
+typedef struct _STORAGE_PROPERTY_QUERY {
+    STORAGE_PROPERTY_ID PropertyId;
+    STORAGE_QUERY_TYPE QueryType;
+    BYTE AdditionalParameters[1];
+} STORAGE_PROPERTY_QUERY, *PSTORAGE_PROPERTY_QUERY;
+
+typedef struct _STORAGE_ADAPTER_DESCRIPTOR {
+
+    ULONG Version;
+
+    ULONG Size;
+
+    ULONG MaximumTransferLength;
+
+    ULONG MaximumPhysicalPages;
+
+    ULONG AlignmentMask;
+
+    BOOLEAN AdapterUsesPio;
+
+    BOOLEAN AdapterScansDown;
+
+    BOOLEAN CommandQueueing;
+
+    BOOLEAN AcceleratedTransfer;
+
+#if (NTDDI_VERSION < NTDDI_WINXP)
+    BOOLEAN BusType;
+#else
+    UCHAR BusType;
+#endif
+
+    USHORT BusMajorVersion;
+
+    USHORT BusMinorVersion;
+
+#if (NTDDI_VERSION >= NTDDI_WIN8)
+
+    UCHAR SrbType;
+
+    UCHAR AddressType;
+#endif
+
+} STORAGE_ADAPTER_DESCRIPTOR, *PSTORAGE_ADAPTER_DESCRIPTOR;
+
+typedef enum _STORAGE_BUS_TYPE {
+    BusTypeUnknown = 0x00,
+    BusTypeScsi,
+    BusTypeAtapi,
+    BusTypeAta,
+    BusType1394,
+    BusTypeSsa,
+    BusTypeFibre,
+    BusTypeUsb,
+    BusTypeRAID,
+    BusTypeiScsi,
+    BusTypeSas,
+    BusTypeSata,
+    BusTypeSd,
+    BusTypeMmc,
+    BusTypeVirtual,
+    BusTypeFileBackedVirtual,
+    BusTypeSpaces,
+    BusTypeNvme,
+    BusTypeSCM,
+    BusTypeUfs,
+    BusTypeNvmeof,
+    BusTypeMax,
+    BusTypeMaxReserved = 0x7F
+} STORAGE_BUS_TYPE, *PSTORAGE_BUS_TYPE;
+
+typedef struct _RETRIEVAL_POINTER_BASE {
+
+    LARGE_INTEGER FileAreaOffset; //sector offset to the first allocatable unit on the filesystem
+} RETRIEVAL_POINTER_BASE, *PRETRIEVAL_POINTER_BASE;
+
+typedef enum _QUERY_FILE_LAYOUT_FILTER_TYPE {
+
+    QUERY_FILE_LAYOUT_FILTER_TYPE_NONE = 0,
+    QUERY_FILE_LAYOUT_FILTER_TYPE_CLUSTERS = 1,
+    QUERY_FILE_LAYOUT_FILTER_TYPE_FILEID = 2,
+#if (NTDDI_VERSION >= NTDDI_WIN10_RS5)
+    QUERY_FILE_LAYOUT_FILTER_TYPE_STORAGE_RESERVE_ID = 3,
+#endif /* (NTDDI_VERSION >= NTDDI_WIN10_RS5) */
+
+    QUERY_FILE_LAYOUT_NUM_FILTER_TYPES
+
+} QUERY_FILE_LAYOUT_FILTER_TYPE;
+
+typedef struct _CLUSTER_RANGE {
+    LARGE_INTEGER StartingCluster;
+    LARGE_INTEGER ClusterCount;
+
+} CLUSTER_RANGE, *PCLUSTER_RANGE;
+
+typedef struct _FILE_REFERENCE_RANGE {
+    DWORDLONG StartingFileReferenceNumber;
+    DWORDLONG EndingFileReferenceNumber;
+
+} FILE_REFERENCE_RANGE, *PFILE_REFERENCE_RANGE;
+
+typedef enum _STORAGE_RESERVE_ID {
+
+    StorageReserveIdNone = 0,
+    StorageReserveIdHard,
+    StorageReserveIdSoft,
+    StorageReserveIdUpdateScratch,
+
+    StorageReserveIdMax
+
+} STORAGE_RESERVE_ID, *PSTORAGE_RESERVE_ID;
+
+typedef struct _FILE_LAYOUT_ENTRY {
+
+    DWORD Version;
+    DWORD NextFileOffset; //byte offset from start of this struct in the user buffer
+    DWORD Flags;
+    DWORD FileAttributes;
+    DWORDLONG FileReferenceNumber;
+    DWORD FirstNameOffset;
+    DWORD FirstStreamOffset;
+    DWORD ExtraInfoOffset;
+
+#if (NTDDI_VERSION < NTDDI_WIN10_RS5) && (NTDDI_VERSION < NTDDI_WIN10_RS1) //RS1  check is for backward compatibility.
+
+    DWORD Reserved;
+#else
+
+    DWORD ExtraInfoLength;
+#endif /* (NTDDI_VERSION < NTDDI_WIN10_RS5) */
+
+} FILE_LAYOUT_ENTRY, *PFILE_LAYOUT_ENTRY;
+
+typedef struct RETRIEVAL_POINTERS_BUFFER_EXTENT {
+    LARGE_INTEGER NextVcn;
+    LARGE_INTEGER Lcn;
+} RETRIEVAL_POINTERS_BUFFER_EXTENT;
+
+typedef struct RETRIEVAL_POINTERS_BUFFER {
+
+    DWORD ExtentCount;
+    LARGE_INTEGER StartingVcn;
+    RETRIEVAL_POINTERS_BUFFER_EXTENT Extents[1];
+
+} RETRIEVAL_POINTERS_BUFFER, *PRETRIEVAL_POINTERS_BUFFER;
+
+typedef struct _QUERY_FILE_LAYOUT_INPUT {
+    union {
+        DWORD FilterEntryCount;
+        DWORD NumberOfPairs;
+    } DUMMYUNIONNAME;
+    DWORD Flags;
+    QUERY_FILE_LAYOUT_FILTER_TYPE FilterType;
+    DWORD Reserved;
+
+    union {
+
+        CLUSTER_RANGE ClusterRanges[1];
+
+        FILE_REFERENCE_RANGE FileReferenceRanges[1];
+
+#if (NTDDI_VERSION >= NTDDI_WIN10_RS5)
+        STORAGE_RESERVE_ID StorageReserveIds[1];
+#endif /* (NTDDI_VERSION >= NTDDI_WIN10_RS5) */
+
+    } Filter;
+
+} QUERY_FILE_LAYOUT_INPUT, *PQUERY_FILE_LAYOUT_INPUT;
+
+typedef struct _QUERY_FILE_LAYOUT_OUTPUT {
+    ULONG FileEntryCount;
+    ULONG FirstFileOffset; //Byte offset from start of user buffer
+    ULONG Flags;
+    ULONG Reserved;
+    FILE_LAYOUT_ENTRY entries[];
+} QUERY_FILE_LAYOUT_OUTPUT, *PQUERY_FILE_LAYOUT_OUTPUT;
+
+typedef struct _FILE_LAYOUT_NAME_ENTRY {
+
+    DWORD NextNameOffset;
+    DWORD Flags;
+    DWORDLONG ParentFileReferenceNumber;
+    DWORD FileNameLength; //Length in bytes
+    DWORD Reserved;
+    WCHAR FileName[1];
+
+} FILE_LAYOUT_NAME_ENTRY, *PFILE_LAYOUT_NAME_ENTRY;
+
+typedef struct _STREAM_LAYOUT_ENTRY {
+
+    DWORD Version;
+    DWORD NextStreamOffset;
+    DWORD Flags;
+    DWORD ExtentInformationOffset;
+    LARGE_INTEGER AllocationSize;
+    LARGE_INTEGER EndOfFile;
+    DWORD StreamInformationOffset;
+    DWORD AttributeTypeCode;
+    DWORD AttributeFlags;
+    DWORD StreamIdentifierLength;
+    WCHAR StreamIdentifier[1];
+
+} STREAM_LAYOUT_ENTRY, *PSTREAM_LAYOUT_ENTRY;
+
+typedef struct _STREAM_EXTENT_ENTRY {
+
+    DWORD Flags;
+
+    union {
+        RETRIEVAL_POINTERS_BUFFER RetrievalPointers;
+
+    } ExtentInformation;
+
+} STREAM_EXTENT_ENTRY, *PSTREAM_EXTENT_ENTRY;
+
+typedef struct _FILE_LAYOUT_INFO_ENTRY {
+
+    struct {
+        LARGE_INTEGER CreationTime;
+        LARGE_INTEGER LastAccessTime;
+        LARGE_INTEGER LastWriteTime;
+        LARGE_INTEGER ChangeTime;
+        DWORD FileAttributes;
+    } BasicInformation;
+    DWORD OwnerId;
+    DWORD SecurityId;
+    USN Usn;
+
+#if (NTDDI_VERSION >= NTDDI_WIN10_RS5) || (NTDDI_VERSION >= NTDDI_WIN10_RS1)
+    STORAGE_RESERVE_ID StorageReserveId;
+#endif
+
+} FILE_LAYOUT_INFO_ENTRY, *PFILE_LAYOUT_INFO_ENTRY;
+
+
+// Functions
+
+WINDOWS_IMPORT void WINAPI GetSystemInfo(LPSYSTEM_INFO lpSystemInfo);
+WINDOWS_IMPORT void* WINAPI VirtualAlloc(void *lpAddress, size_t dwSize, u32 flAllocationType, u32 flProtect);
+WINDOWS_IMPORT s32 WINAPI VirtualFree(void *lpAddress, size_t dwSize, u32 dwFreeType);
+WINDOWS_IMPORT size_t WINAPI VirtualQuery(void* lpAddress, PMEMORY_BASIC_INFORMATION lpBuffer, u32 dwLength);
+WINDOWS_IMPORT void* WINAPI GetStdHandle(u32 nStdHandle);
+WINDOWS_IMPORT BOOL WINAPI SetStdHandle(DWORD nStdHandle, HANDLE hHandle);
+WINDOWS_IMPORT s32 WINAPI WriteFile(HANDLE hFile, LPCVOID lpBuffer, DWORD nNumberOfBytesToWrite, LPDWORD lpNumberOfBytesWritten, LPOVERLAPPED lpOverlapped);
+WINDOWS_IMPORT BOOL WINAPI ReadFile(HANDLE hFile, LPVOID lpBuffer, DWORD nNumberOfBytesToRead, LPDWORD lpNumberOfBytesRead, LPOVERLAPPED lpOverlapped);
+WINDOWS_IMPORT void* WINAPI GetCurrentProcess(void);
+WINDOWS_IMPORT void* WINAPI GetCurrentThread(void);
+WINDOWS_IMPORT void WINAPI RtlCaptureContext(PCONTEXT ContextRecord);
+WINDOWS_IMPORT int WINAPI WideCharToMultiByte(UINT CodePage, DWORD dwFlags, LPCWCH lpWideCharStr, int cchWideChar, LPSTR lpMultiByteStr, int cbMultiByte, LPCCH lpDefaultChar, LPBOOL lpUsedDefaultChar);
+WINDOWS_IMPORT HMODULE WINAPI GetModuleHandleA(LPCSTR lpModuleName);
+WINDOWS_IMPORT HMODULE WINAPI GetModuleHandleW(LPCWSTR lpModuleName);
+WINDOWS_IMPORT DWORD WINAPI GetLastError(void);
+WINDOWS_IMPORT void WINAPI SetLastError(DWORD);
+WINDOWS_IMPORT int WINAPI MultiByteToWideChar(UINT CodePage, DWORD dwFlags, LPCCH lpMultiByteStr, int cbMultiByte, LPWSTR lpWideCharStr, int cchWideChar);
+WINDOWS_IMPORT BOOL WINAPI CreatePipe(HANDLE* hReadPipe, HANDLE* hWritePipe, LPSECURITY_ATTRIBUTES lpPipeAttributes, DWORD nSize);
+WINDOWS_IMPORT BOOL WINAPI CloseHandle(HANDLE hObject);
+WINDOWS_IMPORT HANDLE WINAPI CreateFileW(LPCWSTR lpFileName, DWORD dwDesiredAccess, DWORD dwShareMode, LPSECURITY_ATTRIBUTES lpSecurityAttributes, DWORD dwCreationDisposition, DWORD dwFlagsAndAttributes, HANDLE hTemplateFile);
+WINDOWS_IMPORT BOOL WINAPI GetFileSizeEx(HANDLE hFile, PLARGE_INTEGER lpFileSize);
+WINDOWS_IMPORT BOOL WINAPI QueryPerformanceFrequency(LARGE_INTEGER *lpFrequency);
+WINDOWS_IMPORT BOOL WINAPI QueryPerformanceCounter(LARGE_INTEGER *lpPerformanceCount);
+WINDOWS_IMPORT DWORD_PTR WINAPI SetThreadAffinityMask(HANDLE hThread, DWORD_PTR dwThreadAffinityMask);
+WINDOWS_IMPORT HMODULE WINAPI LoadLibraryA(LPCSTR lpLibFileName);
+WINDOWS_IMPORT void* WINAPI GetProcAddress(HMODULE hModule, LPCSTR lpProcName);
+WINDOWS_IMPORT BOOL WINAPI SetPriorityClass(HANDLE hProcess, DWORD dwPriorityClass);
+WINDOWS_IMPORT BOOL WINAPI SetThreadPriority(HANDLE hThread, int nPriority);
+WINDOWS_IMPORT HMODULE WINAPI LoadLibraryA(LPCSTR lpLibFileName);
+WINDOWS_IMPORT BOOL WINAPI CreateProcessA(LPCSTR lpApplicationName, LPSTR lpCommandLine, LPSECURITY_ATTRIBUTES lpProcessAttributes, LPSECURITY_ATTRIBUTES lpThreadAttributes, BOOL bInheritHandles, DWORD dwCreationFlags, LPVOID lpEnvironment, LPCSTR lpCurrentDirectory, LPSTARTUPINFOA lpStartupInfo, LPPROCESS_INFORMATION lpProcessInformation);
+WINDOWS_IMPORT DWORD WINAPI WaitForSingleObject(HANDLE hHandle, DWORD dwMilliseconds);
+WINDOWS_IMPORT BOOL WINAPI GetExitCodeProcess(HANDLE hProcess, LPDWORD lpExitCode);
+WINDOWS_IMPORT BOOL WINAPI FindClose(HANDLE hFindFile);
+WINDOWS_IMPORT HANDLE WINAPI FindFirstFileW(LPCWSTR lpFileName, LPWIN32_FIND_DATAW lpFindFileData);
+WINDOWS_IMPORT BOOL WINAPI FindNextFileW(HANDLE hFindFile, LPWIN32_FIND_DATAW lpFindFileData);
+WINDOWS_IMPORT DWORD WINAPI GetFileAttributesW(LPCWSTR lpFileName);
+WINDOWS_IMPORT BOOL WINAPI RemoveDirectoryW(LPCWSTR lpPathName);
+WINDOWS_IMPORT BOOL WINAPI DeleteFileW(LPCWSTR lpFileName);
+WINDOWS_IMPORT DWORD WINAPI TlsAlloc(void);
+WINDOWS_IMPORT LPVOID WINAPI TlsGetValue(DWORD dwTlsIndex);
+WINDOWS_IMPORT BOOL WINAPI TlsSetValue(DWORD dwTlsIndex, LPVOID lpTlsValue);
+WINDOWS_IMPORT DWORD WINAPI GetCurrentThreadId(void);
+WINDOWS_IMPORT HANDLE WINAPI CreateThread(LPSECURITY_ATTRIBUTES lpThreadAttributes, size_t dwStackSize, LPTHREAD_START_ROUTINE lpStartAddress, LPVOID lpParameter, DWORD dwCreationFlags, LPDWORD lpThreadId);
+WINDOWS_IMPORT DWORD WINAPI ResumeThread(HANDLE hThread);
+WINDOWS_IMPORT void WINAPI InitializeCriticalSection(LPCRITICAL_SECTION lpCriticalSection);
+WINDOWS_IMPORT void WINAPI EnterCriticalSection(LPCRITICAL_SECTION lpCriticalSection);
+WINDOWS_IMPORT void WINAPI LeaveCriticalSection(LPCRITICAL_SECTION lpCriticalSection);
+WINDOWS_IMPORT void WINAPI DeleteCriticalSection(LPCRITICAL_SECTION lpCriticalSection);
+WINDOWS_IMPORT BOOL WINAPI CreateDirectoryW(LPCWSTR lpPathName, LPSECURITY_ATTRIBUTES lpSecurityAttributes);
+WINDOWS_IMPORT void WINAPI ExitProcess(UINT uExitCode);
+WINDOWS_IMPORT void WINAPI ExitThread(DWORD dwExitCode);
+WINDOWS_IMPORT BOOL WINAPI GetExitCodeThread(HANDLE hThread, LPDWORD lpExitCode);
+WINDOWS_IMPORT DWORD WINAPI GetFullPathNameA(LPCSTR lpFileName, DWORD nBufferLength, LPSTR lpBuffer, LPSTR *lpFilePart);
+WINDOWS_IMPORT LPWSTR WINAPI GetCommandLineW(void);
+WINDOWS_IMPORT LPCSTR WINAPI GetCommandLineA(void);
+WINDOWS_IMPORT HANDLE WINAPI CreateSemaphoreA(LPSECURITY_ATTRIBUTES lpSemaphoreAttributes, LONG lInitialCount, LONG lMaximumCount, LPCSTR lpName);
+WINDOWS_IMPORT BOOL WINAPI ReleaseSemaphore(HANDLE hSemaphore, LONG lReleaseCount, LPLONG lpPreviousCount);
+WINDOWS_IMPORT BOOL WINAPI DeviceIoControl(HANDLE hDevice, DWORD dwIoControlCode, LPVOID lpInBuffer, DWORD nInBufferSize, LPVOID lpOutBuffer, DWORD nOutBufferSize, LPDWORD lpBytesReturned, LPOVERLAPPED lpOverlapped);
+WINDOWS_IMPORT BOOL WINAPI SetFilePointerEx(HANDLE hFile, LARGE_INTEGER liDistanceToMove, LARGE_INTEGER* lpNewFilePointer, DWORD dwMoveMethod);
+WINDOWS_IMPORT HANDLE WINAPI CreateFileMappingW(HANDLE hFile, LPSECURITY_ATTRIBUTES lpFileMappingAttributes, DWORD flProtect, DWORD dwMaximumSizeHigh, DWORD dwMaximumSizeLow, LPCWSTR lpName);
+WINDOWS_IMPORT PVOID WINAPI MapViewOfFile(HANDLE hFileMappingObject, DWORD dwDesiredAccess, DWORD dwFileOffsetHigh, DWORD dwFileOffsetLow, size_t dwNumberOfBytesToMap);
+WINDOWS_IMPORT BOOL WINAPI GetVolumePathNameW(LPCWSTR lpszFileName, LPWSTR lpszVolumePathName, DWORD cchBufferLength);
+WINDOWS_IMPORT BOOL WINAPI GetVolumeNameForVolumeMountPointW(LPCWSTR lpszVolumeMountPoint, LPWSTR lpszVolumeName, DWORD cchBufferLength);
+WINDOWS_IMPORT void WINAPI Sleep(DWORD dwMilliseconds);
+WINDOWS_IMPORT BOOL WINAPI GetOverlappedResult(HANDLE hFile, LPOVERLAPPED lpOverlapped, LPDWORD lpNumberOfBytesTransferred, BOOL bWait);
+WINDOWS_IMPORT HANDLE WINAPI CreateEventA(LPSECURITY_ATTRIBUTES lpEventAttributes, BOOL bManualReset, BOOL bInitialState, LPCSTR lpName);
+WINDOWS_IMPORT BOOL WINAPI ResetEvent(HANDLE hEvent);
+WINDOWS_IMPORT LPVOID WINAPI HeapAlloc(HANDLE hHeap, DWORD dwFlags, u64 dwBytes);
+WINDOWS_IMPORT HANDLE WINAPI GetProcessHeap(void);
+WINDOWS_IMPORT BOOL WINAPI HeapFree(HANDLE hHeap, DWORD dwFlags, LPVOID lpMem);
+WINDOWS_IMPORT BOOL WINAPI SetRect(LPRECT lprc, int xLeft, int yTop, int xRight, int yBottom);
+WINDOWS_IMPORT u64 WINAPI GlobalSize(HGLOBAL hMem);
+WINDOWS_IMPORT LPVOID WINAPI GlobalLock(HGLOBAL hMem);
+WINDOWS_IMPORT BOOL WINAPI GlobalUnlock(HGLOBAL hMem);
+WINDOWS_IMPORT HGLOBAL WINAPI GlobalAlloc(UINT uFlags, u64 dwBytes);
+WINDOWS_IMPORT HMODULE WINAPI GetModuleHandleA(LPCSTR lpModuleName);
+WINDOWS_IMPORT DWORD WINAPI GetLogicalDriveStringsA(DWORD nBufferLength, LPSTR lpBuffer);
+WINDOWS_IMPORT DWORD WINAPI SearchPathA(LPCSTR lpPath, LPCSTR lpFileName, LPCSTR lpExtension, DWORD nBufferLength, LPSTR lpBuffer, LPSTR *lpFilePart);
+WINDOWS_IMPORT BOOL WINAPI SetThreadPriorityBoost(HANDLE hThread, BOOL bDisablePriorityBoost);
+WINDOWS_IMPORT void WINAPI GetSystemTimeAsFileTime(FILETIME *lpSystemTimeAsFileTime);
+BOOL ReadDirectoryChangesW(HANDLE hDirectory, LPVOID lpBuffer, DWORD nBufferLength, BOOL bWatchSubtree, DWORD dwNotifyFilter, LPDWORD lpBytesReturned, LPOVERLAPPED lpOverlapped, LPOVERLAPPED_COMPLETION_ROUTINE lpCompletionRoutine);
+BOOL ReadDirectoryChangesExW(HANDLE hDirectory, LPVOID lpBuffer, DWORD nBufferLength, BOOL bWatchSubtree, DWORD dwNotifyFilter, LPDWORD lpBytesReturned, LPOVERLAPPED lpOverlapped, LPOVERLAPPED_COMPLETION_ROUTINE lpCompletionRoutine, READ_DIRECTORY_NOTIFY_INFORMATION_CLASS ReadDirectoryNotifyInformationClass);
+WINDOWS_IMPORT BOOL WINAPI FlushFileBuffers(HANDLE hFile);
+WINDOWS_IMPORT BOOL WINAPI FileTimeToLocalFileTime(const FILETIME *lpFileTime, LPFILETIME lpLocalFileTime);
+WINDOWS_IMPORT void WINAPI *AddVectoredExceptionHandler(ULONG First, PVECTORED_EXCEPTION_HANDLER Handle);
+WINDOWS_IMPORT HRESULT WINAPI SetThreadDescription(HANDLE hThread, LPCWSTR lpThreadDescription);
+WINDOWS_IMPORT BOOL WINAPI AllocConsole(void);
+WINDOWS_IMPORT DWORD WINAPI GetEnvironmentVariableW(LPCWSTR lpName, LPWSTR lpBuffer, DWORD nSize);
+WINDOWS_IMPORT PVOID WINAPI VirtualAlloc2(HANDLE Process, PVOID BaseAddress, size_t Size, ULONG AllocationType, ULONG PageProtection, MEM_EXTENDED_PARAMETER *ExtendedParameters, ULONG ParameterCount);
+WINDOWS_IMPORT PVOID WINAPI MapViewOfFile3(HANDLE FileMapping, HANDLE Process, PVOID BaseAddress, ULONG64 Offset, size_t ViewSize, ULONG AllocationType, ULONG PageProtection, MEM_EXTENDED_PARAMETER *ExtendedParameters, ULONG ParameterCount);
+WINDOWS_IMPORT BOOL WINAPI UnmapViewOfFile2(HANDLE Process, PVOID BaseAddress, ULONG UnmapFlags);
+WINDOWS_IMPORT HANDLE WINAPI CreateFileMappingW(HANDLE hFile, LPSECURITY_ATTRIBUTES lpFileMappingAttributes, DWORD flProtect, DWORD dwMaximumSizeHigh, DWORD dwMaximumSizeLow, LPCWSTR lpName);
+WINDOWS_IMPORT BOOL WINAPI SetEvent(HANDLE hEvent);
+WINDOWS_IMPORT BOOL WINAPI ReplaceFileW(LPCWSTR lpReplacedFileName, LPCWSTR lpReplacementFileName, LPCWSTR lpBackupFileName, DWORD dwReplaceFlags, LPVOID lpExclude, LPVOID lpReserved);
+WINDOWS_IMPORT BOOL WINAPI CopyFileW(LPCWSTR lpExistingFileName, LPCWSTR lpNewFileName, BOOL bFailIfExists);
+WINDOWS_IMPORT BOOL WINAPI DeleteFileW(LPCWSTR lpFileName);
+WINDOWS_IMPORT BOOL WINAPI GetOverlappedResultEx(HANDLE hFile, LPOVERLAPPED lpOverlapped, LPDWORD lpNumberOfBytesTransferred, DWORD dwMilliseconds, BOOL bAlertable);
+WINDOWS_IMPORT BOOL WINAPI SetFileInformationByHandle(HANDLE hFile, FILE_INFO_BY_HANDLE_CLASS FileInformationClass, LPVOID lpFileInformation, DWORD dwBufferSize);
+WINDOWS_IMPORT BOOL WINAPI CancelIoEx(HANDLE hFile, LPOVERLAPPED lpOverlapped);
+WINDOWS_IMPORT BOOL WINAPI GetVolumeInformationByHandleW(HANDLE hFile, LPWSTR lpVolumeNameBuffer, DWORD nVolumeNameSize, LPDWORD lpVolumeSerialNumber, LPDWORD lpMaximumComponentLength, LPDWORD lpFileSystemFlags, LPWSTR lpFileSystemNameBuffer, DWORD nFileSystemNameSize);
+WINDOWS_IMPORT BOOL WINAPI GetDiskFreeSpaceW(LPCWSTR lpRootPathName, LPDWORD lpSectorsPerCluster, LPDWORD lpBytesPerSector, LPDWORD lpNumberOfFreeClusters, LPDWORD lpTotalNumberOfClusters);
+WINDOWS_IMPORT UINT WINAPI GetDriveTypeW(LPCWSTR lpRootPathName);
+WINDOWS_IMPORT BOOL WINAPI WaitOnAddress( volatile void *Address, void *CompareAddress, size_t AddressSize, DWORD dwMilliseconds);
+WINDOWS_IMPORT void WINAPI WakeByAddressSingle(void *Address);
+WINDOWS_IMPORT void WINAPI WakeByAddressAll(void *Address);
+WINDOWS_IMPORT BOOL WINAPI GetVolumeInformationA( LPCSTR lpRootPathName, LPSTR lpVolumeNameBuffer, DWORD nVolumeNameSize, LPDWORD lpVolumeSerialNumber, LPDWORD lpMaximumComponentLength, LPDWORD lpFileSystemFlags, LPSTR lpFileSystemNameBuffer, DWORD nFileSystemNameSize);
+WINDOWS_IMPORT DWORD WINAPI GetLogicalDrives(void);
+
+// Gdi32
+
+// Macros
+
 /* Font Families */
 #define FF_DONTCARE         (0<<4)  /* Don't care or don't know. */
+
 #define FF_ROMAN            (1<<4)  /* Variable stroke width, serifed. */
                                     /* Times Roman, Century Schoolbook, etc. */
 #define FF_SWISS            (2<<4)  /* Variable stroke width, sans-serifed. */
+
                                     /* Helvetica, Swiss, etc. */
 #define FF_MODERN           (3<<4)  /* Constant stroke width, serifed or sans-serifed. */
+
                                     /* Pica, Elite, Courier, etc. */
 #define FF_SCRIPT           (4<<4)  /* Cursive, etc. */
-#define FF_DECORATIVE       (5<<4)  /* Old English, etc. */
 
+#define FF_DECORATIVE       (5<<4)  /* Old English, etc. */
 #define GGO_METRICS        0
 #define GGO_BITMAP         1
 #define GGO_NATIVE         2
 #define GGO_BEZIER         3
-
 #if(WINVER >= 0x0400)
 #define  GGO_GRAY2_BITMAP   4
 #define  GGO_GRAY4_BITMAP   5
@@ -7504,96 +7349,43 @@ typedef struct _MAT2 {
 #define  GGO_GLYPH_INDEX    0x0080
 #endif /* WINVER >= 0x0400 */
 
-typedef struct tagBITMAP {
-  LONG   bmType;
-  LONG   bmWidth;
-  LONG   bmHeight;
-  LONG   bmWidthBytes;
-  WORD   bmPlanes;
-  WORD   bmBitsPixel;
-  LPVOID bmBits;
-} BITMAP, *PBITMAP, *NPBITMAP, *LPBITMAP;
-
 #if (_WIN32_WINNT >= _WIN32_WINNT_WIN2K)
 #define  GGO_UNHINTED       0x0100
 #endif // (_WIN32_WINNT >= _WIN32_WINNT_WIN2K)
 
 #define TT_POLYGON_TYPE   24
-
 #define TT_PRIM_LINE       1
 #define TT_PRIM_QSPLINE    2
 #define TT_PRIM_CSPLINE    3
-
-WINDOWS_IMPORT HFONT WINAPI CreateFontA( int cHeight, int cWidth, int cEscapement, int cOrientation, int cWeight, DWORD bItalic, DWORD bUnderline, DWORD bStrikeOut, DWORD iCharSet, DWORD iOutPrecision, DWORD iClipPrecision, DWORD iQuality, DWORD iPitchAndFamily, LPCSTR pszFaceName);
-
-WINDOWS_IMPORT HFONT WINAPI CreateFontW( int cHeight, int cWidth, int cEscapement, int cOrientation, int cWeight, DWORD bItalic, DWORD bUnderline, DWORD bStrikeOut, DWORD iCharSet, DWORD iOutPrecision, DWORD iClipPrecision, DWORD iQuality, DWORD iPitchAndFamily, LPCWSTR pszFaceName
-);
-
-WINDOWS_IMPORT DWORD WINAPI GetGlyphOutlineA( HDC hdc, UINT uChar, UINT fuFormat, LPGLYPHMETRICS lpgm, DWORD cjBuffer, LPVOID pvBuffer, const MAT2 *lpmat2);
-
-WINDOWS_IMPORT HGDIOBJ WINAPI SelectObject(HDC hdc,HGDIOBJ h);
-
-WINDOWS_IMPORT void WINAPI Sleep(DWORD dwMilliseconds);
-typedef DWORD COLORREF;
-typedef DWORD* LPCOLORREF;
-typedef struct tagLOGFONTA {
-  LONG lfHeight;
-  LONG lfWidth;
-  LONG lfEscapement;
-  LONG lfOrientation;
-  LONG lfWeight;
-  BYTE lfItalic;
-  BYTE lfUnderline;
-  BYTE lfStrikeOut;
-  BYTE lfCharSet;
-  BYTE lfOutPrecision;
-  BYTE lfClipPrecision;
-  BYTE lfQuality;
-  BYTE lfPitchAndFamily;
-  CHAR lfFaceName[32];
-} LOGFONTA, *PLOGFONTA, *NPLOGFONTA, *LPLOGFONTA;
-
-WINDOWS_IMPORT int WINAPI GetObjectA( HANDLE h, int c, LPVOID pv);
-
-WINDOWS_IMPORT COLORREF WINAPI SetTextColor( HDC hdc, COLORREF color);
-
-WINDOWS_IMPORT int WINAPI SetBkMode( HDC hdc, int mode);
-WINDOWS_IMPORT UINT WINAPI SetTextAlign( HDC hdc, UINT align);
-
-
-
 /* EnumFonts Masks */
 #define RASTER_FONTTYPE     0x0001
+
 #define DEVICE_FONTTYPE     0x0002
 #define TRUETYPE_FONTTYPE   0x0004
-
 #define RGB(r,g,b)          ((COLORREF)(((BYTE)(r)|((WORD)((BYTE)(g))<<8))|(((DWORD)(BYTE)(b))<<16)))
 #define PALETTERGB(r,g,b)   (0x02000000 | RGB(r,g,b))
 #define PALETTEINDEX(i)     ((COLORREF)(0x01000000 | (DWORD)(WORD)(i)))
-
 /* palette entry flags */
 
 #define PC_RESERVED     0x01    /* palette index used for animation */
+
 #define PC_EXPLICIT     0x02    /* palette index is explicit to device */
 #define PC_NOCOLLAPSE   0x04    /* do not match color to system palette */
-
 #define GetRValue(rgb)      (LOBYTE(rgb))
 #define GetGValue(rgb)      (LOBYTE(((WORD)(rgb)) >> 8))
 #define GetBValue(rgb)      (LOBYTE((rgb)>>16))
-
 /* Background Modes */
 #define TRANSPARENT         1
+
 #define OPAQUE              2
 #define BKMODE_LAST         2
-
 /* Text Alignment Options */
 #define TA_NOUPDATECP                0
-#define TA_UPDATECP                  1
 
+#define TA_UPDATECP                  1
 #define TA_LEFT                      0
 #define TA_RIGHT                     2
 #define TA_CENTER                    6
-
 #define TA_TOP                       0
 #define TA_BOTTOM                    8
 #define TA_BASELINE                  24
@@ -7610,10 +7402,6 @@ WINDOWS_IMPORT UINT WINAPI SetTextAlign( HDC hdc, UINT align);
 #define VTA_CENTER   TA_CENTER
 #define VTA_BOTTOM   TA_RIGHT
 #define VTA_TOP      TA_LEFT
-
-WINDOWS_IMPORT BOOL WINAPI ExtTextOutW( HDC hdc, int x, int y, UINT options , RECT *lprect, LPCWSTR lpString, UINT c, INT  *lpDx);
-WINDOWS_IMPORT BOOL WINAPI TextOutW( HDC hdc, int x, int y, LPCWSTR lpString, int c);
-
 #define GCP_DBCS           0x0001
 #define GCP_REORDER        0x0002
 #define GCP_USEKERNING     0x0008
@@ -7621,13 +7409,14 @@ WINDOWS_IMPORT BOOL WINAPI TextOutW( HDC hdc, int x, int y, LPCWSTR lpString, in
 #define GCP_LIGATE         0x0020
 ////#define GCP_GLYPHINDEXING  0x0080
 #define GCP_DIACRITIC      0x0100
+
 #define GCP_KASHIDA        0x0400
 #define GCP_ERROR          0x8000
 #define FLI_MASK           0x103B
-
 #define GCP_JUSTIFY        0x00010000L
 ////#define GCP_NODIACRITICS   0x00020000L
 #define FLI_GLYPHS         0x00040000L
+
 #define GCP_CLASSIN        0x00080000L
 #define GCP_MAXEXTENT      0x00100000L
 #define GCP_JUSTIFYIN      0x00200000L
@@ -7637,7 +7426,6 @@ WINDOWS_IMPORT BOOL WINAPI TextOutW( HDC hdc, int x, int y, LPCWSTR lpString, in
 #define GCP_NEUTRALOVERRIDE 0x02000000L
 #define GCP_NUMERICSLATIN   0x04000000L
 #define GCP_NUMERICSLOCAL   0x08000000L
-
 #define GCPCLASS_LATIN                  1
 #define GCPCLASS_HEBREW                 2
 #define GCPCLASS_ARABIC                 2
@@ -7651,47 +7439,8 @@ WINDOWS_IMPORT BOOL WINAPI TextOutW( HDC hdc, int x, int y, LPCWSTR lpString, in
 #define GCPCLASS_PREBOUNDRTL         0x40
 #define GCPCLASS_POSTBOUNDLTR        0x20
 #define GCPCLASS_POSTBOUNDRTL        0x10
-
 #define GCPGLYPH_LINKBEFORE          0x8000
 #define GCPGLYPH_LINKAFTER           0x4000
-
-typedef struct tagGCP_RESULTSA
-{
-    DWORD   lStructSize;
-    LPSTR     lpOutString;
-    UINT *lpOrder;
-    int  *lpDx;
-    int  *lpCaretPos;
-    LPSTR   lpClass;
-    LPWSTR  lpGlyphs;
-    UINT    nGlyphs;
-    int     nMaxFit;
-} GCP_RESULTSA, *LPGCP_RESULTSA;
-typedef struct tagGCP_RESULTSW
-{
-    DWORD   lStructSize;
-    LPWSTR    lpOutString;
-    UINT *lpOrder;
-    int  *lpDx;
-    int  *lpCaretPos;
-    LPSTR   lpClass;
-    LPWSTR  lpGlyphs;
-    UINT    nGlyphs;
-    int     nMaxFit;
-} GCP_RESULTSW, *LPGCP_RESULTSW;
-
-WINDOWS_IMPORT DWORD WINAPI GetCharacterPlacementW( HDC hdc, LPCWSTR lpString, int nCount, int nMexExtent, LPGCP_RESULTSW lpResults, DWORD dwFlags);
-
-WINDOWS_IMPORT DWORD WINAPI GetGlyphIndicesW( HDC hdc, LPCWSTR lpstr, int c, LPWORD pgi, DWORD fl);
-
-typedef struct tagKERNINGPAIR {
-  WORD wFirst;
-  WORD wSecond;
-  int  iKernAmount;
-} KERNINGPAIR, *LPKERNINGPAIR;
-
-WINDOWS_IMPORT DWORD WINAPI GetKerningPairsW( HDC hdc, DWORD nPairs, LPKERNINGPAIR lpKernPair);
-
 /* flAccel flags for the GLYPHSET structure above */
 
 #define GS_8BIT_INDICES     0x00000001
@@ -7700,25 +7449,9 @@ WINDOWS_IMPORT DWORD WINAPI GetKerningPairsW( HDC hdc, DWORD nPairs, LPKERNINGPA
 
 #define GGI_MARK_NONEXISTING_GLYPHS  0X0001
 
-WINDOWS_IMPORT BOOL WINAPI GetOverlappedResult( HANDLE hFile, LPOVERLAPPED lpOverlapped, LPDWORD lpNumberOfBytesTransferred, BOOL bWait);
-
-WINDOWS_IMPORT HANDLE WINAPI CreateEventA( LPSECURITY_ATTRIBUTES lpEventAttributes, BOOL bManualReset, BOOL bInitialState, LPCSTR lpName
-);
-
-WINDOWS_IMPORT BOOL WINAPI ResetEvent(HANDLE hEvent);
-
-
-WINDOWS_IMPORT LPVOID WINAPI HeapAlloc(HANDLE hHeap,DWORD  dwFlags,u64 dwBytes);
-
-WINDOWS_IMPORT HANDLE WINAPI GetProcessHeap(void);
-
-
-WINDOWS_IMPORT BOOL WINAPI HeapFree(HANDLE hHeap,DWORD dwFlags,LPVOID lpMem);
-
-WINDOWS_IMPORT HPEN WINAPI CreatePen( int iStyle, int cWidth, COLORREF color);
-
 /* Pen Styles */
 #define PS_SOLID            0
+
 #define PS_DASH             1       /* -------  */
 #define PS_DOT              2       /* .......  */
 #define PS_DASHDOT          3       /* _._._._  */
@@ -7728,10 +7461,8 @@ WINDOWS_IMPORT HPEN WINAPI CreatePen( int iStyle, int cWidth, COLORREF color);
 #define PS_USERSTYLE        7
 #define PS_ALTERNATE        8
 #define PS_STYLE_MASK       0x0000000F
-
 #define DC_BRUSH            18
 #define DC_PEN              19
-
 #define NULL_BRUSH          5
 #define ETO_OPAQUE                   0x0002
 #define ETO_CLIPPED                  0x0004
@@ -7742,43 +7473,16 @@ WINDOWS_IMPORT HPEN WINAPI CreatePen( int iStyle, int cWidth, COLORREF color);
 #define ETO_NUMERICSLATIN            0x0800
 #define ETO_IGNORELANGUAGE           0x1000
 #endif /* WINVER >= 0x0400 */
+
 #if (_WIN32_WINNT >= _WIN32_WINNT_WIN2K)
 #define ETO_PDY                      0x2000
 #endif // (_WIN32_WINNT >= _WIN32_WINNT_WIN2K)
+
 #if (_WIN32_WINNT >= _WIN32_WINNT_LONGHORN)
 #define ETO_REVERSE_INDEX_MAP        0x10000
 #endif
 
-typedef USHORT COLOR16;
-
-typedef struct _TRIVERTEX
-{
-    LONG    x;
-    LONG    y;
-    COLOR16 Red;
-    COLOR16 Green;
-    COLOR16 Blue;
-    COLOR16 Alpha;
-}TRIVERTEX,*PTRIVERTEX,*LPTRIVERTEX;
-
-typedef struct _BLENDFUNCTION
-{
-    BYTE   BlendOp;
-    BYTE   BlendFlags;
-    BYTE   SourceConstantAlpha;
-    BYTE   AlphaFormat;
-}BLENDFUNCTION,*PBLENDFUNCTION;
-
-typedef struct _GRADIENT_TRIANGLE
-{
-    ULONG Vertex1;
-    ULONG Vertex2;
-    ULONG Vertex3;
-} GRADIENT_TRIANGLE,*PGRADIENT_TRIANGLE,*LPGRADIENT_TRIANGLE;
-
-
 #define AC_SRC_OVER                 0x00
-
 //
 // alpha format flags
 //
@@ -7789,34 +7493,8 @@ typedef struct _GRADIENT_TRIANGLE
 #define GRADIENT_FILL_RECT_V    0x00000001
 #define GRADIENT_FILL_TRIANGLE  0x00000002
 #define GRADIENT_FILL_OP_FLAG   0x000000ff
-
 #define TRUE 1
 #define FALSE 0
-
-typedef struct tagTEXTMETRICW
-{
-    LONG        tmHeight;
-    LONG        tmAscent;
-    LONG        tmDescent;
-    LONG        tmInternalLeading;
-    LONG        tmExternalLeading;
-    LONG        tmAveCharWidth;
-    LONG        tmMaxCharWidth;
-    LONG        tmWeight;
-    LONG        tmOverhang;
-    LONG        tmDigitizedAspectX;
-    LONG        tmDigitizedAspectY;
-    WCHAR       tmFirstChar;
-    WCHAR       tmLastChar;
-    WCHAR       tmDefaultChar;
-    WCHAR       tmBreakChar;
-    BYTE        tmItalic;
-    BYTE        tmUnderlined;
-    BYTE        tmStruckOut;
-    BYTE        tmPitchAndFamily;
-    BYTE        tmCharSet;
-} TEXTMETRICW, *PTEXTMETRICW, *NPTEXTMETRICW, *LPTEXTMETRICW;
-
 #define CF_TEXT               1
 #define CF_BITMAP             2
 #define CF_METAFILEPICT       3
@@ -7834,19 +7512,15 @@ typedef struct tagTEXTMETRICW
 #define CF_HDROP              15
 #define CF_LOCALE             16
 #define CF_DIBV5              17
-
 #define CF_OWNERDISPLAY       0x0080
 #define CF_DSPTEXT            0x0081
 #define CF_DSPBITMAP          0x0082
 #define CF_DSPMETAFILEPICT    0x0083
 #define CF_DSPENHMETAFILE     0x008E
-
 #define CF_PRIVATEFIRST       0x0200
 #define CF_PRIVATELAST        0x02FF
-
 #define CF_GDIOBJFIRST        0x0300
 #define CF_GDIOBJLAST         0x03FF
-
 #define VK_LBUTTON             0x01
 #define VK_RBUTTON             0x02
 #define VK_CANCEL              0x03
@@ -7891,7 +7565,6 @@ typedef struct tagTEXTMETRICW
 #define VK_INSERT              0x2D
 #define VK_DELETE              0x2E
 #define VK_HELP                0x2F
-
 #define VK_0                   0x30
 #define VK_1                   0x31
 #define VK_2                   0x32
@@ -7902,7 +7575,6 @@ typedef struct tagTEXTMETRICW
 #define VK_7                   0x37
 #define VK_8                   0x38
 #define VK_9                   0x39
-
 #define VK_A                   0x41
 #define VK_B                   0x42
 #define VK_C                   0x43
@@ -7929,12 +7601,10 @@ typedef struct tagTEXTMETRICW
 #define VK_X                   0x58
 #define VK_Y                   0x59
 #define VK_Z                   0x5A
-
 #define VK_LWIN                0x5B
 #define VK_RWIN                0x5C
 #define VK_APPS                0x5D
 #define VK_SLEEP               0x5F
-
 #define VK_NUMPAD0             0x60
 #define VK_NUMPAD1             0x61
 #define VK_NUMPAD2             0x62
@@ -7951,7 +7621,6 @@ typedef struct tagTEXTMETRICW
 #define VK_SUBTRACT            0x6D
 #define VK_DECIMAL             0x6E
 #define VK_DIVIDE              0x6F
-
 #define VK_F1                  0x70
 #define VK_F2                  0x71
 #define VK_F3                  0x72
@@ -7976,17 +7645,14 @@ typedef struct tagTEXTMETRICW
 #define VK_F22                 0x85
 #define VK_F23                 0x86
 #define VK_F24                 0x87
-
 #define VK_NUMLOCK             0x90
 #define VK_SCROLL              0x91
-
 #define VK_LSHIFT              0xA0
 #define VK_RSHIFT              0xA1
 #define VK_LCONTROL            0xA2
 #define VK_RCONTROL            0xA3
 #define VK_LMENU               0xA4
 #define VK_RMENU               0xA5
-
 #define VK_BROWSER_BACK        0xA6
 #define VK_BROWSER_FORWARD     0xA7
 #define VK_BROWSER_REFRESH     0xA8
@@ -7994,21 +7660,17 @@ typedef struct tagTEXTMETRICW
 #define VK_BROWSER_SEARCH      0xAA
 #define VK_BROWSER_FAVORITES   0xAB
 #define VK_BROWSER_HOME        0xAC
-
 #define VK_VOLUME_MUTE         0xAD
 #define VK_VOLUME_DOWN         0xAE
 #define VK_VOLUME_UP           0xAF
-
 #define VK_MEDIA_NEXT_TRACK    0xB0
 #define VK_MEDIA_PREV_TRACK    0xB1
 #define VK_MEDIA_STOP          0xB2
 #define VK_MEDIA_PLAY_PAUSE    0xB3
-
 #define VK_LAUNCH_MAIL         0xB4
 #define VK_LAUNCH_MEDIA_SELECT 0xB5
 #define VK_LAUNCH_APP1         0xB6
 #define VK_LAUNCH_APP2         0xB7
-
 #define VK_OEM_1               0xBA
 #define VK_OEM_PLUS            0xBB
 #define VK_OEM_COMMA           0xBC
@@ -8022,10 +7684,8 @@ typedef struct tagTEXTMETRICW
 #define VK_OEM_7               0xDE
 #define VK_OEM_8               0xDF
 #define VK_OEM_102             0xE2
-
 #define VK_PROCESSKEY          0xE5
 #define VK_PACKET              0xE7
-
 #define VK_ATTN                0xF6
 #define VK_CRSEL               0xF7
 #define VK_EXSEL               0xF8
@@ -8035,21 +7695,6 @@ typedef struct tagTEXTMETRICW
 #define VK_NONAME              0xFC
 #define VK_PA1                 0xFD
 #define VK_OEM_CLEAR           0xFE
-
-typedef struct tagSIZE {
-  LONG cx;
-  LONG cy;
-} SIZE, *PSIZE, *LPSIZE;
-
-typedef struct tagPAINTSTRUCT {
-  HDC  hdc;
-  BOOL fErase;
-  RECT rcPaint;
-  BOOL fRestore;
-  BOOL fIncUpdate;
-  BYTE rgbReserved[32];
-} PAINTSTRUCT, *PPAINTSTRUCT, *NPPAINTSTRUCT, *LPPAINTSTRUCT;
-
 #define GMEM_FIXED          0x0000
 #define GMEM_MOVEABLE       0x0002
 #define GMEM_NOCOMPACT      0x0010
@@ -8064,15 +7709,7 @@ typedef struct tagPAINTSTRUCT {
 #define GMEM_LOWER          GMEM_NOT_BANKED
 #define GMEM_VALID_FLAGS    0x7F72
 #define GMEM_INVALID_HANDLE 0x8000
-
-WINDOWS_IMPORT int WINAPI GetDIBits(HDC hdc, HBITMAP hbm, UINT start, UINT cLines, LPVOID lpvBits, LPBITMAPINFO lpbmi, UINT usage);
-
-WINDOWS_IMPORT int WINAPI SetDIBits(HDC hdc, HBITMAP hbm, UINT start, UINT cLines, const LPVOID lpBits, const BITMAPINFO *lpbmi, UINT ColorUse);
-
-WINDOWS_IMPORT HDC WINAPI CreateCompatibleDC(HDC hdc);
-
 #define GetObject GetObjectA
-
 #ifndef LOWORD
 #define LOWORD(l) ((WORD)((l) & 0xFFFF))
 #endif
@@ -8082,134 +7719,194 @@ WINDOWS_IMPORT HDC WINAPI CreateCompatibleDC(HDC hdc);
 #endif
 
 
+// Types
+
+typedef struct tagBITMAP {
+    LONG bmType;
+    LONG bmWidth;
+    LONG bmHeight;
+    LONG bmWidthBytes;
+    WORD bmPlanes;
+    WORD bmBitsPixel;
+    LPVOID bmBits;
+} BITMAP, *PBITMAP, *NPBITMAP, *LPBITMAP;
+
+typedef DWORD COLORREF;
+typedef DWORD * LPCOLORREF;
+typedef struct tagLOGFONTA {
+    LONG lfHeight;
+    LONG lfWidth;
+    LONG lfEscapement;
+    LONG lfOrientation;
+    LONG lfWeight;
+    BYTE lfItalic;
+    BYTE lfUnderline;
+    BYTE lfStrikeOut;
+    BYTE lfCharSet;
+    BYTE lfOutPrecision;
+    BYTE lfClipPrecision;
+    BYTE lfQuality;
+    BYTE lfPitchAndFamily;
+    CHAR lfFaceName[32];
+} LOGFONTA, *PLOGFONTA, *NPLOGFONTA, *LPLOGFONTA;
+
+typedef struct tagGCP_RESULTSA
+{
+    DWORD lStructSize;
+    LPSTR lpOutString;
+    UINT *lpOrder;
+    int *lpDx;
+    int *lpCaretPos;
+    LPSTR lpClass;
+    LPWSTR lpGlyphs;
+    UINT nGlyphs;
+    int nMaxFit;
+} GCP_RESULTSA, *LPGCP_RESULTSA;
+
+typedef struct tagGCP_RESULTSW
+{
+    DWORD lStructSize;
+    LPWSTR lpOutString;
+    UINT *lpOrder;
+    int *lpDx;
+    int *lpCaretPos;
+    LPSTR lpClass;
+    LPWSTR lpGlyphs;
+    UINT nGlyphs;
+    int nMaxFit;
+} GCP_RESULTSW, *LPGCP_RESULTSW;
+
+typedef struct tagKERNINGPAIR {
+    WORD wFirst;
+    WORD wSecond;
+    int iKernAmount;
+} KERNINGPAIR, *LPKERNINGPAIR;
+
+typedef USHORT COLOR16;
+typedef struct _TRIVERTEX
+{
+    LONG x;
+    LONG y;
+    COLOR16 Red;
+    COLOR16 Green;
+    COLOR16 Blue;
+    COLOR16 Alpha;
+}TRIVERTEX,*PTRIVERTEX,*LPTRIVERTEX;
+
+typedef struct _BLENDFUNCTION
+{
+    BYTE BlendOp;
+    BYTE BlendFlags;
+    BYTE SourceConstantAlpha;
+    BYTE AlphaFormat;
+}BLENDFUNCTION,*PBLENDFUNCTION;
+
+typedef struct _GRADIENT_TRIANGLE
+{
+    ULONG Vertex1;
+    ULONG Vertex2;
+    ULONG Vertex3;
+} GRADIENT_TRIANGLE,*PGRADIENT_TRIANGLE,*LPGRADIENT_TRIANGLE;
+
+typedef struct tagTEXTMETRICW
+{
+    LONG tmHeight;
+    LONG tmAscent;
+    LONG tmDescent;
+    LONG tmInternalLeading;
+    LONG tmExternalLeading;
+    LONG tmAveCharWidth;
+    LONG tmMaxCharWidth;
+    LONG tmWeight;
+    LONG tmOverhang;
+    LONG tmDigitizedAspectX;
+    LONG tmDigitizedAspectY;
+    WCHAR tmFirstChar;
+    WCHAR tmLastChar;
+    WCHAR tmDefaultChar;
+    WCHAR tmBreakChar;
+    BYTE tmItalic;
+    BYTE tmUnderlined;
+    BYTE tmStruckOut;
+    BYTE tmPitchAndFamily;
+    BYTE tmCharSet;
+} TEXTMETRICW, *PTEXTMETRICW, *NPTEXTMETRICW, *LPTEXTMETRICW;
+
+typedef struct tagSIZE {
+    LONG cx;
+    LONG cy;
+} SIZE, *PSIZE, *LPSIZE;
+
+typedef struct tagPAINTSTRUCT {
+    HDC hdc;
+    BOOL fErase;
+    RECT rcPaint;
+    BOOL fRestore;
+    BOOL fIncUpdate;
+    BYTE rgbReserved[32];
+} PAINTSTRUCT, *PPAINTSTRUCT, *NPPAINTSTRUCT, *LPPAINTSTRUCT;
+
+
+// Functions
+
+WINDOWS_IMPORT HBITMAP WINAPI CreateDIBSection(HDC hdc, BITMAPINFO *pbmi, UINT usage, void **ppvBits, HANDLE hSection, DWORD offset);
+WINDOWS_IMPORT int WINAPI StretchDIBits(HDC hdc, int xDest, int yDest, int DestWidth, int DestHeight, int xSrc, int ySrc, int SrcWidth, int SrcHeight, PVOID lpBits, PBITMAPINFO lpbmi, UINT iUsage, DWORD rop);
+WINDOWS_IMPORT BOOL WINAPI DeleteObject(HGDIOBJ ho);
+WINDOWS_IMPORT HFONT WINAPI CreateFontA(int cHeight, int cWidth, int cEscapement, int cOrientation, int cWeight, DWORD bItalic, DWORD bUnderline, DWORD bStrikeOut, DWORD iCharSet, DWORD iOutPrecision, DWORD iClipPrecision, DWORD iQuality, DWORD iPitchAndFamily, LPCSTR pszFaceName);
+WINDOWS_IMPORT HFONT WINAPI CreateFontW(int cHeight, int cWidth, int cEscapement, int cOrientation, int cWeight, DWORD bItalic, DWORD bUnderline, DWORD bStrikeOut, DWORD iCharSet, DWORD iOutPrecision, DWORD iClipPrecision, DWORD iQuality, DWORD iPitchAndFamily, LPCWSTR pszFaceName);
+WINDOWS_IMPORT DWORD WINAPI GetGlyphOutlineA(HDC hdc, UINT uChar, UINT fuFormat, LPGLYPHMETRICS lpgm, DWORD cjBuffer, LPVOID pvBuffer, const MAT2 *lpmat2);
+WINDOWS_IMPORT HGDIOBJ WINAPI SelectObject(HDC hdc, HGDIOBJ h);
+WINDOWS_IMPORT int WINAPI GetObjectA(HANDLE h, int c, LPVOID pv);
+WINDOWS_IMPORT COLORREF WINAPI SetTextColor(HDC hdc, COLORREF color);
+WINDOWS_IMPORT int WINAPI SetBkMode(HDC hdc, int mode);
+WINDOWS_IMPORT UINT WINAPI SetTextAlign(HDC hdc, UINT align);
+WINDOWS_IMPORT BOOL WINAPI ExtTextOutW(HDC hdc, int x, int y, UINT options, RECT *lprect, LPCWSTR lpString, UINT c, INT *lpDx);
+WINDOWS_IMPORT BOOL WINAPI TextOutW(HDC hdc, int x, int y, LPCWSTR lpString, int c);
+WINDOWS_IMPORT DWORD WINAPI GetCharacterPlacementW(HDC hdc, LPCWSTR lpString, int nCount, int nMexExtent, LPGCP_RESULTSW lpResults, DWORD dwFlags);
+WINDOWS_IMPORT DWORD WINAPI GetGlyphIndicesW(HDC hdc, LPCWSTR lpstr, int c, LPWORD pgi, DWORD fl);
+WINDOWS_IMPORT DWORD WINAPI GetKerningPairsW(HDC hdc, DWORD nPairs, LPKERNINGPAIR lpKernPair);
+WINDOWS_IMPORT HPEN WINAPI CreatePen(int iStyle, int cWidth, COLORREF color);
+WINDOWS_IMPORT int WINAPI GetDIBits(HDC hdc, HBITMAP hbm, UINT start, UINT cLines, LPVOID lpvBits, LPBITMAPINFO lpbmi, UINT usage);
+WINDOWS_IMPORT int WINAPI SetDIBits(HDC hdc, HBITMAP hbm, UINT start, UINT cLines, const LPVOID lpBits, const BITMAPINFO *lpbmi, UINT ColorUse);
+WINDOWS_IMPORT HDC WINAPI CreateCompatibleDC(HDC hdc);
 WINDOWS_IMPORT BOOL WINAPI StretchBlt(HDC hdcDest, int xDest, int yDest, int wDest, int hDest, HDC hdcSrc, int xSrc, int ySrc, int wSrc, int hSrc, DWORD rop);
-
 WINDOWS_IMPORT BOOL WINAPI DeleteDC(HDC hdc);
-
 WINDOWS_IMPORT int WINAPI SelectClipRgn(HDC hdc, HRGN hrgn);
-
 WINDOWS_IMPORT int WINAPI IntersectClipRect(HDC hdc, int left, int top, int right, int bottom);
-
 WINDOWS_IMPORT COLORREF WINAPI SetDCPenColor(HDC hdc, COLORREF color);
-
 WINDOWS_IMPORT BOOL WINAPI MoveToEx(HDC hdc, int x, int y, LPPOINT lppt);
-
 WINDOWS_IMPORT BOOL WINAPI LineTo(HDC hdc, int x, int y);
-
 WINDOWS_IMPORT HGDIOBJ WINAPI GetStockObject(int i);
-
 WINDOWS_IMPORT BOOL WINAPI Rectangle(HDC hdc, int left, int top, int right, int bottom);
-
 WINDOWS_IMPORT BOOL WINAPI RoundRect(HDC hdc, int left, int top, int right, int bottom, int width, int height);
-
-WINDOWS_IMPORT BOOL WINAPI SetRect(LPRECT lprc, int xLeft, int yTop, int xRight, int yBottom);
-
 WINDOWS_IMPORT COLORREF WINAPI SetBkColor(HDC hdc, COLORREF color);
-
 WINDOWS_IMPORT COLORREF WINAPI SetDCBrushColor(HDC hdc, COLORREF color);
-
 WINDOWS_IMPORT BOOL WINAPI GdiGradientFill(HDC hdc, PTRIVERTEX pVertex, ULONG nVertex, PVOID pMesh, ULONG nMesh, ULONG dwMode);
-
-WINDOWS_IMPORT BOOL WINAPI AlphaBlend(HDC hdcDest, int xDest, int yDest, int wDest, int hDest,
-                                      HDC hdcSrc, int xSrc, int ySrc, int wSrc, int hSrc, BLENDFUNCTION blend);
-
+WINDOWS_IMPORT BOOL WINAPI AlphaBlend(HDC hdcDest, int xDest, int yDest, int wDest, int hDest, HDC hdcSrc, int xSrc, int ySrc, int wSrc, int hSrc, BLENDFUNCTION blend);
 WINDOWS_IMPORT BOOL WINAPI Polygon(HDC hdc, const POINT *apt, int cpt);
-
 WINDOWS_IMPORT BOOL WINAPI Polyline(HDC hdc, const POINT *apt, int cpt);
-
 WINDOWS_IMPORT BOOL WINAPI Ellipse(HDC hdc, int left, int top, int right, int bottom);
-
 WINDOWS_IMPORT BOOL WINAPI PolyBezier(HDC hdc, const POINT *apt, DWORD cpt);
-
-WINDOWS_IMPORT BOOL WINAPI BitBlt(HDC hdcDest, int xDest, int yDest, int w, int h,
-                                   HDC hdcSrc, int xSrc, int ySrc, DWORD rop);
-
+WINDOWS_IMPORT BOOL WINAPI BitBlt(HDC hdcDest, int xDest, int yDest, int w, int h, HDC hdcSrc, int xSrc, int ySrc, DWORD rop);
 WINDOWS_IMPORT BOOL WINAPI GetTextMetricsW(HDC hdc, LPTEXTMETRICW lptm);
-
 WINDOWS_IMPORT BOOL WINAPI GetTextExtentPoint32W(HDC hdc, LPCWSTR lpStr, int c, LPSIZE lpSize);
-
-WINDOWS_IMPORT BOOL WINAPI IsClipboardFormatAvailable(UINT format);
-
-WINDOWS_IMPORT BOOL WINAPI OpenClipboard(HWND hWndNewOwner);
-
-WINDOWS_IMPORT HANDLE WINAPI GetClipboardData(UINT uFormat);
-
-WINDOWS_IMPORT u64 WINAPI GlobalSize(HGLOBAL hMem);
-
-WINDOWS_IMPORT LPVOID WINAPI GlobalLock(HGLOBAL hMem);
-
-WINDOWS_IMPORT BOOL WINAPI GlobalUnlock(HGLOBAL hMem);
-
-WINDOWS_IMPORT BOOL WINAPI CloseClipboard(void);
-
-WINDOWS_IMPORT HGLOBAL WINAPI GlobalAlloc(UINT uFlags, u64 dwBytes);
-
-WINDOWS_IMPORT HANDLE WINAPI SetClipboardData(UINT uFormat, HANDLE hMem);
-
 WINDOWS_IMPORT HBITMAP WINAPI CreateCompatibleBitmap(HDC hdc, int cx, int cy);
+WINDOWS_IMPORT int WINAPI SetMapMode(HDC hdc, int iMode);
+WINDOWS_IMPORT DWORD WINAPI GetGlyphOutlineW(HDC hdc, UINT uChar, UINT fuFormat, GLYPHMETRICS *lpgm, DWORD cjBuffer, LPVOID pvBuffer, const MAT2 *lpmat2);
+WINDOWS_IMPORT BOOL WINAPI GdiFlush(void);
 
-WINDOWS_IMPORT HDC WINAPI BeginPaint(HWND hWnd, LPPAINTSTRUCT lpPaint);
+// User32
 
-WINDOWS_IMPORT BOOL WINAPI EndPaint(HWND hWnd, const PAINTSTRUCT *lpPaint);
+// Macros
 
-WINDOWS_IMPORT short WINAPI GetKeyState(int nVirtKey);
-
-WINDOWS_IMPORT HWND WINAPI SetCapture(HWND hWnd);
-
-WINDOWS_IMPORT BOOL WINAPI ReleaseCapture(void);
-
-WINDOWS_IMPORT HMODULE WINAPI GetModuleHandleA(LPCSTR lpModuleName);
 #define GetModuleHandle GetModuleHandleA
-
-WINDOWS_IMPORT HICON WINAPI LoadIconA(HINSTANCE hInstance, LPCSTR lpIconName);
-
 #define IDI_APPLICATION 32512
-
 #define LoadIcon LoadIconW
-
-WINDOWS_IMPORT HCURSOR WINAPI LoadCursorA(HINSTANCE hInstance, LPCSTR lpCursorName);
-
 #define IDC_ARROW 32512
-
 #define LoadCursor LoadCursorW
-
-WINDOWS_IMPORT BOOL WINAPI UnregisterClassW(LPCWSTR lpClassName, HINSTANCE hInstance);
-
-WINDOWS_IMPORT BOOL WINAPI SetWindowTextA(HWND hWnd, LPCSTR lpString);
-
-WINDOWS_IMPORT HDC WINAPI GetWindowDC(HWND hWnd);
-
-WINDOWS_IMPORT int WINAPI ReleaseDC(HWND hWnd, HDC hDC);
-
-WINDOWS_IMPORT BOOL WINAPI CloseWindow(HWND hWnd);
-
-WINDOWS_IMPORT BOOL WINAPI PeekMessageA(LPMSG lpMsg, HWND hWnd, UINT wMsgFilterMin, UINT wMsgFilterMax, UINT wRemoveMsg);
 #define PeekMessage PeekMessageW
-
-WINDOWS_IMPORT int WINAPI GetWindowTextA(HWND hWnd, LPSTR lpString, int nMaxCount);
-
-WINDOWS_IMPORT LONG_PTR WINAPI SetWindowLongPtrA(HWND hWnd,int nIndex,LONG_PTR dwNewLong);
-
-WINDOWS_IMPORT LONG_PTR WINAPI SetWindowLongPtrW(HWND hWnd, int nIndex, LONG_PTR dwNewLong);
-
 #define SetWindowLongPtr SetWindowLongPtrW
-
-typedef struct tagCREATESTRUCTA {
-  LPVOID    lpCreateParams;
-  HINSTANCE hInstance;
-  HMENU     hMenu;
-  HWND      hwndParent;
-  int       cy;
-  int       cx;
-  int       y;
-  int       x;
-  LONG      style;
-  LPCSTR    lpszName;
-  LPCSTR    lpszClass;
-  DWORD     dwExStyle;
-} CREATESTRUCTA, *LPCREATESTRUCTA;
 #define CREATESTRUCT CREATESTRUCTA
-
 #define GWL_WNDPROC         (-4)
 #define GWL_HINSTANCE       (-6)
 #define GWL_HWNDPARENT      (-8)
@@ -8217,33 +7914,12 @@ typedef struct tagCREATESTRUCTA {
 #define GWL_EXSTYLE         (-20)
 #define GWL_USERDATA        (-21)
 #define GWL_ID              (-12)
-
-
 #define DefWindowProc DefWindowProcW
-
-WINDOWS_IMPORT HICON WINAPI LoadIconW(HINSTANCE hInstance, LPCWSTR lpIconName);
-
-WINDOWS_IMPORT HCURSOR WINAPI LoadCursorW(HINSTANCE hInstance, LPCWSTR lpCursorName);
-
-WINDOWS_IMPORT BOOL WINAPI PeekMessageW(LPMSG lpMsg, HWND hWnd, UINT wMsgFilterMin, UINT wMsgFilterMax, UINT wRemoveMsg);
-
-WINDOWS_IMPORT LONG_PTR WINAPI SetWindowLongPtrW(HWND hWnd, int nIndex, LONG_PTR dwNewLong);
-
-WINDOWS_IMPORT LONG_PTR WINAPI GetWindowLongPtrW(HWND hWnd, int nIndex);
-
-WINDOWS_IMPORT BOOL WINAPI GetCursorPos(LPPOINT lpPoint);
-
-
 #define GWLP_WNDPROC        (-4)
 #define GWLP_HINSTANCE      (-6)
 #define GWLP_HWNDPARENT     (-8)
 #define GWLP_USERDATA       (-21)
 #define GWLP_ID             (-12)
-
-WINDOWS_IMPORT DWORD WINAPI GetLogicalDriveStringsA(DWORD nBufferLength,LPSTR lpBuffer);
-
-WINDOWS_IMPORT DWORD WINAPI SearchPathA(LPCSTR lpPath,LPCSTR lpFileName,LPCSTR lpExtension,DWORD  nBufferLength,LPSTR  lpBuffer,LPSTR  *lpFilePart);
-
 #define MM_TEXT             1
 #define MM_LOMETRIC         2
 #define MM_HIMETRIC         3
@@ -8252,103 +7928,30 @@ WINDOWS_IMPORT DWORD WINAPI SearchPathA(LPCSTR lpPath,LPCSTR lpFileName,LPCSTR l
 #define MM_TWIPS            6
 #define MM_ISOTROPIC        7
 #define MM_ANISOTROPIC      8
-WINDOWS_IMPORT int WINAPI SetMapMode(HDC hdc,int iMode);
-
-
-WINDOWS_IMPORT DWORD WINAPI GetGlyphOutlineW( HDC hdc, UINT uChar, UINT fuFormat, GLYPHMETRICS *lpgm, DWORD cjBuffer, LPVOID pvBuffer, const MAT2 *lpmat2);
-
-WINDOWS_IMPORT HRESULT WINAPI DwmSetWindowAttribute( HWND    hwnd, DWORD   dwAttribute, LPCVOID pvAttribute, DWORD   cbAttribute);
-
 #define GET_X_LPARAM(lp) ((int)(short)LOWORD(lp))
 #define GET_Y_LPARAM(lp) ((int)(short)HIWORD(lp))
-
-WINDOWS_IMPORT BOOL WINAPI ScreenToClient(HWND hWnd,POINT* lpPoint);
-
 #define SM_CXSIZEFRAME 32
 #define SM_CXPADDEDBORDER 92
-
-WINDOWS_IMPORT int WINAPI GetSystemMetrics(int nIndex);
-
 #define SC_RESTORE 0xF120
 #define SC_MAXIMIZE 0xF030
 #define SC_MINIMIZE 0xF020
 #define SC_CLOSE 0xF060
 #define SC_MOVE 0xF010
-
-WINDOWS_IMPORT LRESULT WINAPI SendMessageW(HWND hWnd,UINT Msg,WPARAM wParam,LPARAM lParam);
-
-WINDOWS_IMPORT BOOL WINAPI PostMessageW( HWND hWnd, UINT Msg, WPARAM wParam, LPARAM lParam);
-
-WINDOWS_IMPORT BOOL WINAPI ReleaseCapture(void);
-
-typedef struct tagWINDOWPLACEMENT {
-  UINT  length;
-  UINT  flags;
-  UINT  showCmd;
-  POINT ptMinPosition;
-  POINT ptMaxPosition;
-  RECT  rcNormalPosition;
-  RECT  rcDevice;
-} WINDOWPLACEMENT;
-
-WINDOWS_IMPORT BOOL WINAPI GetWindowPlacement(HWND hWnd, WINDOWPLACEMENT *lpwndpl);
-
 #define RDW_INVALIDATE         0x0001
 #define RDW_INTERNALPAINT      0x0002
 #define RDW_ERASE              0x0004
-
 #define RDW_VALIDATE           0x0008
 #define RDW_NOINTERNALPAINT    0x0010
 #define RDW_NOERASE            0x0020
-
 #define RDW_NOCHILDREN         0x0040
 #define RDW_ALLCHILDREN        0x0080
-
 #define RDW_UPDATENOW          0x0100
 #define RDW_ERASENOW           0x0200
-
 #define RDW_FRAME              0x0400
 #define RDW_NOFRAME            0x0800
-WINDOWS_IMPORT BOOL WINAPI RedrawWindow(HWND       hWnd,const RECT *lprcUpdate,HRGN       hrgnUpdate,UINT       flags);
-
-WINDOWS_IMPORT BOOL WINAPI IsZoomed(HWND hWnd);
-
-WINDOWS_IMPORT BOOL WINAPI GetWindowRect(HWND   hWnd,LPRECT lpRect);
-
-WINDOWS_IMPORT BOOL WINAPI ScreenToClient(HWND    hWnd, POINT* lpPoint);
-
-WINDOWS_IMPORT BOOL WINAPI ClientToScreen( HWND hWnd, POINT* lpPoint);
-
-WINDOWS_IMPORT HWND WINAPI GetForegroundWindow(void);
-
-WINDOWS_IMPORT short WINAPI GetAsyncKeyState(int vKey);
-
-WINDOWS_IMPORT BOOL WINAPI ScreenToClient(HWND hWnd, LPPOINT lpPoint);
-
-WINDOWS_IMPORT BOOL WINAPI PtInRect(const RECT *lprc, POINT pt);
-
-WINDOWS_IMPORT HCURSOR WINAPI SetCursor(HCURSOR hCursor);
-
-
-
 #pragma comment(lib, "avrt")
-WINDOWS_IMPORT HANDLE WINAPI AvSetMmThreadCharacteristicsW(LPCWSTR TaskName,LPDWORD TaskIndex);
-WINDOWS_IMPORT BOOL WINAPI SetThreadPriorityBoost(HANDLE hThread,BOOL   bDisablePriorityBoost);
-typedef enum AVRT_PRIORITY {
-	AVRT_PRIORITY_CRITICAL = (2),
-	AVRT_PRIORITY_HIGH = (1),
-	AVRT_PRIORITY_LOW = (-1),
-	AVRT_PRIORITY_NORMAL = (0),
-} AVRT_PRIORITY;
-
-WINDOWS_IMPORT BOOL WINAPI AvSetMmThreadPriority(HANDLE AvrtHandle,AVRT_PRIORITY Priority);
-
-WINDOWS_IMPORT UINT WINAPI GetDoubleClickTime(void);
-
 #define SPI_GETKEYBOARDDELAY 0x0016
 #define SPI_GETKEYBOARDSPEED 0x000A
-WINDOWS_IMPORT BOOL WINAPI SystemParametersInfoA( UINT  uiAction, UINT  uiParam, PVOID pvParam, UINT  fWinIni);
-
 #if defined(INITGUID) || defined(INITKNOWNFOLDERS)
 #define DEFINE_KNOWN_FOLDER(name, l, w1, w2, b1, b2, b3, b4, b5, b6, b7, b8) \
         extern const GUID  name \
@@ -8358,267 +7961,443 @@ WINDOWS_IMPORT BOOL WINAPI SystemParametersInfoA( UINT  uiAction, UINT  uiParam,
         extern const GUID name
 #endif // INITGUID || INITKNOWNFOLDERS
 
+
+// Types
+
+typedef struct tagCREATESTRUCTA {
+    LPVOID lpCreateParams;
+    HINSTANCE hInstance;
+    HMENU hMenu;
+    HWND hwndParent;
+    int cy;
+    int cx;
+    int y;
+    int x;
+    LONG style;
+    LPCSTR lpszName;
+    LPCSTR lpszClass;
+    DWORD dwExStyle;
+} CREATESTRUCTA, *LPCREATESTRUCTA;
+
+typedef struct tagWINDOWPLACEMENT {
+    UINT length;
+    UINT flags;
+    UINT showCmd;
+    POINT ptMinPosition;
+    POINT ptMaxPosition;
+    RECT rcNormalPosition;
+    RECT rcDevice;
+} WINDOWPLACEMENT;
+
+typedef enum AVRT_PRIORITY {
+    AVRT_PRIORITY_CRITICAL = (2),
+    AVRT_PRIORITY_HIGH = (1),
+    AVRT_PRIORITY_LOW = (-1),
+    AVRT_PRIORITY_NORMAL = (0),
+} AVRT_PRIORITY;
+
+
+// Functions
+
+WINDOWS_IMPORT BOOL WINAPI GetMonitorInfoW(HMONITOR hMonitor, LPMONITORINFO lpmi);
+WINDOWS_IMPORT BOOL WINAPI EnumDisplaySettingsW(LPCWSTR lpszDeviceName, DWORD iModeNum, DEVMODEW *lpDevMode);
+WINDOWS_IMPORT BOOL WINAPI EnumDisplayDevicesW(LPCWSTR lpDevice, DWORD iDevNum, PDISPLAY_DEVICEW lpDisplayDevice, DWORD dwFlags);
+WINDOWS_IMPORT HMONITOR WINAPI MonitorFromWindow(HWND hwnd, DWORD dwFlags);
+WINDOWS_IMPORT BOOL WINAPI EnumDisplayMonitors(HDC hdc, LPCRECT lprcClip, MONITORENUMPROC lpfnEnum, LPARAM dwData);
+WINDOWS_IMPORT ATOM WINAPI RegisterClassExW(const WNDCLASSEXW *unnamedParam1);
+WINDOWS_IMPORT BOOL WINAPI AdjustWindowRectEx(LPRECT lpRect, DWORD dwStyle, BOOL bMenu, DWORD dwExStyle);
+WINDOWS_IMPORT HWND WINAPI CreateWindowExW(DWORD dwExStyle, LPCWSTR lpClassName, LPCWSTR lpWindowName, DWORD dwStyle, int X, int Y, int nWidth, int nHeight, HWND hWndParent, HMENU hMenu, HINSTANCE hInstance, LPVOID lpParam);
+WINDOWS_IMPORT BOOL WINAPI UpdateWindow(HWND hWnd);
+WINDOWS_IMPORT BOOL WINAPI ShowWindow(HWND hWnd, int nCmdShow);
+WINDOWS_IMPORT BOOL WINAPI PeekMessageW(LPMSG lpMsg, HWND hWnd, UINT wMsgFilterMin, UINT wMsgFilterMax, UINT wRemoveMsg);
+WINDOWS_IMPORT BOOL WINAPI TranslateMessage(const MSG *lpMsg);
+WINDOWS_IMPORT LRESULT WINAPI DispatchMessageW(const MSG *lpMsg);
+WINDOWS_IMPORT LRESULT WINAPI DefWindowProcW(HWND hWnd, UINT Msg, WPARAM wParam, LPARAM lParam);
+WINDOWS_IMPORT BOOL WINAPI DestroyWindow(HWND hWnd);
+WINDOWS_IMPORT LONG WINAPI GetWindowLongW(HWND hWnd, int nIndex);
+WINDOWS_IMPORT LONG WINAPI SetWindowLongW(HWND hWnd, int nIndex, LONG dwNewLong);
+WINDOWS_IMPORT BOOL WINAPI SetWindowPos(HWND hWnd, HWND hWndInsertAfter, int X, int Y, int cx, int cy, UINT uFlags);
+WINDOWS_IMPORT BOOL WINAPI GetClientRect(HWND hWnd, LPRECT lpRect);
+WINDOWS_IMPORT HDC WINAPI GetDC(HWND hWnd);
+WINDOWS_IMPORT HMONITOR WINAPI MonitorFromWindow(HWND hwnd, DWORD dwFlags);
+WINDOWS_IMPORT BOOL WINAPI IsClipboardFormatAvailable(UINT format);
+WINDOWS_IMPORT BOOL WINAPI OpenClipboard(HWND hWndNewOwner);
+WINDOWS_IMPORT HANDLE WINAPI GetClipboardData(UINT uFormat);
+WINDOWS_IMPORT BOOL WINAPI CloseClipboard(void);
+WINDOWS_IMPORT HANDLE WINAPI SetClipboardData(UINT uFormat, HANDLE hMem);
+WINDOWS_IMPORT HDC WINAPI BeginPaint(HWND hWnd, LPPAINTSTRUCT lpPaint);
+WINDOWS_IMPORT BOOL WINAPI EndPaint(HWND hWnd, const PAINTSTRUCT *lpPaint);
+WINDOWS_IMPORT short WINAPI GetKeyState(int nVirtKey);
+WINDOWS_IMPORT HWND WINAPI SetCapture(HWND hWnd);
+WINDOWS_IMPORT BOOL WINAPI ReleaseCapture(void);
+WINDOWS_IMPORT HICON WINAPI LoadIconA(HINSTANCE hInstance, LPCSTR lpIconName);
+WINDOWS_IMPORT HCURSOR WINAPI LoadCursorA(HINSTANCE hInstance, LPCSTR lpCursorName);
+WINDOWS_IMPORT BOOL WINAPI UnregisterClassW(LPCWSTR lpClassName, HINSTANCE hInstance);
+WINDOWS_IMPORT BOOL WINAPI SetWindowTextA(HWND hWnd, LPCSTR lpString);
+WINDOWS_IMPORT HDC WINAPI GetWindowDC(HWND hWnd);
+WINDOWS_IMPORT int WINAPI ReleaseDC(HWND hWnd, HDC hDC);
+WINDOWS_IMPORT BOOL WINAPI CloseWindow(HWND hWnd);
+WINDOWS_IMPORT BOOL WINAPI PeekMessageA(LPMSG lpMsg, HWND hWnd, UINT wMsgFilterMin, UINT wMsgFilterMax, UINT wRemoveMsg);
+WINDOWS_IMPORT int WINAPI GetWindowTextA(HWND hWnd, LPSTR lpString, int nMaxCount);
+WINDOWS_IMPORT LONG_PTR WINAPI SetWindowLongPtrA(HWND hWnd, int nIndex, LONG_PTR dwNewLong);
+WINDOWS_IMPORT LONG_PTR WINAPI SetWindowLongPtrW(HWND hWnd, int nIndex, LONG_PTR dwNewLong);
+WINDOWS_IMPORT HICON WINAPI LoadIconW(HINSTANCE hInstance, LPCWSTR lpIconName);
+WINDOWS_IMPORT HCURSOR WINAPI LoadCursorW(HINSTANCE hInstance, LPCWSTR lpCursorName);
+WINDOWS_IMPORT BOOL WINAPI PeekMessageW(LPMSG lpMsg, HWND hWnd, UINT wMsgFilterMin, UINT wMsgFilterMax, UINT wRemoveMsg);
+WINDOWS_IMPORT LONG_PTR WINAPI SetWindowLongPtrW(HWND hWnd, int nIndex, LONG_PTR dwNewLong);
+WINDOWS_IMPORT LONG_PTR WINAPI GetWindowLongPtrW(HWND hWnd, int nIndex);
+WINDOWS_IMPORT BOOL WINAPI GetCursorPos(LPPOINT lpPoint);
+WINDOWS_IMPORT BOOL WINAPI ScreenToClient(HWND hWnd, POINT* lpPoint);
+WINDOWS_IMPORT int WINAPI GetSystemMetrics(int nIndex);
+WINDOWS_IMPORT LRESULT WINAPI SendMessageW(HWND hWnd, UINT Msg, WPARAM wParam, LPARAM lParam);
+WINDOWS_IMPORT BOOL WINAPI PostMessageW(HWND hWnd, UINT Msg, WPARAM wParam, LPARAM lParam);
+WINDOWS_IMPORT BOOL WINAPI ReleaseCapture(void);
+WINDOWS_IMPORT BOOL WINAPI GetWindowPlacement(HWND hWnd, WINDOWPLACEMENT *lpwndpl);
+WINDOWS_IMPORT BOOL WINAPI RedrawWindow(HWND hWnd, const RECT *lprcUpdate, HRGN hrgnUpdate, UINT flags);
+WINDOWS_IMPORT BOOL WINAPI IsZoomed(HWND hWnd);
+WINDOWS_IMPORT BOOL WINAPI GetWindowRect(HWND hWnd, LPRECT lpRect);
+WINDOWS_IMPORT BOOL WINAPI ScreenToClient(HWND hWnd, POINT* lpPoint);
+WINDOWS_IMPORT BOOL WINAPI ClientToScreen(HWND hWnd, POINT* lpPoint);
+WINDOWS_IMPORT HWND WINAPI GetForegroundWindow(void);
+WINDOWS_IMPORT short WINAPI GetAsyncKeyState(int vKey);
+WINDOWS_IMPORT BOOL WINAPI ScreenToClient(HWND hWnd, LPPOINT lpPoint);
+WINDOWS_IMPORT BOOL WINAPI PtInRect(const RECT *lprc, POINT pt);
+WINDOWS_IMPORT HCURSOR WINAPI SetCursor(HCURSOR hCursor);
+WINDOWS_IMPORT UINT WINAPI GetDoubleClickTime(void);
+WINDOWS_IMPORT BOOL WINAPI SystemParametersInfoA(UINT uiAction, UINT uiParam, PVOID pvParam, UINT fWinIni);
+WINDOWS_IMPORT UINT WINAPI GetDpiForSystem(void);
+WINDOWS_IMPORT int WINAPI MessageBoxA(HWND hWnd, LPCSTR lpText, LPCSTR lpCaption, UINT uType);
+WINDOWS_IMPORT DWORD WINAPI CharLowerBuffW(LPWSTR lpsz, DWORD cchLength);
+WINDOWS_IMPORT HANDLE WINAPI LoadImageA(HINSTANCE hInst, LPCSTR name, UINT type, int cx, int cy, UINT fuLoad);
+WINDOWS_IMPORT HMENU WINAPI CreatePopupMenu(void);
+WINDOWS_IMPORT BOOL WINAPI AppendMenuW(HMENU hMenu, UINT uFlags, UINT_PTR uIDNewItem, LPCWSTR lpNewItem);
+WINDOWS_IMPORT BOOL WINAPI SetForegroundWindow(HWND hWnd);
+WINDOWS_IMPORT BOOL WINAPI TrackPopupMenu(HMENU hMenu, UINT uFlags, int x, int y, int nReserved, HWND hWnd, const RECT *prcRect);
+WINDOWS_IMPORT BOOL WINAPI DestroyMenu(HMENU hMenu);
+WINDOWS_IMPORT HWND WINAPI WindowFromPoint(POINT Point);
+WINDOWS_IMPORT HWND WINAPI SetFocus(HWND hWnd);
+
+// Advapi32
+
+// Macros
+
+#define TOKEN_ASSIGN_PRIMARY    (0x0001)
+#define TOKEN_DUPLICATE         (0x0002)
+#define TOKEN_IMPERSONATE       (0x0004)
+#define TOKEN_QUERY             (0x0008)
+#define TOKEN_QUERY_SOURCE      (0x0010)
+#define TOKEN_ADJUST_PRIVILEGES (0x0020)
+#define TOKEN_ADJUST_GROUPS     (0x0040)
+#define TOKEN_ADJUST_DEFAULT    (0x0080)
+#define TOKEN_ADJUST_SESSIONID  (0x0100)
+#define TOKEN_ALL_ACCESS_P (STANDARD_RIGHTS_REQUIRED  |\
+                          TOKEN_ASSIGN_PRIMARY      |\
+                          TOKEN_DUPLICATE           |\
+                          TOKEN_IMPERSONATE         |\
+                          TOKEN_QUERY               |\
+                          TOKEN_QUERY_SOURCE        |\
+                          TOKEN_ADJUST_PRIVILEGES   |\
+                          TOKEN_ADJUST_GROUPS       |\
+                          TOKEN_ADJUST_DEFAULT )
+
+#if ((defined(_WIN32_WINNT) && (_WIN32_WINNT > 0x0400)) || (!defined(_WIN32_WINNT)))
+#define TOKEN_ALL_ACCESS  (TOKEN_ALL_ACCESS_P |\
+                          TOKEN_ADJUST_SESSIONID )
+#else
+#define TOKEN_ALL_ACCESS  (TOKEN_ALL_ACCESS_P)
+#endif
+
+#define TOKEN_READ       (STANDARD_RIGHTS_READ      |\
+                          TOKEN_QUERY)
+
+#define TOKEN_WRITE      (STANDARD_RIGHTS_WRITE     |\
+                          TOKEN_ADJUST_PRIVILEGES   |\
+                          TOKEN_ADJUST_GROUPS       |\
+                          TOKEN_ADJUST_DEFAULT)
+
+#define TOKEN_EXECUTE    (STANDARD_RIGHTS_EXECUTE)
+#define TOKEN_TRUST_CONSTRAINT_MASK    (STANDARD_RIGHTS_READ  | \
+                                       TOKEN_QUERY  |\
+                                       TOKEN_QUERY_SOURCE )
+
+#define SE_ASSIGNPRIMARYTOKEN_NAME                   (L"SeAssignPrimaryTokenPrivilege")
+#define SE_LOCK_MEMORY_NAME                          (L"SeLockMemoryPrivilege")
+#define SE_INCREASE_QUOTA_NAME                       (L"SeIncreaseQuotaPrivilege")
+#define SE_UNSOLICITED_INPUT_NAME                    (L"SeUnsolicitedInputPrivilege")
+#define SE_MACHINE_ACCOUNT_NAME                      (L"SeMachineAccountPrivilege")
+#define SE_TCB_NAME                                  (L"SeTcbPrivilege")
+#define SE_SECURITY_NAME                             (L"SeSecurityPrivilege")
+#define SE_TAKE_OWNERSHIP_NAME                       (L"SeTakeOwnershipPrivilege")
+#define SE_LOAD_DRIVER_NAME                          (L"SeLoadDriverPrivilege")
+#define SE_SYSTEM_PROFILE_NAME                       (L"SeSystemProfilePrivilege")
+#define SE_SYSTEMTIME_NAME                           (L"SeSystemtimePrivilege")
+#define SE_PROF_SINGLE_PROCESS_NAME                  (L"SeProfileSingleProcessPrivilege")
+#define SE_INC_BASE_PRIORITY_NAME                    (L"SeIncreaseBasePriorityPrivilege")
+#define SE_CREATE_PAGEFILE_NAME                      (L"SeCreatePagefilePrivilege")
+#define SE_CREATE_PERMANENT_NAME                     (L"SeCreatePermanentPrivilege")
+#define SE_BACKUP_NAME                               (L"SeBackupPrivilege")
+#define SE_RESTORE_NAME                              (L"SeRestorePrivilege")
+#define SE_SHUTDOWN_NAME                             (L"SeShutdownPrivilege")
+#define SE_DEBUG_NAME                                (L"SeDebugPrivilege")
+#define SE_AUDIT_NAME                                (L"SeAuditPrivilege")
+#define SE_SYSTEM_ENVIRONMENT_NAME                   (L"SeSystemEnvironmentPrivilege")
+#define SE_CHANGE_NOTIFY_NAME                        (L"SeChangeNotifyPrivilege")
+#define SE_REMOTE_SHUTDOWN_NAME                      (L"SeRemoteShutdownPrivilege")
+#define SE_UNDOCK_NAME                               (L"SeUndockPrivilege")
+#define SE_SYNC_AGENT_NAME                           (L"SeSyncAgentPrivilege")
+#define SE_ENABLE_DELEGATION_NAME                    (L"SeEnableDelegationPrivilege")
+#define SE_MANAGE_VOLUME_NAME                        (L"SeManageVolumePrivilege")
+#define SE_IMPERSONATE_NAME                          (L"SeImpersonatePrivilege")
+#define SE_CREATE_GLOBAL_NAME                        (L"SeCreateGlobalPrivilege")
+#define SE_TRUSTED_CREDMAN_ACCESS_NAME               (L"SeTrustedCredManAccessPrivilege")
+#define SE_RELABEL_NAME                              (L"SeRelabelPrivilege")
+#define SE_INC_WORKING_SET_NAME                      (L"SeIncreaseWorkingSetPrivilege")
+#define SE_TIME_ZONE_NAME                            (L"SeTimeZonePrivilege")
+#define SE_CREATE_SYMBOLIC_LINK_NAME                 (L"SeCreateSymbolicLinkPrivilege")
+#define SE_DELEGATE_SESSION_USER_IMPERSONATE_NAME    (L"SeDelegateSessionUserImpersonatePrivilege")
+#define SE_PRIVILEGE_ENABLED_BY_DEFAULT (0x00000001L)
+#define SE_PRIVILEGE_ENABLED            (0x00000002L)
+#define SE_PRIVILEGE_REMOVED            (0X00000004L)
+#define SE_PRIVILEGE_USED_FOR_ACCESS    (0x80000000L)
+#define SE_PRIVILEGE_VALID_ATTRIBUTES   (SE_PRIVILEGE_ENABLED_BY_DEFAULT | \
+                                         SE_PRIVILEGE_ENABLED            | \
+                                         SE_PRIVILEGE_REMOVED            | \
+                                         SE_PRIVILEGE_USED_FOR_ACCESS)
+
+#define ANYSIZE_ARRAY 1
+
+// Types
+
+typedef enum _TOKEN_INFORMATION_CLASS {
+    TokenUser = 1,
+    TokenGroups,
+    TokenPrivileges,
+    TokenOwner,
+    TokenPrimaryGroup,
+    TokenDefaultDacl,
+    TokenSource,
+    TokenType,
+    TokenImpersonationLevel,
+    TokenStatistics,
+    TokenRestrictedSids,
+    TokenSessionId,
+    TokenGroupsAndPrivileges,
+    TokenSessionReference,
+    TokenSandBoxInert,
+    TokenAuditPolicy,
+    TokenOrigin,
+    TokenElevationType,
+    TokenLinkedToken,
+    TokenElevation,
+    TokenHasRestrictions,
+    TokenAccessInformation,
+    TokenVirtualizationAllowed,
+    TokenVirtualizationEnabled,
+    TokenIntegrityLevel,
+    TokenUIAccess,
+    TokenMandatoryPolicy,
+    TokenLogonSid,
+    TokenIsAppContainer,
+    TokenCapabilities,
+    TokenAppContainerSid,
+    TokenAppContainerNumber,
+    TokenUserClaimAttributes,
+    TokenDeviceClaimAttributes,
+    TokenRestrictedUserClaimAttributes,
+    TokenRestrictedDeviceClaimAttributes,
+    TokenDeviceGroups,
+    TokenRestrictedDeviceGroups,
+    TokenSecurityAttributes,
+    TokenIsRestricted,
+    TokenProcessTrustLevel,
+    TokenPrivateNameSpace,
+    TokenSingletonAttributes,
+    TokenBnoIsolation,
+    TokenChildProcessFlags,
+    TokenIsLessPrivilegedAppContainer,
+    TokenIsSandboxed,
+    TokenIsAppSilo,
+    TokenLoggingInformation,
+    TokenLearningMode,
+    MaxTokenInfoClass
+} TOKEN_INFORMATION_CLASS, *PTOKEN_INFORMATION_CLASS;
+
+typedef struct _TOKEN_ELEVATION {
+    DWORD TokenIsElevated;
+} TOKEN_ELEVATION, *PTOKEN_ELEVATION;
+
+typedef struct {
+    LUID Luid;
+    DWORD Attributes;
+} LUID_AND_ATTRIBUTES, * PLUID_AND_ATTRIBUTES;
+
+typedef LUID_AND_ATTRIBUTES LUID_AND_ATTRIBUTES_ARRAY[ANYSIZE_ARRAY];
+typedef LUID_AND_ATTRIBUTES_ARRAY *PLUID_AND_ATTRIBUTES_ARRAY;
+typedef struct {
+    DWORD PrivilegeCount;
+    LUID_AND_ATTRIBUTES Privileges[ANYSIZE_ARRAY];
+} TOKEN_PRIVILEGES, *PTOKEN_PRIVILEGES;
+
+
+// Functions
+
+WINDOWS_IMPORT BOOL WINAPI OpenProcessToken(HANDLE ProcessHandle, DWORD DesiredAccess, HANDLE* TokenHandle);
+WINDOWS_IMPORT BOOL WINAPI GetTokenInformation(HANDLE TokenHandle, TOKEN_INFORMATION_CLASS TokenInformationClass, LPVOID TokenInformation, DWORD TokenInformationLength, PDWORD ReturnLength);
+WINDOWS_IMPORT BOOL WINAPI LookupPrivilegeValueW(LPCWSTR lpSystemName, LPCWSTR lpName, LUID *lpLuid);
+WINDOWS_IMPORT BOOL WINAPI AdjustTokenPrivileges(HANDLE TokenHandle, BOOL DisableAllPrivileges, TOKEN_PRIVILEGES *NewState, DWORD BufferLength, PTOKEN_PRIVILEGES PreviousState, PDWORD ReturnLength);
+
+// Shell32
+
+// Macros
+
+#define SEE_MASK_DEFAULT           0x00000000
+#define SEE_MASK_CLASSNAME         0x00000001   // SHELLEXECUTEINFO.lpClass is valid
+#define SEE_MASK_CLASSKEY          0x00000003   // SHELLEXECUTEINFO.hkeyClass is valid
+// Note SEE_MASK_INVOKEIDLIST(0xC) implies SEE_MASK_IDLIST(0x04)
+#define SEE_MASK_IDLIST            0x00000004   // SHELLEXECUTEINFO.lpIDList is valid
+
+#define SEE_MASK_INVOKEIDLIST      0x0000000c   // enable IContextMenu based verbs
+#define SEE_MASK_HOTKEY            0x00000020   // SHELLEXECUTEINFO.dwHotKey is valid
+#define SEE_MASK_NOCLOSEPROCESS    0x00000040   // SHELLEXECUTEINFO.hProcess
+#define SEE_MASK_CONNECTNETDRV     0x00000080   // enables re-connecting disconnected network drives
+#define SEE_MASK_NOASYNC           0x00000100   // block on the call until the invoke has completed, use for callers that exit after calling ShellExecuteEx()
+#define SEE_MASK_FLAG_DDEWAIT      SEE_MASK_NOASYNC // Use SEE_MASK_NOASYNC instead of SEE_MASK_FLAG_DDEWAIT as it more accuratly describes the behavior
+#define SEE_MASK_DOENVSUBST        0x00000200   // indicates that SHELLEXECUTEINFO.lpFile contains env vars that should be expanded
+#define SEE_MASK_FLAG_NO_UI        0x00000400   // disable UI including error messages
+#define SEE_MASK_UNICODE           0x00004000
+#define SEE_MASK_NO_CONSOLE        0x00008000
+#define SEE_MASK_ASYNCOK           0x00100000
+#define FILE_FLAG_WRITE_THROUGH         0x80000000
 // {3EB685DB-65F9-4CF6-A03A-E3EF65729F3D}
 DEFINE_KNOWN_FOLDER(FOLDERID_RoamingAppData,      0x3EB685DB, 0x65F9, 0x4CF6, 0xA0, 0x3A, 0xE3, 0xEF, 0x65, 0x72, 0x9F, 0x3D);
 
-typedef GUID KNOWNFOLDERID;
 #define REFKNOWNFOLDERID const KNOWNFOLDERID *
-
-WINDOWS_IMPORT HRESULT WINAPI SHGetKnownFolderPath(REFKNOWNFOLDERID rfid, DWORD dwFlags,HANDLE hToken,PWSTR *ppszPath);
-
-WINDOWS_IMPORT void WINAPI GetSystemTimeAsFileTime(FILETIME *lpSystemTimeAsFileTime);
-
-WINDOWS_IMPORT UINT WINAPI GetDpiForSystem(void);
-
-
-typedef void (WINAPI *LPOVERLAPPED_COMPLETION_ROUTINE)( DWORD dwErrorCode, DWORD dwNumberOfBytesTransfered, LPOVERLAPPED lpOverlapped);
-BOOL ReadDirectoryChangesW(HANDLE hDirectory,LPVOID lpBuffer,DWORD nBufferLength,BOOL bWatchSubtree,DWORD dwNotifyFilter,LPDWORD lpBytesReturned,LPOVERLAPPED lpOverlapped,LPOVERLAPPED_COMPLETION_ROUTINE lpCompletionRoutine);
-
-typedef enum _READ_DIRECTORY_NOTIFY_INFORMATION_CLASS {
-  ReadDirectoryNotifyInformation = 1,
-  ReadDirectoryNotifyExtendedInformation,
-  ReadDirectoryNotifyFullInformation,
-  ReadDirectoryNotifyMaximumInformation
-} READ_DIRECTORY_NOTIFY_INFORMATION_CLASS, *PREAD_DIRECTORY_NOTIFY_INFORMATION_CLASS;
-
-BOOL ReadDirectoryChangesExW(HANDLE hDirectory, LPVOID lpBuffer, DWORD nBufferLength, BOOL bWatchSubtree, DWORD dwNotifyFilter, LPDWORD lpBytesReturned, LPOVERLAPPED lpOverlapped, LPOVERLAPPED_COMPLETION_ROUTINE lpCompletionRoutine, READ_DIRECTORY_NOTIFY_INFORMATION_CLASS ReadDirectoryNotifyInformationClass);
-
-typedef struct _FILE_NOTIFY_INFORMATION {
-    DWORD NextEntryOffset;
-    DWORD Action;
-    DWORD FileNameLength;
-    WCHAR FileName[1];
-} FILE_NOTIFY_INFORMATION, *PFILE_NOTIFY_INFORMATION;
-
-typedef struct _FILE_NOTIFY_EXTENDED_INFORMATION {
-    DWORD NextEntryOffset;
-    DWORD Action;
-    LARGE_INTEGER CreationTime;
-    LARGE_INTEGER LastModificationTime;
-    LARGE_INTEGER LastChangeTime;
-    LARGE_INTEGER LastAccessTime;
-    LARGE_INTEGER AllocatedLength;
-    LARGE_INTEGER FileSize;
-    DWORD FileAttributes;
-    union {
-        DWORD ReparsePointTag;
-        DWORD EaSize;
-    } DUMMYUNIONNAME;
-    LARGE_INTEGER FileId;
-    LARGE_INTEGER ParentFileId;
-    DWORD FileNameLength;
-    WCHAR FileName[1];
-} FILE_NOTIFY_EXTENDED_INFORMATION, *PFILE_NOTIFY_EXTENDED_INFORMATION;
-
-
-WINDOWS_IMPORT BOOL WINAPI FlushFileBuffers(HANDLE hFile);
-
-typedef struct {
-  USN       StartUsn;
-  DWORD     ReasonMask;
-  DWORD     ReturnOnlyOnClose;
-  DWORDLONG Timeout;
-  DWORDLONG BytesToWaitFor;
-  DWORDLONG UsnJournalID;
-} READ_USN_JOURNAL_DATA_V0, *PREAD_USN_JOURNAL_DATA_V0;
-
-typedef struct {
-  DWORDLONG UsnJournalID;
-  USN       FirstUsn;
-  USN       NextUsn;
-  USN       LowestValidUsn;
-  USN       MaxUsn;
-  DWORDLONG MaximumSize;
-  DWORDLONG AllocationDelta;
-} USN_JOURNAL_DATA_V0, *PUSN_JOURNAL_DATA_V0;
-
-WINDOWS_IMPORT BOOL WINAPI FileTimeToLocalFileTime(const FILETIME *lpFileTime, LPFILETIME lpLocalFileTime);
-
-#define STATUS_WAIT_0                           ((DWORD   )0x00000000L) 
-#define STATUS_ABANDONED_WAIT_0          ((DWORD   )0x00000080L)    
-#define STATUS_USER_APC                  ((DWORD   )0x000000C0L)    
-#define STATUS_TIMEOUT                   ((DWORD   )0x00000102L)    
-#define STATUS_PENDING                   ((DWORD   )0x00000103L)    
-#define DBG_EXCEPTION_HANDLED            ((DWORD   )0x00010001L)    
-#define DBG_CONTINUE                     ((DWORD   )0x00010002L)    
-#define STATUS_SEGMENT_NOTIFICATION      ((DWORD   )0x40000005L)    
-#define STATUS_FATAL_APP_EXIT            ((DWORD   )0x40000015L)    
-#define DBG_REPLY_LATER                  ((DWORD   )0x40010001L)    
-#define DBG_TERMINATE_THREAD             ((DWORD   )0x40010003L)    
-#define DBG_TERMINATE_PROCESS            ((DWORD   )0x40010004L)    
-#define DBG_CONTROL_C                    ((DWORD   )0x40010005L)    
-#define DBG_PRINTEXCEPTION_C             ((DWORD   )0x40010006L)    
-#define DBG_RIPEXCEPTION                 ((DWORD   )0x40010007L)    
-#define DBG_CONTROL_BREAK                ((DWORD   )0x40010008L)    
-#define DBG_COMMAND_EXCEPTION            ((DWORD   )0x40010009L)    
-#define DBG_PRINTEXCEPTION_WIDE_C        ((DWORD   )0x4001000AL)    
-#define STATUS_GUARD_PAGE_VIOLATION      ((DWORD   )0x80000001L)    
-#define STATUS_DATATYPE_MISALIGNMENT     ((DWORD   )0x80000002L)    
-#define STATUS_BREAKPOINT                ((DWORD   )0x80000003L)    
-#define STATUS_SINGLE_STEP               ((DWORD   )0x80000004L)    
-#define STATUS_LONGJUMP                  ((DWORD   )0x80000026L)    
-#define STATUS_UNWIND_CONSOLIDATE        ((DWORD   )0x80000029L)    
-#define DBG_EXCEPTION_NOT_HANDLED        ((DWORD   )0x80010001L)    
-#define STATUS_ACCESS_VIOLATION          ((DWORD   )0xC0000005L)    
-#define STATUS_IN_PAGE_ERROR             ((DWORD   )0xC0000006L)    
-#define STATUS_INVALID_HANDLE            ((DWORD   )0xC0000008L)    
-#define STATUS_INVALID_PARAMETER         ((DWORD   )0xC000000DL)    
-#define STATUS_NO_MEMORY                 ((DWORD   )0xC0000017L)    
-#define STATUS_ILLEGAL_INSTRUCTION       ((DWORD   )0xC000001DL)    
-#define STATUS_NONCONTINUABLE_EXCEPTION  ((DWORD   )0xC0000025L)    
-#define STATUS_INVALID_DISPOSITION       ((DWORD   )0xC0000026L)    
-#define STATUS_ARRAY_BOUNDS_EXCEEDED     ((DWORD   )0xC000008CL)    
-#define STATUS_FLOAT_DENORMAL_OPERAND    ((DWORD   )0xC000008DL)    
-#define STATUS_FLOAT_DIVIDE_BY_ZERO      ((DWORD   )0xC000008EL)    
-#define STATUS_FLOAT_INEXACT_RESULT      ((DWORD   )0xC000008FL)    
-#define STATUS_FLOAT_INVALID_OPERATION   ((DWORD   )0xC0000090L)    
-#define STATUS_FLOAT_OVERFLOW            ((DWORD   )0xC0000091L)    
-#define STATUS_FLOAT_STACK_CHECK         ((DWORD   )0xC0000092L)    
-#define STATUS_FLOAT_UNDERFLOW           ((DWORD   )0xC0000093L)    
-#define STATUS_INTEGER_DIVIDE_BY_ZERO    ((DWORD   )0xC0000094L)    
-#define STATUS_INTEGER_OVERFLOW          ((DWORD   )0xC0000095L)    
-#define STATUS_PRIVILEGED_INSTRUCTION    ((DWORD   )0xC0000096L)    
-#define STATUS_STACK_OVERFLOW            ((DWORD   )0xC00000FDL)    
-#define STATUS_DLL_NOT_FOUND             ((DWORD   )0xC0000135L)    
-#define STATUS_ORDINAL_NOT_FOUND         ((DWORD   )0xC0000138L)    
-#define STATUS_ENTRYPOINT_NOT_FOUND      ((DWORD   )0xC0000139L)    
-#define STATUS_CONTROL_C_EXIT            ((DWORD   )0xC000013AL)    
-#define STATUS_DLL_INIT_FAILED           ((DWORD   )0xC0000142L)    
-#define STATUS_CONTROL_STACK_VIOLATION   ((DWORD   )0xC00001B2L)    
-#define STATUS_FLOAT_MULTIPLE_FAULTS     ((DWORD   )0xC00002B4L)    
-#define STATUS_FLOAT_MULTIPLE_TRAPS      ((DWORD   )0xC00002B5L)    
-#define STATUS_REG_NAT_CONSUMPTION       ((DWORD   )0xC00002C9L)    
-#define STATUS_HEAP_CORRUPTION           ((DWORD   )0xC0000374L)    
-#define STATUS_STACK_BUFFER_OVERRUN      ((DWORD   )0xC0000409L)    
-#define STATUS_INVALID_CRUNTIME_PARAMETER ((DWORD   )0xC0000417L)    
-#define STATUS_ASSERTION_FAILURE         ((DWORD   )0xC0000420L)    
-#define STATUS_ENCLAVE_VIOLATION         ((DWORD   )0xC00004A2L)    
-#define STATUS_INTERRUPTED               ((DWORD   )0xC0000515L)    
-#define STATUS_THREAD_NOT_RUNNING        ((DWORD   )0xC0000516L)    
-#define STATUS_ALREADY_REGISTERED        ((DWORD   )0xC0000718L) 
-
-#define STILL_ACTIVE                        STATUS_PENDING
-#define EXCEPTION_ACCESS_VIOLATION          STATUS_ACCESS_VIOLATION
-#define EXCEPTION_DATATYPE_MISALIGNMENT     STATUS_DATATYPE_MISALIGNMENT
-#define EXCEPTION_BREAKPOINT                STATUS_BREAKPOINT
-#define EXCEPTION_SINGLE_STEP               STATUS_SINGLE_STEP
-#define EXCEPTION_ARRAY_BOUNDS_EXCEEDED     STATUS_ARRAY_BOUNDS_EXCEEDED
-#define EXCEPTION_FLT_DENORMAL_OPERAND      STATUS_FLOAT_DENORMAL_OPERAND
-#define EXCEPTION_FLT_DIVIDE_BY_ZERO        STATUS_FLOAT_DIVIDE_BY_ZERO
-#define EXCEPTION_FLT_INEXACT_RESULT        STATUS_FLOAT_INEXACT_RESULT
-#define EXCEPTION_FLT_INVALID_OPERATION     STATUS_FLOAT_INVALID_OPERATION
-#define EXCEPTION_FLT_OVERFLOW              STATUS_FLOAT_OVERFLOW
-#define EXCEPTION_FLT_STACK_CHECK           STATUS_FLOAT_STACK_CHECK
-#define EXCEPTION_FLT_UNDERFLOW             STATUS_FLOAT_UNDERFLOW
-#define EXCEPTION_INT_DIVIDE_BY_ZERO        STATUS_INTEGER_DIVIDE_BY_ZERO
-#define EXCEPTION_INT_OVERFLOW              STATUS_INTEGER_OVERFLOW
-#define EXCEPTION_PRIV_INSTRUCTION          STATUS_PRIVILEGED_INSTRUCTION
-#define EXCEPTION_IN_PAGE_ERROR             STATUS_IN_PAGE_ERROR
-#define EXCEPTION_ILLEGAL_INSTRUCTION       STATUS_ILLEGAL_INSTRUCTION
-#define EXCEPTION_NONCONTINUABLE_EXCEPTION  STATUS_NONCONTINUABLE_EXCEPTION
-#define EXCEPTION_STACK_OVERFLOW            STATUS_STACK_OVERFLOW
-#define EXCEPTION_INVALID_DISPOSITION       STATUS_INVALID_DISPOSITION
-#define EXCEPTION_GUARD_PAGE                STATUS_GUARD_PAGE_VIOLATION
-#define EXCEPTION_INVALID_HANDLE            STATUS_INVALID_HANDLE
-#define EXCEPTION_POSSIBLE_DEADLOCK         STATUS_POSSIBLE_DEADLOCK
-#define CONTROL_C_EXIT                      STATUS_CONTROL_C_EXIT
-
-typedef struct _EXCEPTION_RECORD {
-  DWORD                    ExceptionCode;
-  DWORD                    ExceptionFlags;
-  struct _EXCEPTION_RECORD *ExceptionRecord;
-  PVOID                    ExceptionAddress;
-  DWORD                    NumberParameters;
-  ULONG_PTR                ExceptionInformation[15];
-} EXCEPTION_RECORD;
-
-typedef struct _EXCEPTION_POINTERS {
-  EXCEPTION_RECORD *ExceptionRecord;
-  PCONTEXT          ContextRecord;
-} EXCEPTION_POINTERS, *PEXCEPTION_POINTERS;
-typedef LONG (*PVECTORED_EXCEPTION_HANDLER)(EXCEPTION_POINTERS *ExceptionInfo);
-
-WINDOWS_IMPORT void WINAPI *AddVectoredExceptionHandler(ULONG First, PVECTORED_EXCEPTION_HANDLER Handle);
-
-#define MB_ABORTRETRYIGNORE 0x00000002L
-#define MB_CANCELTRYCONTINUE 0x00000006L
-#define MB_HELP 0x00004000L
-#define MB_OK 0x00000000L
-#define MB_OKCANCEL 0x00000001L
-#define MB_RETRYCANCEL 0x00000005L
-#define MB_YESNO 0x00000004L
-#define MB_YESNOCANCEL 0x00000003L
-
-#define MB_ICONEXCLAMATION 0x00000030L
-#define MB_ICONWARNING 0x00000030L
-#define MB_ICONINFORMATION 0x00000040L
-#define MB_ICONASTERISK 0x00000040L
-#define MB_ICONQUESTION 0x00000020L
-#define MB_ICONSTOP 0x00000010L
-#define MB_ICONERROR 0x00000010L
-#define MB_ICONHAND 0x00000010L
-
-WINDOWS_IMPORT int WINAPI MessageBoxA(HWND hWnd,LPCSTR lpText,LPCSTR lpCaption,UINT uType);
-
-WINDOWS_IMPORT DWORD WINAPI CharLowerBuffW(LPWSTR lpsz, DWORD cchLength);
-
-#define MAKEINTRESOURCEA(i) ((LPSTR)((ULONG_PTR)((WORD)(i))))
-#define IDI_MAINICON 101
-#define IMAGE_ICON 1
-#define LR_DEFAULTSIZE 0x00000040
-#define ICON_BIG 1
-#define ICON_SMALL 0
-#define WM_SETICON 0x0080
-
-WINDOWS_IMPORT HANDLE WINAPI LoadImageA( HINSTANCE hInst, LPCSTR name, UINT type, int cx, int cy, UINT fuLoad);
-
-WINDOWS_IMPORT HRESULT WINAPI SetThreadDescription(HANDLE hThread, LPCWSTR lpThreadDescription);
-
-WINDOWS_IMPORT BOOL WINAPI GdiFlush(void);
-
-#define STD_INPUT_HANDLE  ((DWORD)-10)
-#define STD_OUTPUT_HANDLE ((DWORD)-11)
-#define STD_ERROR_HANDLE  ((DWORD)-12)
-
-WINDOWS_IMPORT BOOL WINAPI AllocConsole(void);
-
-#define BIF_RETURNONLYFSDIRS 0x00000001
-#define BIF_DONTGOBELOWDOMAIN 0x00000002
-#define BIF_STATUSTEXT 0x00000004
-
-#define BIF_RETURNFSANCESTORS 0x00000008
-#define BIF_EDITBOX 0x00000010
-#define BIF_VALIDATE 0x00000020
-
-#define BIF_NEWDIALOGSTYLE 0x00000040
-
-#define BIF_USENEWUI (BIF_NEWDIALOGSTYLE | BIF_EDITBOX)
-
-#define BIF_BROWSEINCLUDEURLS 0x00000080
-#define BIF_UAHINT 0x00000100
-#define BIF_NONEWFOLDERBUTTON 0x00000200
-#define BIF_NOTRANSLATETARGETS 0x00000400
-
 #define BIF_BROWSEFORCOMPUTER 0x00001000
 #define BIF_BROWSEFORPRINTER 0x00002000
 #define BIF_BROWSEINCLUDEFILES 0x00004000
 #define BIF_SHAREABLE 0x00008000
 #define BIF_BROWSEFILEJUNCTIONS 0x00010000
+#define PIDLIST_ABSOLUTE LPITEMIDLIST
+#define PCIDLIST_ABSOLUTE LPCITEMIDLIST
+#define NIM_MODIFY 0x00000001
+#define NIM_DELETE 0x00000002
+#define NIM_SETFOCUS 0x00000003
+#define NIM_SETVERSION 0x00000004
+#define NTDDI_VERSION_FROM_WIN32_WINNT2(ver)    ver##0000
+#define NTDDI_VERSION_FROM_WIN32_WINNT(ver)     NTDDI_VERSION_FROM_WIN32_WINNT2(ver)
+#if !defined(_WIN32_WINNT) && !defined(_CHICAGO_)
+#define  _WIN32_WINNT   0x0A00
+#endif
 
+#ifndef NTDDI_VERSION
+#ifdef _WIN32_WINNT
+#if (_WIN32_WINNT <= _WIN32_WINNT_WINBLUE)
+// set NTDDI_VERSION based on _WIN32_WINNT
+#define NTDDI_VERSION   NTDDI_VERSION_FROM_WIN32_WINNT(_WIN32_WINNT)
+#elif (_WIN32_WINNT >= _WIN32_WINNT_WIN10)
+// set NTDDI_VERSION to default to WDK_NTDDI_VERSION
+#define NTDDI_VERSION   WDK_NTDDI_VERSION
+#endif // (_WIN32_WINNT <= _WIN32_WINNT_WINBLUE)
+#else
+// set NTDDI_VERSION to default to latest if _WIN32_WINNT isn't set
+#define NTDDI_VERSION   0x0A00000C
+#endif // _WIN32_WINNT
+#endif // NTDDI_VERSION
+
+#define NIF_MESSAGE     0x00000001
+#define NIF_ICON        0x00000002
+#define NIF_TIP         0x00000004
+#define NIF_STATE       0x00000008
+#define NIF_INFO        0x00000010
+#define NOTIFYICON_VERSION 3
+#if NTDDI_VERSION >= 0x06000000
+#define NOTIFYICON_VERSION_4 4
+#endif
+
+#define MF_INSERT 0x00000000L
+#define MF_CHANGE 0x00000080L
+#define MF_APPEND 0x00000100L
+#define MF_DELETE 0x00000200L
+#define MF_REMOVE 0x00001000L
+#define MF_BYCOMMAND 0x00000000L
+#define MF_BYPOSITION 0x00000400L
+#define MF_SEPARATOR 0x00000800L
+#define MF_ENABLED 0x00000000L
+#define MF_GRAYED 0x00000001L
+#define MF_DISABLED 0x00000002L
+#define MF_UNCHECKED 0x00000000L
+#define MF_CHECKED 0x00000008L
+#define MF_USECHECKBITMAPS 0x00000200L
+#define MF_STRING 0x00000000L
+#define MF_BITMAP 0x00000004L
+#define MF_OWNERDRAW 0x00000100L
+#define MF_POPUP 0x00000010L
+#define MF_MENUBARBREAK 0x00000020L
+#define MF_MENUBREAK 0x00000040L
+#define MF_UNHILITE 0x00000000L
+#define MF_HILITE 0x00000080L
+#define MF_DEFAULT 0x00001000L
+#define MF_SYSMENU 0x00002000L
+#define MF_HELP 0x00004000L
+#define MF_RIGHTJUSTIFY 0x00004000L
+#define MF_MOUSESELECT 0x00008000L
+#define MF_END 0x00000080L
+#define TPM_LEFTBUTTON 0x0000L
+#define TPM_RIGHTBUTTON 0x0002L
+#define TPM_LEFTALIGN 0x0000L
+#define TPM_CENTERALIGN 0x0004L
+#define TPM_RIGHTALIGN 0x0008L
+#define TPM_TOPALIGN 0x0000L
+#define TPM_VCENTERALIGN 0x0010L
+#define TPM_BOTTOMALIGN 0x0020L
+#define TPM_HORIZONTAL 0x0000L
+#define TPM_VERTICAL 0x0040L
+#define TPM_NONOTIFY 0x0080L
+#define TPM_RETURNCMD 0x0100L
+#define TPM_RECURSE 0x0001L
+#define TPM_HORPOSANIMATION 0x0400L
+#define TPM_HORNEGANIMATION 0x0800L
+#define TPM_VERPOSANIMATION 0x1000L
+#define TPM_VERNEGANIMATION 0x2000L
+#define TPM_NOANIMATION 0x4000L
+#define TPM_LAYOUTRTL 0x8000L
+
+// Types
+
+typedef struct _SHELLEXECUTEINFOA {
+    DWORD cbSize;
+    ULONG fMask;
+    HWND hwnd;
+    LPCSTR lpVerb;
+    LPCSTR lpFile;
+    LPCSTR lpParameters;
+    LPCSTR lpDirectory;
+    int nShow;
+    HINSTANCE hInstApp;
+    void *lpIDList;
+    LPCSTR lpClass;
+    HKEY hkeyClass;
+    DWORD dwHotKey;
+    union {
+        HANDLE hIcon;
+        HANDLE hMonitor;
+    } DUMMYUNIONNAME;
+    HANDLE hProcess;
+} SHELLEXECUTEINFOA, *LPSHELLEXECUTEINFOA;
+
+typedef GUID KNOWNFOLDERID;
 typedef struct _SHITEMID {
     USHORT cb;
     BYTE abID[1];
 } SHITEMID;
+
 typedef struct _ITEMIDLIST {
     SHITEMID mkid;
 } ITEMIDLIST;
+
 typedef ITEMIDLIST *LPITEMIDLIST;
 typedef const ITEMIDLIST *LPCITEMIDLIST;
-#define PIDLIST_ABSOLUTE LPITEMIDLIST
-#define PCIDLIST_ABSOLUTE LPCITEMIDLIST
-
 typedef int (__stdcall *BFFCALLBACK) (HWND hwnd, UINT uMsg, LPARAM lParam, LPARAM lpData);
-
 typedef struct _browseinfoW {
     HWND hwndOwner;
     PCIDLIST_ABSOLUTE pidlRoot;
@@ -8630,44 +8409,799 @@ typedef struct _browseinfoW {
     int iImage;
 } BROWSEINFOW,*PBROWSEINFOW,*LPBROWSEINFOW;
 
-WINDOWS_IMPORT PIDLIST_ABSOLUTE WINAPI SHBrowseForFolderW(LPBROWSEINFOW lpbi);
-
-WINDOWS_IMPORT BOOL WINAPI SHGetPathFromIDListW( PCIDLIST_ABSOLUTE pidl, LPWSTR pszPath);
-
-typedef void* HINTERNET;
+typedef void * HINTERNET;
 typedef HINTERNET *LPHINTERNET;
-
 typedef WORD INTERNET_PORT;
 typedef INTERNET_PORT *LPINTERNET_PORT;
-  
-  
-WINDOWS_IMPORT HINTERNET WINAPI InternetOpenA(LPCSTR lpszAgent,DWORD dwAccessType,LPCSTR lpszProxy,LPCSTR lpszProxyBypass,DWORD dwFlags);
+typedef struct _NOTIFYICONDATAA {
+    DWORD cbSize;
+    HWND hWnd;
+    UINT uID;
+    UINT uFlags;
+    UINT uCallbackMessage;
+    HICON hIcon;
+#if (NTDDI_VERSION < NTDDI_WIN2K)
+    CHAR szTip[64];
+#endif
+#if (NTDDI_VERSION >= NTDDI_WIN2K)
+    CHAR szTip[128];
+    DWORD dwState;
+    DWORD dwStateMask;
+    CHAR szInfo[256];
+#ifndef _SHELL_EXPORTS_INTERNALAPI_H_
+    union {
+        UINT uTimeout;
+        UINT uVersion; //used with NIM_SETVERSION, values 0, 3 and 4
+    } DUMMYUNIONNAME;
+#endif
+    CHAR szInfoTitle[64];
+    DWORD dwInfoFlags;
+#endif
+#if (NTDDI_VERSION >= NTDDI_WINXP)
+    GUID guidItem;
+#endif
+#if (NTDDI_VERSION >= NTDDI_VISTA)
+    HICON hBalloonIcon;
+#endif
+} NOTIFYICONDATAA, *PNOTIFYICONDATAA;
+
+typedef struct _NOTIFYICONDATAW {
+    DWORD cbSize;
+    HWND hWnd;
+    UINT uID;
+    UINT uFlags;
+    UINT uCallbackMessage;
+    HICON hIcon;
+#if (NTDDI_VERSION < NTDDI_WIN2K)
+    WCHAR szTip[64];
+#endif
+#if (NTDDI_VERSION >= NTDDI_WIN2K)
+    WCHAR szTip[128];
+    DWORD dwState;
+    DWORD dwStateMask;
+    WCHAR szInfo[256];
+#ifndef _SHELL_EXPORTS_INTERNALAPI_H_
+    union {
+        UINT uTimeout;
+        UINT uVersion; //used with NIM_SETVERSION, values 0, 3 and 4
+    } DUMMYUNIONNAME;
+#endif
+    WCHAR szInfoTitle[64];
+    DWORD dwInfoFlags;
+#endif
+#if (NTDDI_VERSION >= NTDDI_WINXP)
+    GUID guidItem;
+#endif
+#if (NTDDI_VERSION >= NTDDI_VISTA)
+    HICON hBalloonIcon;
+#endif
+} NOTIFYICONDATAW, *PNOTIFYICONDATAW;
+
+
+// Functions
+
+WINDOWS_IMPORT LPWSTR* WINAPI CommandLineToArgvW(LPCWSTR, int*);
+WINDOWS_IMPORT BOOL WINAPI ShellExecuteExA(SHELLEXECUTEINFOA *pExecInfo);
+WINDOWS_IMPORT HRESULT WINAPI SHGetKnownFolderPath(REFKNOWNFOLDERID rfid, DWORD dwFlags, HANDLE hToken, PWSTR *ppszPath);
+WINDOWS_IMPORT PIDLIST_ABSOLUTE WINAPI SHBrowseForFolderW(LPBROWSEINFOW lpbi);
+WINDOWS_IMPORT BOOL WINAPI SHGetPathFromIDListW(PCIDLIST_ABSOLUTE pidl, LPWSTR pszPath);
+WINDOWS_IMPORT BOOL WINAPI Shell_NotifyIconW(DWORD dwMessage, PNOTIFYICONDATAW lpData);
+
+// DbgHelp
+
+// Functions
+
+WINDOWS_IMPORT BOOL WINAPI SymInitialize(HANDLE hProcess, PCSTR UserSearchPath, BOOL fInvadeProcess);
+WINDOWS_IMPORT int WINAPI SymCleanup(HANDLE hProcess);
+WINDOWS_IMPORT BOOL WINAPI SymFromAddr(HANDLE hProcess, DWORD64 Address, PDWORD64 Displacement, PSYMBOL_INFO Symbol);
+WINDOWS_IMPORT int WINAPI SymGetLineFromAddr64(HANDLE hProcess, DWORD64 dwAddr, PDWORD pdwDisplacement, PIMAGEHLP_LINE64 Line);
+WINDOWS_IMPORT HANDLE WINAPI SymFunctionTableAccess64(HANDLE hProcess, DWORD64 AddrBase);
+WINDOWS_IMPORT DWORD64 WINAPI SymGetModuleBase64(HANDLE hProcess, DWORD64 Address);
+WINDOWS_IMPORT BOOL WINAPI StackWalk64(DWORD MachineType, HANDLE hProcess, HANDLE hThread, LPSTACKFRAME64 StackFrame, PVOID ContextRecord, PREAD_PROCESS_MEMORY_ROUTINE64 ReadMemoryRoutine, PFUNCTION_TABLE_ACCESS_ROUTINE64 FunctionTableAccessRoutine, PGET_MODULE_BASE_ROUTINE64 GetModuleBaseRoutine, PTRANSLATE_ADDRESS_ROUTINE64 TranslateAddress);
+
+// Dxgi
+
+// Macros
+
+#define  DXGI_FORMAT_FORCE_UINT 0xffffffff
+#define DXGI_CPU_ACCESS_NONE    ( 0 )
+#define DXGI_CPU_ACCESS_DYNAMIC    ( 1 )
+#define DXGI_CPU_ACCESS_READ_WRITE    ( 2 )
+#define DXGI_CPU_ACCESS_SCRATCH    ( 3 )
+#define DXGI_CPU_ACCESS_FIELD        15
+#define DXGI_USAGE_SHADER_INPUT             ( 1L << (0 + 4) )
+#define DXGI_USAGE_RENDER_TARGET_OUTPUT     ( 1L << (1 + 4) )
+#define DXGI_USAGE_BACK_BUFFER              ( 1L << (2 + 4) )
+#define DXGI_USAGE_SHARED                   ( 1L << (3 + 4) )
+#define DXGI_USAGE_READ_ONLY                ( 1L << (4 + 4) )
+#define DXGI_USAGE_DISCARD_ON_PRESENT       ( 1L << (5 + 4) )
+#define DXGI_USAGE_UNORDERED_ACCESS         ( 1L << (6 + 4) )
+#define DEFINE_GUID(name, l, w1, w2, b1, b2, b3, b4, b5, b6, b7, b8) \
+    const GUID name = { l, w1, w2, { b1, b2, b3, b4, b5, b6, b7, b8 } }
+
+DEFINE_GUID(IID_IDXGIFactory,0x7b7166ec,0x21c7,0x44ae,0xb2,0x1a,0xc9,0xae,0x32,0x1a,0xe3,0x69);
+unit_local const HRESULT DXGI_ERROR_NOT_FOUND = 0x887A0002;
+
+// Types
+
+typedef enum DXGI_FORMAT {
+    DXGI_FORMAT_UNKNOWN = 0,
+    DXGI_FORMAT_R32G32B32A32_TYPELESS = 1,
+    DXGI_FORMAT_R32G32B32A32_FLOAT = 2,
+    DXGI_FORMAT_R32G32B32A32_UINT = 3,
+    DXGI_FORMAT_R32G32B32A32_SINT = 4,
+    DXGI_FORMAT_R32G32B32_TYPELESS = 5,
+    DXGI_FORMAT_R32G32B32_FLOAT = 6,
+    DXGI_FORMAT_R32G32B32_UINT = 7,
+    DXGI_FORMAT_R32G32B32_SINT = 8,
+    DXGI_FORMAT_R16G16B16A16_TYPELESS = 9,
+    DXGI_FORMAT_R16G16B16A16_FLOAT = 10,
+    DXGI_FORMAT_R16G16B16A16_UNORM = 11,
+    DXGI_FORMAT_R16G16B16A16_UINT = 12,
+    DXGI_FORMAT_R16G16B16A16_SNORM = 13,
+    DXGI_FORMAT_R16G16B16A16_SINT = 14,
+    DXGI_FORMAT_R32G32_TYPELESS = 15,
+    DXGI_FORMAT_R32G32_FLOAT = 16,
+    DXGI_FORMAT_R32G32_UINT = 17,
+    DXGI_FORMAT_R32G32_SINT = 18,
+    DXGI_FORMAT_R32G8X24_TYPELESS = 19,
+    DXGI_FORMAT_D32_FLOAT_S8X24_UINT = 20,
+    DXGI_FORMAT_R32_FLOAT_X8X24_TYPELESS = 21,
+    DXGI_FORMAT_X32_TYPELESS_G8X24_UINT = 22,
+    DXGI_FORMAT_R10G10B10A2_TYPELESS = 23,
+    DXGI_FORMAT_R10G10B10A2_UNORM = 24,
+    DXGI_FORMAT_R10G10B10A2_UINT = 25,
+    DXGI_FORMAT_R11G11B10_FLOAT = 26,
+    DXGI_FORMAT_R8G8B8A8_TYPELESS = 27,
+    DXGI_FORMAT_R8G8B8A8_UNORM = 28,
+    DXGI_FORMAT_R8G8B8A8_UNORM_SRGB = 29,
+    DXGI_FORMAT_R8G8B8A8_UINT = 30,
+    DXGI_FORMAT_R8G8B8A8_SNORM = 31,
+    DXGI_FORMAT_R8G8B8A8_SINT = 32,
+    DXGI_FORMAT_R16G16_TYPELESS = 33,
+    DXGI_FORMAT_R16G16_FLOAT = 34,
+    DXGI_FORMAT_R16G16_UNORM = 35,
+    DXGI_FORMAT_R16G16_UINT = 36,
+    DXGI_FORMAT_R16G16_SNORM = 37,
+    DXGI_FORMAT_R16G16_SINT = 38,
+    DXGI_FORMAT_R32_TYPELESS = 39,
+    DXGI_FORMAT_D32_FLOAT = 40,
+    DXGI_FORMAT_R32_FLOAT = 41,
+    DXGI_FORMAT_R32_UINT = 42,
+    DXGI_FORMAT_R32_SINT = 43,
+    DXGI_FORMAT_R24G8_TYPELESS = 44,
+    DXGI_FORMAT_D24_UNORM_S8_UINT = 45,
+    DXGI_FORMAT_R24_UNORM_X8_TYPELESS = 46,
+    DXGI_FORMAT_X24_TYPELESS_G8_UINT = 47,
+    DXGI_FORMAT_R8G8_TYPELESS = 48,
+    DXGI_FORMAT_R8G8_UNORM = 49,
+    DXGI_FORMAT_R8G8_UINT = 50,
+    DXGI_FORMAT_R8G8_SNORM = 51,
+    DXGI_FORMAT_R8G8_SINT = 52,
+    DXGI_FORMAT_R16_TYPELESS = 53,
+    DXGI_FORMAT_R16_FLOAT = 54,
+    DXGI_FORMAT_D16_UNORM = 55,
+    DXGI_FORMAT_R16_UNORM = 56,
+    DXGI_FORMAT_R16_UINT = 57,
+    DXGI_FORMAT_R16_SNORM = 58,
+    DXGI_FORMAT_R16_SINT = 59,
+    DXGI_FORMAT_R8_TYPELESS = 60,
+    DXGI_FORMAT_R8_UNORM = 61,
+    DXGI_FORMAT_R8_UINT = 62,
+    DXGI_FORMAT_R8_SNORM = 63,
+    DXGI_FORMAT_R8_SINT = 64,
+    DXGI_FORMAT_A8_UNORM = 65,
+    DXGI_FORMAT_R1_UNORM = 66,
+    DXGI_FORMAT_R9G9B9E5_SHAREDEXP = 67,
+    DXGI_FORMAT_R8G8_B8G8_UNORM = 68,
+    DXGI_FORMAT_G8R8_G8B8_UNORM = 69,
+    DXGI_FORMAT_BC1_TYPELESS = 70,
+    DXGI_FORMAT_BC1_UNORM = 71,
+    DXGI_FORMAT_BC1_UNORM_SRGB = 72,
+    DXGI_FORMAT_BC2_TYPELESS = 73,
+    DXGI_FORMAT_BC2_UNORM = 74,
+    DXGI_FORMAT_BC2_UNORM_SRGB = 75,
+    DXGI_FORMAT_BC3_TYPELESS = 76,
+    DXGI_FORMAT_BC3_UNORM = 77,
+    DXGI_FORMAT_BC3_UNORM_SRGB = 78,
+    DXGI_FORMAT_BC4_TYPELESS = 79,
+    DXGI_FORMAT_BC4_UNORM = 80,
+    DXGI_FORMAT_BC4_SNORM = 81,
+    DXGI_FORMAT_BC5_TYPELESS = 82,
+    DXGI_FORMAT_BC5_UNORM = 83,
+    DXGI_FORMAT_BC5_SNORM = 84,
+    DXGI_FORMAT_B5G6R5_UNORM = 85,
+    DXGI_FORMAT_B5G5R5A1_UNORM = 86,
+    DXGI_FORMAT_B8G8R8A8_UNORM = 87,
+    DXGI_FORMAT_B8G8R8X8_UNORM = 88,
+    DXGI_FORMAT_R10G10B10_XR_BIAS_A2_UNORM = 89,
+    DXGI_FORMAT_B8G8R8A8_TYPELESS = 90,
+    DXGI_FORMAT_B8G8R8A8_UNORM_SRGB = 91,
+    DXGI_FORMAT_B8G8R8X8_TYPELESS = 92,
+    DXGI_FORMAT_B8G8R8X8_UNORM_SRGB = 93,
+    DXGI_FORMAT_BC6H_TYPELESS = 94,
+    DXGI_FORMAT_BC6H_UF16 = 95,
+    DXGI_FORMAT_BC6H_SF16 = 96,
+    DXGI_FORMAT_BC7_TYPELESS = 97,
+    DXGI_FORMAT_BC7_UNORM = 98,
+    DXGI_FORMAT_BC7_UNORM_SRGB = 99,
+    DXGI_FORMAT_AYUV = 100,
+    DXGI_FORMAT_Y410 = 101,
+    DXGI_FORMAT_Y416 = 102,
+    DXGI_FORMAT_NV12 = 103,
+    DXGI_FORMAT_P010 = 104,
+    DXGI_FORMAT_P016 = 105,
+    DXGI_FORMAT_420_OPAQUE = 106,
+    DXGI_FORMAT_YUY2 = 107,
+    DXGI_FORMAT_Y210 = 108,
+    DXGI_FORMAT_Y216 = 109,
+    DXGI_FORMAT_NV11 = 110,
+    DXGI_FORMAT_AI44 = 111,
+    DXGI_FORMAT_IA44 = 112,
+    DXGI_FORMAT_P8 = 113,
+    DXGI_FORMAT_A8P8 = 114,
+    DXGI_FORMAT_B4G4R4A4_UNORM = 115,
+    DXGI_FORMAT_P208 = 130,
+    DXGI_FORMAT_V208 = 131,
+    DXGI_FORMAT_V408 = 132,
+    DXGI_FORMAT_SAMPLER_FEEDBACK_MIN_MIP_OPAQUE,
+    DXGI_FORMAT_SAMPLER_FEEDBACK_MIP_REGION_USED_OPAQUE,
+
+} DXGI_FORMAT;
+
+typedef enum DXGI_MODE_ROTATION {
+    DXGI_MODE_ROTATION_UNSPECIFIED = 0,
+    DXGI_MODE_ROTATION_IDENTITY = 1,
+    DXGI_MODE_ROTATION_ROTATE90 = 2,
+    DXGI_MODE_ROTATION_ROTATE180 = 3,
+    DXGI_MODE_ROTATION_ROTATE270 = 4
+} DXGI_MODE_ROTATION;
+
+typedef struct DXGI_OUTPUT_DESC
+{
+    WCHAR DeviceName[ 32 ];
+    RECT DesktopCoordinates;
+    BOOL AttachedToDesktop;
+    DXGI_MODE_ROTATION Rotation;
+    HMONITOR Monitor;
+} DXGI_OUTPUT_DESC;
+
+typedef struct DXGI_RATIONAL
+{
+    UINT Numerator;
+    UINT Denominator;
+} DXGI_RATIONAL;
+
+typedef enum DXGI_MODE_SCANLINE_ORDER {
+    DXGI_MODE_SCANLINE_ORDER_UNSPECIFIED = 0,
+    DXGI_MODE_SCANLINE_ORDER_PROGRESSIVE = 1,
+    DXGI_MODE_SCANLINE_ORDER_UPPER_FIELD_FIRST = 2,
+    DXGI_MODE_SCANLINE_ORDER_LOWER_FIELD_FIRST = 3
+} DXGI_MODE_SCANLINE_ORDER;
+
+typedef enum DXGI_MODE_SCALING {
+    DXGI_MODE_SCALING_UNSPECIFIED = 0,
+    DXGI_MODE_SCALING_CENTERED = 1,
+    DXGI_MODE_SCALING_STRETCHED = 2
+} DXGI_MODE_SCALING;
+
+typedef struct DXGI_MODE_DESC
+{
+    UINT Width;
+    UINT Height;
+    DXGI_RATIONAL RefreshRate;
+    DXGI_FORMAT Format;
+    DXGI_MODE_SCANLINE_ORDER ScanlineOrdering;
+    DXGI_MODE_SCALING Scaling;
+} DXGI_MODE_DESC;
+
+typedef struct DXGI_GAMMA_CONTROL_CAPABILITIES
+{
+    BOOL ScaleAndOffsetSupported;
+    float MaxConvertedValue;
+    float MinConvertedValue;
+    UINT NumGammaControlPoints;
+    float ControlPointPositions[1025];
+} DXGI_GAMMA_CONTROL_CAPABILITIES;
+
+typedef struct DXGI_RGB {
+    float Red;
+    float Green;
+    float Blue;
+} DXGI_RGB;
+
+typedef struct DXGI_GAMMA_CONTROL
+{
+    DXGI_RGB Scale;
+    DXGI_RGB Offset;
+    DXGI_RGB GammaCurve[ 1025 ];
+} DXGI_GAMMA_CONTROL;
+
+typedef struct DXGI_FRAME_STATISTICS
+{
+    UINT PresentCount;
+    UINT PresentRefreshCount;
+    UINT SyncRefreshCount;
+    LARGE_INTEGER SyncQPCTime;
+    LARGE_INTEGER SyncGPUTime;
+} DXGI_FRAME_STATISTICS;
+
+typedef struct DXGI_ADAPTER_DESC
+{
+    WCHAR Description[ 128 ];
+    UINT VendorId;
+    UINT DeviceId;
+    UINT SubSysId;
+    UINT Revision;
+    size_t DedicatedVideoMemory;
+    size_t DedicatedSystemMemory;
+    size_t SharedSystemMemory;
+    LUID AdapterLuid;
+} DXGI_ADAPTER_DESC;
+
+typedef struct DXGI_SAMPLE_DESC {
+    UINT Count;
+    UINT Quality;
+} DXGI_SAMPLE_DESC;
+
+typedef enum DXGI_SWAP_EFFECT {
+    DXGI_SWAP_EFFECT_DISCARD = 0,
+    DXGI_SWAP_EFFECT_SEQUENTIAL = 1,
+    DXGI_SWAP_EFFECT_FLIP_SEQUENTIAL = 3,
+    DXGI_SWAP_EFFECT_FLIP_DISCARD = 4
+} DXGI_SWAP_EFFECT;
+
+typedef UINT DXGI_USAGE;
+typedef struct DXGI_SWAP_CHAIN_DESC {
+    DXGI_MODE_DESC BufferDesc;
+    DXGI_SAMPLE_DESC SampleDesc;
+    DXGI_USAGE BufferUsage;
+    UINT BufferCount;
+    HWND OutputWindow;
+    BOOL Windowed;
+    DXGI_SWAP_EFFECT SwapEffect;
+    UINT Flags;
+} DXGI_SWAP_CHAIN_DESC;
+
+typedef struct IUnknownVtbl {
+    HRESULT (*QueryInterface)(void *This, const GUID *riid, void **ppvObject);
+    ULONG (*AddRef)(void *This);
+    ULONG (*Release)(void *This);
+} IUnknownVtbl;
+
+typedef struct IDXGIObjectVtbl {
+    IUnknownVtbl parent; //Inherits from IUnknown
+
+    HRESULT (*SetPrivateData)(void *This, const GUID *Name, UINT DataSize, const void *pData);
+    HRESULT (*SetPrivateDataInterface)(void *This, const GUID *Name, const void *pUnknown);
+    HRESULT (*GetPrivateData)(void *This, const GUID *Name, UINT *pDataSize, void *pData);
+    HRESULT (*GetParent)(void *This, const GUID *riid, void **ppParent);
+} IDXGIObjectVtbl;
+
+typedef struct IDXGIObject {
+    const IDXGIObjectVtbl *lpVtbl;
+} IDXGIObject;
+
+typedef struct IDXGIOutputVtbl {
+    IUnknownVtbl parent; //Inherits from IUnknown
+
+    HRESULT (*SetPrivateData)(void *This, const GUID *Name, UINT DataSize, const void *pData);
+    HRESULT (*SetPrivateDataInterface)(void *This, const GUID *Name, const void *pUnknown);
+    HRESULT (*GetPrivateData)(void *This, const GUID *Name, UINT *pDataSize, void *pData);
+    HRESULT (*GetParent)(void *This, const GUID *riid, void **ppParent);
+
+    HRESULT (*GetDesc)(void *This, DXGI_OUTPUT_DESC *pDesc);
+    HRESULT (*GetDisplayModeList)(void *This, DXGI_FORMAT EnumFormat, UINT Flags, UINT *pNumModes, DXGI_MODE_DESC *pDesc);
+    HRESULT (*FindClosestMatchingMode)(void *This, const DXGI_MODE_DESC *pModeToMatch, DXGI_MODE_DESC *pClosestMatch, void *pConcernedDevice);
+    HRESULT (*WaitForVBlank)(void *This);
+    HRESULT (*TakeOwnership)(void *This, void *pDevice, BOOL Exclusive);
+    void (*ReleaseOwnership)(void *This);
+    HRESULT (*GetGammaControlCapabilities)(void *This, DXGI_GAMMA_CONTROL_CAPABILITIES *pGammaCaps);
+    HRESULT (*SetGammaControl)(void *This, const DXGI_GAMMA_CONTROL *pArray);
+    HRESULT (*GetGammaControl)(void *This, DXGI_GAMMA_CONTROL *pArray);
+    HRESULT (*SetDisplaySurface)(void *This, void *pScanoutSurface);
+    HRESULT (*GetDisplaySurfaceData)(void *This, void *pDestination);
+    HRESULT (*GetFrameStatistics)(void *This, DXGI_FRAME_STATISTICS *pStats);
+} IDXGIOutputVtbl;
+
+typedef struct IDXGIOutput {
+    const IDXGIOutputVtbl *lpVtbl;
+} IDXGIOutput;
+
+typedef struct IDXGIAdapterVtbl {
+    IUnknownVtbl parent; //Inherits from IUnknown
+
+    HRESULT (*SetPrivateData)(void *This, const GUID *Name, UINT DataSize, const void *pData);
+    HRESULT (*SetPrivateDataInterface)(void *This, const GUID *Name, const void *pUnknown);
+    HRESULT (*GetPrivateData)(void *This, const GUID *Name, UINT *pDataSize, void *pData);
+    HRESULT (*GetParent)(void *This, const GUID *riid, void **ppParent);
+
+    HRESULT (*EnumOutputs)(void *This, UINT Output, IDXGIOutput **ppOutput);
+    HRESULT (*GetDesc)(void *This, DXGI_ADAPTER_DESC *pDesc);
+    HRESULT (*CheckInterfaceSupport)(void *This, const GUID *InterfaceName, LARGE_INTEGER *pUMDVersion);
+} IDXGIAdapterVtbl;
+
+typedef struct IDXGIAdapter {
+    const IDXGIAdapterVtbl *lpVtbl;
+} IDXGIAdapter;
+
+struct IDXGISwapChain;
+typedef struct IDXGIFactoryVtbl {
+    IUnknownVtbl parent; //Inherits from IUnknown
+
+    HRESULT (*SetPrivateData)(void *This, const GUID *Name, UINT DataSize, const void *pData);
+    HRESULT (*SetPrivateDataInterface)(void *This, const GUID *Name, const void *pUnknown);
+    HRESULT (*GetPrivateData)(void *This, const GUID *Name, UINT *pDataSize, void *pData);
+    HRESULT (*GetParent)(void *This, const GUID *riid, void **ppParent);
+
+    HRESULT (*EnumAdapters)(void *This, UINT Adapter, IDXGIAdapter **ppAdapter);
+    HRESULT (*MakeWindowAssociation)(void *This, HWND WindowHandle, UINT Flags);
+    HRESULT (*GetWindowAssociation)(void *This, HWND *pWindowHandle);
+    HRESULT (*CreateSwapChain)(void *This, void *pDevice, const DXGI_SWAP_CHAIN_DESC *pDesc, struct IDXGISwapChain **ppSwapChain);
+    HRESULT (*CreateSoftwareAdapter)(void *This, HMODULE Module, IDXGIAdapter **ppAdapter);
+} IDXGIFactoryVtbl;
+
+typedef struct IDXGIFactory {
+    const IDXGIFactoryVtbl *lpVtbl;
+} IDXGIFactory;
+
+typedef GUID IID;
+extern const IID IID_IDXGIFactory;
+
+// Functions
+
+WINDOWS_IMPORT HRESULT WINAPI CreateDXGIFactory(const GUID *riid, void **ppFactory);
+
+// Ws2_32
+
+// Macros
+
+#define WSABASEERR 10000
+#define WSAEINTR                         10004L
+#define WSAEBADF                         10009L
+#define WSAEACCES                        10013L
+#define WSAEFAULT                        10014L
+#define WSAEINVAL                        10022L
+#define WSAEMFILE                        10024L
+#define WSAEWOULDBLOCK                   10035L
+#define WSAEINPROGRESS                   10036L
+#define WSAEALREADY                      10037L
+#define WSAENOTSOCK                      10038L
+#define WSAEDESTADDRREQ                  10039L
+#define WSAEMSGSIZE                      10040L
+#define WSAEPROTOTYPE                    10041L
+#define WSAENOPROTOOPT                   10042L
+#define WSAEPROTONOSUPPORT               10043L
+#define WSAESOCKTNOSUPPORT               10044L
+#define WSAEOPNOTSUPP                    10045L
+#define WSAEPFNOSUPPORT                  10046L
+#define WSAEAFNOSUPPORT                  10047L
+#define WSAEADDRINUSE                    10048L
+#define WSAEADDRNOTAVAIL                 10049L
+#define WSAENETDOWN                      10050L
+#define WSAENETUNREACH                   10051L
+#define WSAENETRESET                     10052L
+#define WSAECONNABORTED                  10053L
+#define WSAECONNRESET                    10054L
+#define WSAENOBUFS                       10055L
+#define WSAEISCONN                       10056L
+#define WSAENOTCONN                      10057L
+#define WSAESHUTDOWN                     10058L
+#define WSAETOOMANYREFS                  10059L
+#define WSAETIMEDOUT                     10060L
+#define WSAECONNREFUSED                  10061L
+#define WSAELOOP                         10062L
+#define WSAENAMETOOLONG                  10063L
+#define WSAEHOSTDOWN                     10064L
+#define WSAEHOSTUNREACH                  10065L
+#define WSAENOTEMPTY                     10066L
+#define WSAEPROCLIM                      10067L
+#define WSAEUSERS                        10068L
+#define WSAEDQUOT                        10069L
+#define WSAESTALE                        10070L
+#define WSAEREMOTE                       10071L
+#define WSASYSNOTREADY                   10091L
+#define WSAVERNOTSUPPORTED               10092L
+#define WSANOTINITIALISED                10093L
+#define WSAEDISCON                       10101L
+#define WSAENOMORE                       10102L
+#define WSAECANCELLED                    10103L
+#define WSAEINVALIDPROCTABLE             10104L
+#define WSAEINVALIDPROVIDER              10105L
+#define WSAEPROVIDERFAILEDINIT           10106L
+#define WSASYSCALLFAILURE                10107L
+#define WSASERVICE_NOT_FOUND             10108L
+#define WSATYPE_NOT_FOUND                10109L
+#define WSA_E_NO_MORE                    10110L
+#define WSA_E_CANCELLED                  10111L
+#define WSAEREFUSED                      10112L
+#define WSAHOST_NOT_FOUND                11001L
+#define WSATRY_AGAIN                     11002L
+#define WSANO_RECOVERY                   11003L
+#define WSANO_DATA                       11004L
+#define WSA_QOS_RECEIVERS                11005L
+#define WSA_QOS_SENDERS                  11006L
+#define WSA_QOS_NO_SENDERS               11007L
+#define WSA_QOS_NO_RECEIVERS             11008L
+#define WSA_QOS_REQUEST_CONFIRMED        11009L
+#define WSA_QOS_ADMISSION_FAILURE        11010L
+#define WSA_QOS_POLICY_FAILURE           11011L
+#define WSA_QOS_BAD_STYLE                11012L
+#define WSA_QOS_BAD_OBJECT               11013L
+#define WSA_QOS_TRAFFIC_CTRL_ERROR       11014L
+#define WSA_QOS_GENERIC_ERROR            11015L
+#define WSA_QOS_ESERVICETYPE             11016L
+#define WSA_QOS_EFLOWSPEC                11017L
+#define WSA_QOS_EPROVSPECBUF             11018L
+#define WSA_QOS_EFILTERSTYLE             11019L
+#define WSA_QOS_EFILTERTYPE              11020L
+#define WSA_QOS_EFILTERCOUNT             11021L
+#define WSA_QOS_EOBJLENGTH               11022L
+#define WSA_QOS_EFLOWCOUNT               11023L
+#define WSA_QOS_EUNKOWNPSOBJ             11024L
+#define WSA_QOS_EPOLICYOBJ               11025L
+#define WSA_QOS_EFLOWDESC                11026L
+#define WSA_QOS_EPSFLOWSPEC              11027L
+#define WSA_QOS_EPSFILTERSPEC            11028L
+#define WSA_QOS_ESDMODEOBJ               11029L
+#define WSA_QOS_ESHAPERATEOBJ            11030L
+#define WSA_QOS_RESERVED_PETYPE          11031L
+#define WSA_SECURE_HOST_NOT_FOUND        11032L
+#define WSA_IPSEC_NAME_POLICY_ERROR      11033L
+#define WSADESCRIPTION_LEN      256
+#define WSASYS_STATUS_LEN       128
+/*
+ * Address families.
+ */
+#define AF_UNSPEC       0               /* unspecified */
+
+#define AF_UNIX         1               /* local to host (pipes, portals) */
+#define AF_INET         2               /* internetwork: UDP, TCP, etc. */
+#define AF_IMPLINK      3               /* arpanet imp addresses */
+#define AF_PUP          4               /* pup protocols: e.g. BSP */
+#define AF_CHAOS        5               /* mit CHAOS protocols */
+#define AF_IPX          6               /* IPX and SPX */
+#define AF_NS           6               /* XEROX NS protocols */
+#define AF_ISO          7               /* ISO protocols */
+#define AF_OSI          AF_ISO          /* OSI is ISO */
+#define AF_ECMA         8               /* european computer manufacturers */
+#define AF_DATAKIT      9               /* datakit protocols */
+#define AF_CCITT        10              /* CCITT protocols, X.25 etc */
+#define AF_SNA          11              /* IBM SNA */
+#define AF_DECnet       12              /* DECnet */
+#define AF_DLI          13              /* Direct data link interface */
+#define AF_LAT          14              /* LAT */
+#define AF_HYLINK       15              /* NSC Hyperchannel */
+#define AF_APPLETALK    16              /* AppleTalk */
+#define AF_NETBIOS      17              /* NetBios-style addresses */
+#define AF_VOICEVIEW    18              /* VoiceView */
+#define AF_FIREFOX      19              /* FireFox */
+#define AF_UNKNOWN1     20              /* Somebody is using this! */
+#define AF_BAN          21              /* Banyan */
+#define AF_MAX          22
+/*
+ * Types
+ */
+#define SOCK_STREAM     1               /* stream socket */
+
+#define SOCK_DGRAM      2               /* datagram socket */
+#define SOCK_RAW        3               /* raw-protocol interface */
+#define SOCK_RDM        4               /* reliably-delivered message */
+#define SOCK_SEQPACKET  5               /* sequenced packet stream */
+#define IPPROTO_IP              0               /* dummy for IP */
+#define IPPROTO_ICMP            1               /* control message protocol */
+#define IPPROTO_IGMP            2               /* group management protocol */
+#define IPPROTO_GGP             3               /* gateway^2 (deprecated) */
+#define IPPROTO_TCP             6               /* tcp */
+#define IPPROTO_PUP             12              /* pup */
+#define IPPROTO_UDP             17              /* user datagram protocol */
+#define IPPROTO_IDP             22              /* xns idp */
+#define IPPROTO_ND              77              /* UNOFFICIAL net disk proto */
+#define IPPROTO_RAW             255             /* raw IP packet */
+#define IPPROTO_MAX             256
+
+#define INVALID_SOCKET  (SOCKET)(~0)
+
+#define SOCKET_ERROR            (-1)
+
+#define INADDR_NONE             0xffffffff
+
+
+
+#define IOCPARM_MASK    0x7f            /* parameters must be < 128 bytes */
+
+#define IOC_VOID        0x20000000      /* no parameters */
+#define IOC_OUT         0x40000000      /* copy out parameters */
+#define IOC_IN          0x80000000      /* copy in parameters */
+#define IOC_INOUT       (IOC_IN|IOC_OUT)
+#define _IO(x,y)        (IOC_VOID|((x)<<8)|(y))
+#define _IOR(x,y,t)     (IOC_OUT|(((long)sizeof(t)&IOCPARM_MASK)<<16)|((x)<<8)|(y))
+#define _IOW(x,y,t)     (IOC_IN|(((long)sizeof(t)&IOCPARM_MASK)<<16)|((x)<<8)|(y))
+#define FIONREAD    _IOR('f', 127, unsigned long) /* get # bytes to read */
+#define FIONBIO     _IOW('f', 126, unsigned long) /* set/clear non-blocking i/o */
+#define FIOASYNC    _IOW('f', 125, unsigned long) /* set/clear async i/o */
+#define NO_ERROR 0L                                                 // dderror
+
+#define SOL_SOCKET      0xffff          /* options for socket level */
+
+#define SO_SNDBUF       0x1001          /* send buffer size */
+#define SO_RCVBUF       0x1002          /* receive buffer size */
+#define SO_SNDLOWAT     0x1003          /* send low-water mark */
+#define SO_RCVLOWAT     0x1004          /* receive low-water mark */
+#define SO_SNDTIMEO     0x1005          /* send timeout */
+#define SO_RCVTIMEO     0x1006          /* receive timeout */
+#define SO_ERROR        0x1007          /* get error status and clear */
+#define SO_TYPE         0x1008          /* get socket type */
+#define FD_SETSIZE      64
+#define FD_CLR(fd, set) do { \
+    u_int __i; \
+    for (__i = 0; __i < ((fd_set *)(set))->fd_count ; __i++) { \
+        if (((fd_set *)(set))->fd_array[__i] == fd) { \
+            while (__i < ((fd_set *)(set))->fd_count-1) { \
+                ((fd_set *)(set))->fd_array[__i] = \
+                    ((fd_set *)(set))->fd_array[__i+1]; \
+                __i++; \
+            } \
+            ((fd_set *)(set))->fd_count--; \
+            break; \
+        } \
+    } \
+} while(0)
+
+#define FD_SET(fd, set) do { \
+    if (((fd_set *)(set))->fd_count < FD_SETSIZE) \
+        ((fd_set *)(set))->fd_array[((fd_set *)(set))->fd_count++]=(fd);\
+} while(0)
+
+#define FD_ZERO(set) (((fd_set *)(set))->fd_count=0)
+#define FD_ISSET(fd, set) __WSAFDIsSet((SOCKET)(fd), (fd_set *)(set))
+/*
+ * Operations on timevals.
+ *
+ * NB: timercmp does not work for >= or <=.
+ */
+#define timerisset(tvp)         ((tvp)->tv_sec || (tvp)->tv_usec)
+
+#define timercmp(tvp, uvp, cmp) \
+        ((tvp)->tv_sec cmp (uvp)->tv_sec || \
+         (tvp)->tv_sec == (uvp)->tv_sec && (tvp)->tv_usec cmp (uvp)->tv_usec)
+
+#define timerclear(tvp)         (tvp)->tv_sec = (tvp)->tv_usec = 0
+
+// Types
+
+typedef UINT_PTR SOCKET;
+typedef struct WSAData {
+    WORD wVersion;
+    WORD wHighVersion;
+#ifdef _WIN64
+    unsigned short iMaxSockets;
+    unsigned short iMaxUdpDg;
+    char * lpVendorInfo;
+    char szDescription[WSADESCRIPTION_LEN+1];
+    char szSystemStatus[WSASYS_STATUS_LEN+1];
+#else
+    char szDescription[WSADESCRIPTION_LEN+1];
+    char szSystemStatus[WSASYS_STATUS_LEN+1];
+    unsigned short iMaxSockets;
+    unsigned short iMaxUdpDg;
+    char * lpVendorInfo;
+#endif
+} WSADATA;
+
+typedef WSADATA *LPWSADATA;
+
+typedef struct in_addr {
+    union {
+        struct { UCHAR s_b1,s_b2,s_b3,s_b4; } S_un_b;
+        struct { USHORT s_w1,s_w2; } S_un_w;
+        ULONG S_addr;
+    } S_un;
+#define s_addr  S_un.S_addr /* can be used for most tcp & ip code */
+#define s_host  S_un.S_un_b.s_b2 //host on imp
+#define s_net   S_un.S_un_b.s_b1 //network
+#define s_imp   S_un.S_un_w.s_w2 //imp
+#define s_impno S_un.S_un_b.s_b4 //imp #
+#define s_lh    S_un.S_un_b.s_b3 //logical host
+} IN_ADDR, *PIN_ADDR, *LPIN_ADDR;
+
+
+typedef struct sockaddr_in SOCKADDR_IN;
+
+typedef struct sockaddr_in *PSOCKADDR_IN;
+typedef struct sockaddr_in *LPSOCKADDR_IN;
+typedef USHORT ADDRESS_FAMILY;
+typedef struct sockaddr_in {
+
+#if(_WIN32_WINNT < 0x0600)
+    short sin_family;
+#else //(_WIN32_WINNT < 0x0600)
+    ADDRESS_FAMILY sin_family;
+#endif //(_WIN32_WINNT < 0x0600)
+
+    USHORT sin_port;
+    IN_ADDR sin_addr;
+    CHAR sin_zero[8];
+} SOCKADDR_IN, *PSOCKADDR_IN;
+
+struct sockaddr {
+    USHORT sa_family; /* address family */
+    char sa_data[14]; /* up to 14 bytes of direct address */
+};
+
+/*
+* Structure used in select() call, taken from the BSD file sys/time.h.
+*/
+struct timeval {
+    long tv_sec; /* seconds */
+    long tv_usec; /* and microseconds */
+};
+
+typedef struct fd_set {
+    unsigned int fd_count; /* how many are SET? */
+    SOCKET fd_array[FD_SETSIZE]; /* an array of SOCKETs */
+} fd_set;
+
+
+// Functions
+
+WINDOWS_IMPORT int WINAPI WSAStartup(WORD wVersionRequired, LPWSADATA lpWSAData);
+WINDOWS_IMPORT SOCKET WINAPI socket(int af, int type, int protocol);
+WINDOWS_IMPORT USHORT WINAPI htons(USHORT hostshort);
+WINDOWS_IMPORT USHORT WINAPI htonl(USHORT hostlong);
+WINDOWS_IMPORT int WINAPI bind(SOCKET s, const struct sockaddr * name, int namelen);
+WINDOWS_IMPORT int WINAPI WSAGetLastError(void);
+WINDOWS_IMPORT int WINAPI listen(SOCKET s, int backlog);
+WINDOWS_IMPORT SOCKET WINAPI accept(SOCKET s, struct sockaddr * addr, int * addrlen);
+WINDOWS_IMPORT unsigned long WINAPI inet_addr(const char * cp);
+WINDOWS_IMPORT int WINAPI connect(SOCKET s, const struct sockaddr * name, int namelen);
+WINDOWS_IMPORT int WINAPI send(SOCKET s, const char * buf, int len, int flags);
+WINDOWS_IMPORT int WINAPI recv(SOCKET s, char * buf, int len, int flags);
+WINDOWS_IMPORT int WINAPI closesocket(SOCKET s);
+WINDOWS_IMPORT int WINAPI ioctlsocket(SOCKET s, long cmd, unsigned long * argp);
+int setsockopt (SOCKET s, int level, int optname, const char * optval, int optlen);
+WINDOWS_IMPORT int WINAPI select(int nfds, fd_set * readfds, fd_set * writefds, fd_set * exceptfds, const struct timeval * timeout);
+
+// Winmm
+
+// Functions
+
+WINDOWS_IMPORT u32 WINAPI timeBeginPeriod(UINT uPeriod);
+WINDOWS_IMPORT u32 WINAPI timeEndPeriod(UINT uPeriod);
+
+// Dwmapi
+
+// Functions
+
+WINDOWS_IMPORT HRESULT WINAPI DwmSetWindowAttribute(HWND hwnd, DWORD dwAttribute, LPCVOID pvAttribute, DWORD cbAttribute);
+
+// Avrt
+
+// Functions
+
+WINDOWS_IMPORT HANDLE WINAPI AvSetMmThreadCharacteristicsW(LPCWSTR TaskName, LPDWORD TaskIndex);
+WINDOWS_IMPORT BOOL WINAPI AvSetMmThreadPriority(HANDLE AvrtHandle, AVRT_PRIORITY Priority);
+
+// Wininet
+
+// Macros
 
 #define INTERNET_OPEN_TYPE_PRECONFIG 0
 #define INTERNET_OPEN_TYPE_DIRECT 1
 #define INTERNET_OPEN_TYPE_PROXY 3
 #define INTERNET_OPEN_TYPE_PRECONFIG_WITH_NO_AUTOPROXY 4
-
 #define PRE_CONFIG_INTERNET_ACCESS INTERNET_OPEN_TYPE_PRECONFIG
 #define LOCAL_INTERNET_ACCESS INTERNET_OPEN_TYPE_DIRECT
 #define CERN_PROXY_INTERNET_ACCESS INTERNET_OPEN_TYPE_PROXY
-
-WINDOWS_IMPORT HINTERNET WINAPI InternetConnectA(HINTERNET hInternet,LPCSTR lpszServerName,INTERNET_PORT nServerPort,LPCSTR lpszUserName,LPCSTR lpszPassword,DWORD dwService,DWORD dwFlags,DWORD_PTR dwContext);
-
 #define INTERNET_SERVICE_FTP 1
 #define INTERNET_SERVICE_GOPHER 2
 #define INTERNET_SERVICE_HTTP 3
-
-WINDOWS_IMPORT HINTERNET WINAPI HttpOpenRequestA(HINTERNET hConnect,LPCSTR lpszVerb,LPCSTR lpszObjectName,LPCSTR lpszVersion,LPCSTR lpszReferrer,LPCSTR *lplpszAcceptTypes,DWORD dwFlags,DWORD_PTR dwContext);
-
 #define INTERNET_INVALID_PORT_NUMBER 0
-
 #define INTERNET_DEFAULT_FTP_PORT 21
 #define INTERNET_DEFAULT_GOPHER_PORT 70
 #define INTERNET_DEFAULT_HTTP_PORT 80
 #define INTERNET_DEFAULT_HTTPS_PORT 443
 #define INTERNET_DEFAULT_SOCKS_PORT 1080
-
 #define INTERNET_MAX_HOST_NAME_LENGTH 256
 #define INTERNET_MAX_USER_NAME_LENGTH 128
 #define INTERNET_MAX_PASSWORD_LENGTH 128
@@ -8676,11 +9210,9 @@ WINDOWS_IMPORT HINTERNET WINAPI HttpOpenRequestA(HINTERNET hConnect,LPCSTR lpszV
 #define INTERNET_MAX_PATH_LENGTH 2048
 #define INTERNET_MAX_SCHEME_LENGTH 32
 #define INTERNET_MAX_URL_LENGTH (INTERNET_MAX_SCHEME_LENGTH + sizeof("://") + INTERNET_MAX_PATH_LENGTH)
-
 #define INTERNET_KEEP_ALIVE_UNKNOWN ((DWORD)-1)
 #define INTERNET_KEEP_ALIVE_ENABLED 1
 #define INTERNET_KEEP_ALIVE_DISABLED 0
-
 #define INTERNET_REQFLAG_FROM_CACHE 0x00000001
 #define INTERNET_REQFLAG_ASYNC 0x00000002
 #define INTERNET_REQFLAG_VIA_PROXY 0x00000004
@@ -8688,25 +9220,18 @@ WINDOWS_IMPORT HINTERNET WINAPI HttpOpenRequestA(HINTERNET hConnect,LPCSTR lpszV
 #define INTERNET_REQFLAG_PASSIVE 0x00000010
 #define INTERNET_REQFLAG_CACHE_WRITE_DISABLED 0x00000040
 #define INTERNET_REQFLAG_NET_TIMEOUT 0x00000080
-
 #define INTERNET_FLAG_IDN_DIRECT 0x00000001
 #define INTERNET_FLAG_IDN_PROXY 0x00000002
-
 #define INTERNET_FLAG_RELOAD 0x80000000
-
 #define INTERNET_FLAG_RAW_DATA 0x40000000
 #define INTERNET_FLAG_EXISTING_CONNECT 0x20000000
-
 #define INTERNET_FLAG_ASYNC 0x10000000
-
 #define INTERNET_FLAG_PASSIVE 0x08000000
-
 #define INTERNET_FLAG_NO_CACHE_WRITE 0x04000000
 #define INTERNET_FLAG_DONT_CACHE INTERNET_FLAG_NO_CACHE_WRITE
 #define INTERNET_FLAG_MAKE_PERSISTENT 0x02000000
 #define INTERNET_FLAG_FROM_CACHE 0x01000000
 #define INTERNET_FLAG_OFFLINE INTERNET_FLAG_FROM_CACHE
-
 #define INTERNET_FLAG_SECURE 0x00800000
 #define INTERNET_FLAG_KEEP_CONNECTION 0x00400000
 #define INTERNET_FLAG_NO_AUTO_REDIRECT 0x00200000
@@ -8715,12 +9240,10 @@ WINDOWS_IMPORT HINTERNET WINAPI HttpOpenRequestA(HINTERNET hConnect,LPCSTR lpszV
 #define INTERNET_FLAG_NO_AUTH 0x00040000
 #define INTERNET_FLAG_RESTRICTED_ZONE 0x00020000
 #define INTERNET_FLAG_CACHE_IF_NET_FAIL 0x00010000
-
 #define INTERNET_FLAG_IGNORE_REDIRECT_TO_HTTP 0x00008000
 #define INTERNET_FLAG_IGNORE_REDIRECT_TO_HTTPS 0x00004000
 #define INTERNET_FLAG_IGNORE_CERT_DATE_INVALID 0x00002000
 #define INTERNET_FLAG_IGNORE_CERT_CN_INVALID 0x00001000
-
 #define INTERNET_FLAG_RESYNCHRONIZE 0x00000800
 #define INTERNET_FLAG_HYPERLINK 0x00000400
 #define INTERNET_FLAG_NO_UI 0x00000200
@@ -8730,18 +9253,11 @@ WINDOWS_IMPORT HINTERNET WINAPI HttpOpenRequestA(HINTERNET hConnect,LPCSTR lpszV
 #define INTERNET_FLAG_FWD_BACK 0x00000020
 #define INTERNET_FLAG_NEED_FILE 0x00000010
 #define INTERNET_FLAG_MUST_CACHE_REQUEST INTERNET_FLAG_NEED_FILE
-
 #define INTERNET_FLAG_TRANSFER_ASCII FTP_TRANSFER_TYPE_ASCII
 #define INTERNET_FLAG_TRANSFER_BINARY FTP_TRANSFER_TYPE_BINARY
-
 #define SECURITY_INTERNET_MASK (INTERNET_FLAG_IGNORE_CERT_CN_INVALID | INTERNET_FLAG_IGNORE_CERT_DATE_INVALID | INTERNET_FLAG_IGNORE_REDIRECT_TO_HTTPS | INTERNET_FLAG_IGNORE_REDIRECT_TO_HTTP)
 #define SECURITY_IGNORE_ERROR_MASK (INTERNET_FLAG_IGNORE_CERT_CN_INVALID | INTERNET_FLAG_IGNORE_CERT_DATE_INVALID | SECURITY_FLAG_IGNORE_UNKNOWN_CA | SECURITY_FLAG_IGNORE_REVOCATION | SECURITY_FLAG_IGNORE_WEAK_SIGNATURE)
 #define INTERNET_FLAGS_MASK (INTERNET_FLAG_RELOAD | INTERNET_FLAG_RAW_DATA | INTERNET_FLAG_EXISTING_CONNECT | INTERNET_FLAG_ASYNC | INTERNET_FLAG_PASSIVE | INTERNET_FLAG_NO_CACHE_WRITE | INTERNET_FLAG_MAKE_PERSISTENT | INTERNET_FLAG_FROM_CACHE | INTERNET_FLAG_SECURE | INTERNET_FLAG_KEEP_CONNECTION | INTERNET_FLAG_NO_AUTO_REDIRECT | INTERNET_FLAG_READ_PREFETCH | INTERNET_FLAG_NO_COOKIES | INTERNET_FLAG_NO_AUTH | INTERNET_FLAG_CACHE_IF_NET_FAIL | SECURITY_INTERNET_MASK | INTERNET_FLAG_RESYNCHRONIZE | INTERNET_FLAG_HYPERLINK | INTERNET_FLAG_NO_UI | INTERNET_FLAG_PRAGMA_NOCACHE | INTERNET_FLAG_CACHE_ASYNC | INTERNET_FLAG_FORMS_SUBMIT | INTERNET_FLAG_NEED_FILE | INTERNET_FLAG_RESTRICTED_ZONE | INTERNET_FLAG_TRANSFER_BINARY | INTERNET_FLAG_TRANSFER_ASCII | INTERNET_FLAG_FWD_BACK | INTERNET_FLAG_BGUPDATE)
-
-WINDOWS_IMPORT int WINAPI HttpSendRequestA(HINTERNET hRequest,LPCSTR lpszHeaders,DWORD dwHeadersLength,LPVOID lpOptional,DWORD dwOptionalLength);
-
-WINDOWS_IMPORT int WINAPI HttpQueryInfoA(HINTERNET hRequest,DWORD dwInfoLevel,LPVOID lpBuffer,LPDWORD lpdwBufferLength,LPDWORD lpdwIndex);
-
 #define HTTP_QUERY_MIME_VERSION 0
 #define HTTP_QUERY_CONTENT_TYPE 1
 #define HTTP_QUERY_CONTENT_TRANSFER_ENCODING 2
@@ -8790,7 +9306,6 @@ WINDOWS_IMPORT int WINAPI HttpQueryInfoA(HINTERNET hRequest,DWORD dwInfoLevel,LP
 #define HTTP_QUERY_REQUEST_METHOD 45
 #define HTTP_QUERY_REFRESH 46
 #define HTTP_QUERY_CONTENT_DISPOSITION 47
-
 #define HTTP_QUERY_AGE 48
 #define HTTP_QUERY_CACHE_CONTROL 49
 #define HTTP_QUERY_CONTENT_BASE 50
@@ -8814,18 +9329,14 @@ WINDOWS_IMPORT int WINAPI HttpQueryInfoA(HINTERNET hRequest,DWORD dwInfoLevel,LP
 #define HTTP_QUERY_EXPECT 68
 #define HTTP_QUERY_PROXY_CONNECTION 69
 #define HTTP_QUERY_UNLESS_MODIFIED_SINCE 70
-
 #define HTTP_QUERY_ECHO_REQUEST 71
 #define HTTP_QUERY_ECHO_REPLY 72
-
 #define HTTP_QUERY_ECHO_HEADERS 73
 #define HTTP_QUERY_ECHO_HEADERS_CRLF 74
-
 #define HTTP_QUERY_PROXY_SUPPORT 75
 #define HTTP_QUERY_AUTHENTICATION_INFO 76
 #define HTTP_QUERY_PASSPORT_URLS 77
 #define HTTP_QUERY_PASSPORT_CONFIG 78
-
 #define HTTP_QUERY_X_CONTENT_TYPE_OPTIONS 79
 #define HTTP_QUERY_P3P 80
 #define HTTP_QUERY_X_P2P_PEERDIST 81
@@ -8834,25 +9345,16 @@ WINDOWS_IMPORT int WINAPI HttpQueryInfoA(HINTERNET hRequest,DWORD dwInfoLevel,LP
 #define HTTP_QUERY_DEFAULT_STYLE 84
 #define HTTP_QUERY_X_FRAME_OPTIONS 85
 #define HTTP_QUERY_X_XSS_PROTECTION 86
-
 #define HTTP_QUERY_SET_COOKIE2 87
-
 #define HTTP_QUERY_DO_NOT_TRACK 88
-
 #define HTTP_QUERY_KEEP_ALIVE 89
-
 #define HTTP_QUERY_HTTP2_SETTINGS 90
-
 #define HTTP_QUERY_STRICT_TRANSPORT_SECURITY 91
-
 #define HTTP_QUERY_TOKEN_BINDING 92
-
 #define HTTP_QUERY_INCLUDE_REFERRED_TOKEN_BINDING_ID 93
 #define HTTP_QUERY_INCLUDE_REFERER_TOKEN_BINDING_ID HTTP_QUERY_INCLUDE_REFERRED_TOKEN_BINDING_ID
-
 #define HTTP_QUERY_PUBLIC_KEY_PINS 94
 #define HTTP_QUERY_PUBLIC_KEY_PINS_REPORT_ONLY 95
-
 #define HTTP_QUERY_FLAG_REQUEST_HEADERS 0x80000000
 #define HTTP_QUERY_FLAG_SYSTEMTIME 0x40000000
 #define HTTP_QUERY_FLAG_NUMBER 0x20000000
@@ -8861,434 +9363,458 @@ WINDOWS_IMPORT int WINAPI HttpQueryInfoA(HINTERNET hRequest,DWORD dwInfoLevel,LP
 #define HTTP_QUERY_FLAG_COALESCE_WITH_COMMA 0x04000000
 #define HTTP_QUERY_MODIFIER_FLAGS_MASK (HTTP_QUERY_FLAG_REQUEST_HEADERS | HTTP_QUERY_FLAG_SYSTEMTIME | HTTP_QUERY_FLAG_NUMBER | HTTP_QUERY_FLAG_COALESCE | HTTP_QUERY_FLAG_NUMBER64 | HTTP_QUERY_FLAG_COALESCE_WITH_COMMA)
 #define HTTP_QUERY_HEADER_MASK (~HTTP_QUERY_MODIFIER_FLAGS_MASK)
+#define NIM_ADD 0x00000000
 
-WINDOWS_IMPORT int WINAPI InternetReadFile(HINTERNET hFile,LPVOID lpBuffer,DWORD dwNumberOfBytesToRead,LPDWORD lpdwNumberOfBytesRead);
+// Functions
 
+WINDOWS_IMPORT HINTERNET WINAPI InternetOpenA(LPCSTR lpszAgent, DWORD dwAccessType, LPCSTR lpszProxy, LPCSTR lpszProxyBypass, DWORD dwFlags);
+WINDOWS_IMPORT HINTERNET WINAPI InternetConnectA(HINTERNET hInternet, LPCSTR lpszServerName, INTERNET_PORT nServerPort, LPCSTR lpszUserName, LPCSTR lpszPassword, DWORD dwService, DWORD dwFlags, DWORD_PTR dwContext);
+WINDOWS_IMPORT HINTERNET WINAPI HttpOpenRequestA(HINTERNET hConnect, LPCSTR lpszVerb, LPCSTR lpszObjectName, LPCSTR lpszVersion, LPCSTR lpszReferrer, LPCSTR *lplpszAcceptTypes, DWORD dwFlags, DWORD_PTR dwContext);
+WINDOWS_IMPORT int WINAPI HttpSendRequestA(HINTERNET hRequest, LPCSTR lpszHeaders, DWORD dwHeadersLength, LPVOID lpOptional, DWORD dwOptionalLength);
+WINDOWS_IMPORT int WINAPI HttpQueryInfoA(HINTERNET hRequest, DWORD dwInfoLevel, LPVOID lpBuffer, LPDWORD lpdwBufferLength, LPDWORD lpdwIndex);
+WINDOWS_IMPORT int WINAPI InternetReadFile(HINTERNET hFile, LPVOID lpBuffer, DWORD dwNumberOfBytesToRead, LPDWORD lpdwNumberOfBytesRead);
 WINDOWS_IMPORT int WINAPI InternetCloseHandle(HINTERNET hInternet);
 
-WINDOWS_IMPORT DWORD WINAPI GetEnvironmentVariableW(LPCWSTR lpName,LPWSTR  lpBuffer,DWORD   nSize);
+// Ntdll
 
-#define NIM_ADD 0x00000000
-#define NIM_MODIFY 0x00000001
-#define NIM_DELETE 0x00000002
-#define NIM_SETFOCUS 0x00000003
-#define NIM_SETVERSION 0x00000004
+#define FILE_SUPERSEDE                  0x00000000
+#define FILE_OPEN                       0x00000001
+#define FILE_CREATE                     0x00000002
+#define FILE_OPEN_IF                    0x00000003
+#define FILE_OVERWRITE                  0x00000004
+#define FILE_OVERWRITE_IF               0x00000005
+#define FILE_MAXIMUM_DISPOSITION        0x00000005
 
-#define NTDDI_VERSION_FROM_WIN32_WINNT2(ver)    ver##0000
-#define NTDDI_VERSION_FROM_WIN32_WINNT(ver)     NTDDI_VERSION_FROM_WIN32_WINNT2(ver)
+#define NT_SUCCESS(Status) ((NTSTATUS)(Status) >= 0)
 
-#if !defined(_WIN32_WINNT) && !defined(_CHICAGO_)
-#define  _WIN32_WINNT   0x0A00
-#endif
+typedef enum NTSTATUS {
+    STATUS_SUCCESS                 =  0x0,
+    STATUS_NO_MORE_FILES           = ((s32)0x80000006L),
+    STATUS_BUFFER_OVERFLOW         = ((s32)0x80000005L),
+    STATUS_INVALID_HANDLE          = ((s32)0xC0000008L),
+    STATUS_ACCESS_DENIED           = ((s32)0xC0000022L),
+    STATUS_OBJECT_NAME_INVALID     = ((s32)0xC0000033L),
+    STATUS_OBJECT_NAME_NOT_FOUND   = ((s32)0xC0000034L),
+    STATUS_OBJECT_PATH_SYNTAX_BAD  = ((s32)0xC000003BL),
+    STATUS_SHARING_VIOLATION       = ((s32)0xC0000043L),
+    STATUS_END_OF_FILE             = ((s32)0xC0000011L),
+    STATUS_FILE_IS_A_DIRECTORY     = ((s32)0xC00000BAL),
+    STATUS_DELETE_PENDING          = ((s32)0xC0000056L),
+    STATUS_OBJECT_PATH_NOT_FOUND   = ((s32)0xC000003AL),
+    STATUS_INVALID_USER_BUFFER     = ((s32)0xC00000E8L),
+    STATUS_NOT_A_REPARSE_POINT     = ((s32)0xC0000275L),
+    STATUS_REPARSE_TAG_NOT_HANDLED = ((s32)0xC0000279L),
+    STATUS_VOLUME_DISMOUNTED = ((s32)0xC000026eL),
+    STATUS_NO_SUCH_DEVICE          = ((s32)0xC000000EL),
+    STATUS_DEVICE_DOES_NOT_EXIST   = ((s32)0xC00000C0L),
+    STATUS_DEVICE_IO_ERROR         = ((s32)0xC0000185L),
+} NTSTATUS;
 
-#ifndef NTDDI_VERSION
-#ifdef _WIN32_WINNT
-#if (_WIN32_WINNT <= _WIN32_WINNT_WINBLUE)
-// set NTDDI_VERSION based on _WIN32_WINNT
-#define NTDDI_VERSION   NTDDI_VERSION_FROM_WIN32_WINNT(_WIN32_WINNT)
-#elif (_WIN32_WINNT >= _WIN32_WINNT_WIN10)
-// set NTDDI_VERSION to default to WDK_NTDDI_VERSION
-#define NTDDI_VERSION   WDK_NTDDI_VERSION
-#endif // (_WIN32_WINNT <= _WIN32_WINNT_WINBLUE)
-#else
-// set NTDDI_VERSION to default to latest if _WIN32_WINNT isn't set
-#define NTDDI_VERSION   0x0A00000C
-#endif // _WIN32_WINNT
-#endif // NTDDI_VERSION
+#define SL_RESTART_SCAN                   0x01
+#define SL_RETURN_SINGLE_ENTRY            0x02
+#define SL_INDEX_SPECIFIED                0x04
+#define SL_RETURN_ON_DISK_ENTRIES_ONLY                 0x08
+#define SL_NO_CURSOR_UPDATE_QUERY                 0x10
 
-typedef struct _NOTIFYICONDATAA {
-    DWORD cbSize;
-    HWND hWnd;
-    UINT uID;
-    UINT uFlags;
-    UINT uCallbackMessage;
-    HICON hIcon;
-#if (NTDDI_VERSION < NTDDI_WIN2K)
-    CHAR   szTip[64];
-#endif
-#if (NTDDI_VERSION >= NTDDI_WIN2K)
-    CHAR   szTip[128];
-    DWORD dwState;
-    DWORD dwStateMask;
-    CHAR   szInfo[256];
-#ifndef _SHELL_EXPORTS_INTERNALAPI_H_
+#define FILE_DIRECTORY_FILE                     0x00000001
+#define FILE_WRITE_THROUGH                      0x00000002
+#define FILE_SEQUENTIAL_ONLY                    0x00000004
+#define FILE_NO_INTERMEDIATE_BUFFERING          0x00000008
+
+#define FILE_SYNCHRONOUS_IO_ALERT               0x00000010
+#define FILE_SYNCHRONOUS_IO_NONALERT            0x00000020
+#define FILE_NON_DIRECTORY_FILE                 0x00000040
+#define FILE_CREATE_TREE_CONNECTION             0x00000080
+
+#define FILE_COMPLETE_IF_OPLOCKED               0x00000100
+#define FILE_NO_EA_KNOWLEDGE                    0x00000200
+#define FILE_OPEN_REMOTE_INSTANCE               0x00000400
+#define FILE_RANDOM_ACCESS                      0x00000800
+
+#define FILE_DELETE_ON_CLOSE                    0x00001000
+#define FILE_OPEN_BY_FILE_ID                    0x00002000
+#define FILE_OPEN_FOR_BACKUP_INTENT             0x00004000
+#define FILE_NO_COMPRESSION                     0x00008000
+
+
+
+// Types
+
+typedef DWORD ACCESS_MASK;
+
+
+//typedef LONG NTSTATUS;
+typedef struct _IO_STATUS_BLOCK {
     union {
-        UINT  uTimeout;
-        UINT  uVersion;  // used with NIM_SETVERSION, values 0, 3 and 4
+        NTSTATUS Status;
+        PVOID Pointer;
     } DUMMYUNIONNAME;
-#endif
-    CHAR   szInfoTitle[64];
-    DWORD dwInfoFlags;
-#endif
-#if (NTDDI_VERSION >= NTDDI_WINXP)
-    GUID guidItem;
-#endif
-#if (NTDDI_VERSION >= NTDDI_VISTA)
-    HICON hBalloonIcon;
-#endif
-} NOTIFYICONDATAA, *PNOTIFYICONDATAA;
-typedef struct _NOTIFYICONDATAW {
-    DWORD cbSize;
-    HWND hWnd;
-    UINT uID;
-    UINT uFlags;
-    UINT uCallbackMessage;
-    HICON hIcon;
-#if (NTDDI_VERSION < NTDDI_WIN2K)
-    WCHAR  szTip[64];
-#endif
-#if (NTDDI_VERSION >= NTDDI_WIN2K)
-    WCHAR  szTip[128];
-    DWORD dwState;
-    DWORD dwStateMask;
-    WCHAR  szInfo[256];
-#ifndef _SHELL_EXPORTS_INTERNALAPI_H_
+    ULONG_PTR Information;
+} IO_STATUS_BLOCK,*PIO_STATUS_BLOCK;
+
+  typedef struct _FILE_DIRECTORY_INFORMATION {
+    ULONG NextEntryOffset;
+    ULONG FileIndex;
+    LARGE_INTEGER CreationTime;
+    LARGE_INTEGER LastAccessTime;
+    LARGE_INTEGER LastWriteTime;
+    LARGE_INTEGER ChangeTime;
+    LARGE_INTEGER EndOfFile;
+    LARGE_INTEGER AllocationSize;
+    ULONG FileAttributes;
+    ULONG FileNameLength;
+    WCHAR FileName[ANYSIZE_ARRAY];
+  } FILE_DIRECTORY_INFORMATION, *PFILE_DIRECTORY_INFORMATION;
+
+typedef struct _FILE_ID_FULL_DIR_INFORMATION {
+  ULONG NextEntryOffset;
+  ULONG FileIndex;
+  LARGE_INTEGER CreationTime;
+  LARGE_INTEGER LastAccessTime;
+  LARGE_INTEGER LastWriteTime;
+  LARGE_INTEGER ChangeTime;
+  LARGE_INTEGER EndOfFile;
+  LARGE_INTEGER AllocationSize;
+  ULONG FileAttributes;
+  ULONG FileNameLength;
+  ULONG EaSize;
+  LARGE_INTEGER FileId;
+  WCHAR FileName[1];
+} FILE_ID_FULL_DIR_INFORMATION, *PFILE_ID_FULL_DIR_INFORMATION;
+
+typedef void (WINAPI *PIO_APC_ROUTINE)( PVOID ApcContext, PIO_STATUS_BLOCK IoStatusBlock, ULONG Reserved);
+
+typedef enum _FILE_INFORMATION_CLASS {
+  FileDirectoryInformation = 1,
+  FileFullDirectoryInformation,
+  FileBothDirectoryInformation,
+  FileBasicInformation,
+  FileStandardInformation,
+  FileInternalInformation,
+  FileEaInformation,
+  FileAccessInformation,
+  FileNameInformation,
+  FileRenameInformation,
+  FileLinkInformation,
+  FileNamesInformation,
+  FileDispositionInformation,
+  FilePositionInformation,
+  FileFullEaInformation,
+  FileModeInformation,
+  FileAlignmentInformation,
+  FileAllInformation,
+  FileAllocationInformation,
+  FileEndOfFileInformation,
+  FileAlternateNameInformation,
+  FileStreamInformation,
+  FilePipeInformation,
+  FilePipeLocalInformation,
+  FilePipeRemoteInformation,
+  FileMailslotQueryInformation,
+  FileMailslotSetInformation,
+  FileCompressionInformation,
+  FileObjectIdInformation,
+  FileCompletionInformation,
+  FileMoveClusterInformation,
+  FileQuotaInformation,
+  FileReparsePointInformation,
+  FileNetworkOpenInformation,
+  FileAttributeTagInformation,
+  FileTrackingInformation,
+  FileIdBothDirectoryInformation,
+  FileIdFullDirectoryInformation,
+  FileValidDataLengthInformation,
+  FileShortNameInformation,
+  FileIoCompletionNotificationInformation,
+  FileIoStatusBlockRangeInformation,
+  FileIoPriorityHintInformation,
+  FileSfioReserveInformation,
+  FileSfioVolumeInformation,
+  FileHardLinkInformation,
+  FileProcessIdsUsingFileInformation,
+  FileNormalizedNameInformation,
+  FileNetworkPhysicalNameInformation,
+  FileIdGlobalTxDirectoryInformation,
+  FileIsRemoteDeviceInformation,
+  FileUnusedInformation,
+  FileNumaNodeInformation,
+  FileStandardLinkInformation,
+  FileRemoteProtocolInformation,
+  FileRenameInformationBypassAccessCheck,
+  FileLinkInformationBypassAccessCheck,
+  FileVolumeNameInformation,
+  FileIdInformation,
+  FileIdExtdDirectoryInformation,
+  FileReplaceCompletionInformation,
+  FileHardLinkFullIdInformation,
+  FileIdExtdBothDirectoryInformation,
+  FileDispositionInformationEx,
+  FileRenameInformationEx,
+  FileRenameInformationExBypassAccessCheck,
+  FileDesiredStorageClassInformation,
+  FileStatInformation,
+  FileMemoryPartitionInformation,
+  FileStatLxInformation,
+  FileCaseSensitiveInformation,
+  FileLinkInformationEx,
+  FileLinkInformationExBypassAccessCheck,
+  FileStorageReserveIdInformation,
+  FileCaseSensitiveInformationForceAccessCheck,
+  FileMaximumInformation
+} FILE_INFORMATION_CLASS, *PFILE_INFORMATION_CLASS;
+
+typedef struct _FILE_NAMES_INFORMATION {
+  ULONG NextEntryOffset;
+  ULONG FileIndex;
+  ULONG FileNameLength;
+  WCHAR FileName[1];
+} FILE_NAMES_INFORMATION, *PFILE_NAMES_INFORMATION;
+
+typedef struct _UNICODE_STRING {
+    USHORT Length;
+    USHORT MaximumLength;
+    PWSTR  Buffer;
+} UNICODE_STRING;
+typedef UNICODE_STRING *PUNICODE_STRING;
+typedef const UNICODE_STRING *PCUNICODE_STRING;
+
+typedef struct _OBJECT_ATTRIBUTES {
+    ULONG Length;
+    HANDLE RootDirectory;
+    PUNICODE_STRING ObjectName;
+    ULONG Attributes;
+    PVOID SecurityDescriptor;        // Points to type SECURITY_DESCRIPTOR
+    PVOID SecurityQualityOfService;  // Points to type SECURITY_QUALITY_OF_SERVICE
+} OBJECT_ATTRIBUTES;
+typedef OBJECT_ATTRIBUTES *POBJECT_ATTRIBUTES;
+typedef const OBJECT_ATTRIBUTES *PCOBJECT_ATTRIBUTES;
+
+typedef struct {
+  u64 StartingVcn;
+} STARTING_VCN_INPUT_BUFFER, *PSTARTING_VCN_INPUT_BUFFER;
+
+typedef struct _FILE_BASIC_INFORMATION {
+    LARGE_INTEGER CreationTime;
+    LARGE_INTEGER LastAccessTime;
+    LARGE_INTEGER LastWriteTime;
+    LARGE_INTEGER ChangeTime;
+    ULONG FileAttributes;
+  } FILE_BASIC_INFORMATION, *PFILE_BASIC_INFORMATION;
+
+typedef struct _FILE_STANDARD_INFORMATION {
+  LARGE_INTEGER AllocationSize;
+  LARGE_INTEGER EndOfFile;
+  ULONG         NumberOfLinks;
+  BOOLEAN       DeletePending;
+  BOOLEAN       Directory;
+} FILE_STANDARD_INFORMATION, *PFILE_STANDARD_INFORMATION;
+
+typedef struct _FILE_STAT_INFORMATION {
+  LARGE_INTEGER FileId;
+  LARGE_INTEGER CreationTime;
+  LARGE_INTEGER LastAccessTime;
+  LARGE_INTEGER LastWriteTime;
+  LARGE_INTEGER ChangeTime;
+  LARGE_INTEGER AllocationSize;
+  LARGE_INTEGER EndOfFile;
+  ULONG         FileAttributes;
+  ULONG         ReparseTag;
+  ULONG         NumberOfLinks;
+  ACCESS_MASK   EffectiveAccess;
+} FILE_STAT_INFORMATION, *PFILE_STAT_INFORMATION;
+
+// Functions
+
+WINAPI NTSTATUS NtFsControlFile(HANDLE FileHandle, HANDLE Event, PIO_APC_ROUTINE ApcRoutine, PVOID ApcContext, PIO_STATUS_BLOCK IoStatusBlock, ULONG FsControlCode, PVOID InputBuffer, ULONG InputBufferLength, PVOID OutputBuffer, ULONG OutputBufferLength);
+
+WINAPI NTSTATUS NtOpenFile( HANDLE *FileHandle, ACCESS_MASK DesiredAccess, POBJECT_ATTRIBUTES ObjectAttributes, PIO_STATUS_BLOCK IoStatusBlock, ULONG ShareAccess, ULONG OpenOptions);
+
+WINAPI NTSTATUS NtQueryDirectoryFileEx( HANDLE FileHandle, HANDLE Event, PIO_APC_ROUTINE ApcRoutine, PVOID ApcContext, PIO_STATUS_BLOCK IoStatusBlock, PVOID FileInformation, ULONG Length, FILE_INFORMATION_CLASS FileInformationClass, ULONG QueryFlags, PUNICODE_STRING FileName);
+
+WINAPI NTSTATUS NtReadFile( HANDLE FileHandle, HANDLE Event, PIO_APC_ROUTINE ApcRoutine, PVOID ApcContext, PIO_STATUS_BLOCK IoStatusBlock, PVOID Buffer, ULONG Length, LARGE_INTEGER *ByteOffset, PULONG Key);
+
+WINAPI NTSTATUS WINDOWS_IMPORT NtSetInformationFile( HANDLE FileHandle, PIO_STATUS_BLOCK IoStatusBlock, PVOID FileInformation, ULONG Length, FILE_INFORMATION_CLASS FileInformationClass
+);
+
+WINAPI NTSTATUS WINDOWS_IMPORT NtNotifyChangeDirectoryFile( HANDLE FileHandle, HANDLE Event, PIO_APC_ROUTINE ApcRoutine, PVOID ApcContext, PIO_STATUS_BLOCK IoStatusBlock, PVOID Buffer, ULONG Length, ULONG CompletionFilter, BOOLEAN WatchTree);
+
+WINAPI NTSTATUS WINDOWS_IMPORT NtQueryInformationFile( HANDLE FileHandle, PIO_STATUS_BLOCK IoStatusBlock, PVOID FileInformation, ULONG Length, FILE_INFORMATION_CLASS FileInformationClass);
+
+#define InitializeObjectAttributes( p, n, a, r, s ) { \
+    (p)->Length = sizeof( OBJECT_ATTRIBUTES );          \
+    (p)->RootDirectory = r;                             \
+    (p)->Attributes = a;                                \
+    (p)->ObjectName = n;                                \
+    (p)->SecurityDescriptor = s;                        \
+    (p)->SecurityQualityOfService = 0;               \
+    }
+
+#endif // _WINDOWS_LOADER_H
+
+
+
+/// wevtapi
+
+typedef HANDLE EVT_HANDLE;
+typedef HANDLE HCMNOTIFICATION;
+typedef HCMNOTIFICATION *PHCMNOTIFICATION;
+
+typedef enum _EVT_QUERY_FLAGS {
+  EvtQueryChannelPath = 0x1,
+  EvtQueryFilePath = 0x2,
+  EvtQueryForwardDirection = 0x100,
+  EvtQueryReverseDirection = 0x200,
+  EvtQueryTolerateQueryErrors = 0x1000
+} EVT_QUERY_FLAGS;
+
+WINDOWS_IMPORT EVT_HANDLE WINAPI EvtQuery( EVT_HANDLE Session, LPCWSTR Path, LPCWSTR Query, DWORD Flags);
+WINDOWS_IMPORT BOOL WINAPI EvtNext( EVT_HANDLE ResultSet, DWORD EventsSize, EVT_HANDLE *Events, DWORD Timeout, DWORD Flags, PDWORD Returned);
+WINDOWS_IMPORT BOOL WINAPI EvtClose(EVT_HANDLE Object);
+
+//// cfgmgr
+
+typedef enum CONFIGRET {
+    CR_SUCCESS                  = (s32)(0x00000000),
+    CR_DEFAULT                  = (s32)(0x00000001),
+    CR_OUT_OF_MEMORY            = (s32)(0x00000002),
+    CR_INVALID_POINTER          = (s32)(0x00000003),
+    CR_INVALID_FLAG             = (s32)(0x00000004),
+    CR_INVALID_DEVNODE          = (s32)(0x00000005),
+    CR_INVALID_DEVINST          = (s32) CR_INVALID_DEVNODE,
+    CR_INVALID_RES_DES          = (s32)(0x00000006),
+    CR_INVALID_LOG_CONF         = (s32)(0x00000007),
+    CR_INVALID_ARBITRATOR       = (s32)(0x00000008),
+    CR_INVALID_NODELIST         = (s32)(0x00000009),
+    CR_DEVNODE_HAS_REQS         = (s32)(0x0000000A),
+    CR_DEVINST_HAS_REQS         = (s32) CR_DEVNODE_HAS_REQS,
+    CR_INVALID_RESOURCEID       = (s32)(0x0000000B),
+    CR_DLVXD_NOT_FOUND          = (s32)(0x0000000C),
+    CR_NO_SUCH_DEVNODE          = (s32)(0x0000000D),
+    CR_NO_SUCH_DEVINST          = (s32) CR_NO_SUCH_DEVNODE,
+    CR_NO_MORE_LOG_CONF         = (s32)(0x0000000E),
+    CR_NO_MORE_RES_DES          = (s32)(0x0000000F),
+    CR_ALREADY_SUCH_DEVNODE     = (s32)(0x00000010),
+    CR_ALREADY_SUCH_DEVINST     = (s32) CR_ALREADY_SUCH_DEVNODE,
+    CR_INVALID_RANGE_LIST       = (s32)(0x00000011),
+    CR_INVALID_RANGE            = (s32)(0x00000012),
+    CR_FAILURE                  = (s32)(0x00000013),
+    CR_NO_SUCH_LOGICAL_DEV      = (s32)(0x00000014),
+    CR_CREATE_BLOCKED           = (s32)(0x00000015),
+    CR_NOT_SYSTEM_VM            = (s32)(0x00000016),
+    CR_REMOVE_VETOED            = (s32)(0x00000017),
+    CR_APM_VETOED               = (s32)(0x00000018),
+    CR_INVALID_LOAD_TYPE        = (s32)(0x00000019),
+    CR_BUFFER_SMALL             = (s32)(0x0000001A),
+    CR_NO_ARBITRATOR            = (s32)(0x0000001B),
+    CR_NO_REGISTRY_HANDLE       = (s32)(0x0000001C),
+    CR_REGISTRY_ERROR           = (s32)(0x0000001D),
+    CR_INVALID_DEVICE_ID        = (s32)(0x0000001E),
+    CR_INVALID_DATA             = (s32)(0x0000001F),
+    CR_INVALID_API              = (s32)(0x00000020),
+    CR_DEVLOADER_NOT_READY      = (s32)(0x00000021),
+    CR_NEED_RESTART             = (s32)(0x00000022),
+    CR_NO_MORE_HW_PROFILES      = (s32)(0x00000023),
+    CR_DEVICE_NOT_THERE         = (s32)(0x00000024),
+    CR_NO_SUCH_VALUE            = (s32)(0x00000025),
+    CR_WRONG_TYPE               = (s32)(0x00000026),
+    CR_INVALID_PRIORITY         = (s32)(0x00000027),
+    CR_NOT_DISABLEABLE          = (s32)(0x00000028),
+    CR_FREE_RESOURCES           = (s32)(0x00000029),
+    CR_QUERY_VETOED             = (s32)(0x0000002A),
+    CR_CANT_SHARE_IRQ           = (s32)(0x0000002B),
+    CR_NO_DEPENDENT             = (s32)(0x0000002C),
+    CR_SAME_RESOURCES           = (s32)(0x0000002D),
+    CR_NO_SUCH_REGISTRY_KEY     = (s32)(0x0000002E),
+    CR_INVALID_MACHINENAME      = (s32)(0x0000002F),
+    CR_REMOTE_COMM_FAILURE      = (s32)(0x00000030),
+    CR_MACHINE_UNAVAILABLE      = (s32)(0x00000031),
+    CR_NO_CM_SERVICES           = (s32)(0x00000032),
+    CR_ACCESS_DENIED            = (s32)(0x00000033),
+    CR_CALL_NOT_IMPLEMENTED     = (s32)(0x00000034),
+    CR_INVALID_PROPERTY         = (s32)(0x00000035),
+    CR_DEVICE_INTERFACE_ACTIVE  = (s32)(0x00000036),
+    CR_NO_SUCH_DEVICE_INTERFACE = (s32)(0x00000037),
+    CR_INVALID_REFERENCE_STRING = (s32)(0x00000038),
+    CR_INVALID_CONFLICT_LIST    = (s32)(0x00000039),
+    CR_INVALID_INDEX            = (s32)(0x0000003A),
+    CR_INVALID_STRUCTURE_SIZE   = (s32)(0x0000003B),
+} CONFIGRET;
+
+typedef enum _CM_NOTIFY_FILTER_TYPE {
+
+    CM_NOTIFY_FILTER_TYPE_DEVICEINTERFACE = 0,
+    CM_NOTIFY_FILTER_TYPE_DEVICEHANDLE,
+    CM_NOTIFY_FILTER_TYPE_DEVICEINSTANCE,
+    CM_NOTIFY_FILTER_TYPE_MAX
+
+} CM_NOTIFY_FILTER_TYPE, *PCM_NOTIFY_FILTER_TYPE;
+
+typedef enum _CM_NOTIFY_ACTION {
+  CM_NOTIFY_ACTION_DEVICEINTERFACEARRIVAL = 0,
+  CM_NOTIFY_ACTION_DEVICEINTERFACEREMOVAL,
+  CM_NOTIFY_ACTION_DEVICEQUERYREMOVE,
+  CM_NOTIFY_ACTION_DEVICEQUERYREMOVEFAILED,
+  CM_NOTIFY_ACTION_DEVICEREMOVEPENDING,
+  CM_NOTIFY_ACTION_DEVICEREMOVECOMPLETE,
+  CM_NOTIFY_ACTION_DEVICECUSTOMEVENT,
+  CM_NOTIFY_ACTION_DEVICEINSTANCEENUMERATED,
+  CM_NOTIFY_ACTION_DEVICEINSTANCESTARTED,
+  CM_NOTIFY_ACTION_DEVICEINSTANCEREMOVED,
+  CM_NOTIFY_ACTION_MAX
+} CM_NOTIFY_ACTION, *PCM_NOTIFY_ACTION;
+
+#define CM_NOTIFY_FILTER_FLAG_ALL_INTERFACE_CLASSES     0x00000001
+#define CM_NOTIFY_FILTER_FLAG_ALL_DEVICE_INSTANCES      0x00000002
+
+DEFINE_GUID(GUID_DEVINTERFACE_VOLUME,                 0x53f5630dL, 0xb6bf, 0x11d0, 0x94, 0xf2, 0x00, 0xa0, 0xc9, 0x1e, 0xfb, 0x8b);
+
+#define MAX_DEVICE_ID_LEN     200
+typedef struct _CM_NOTIFY_FILTER {
+    DWORD                    cbSize;
+    DWORD                    Flags;
+    CM_NOTIFY_FILTER_TYPE    FilterType;
+    DWORD                    Reserved;
     union {
-        UINT  uTimeout;
-        UINT  uVersion;  // used with NIM_SETVERSION, values 0, 3 and 4
-    } DUMMYUNIONNAME;
-#endif
-    WCHAR  szInfoTitle[64];
-    DWORD dwInfoFlags;
-#endif
-#if (NTDDI_VERSION >= NTDDI_WINXP)
-    GUID guidItem;
-#endif
-#if (NTDDI_VERSION >= NTDDI_VISTA)
-    HICON hBalloonIcon;
-#endif
-} NOTIFYICONDATAW, *PNOTIFYICONDATAW;
+        struct {
+            GUID    ClassGuid;
+        } DeviceInterface;
 
-WINDOWS_IMPORT BOOL WINAPI Shell_NotifyIconW( DWORD dwMessage, PNOTIFYICONDATAW lpData);
+        struct {
+            HANDLE  hTarget;
+        } DeviceHandle;
 
-#define NIF_MESSAGE     0x00000001
-#define NIF_ICON        0x00000002
-#define NIF_TIP         0x00000004
-#define NIF_STATE       0x00000008
-#define NIF_INFO        0x00000010
+        struct {
+            WCHAR   InstanceId[MAX_DEVICE_ID_LEN];
+        } DeviceInstance;
 
-#define NOTIFYICON_VERSION 3
-#if NTDDI_VERSION >= 0x06000000
-#define NOTIFYICON_VERSION_4 4
-#endif
+    } u;
+} CM_NOTIFY_FILTER, *PCM_NOTIFY_FILTER;
 
-WINDOWS_IMPORT HMENU WINAPI CreatePopupMenu(void);
-
-WINDOWS_IMPORT BOOL WINAPI AppendMenuW( HMENU hMenu, UINT uFlags, UINT_PTR uIDNewItem, LPCWSTR lpNewItem);
-
-#define MF_INSERT 0x00000000L
-#define MF_CHANGE 0x00000080L
-#define MF_APPEND 0x00000100L
-#define MF_DELETE 0x00000200L
-#define MF_REMOVE 0x00001000L
-#define MF_BYCOMMAND 0x00000000L
-#define MF_BYPOSITION 0x00000400L
-#define MF_SEPARATOR 0x00000800L
-#define MF_ENABLED 0x00000000L
-#define MF_GRAYED 0x00000001L
-#define MF_DISABLED 0x00000002L
-#define MF_UNCHECKED 0x00000000L
-#define MF_CHECKED 0x00000008L
-#define MF_USECHECKBITMAPS 0x00000200L
-#define MF_STRING 0x00000000L
-#define MF_BITMAP 0x00000004L
-#define MF_OWNERDRAW 0x00000100L
-#define MF_POPUP 0x00000010L
-#define MF_MENUBARBREAK 0x00000020L
-#define MF_MENUBREAK 0x00000040L
-#define MF_UNHILITE 0x00000000L
-#define MF_HILITE 0x00000080L
-#define MF_DEFAULT 0x00001000L
-#define MF_SYSMENU 0x00002000L
-#define MF_HELP 0x00004000L
-#define MF_RIGHTJUSTIFY 0x00004000L
-#define MF_MOUSESELECT 0x00008000L
-#define MF_END 0x00000080L
-
-WINDOWS_IMPORT BOOL WINAPI SetForegroundWindow(HWND hWnd);
-
-WINDOWS_IMPORT BOOL WINAPI TrackPopupMenu( HMENU hMenu, UINT uFlags, int x, int y, int nReserved, HWND hWnd, const RECT *prcRect);
-
-#define TPM_LEFTBUTTON 0x0000L
-#define TPM_RIGHTBUTTON 0x0002L
-#define TPM_LEFTALIGN 0x0000L
-#define TPM_CENTERALIGN 0x0004L
-#define TPM_RIGHTALIGN 0x0008L
-#define TPM_TOPALIGN 0x0000L
-#define TPM_VCENTERALIGN 0x0010L
-#define TPM_BOTTOMALIGN 0x0020L
-
-#define TPM_HORIZONTAL 0x0000L
-#define TPM_VERTICAL 0x0040L
-#define TPM_NONOTIFY 0x0080L
-#define TPM_RETURNCMD 0x0100L
-#define TPM_RECURSE 0x0001L
-#define TPM_HORPOSANIMATION 0x0400L
-#define TPM_HORNEGANIMATION 0x0800L
-#define TPM_VERPOSANIMATION 0x1000L
-#define TPM_VERNEGANIMATION 0x2000L
-#define TPM_NOANIMATION 0x4000L
-#define TPM_LAYOUTRTL 0x8000L
-
-WINDOWS_IMPORT BOOL WINAPI DestroyMenu(HMENU hMenu);
-
-typedef struct _MEM_ADDRESS_REQUIREMENTS {
-    PVOID LowestStartingAddress;
-    PVOID HighestEndingAddress;
-    size_t Alignment;
-  } MEM_ADDRESS_REQUIREMENTS, *PMEM_ADDRESS_REQUIREMENTS;
-
-#define MEM_EXTENDED_PARAMETER_GRAPHICS 0x01
-#define MEM_EXTENDED_PARAMETER_NONPAGED 0x02
-#define MEM_EXTENDED_PARAMETER_ZERO_PAGES_OPTIONAL 0x04
-#define MEM_EXTENDED_PARAMETER_NONPAGED_LARGE 0x08
-#define MEM_EXTENDED_PARAMETER_NONPAGED_HUGE 0x10
-#define MEM_EXTENDED_PARAMETER_SOFT_FAULT_PAGES 0x20
-#define MEM_EXTENDED_PARAMETER_EC_CODE 0x40
-#define MEM_EXTENDED_PARAMETER_IMAGE_NO_HPAT 0x80
-
-typedef enum MEM_EXTENDED_PARAMETER_TYPE {
-  MemExtendedParameterInvalidType = 0,
-  MemExtendedParameterAddressRequirements,
-  MemExtendedParameterNumaNode,
-  MemExtendedParameterPartitionHandle,
-  MemExtendedParameterUserPhysicalHandle,
-  MemExtendedParameterAttributeFlags,
-  MemExtendedParameterImageMachine,
-  MemExtendedParameterMax
-} MEM_EXTENDED_PARAMETER_TYPE, *PMEM_EXTENDED_PARAMETER_TYPE;
-
-#define MEM_EXTENDED_PARAMETER_TYPE_BITS 8
-
-typedef struct DECLSPEC_ALIGN(8) MEM_EXTENDED_PARAMETER {
-  struct {
-      DWORD64 Type;
-      DWORD64 Reserved;
-  } DUMMYUNIONNAME1;
+typedef struct _CM_NOTIFY_EVENT_DATA {
+  CM_NOTIFY_FILTER_TYPE FilterType;
+  DWORD                 Reserved;
   union {
-      DWORD64 ULong64;
-      PVOID Pointer;
-      size_t Size;
-      HANDLE Handle;
-      DWORD ULong;
-  } DUMMYUNIONNAME2;
-} MEM_EXTENDED_PARAMETER, *PMEM_EXTENDED_PARAMETER;
+    struct {
+      GUID  ClassGuid;
+      WCHAR SymbolicLink[ANYSIZE_ARRAY];
+    } DeviceInterface;
+    struct {
+      GUID  EventGuid;
+      LONG  NameOffset;
+      DWORD DataSize;
+      BYTE  Data[ANYSIZE_ARRAY];
+    } DeviceHandle;
+    struct {
+      WCHAR InstanceId[ANYSIZE_ARRAY];
+    } DeviceInstance;
+  } u;
+} CM_NOTIFY_EVENT_DATA, *PCM_NOTIFY_EVENT_DATA;
 
-WINDOWS_IMPORT PVOID WINAPI VirtualAlloc2( HANDLE Process, PVOID BaseAddress, size_t Size, ULONG AllocationType, ULONG PageProtection, MEM_EXTENDED_PARAMETER  *ExtendedParameters, ULONG ParameterCount);
+typedef DWORD (*PCM_NOTIFY_CALLBACK)( HCMNOTIFICATION hNotify, PVOID Context, CM_NOTIFY_ACTION Action, PCM_NOTIFY_EVENT_DATA EventData, DWORD EventDataSize);
 
+WINAPI CONFIGRET CM_Register_Notification(PCM_NOTIFY_FILTER pFilter,PVOID pContext,PCM_NOTIFY_CALLBACK pCallback,PHCMNOTIFICATION pNotifyContext);
 
-WINDOWS_IMPORT PVOID WINAPI MapViewOfFile3( HANDLE FileMapping, HANDLE Process, PVOID BaseAddress, ULONG64 Offset, size_t ViewSize, ULONG AllocationType, ULONG PageProtection, MEM_EXTENDED_PARAMETER  *ExtendedParameters, ULONG ParameterCount);
-
-WINDOWS_IMPORT BOOL WINAPI UnmapViewOfFile2( HANDLE Process, PVOID BaseAddress, ULONG UnmapFlags);
-
-WINDOWS_IMPORT HANDLE WINAPI CreateFileMappingW( HANDLE hFile, LPSECURITY_ATTRIBUTES lpFileMappingAttributes, DWORD flProtect, DWORD dwMaximumSizeHigh, DWORD dwMaximumSizeLow, LPCWSTR lpName);
-
-WINDOWS_IMPORT BOOL WINAPI SetEvent(HANDLE hEvent);
-
-WINDOWS_IMPORT HWND WINAPI WindowFromPoint(POINT Point);
-
-WINDOWS_IMPORT HWND WINAPI SetFocus(HWND hWnd);
-
-WINDOWS_IMPORT BOOL WINAPI ReplaceFileW( LPCWSTR lpReplacedFileName, LPCWSTR lpReplacementFileName, LPCWSTR lpBackupFileName, DWORD dwReplaceFlags, LPVOID lpExclude, LPVOID lpReserved);
-
-WINDOWS_IMPORT BOOL WINAPI CopyFileW(LPCWSTR lpExistingFileName,LPCWSTR lpNewFileName,BOOL bFailIfExists);
-
-WINDOWS_IMPORT BOOL WINAPI DeleteFileW(LPCWSTR lpFileName);
-
-WINDOWS_IMPORT BOOL WINAPI GetOverlappedResultEx(HANDLE hFile,LPOVERLAPPED lpOverlapped,LPDWORD lpNumberOfBytesTransferred,DWORD dwMilliseconds,BOOL bAlertable);
-
-#define THREAD_MODE_BACKGROUND_BEGIN 0x00010000
-#define THREAD_MODE_BACKGROUND_END 0x00020000
-
-
-typedef enum _PRIORITY_HINT {
-      IoPriorityHintVeryLow = 0,
-      IoPriorityHintLow,
-      IoPriorityHintNormal,
-      MaximumIoPriorityHintType
-} PRIORITY_HINT;
-
-typedef struct _FILE_IO_PRIORITY_HINT_INFO {
-    PRIORITY_HINT PriorityHint;
-} FILE_IO_PRIORITY_HINT_INFO, *PFILE_IO_PRIORITY_HINT_INFO;
-
-typedef enum _FILE_INFO_BY_HANDLE_CLASS {
-    FileBasicInfo,
-    FileStandardInfo,
-    FileNameInfo,
-    FileRenameInfo,
-    FileDispositionInfo,
-    FileAllocationInfo,
-    FileEndOfFileInfo,
-    FileStreamInfo,
-    FileCompressionInfo,
-    FileAttributeTagInfo,
-    FileIdBothDirectoryInfo,
-    FileIdBothDirectoryRestartInfo,
-    FileIoPriorityHintInfo,
-    FileRemoteProtocolInfo,
-    FileFullDirectoryInfo,
-    FileFullDirectoryRestartInfo,
-#if (NTDDI_VERSION >= NTDDI_WIN8)
-    FileStorageInfo,
-    FileAlignmentInfo,
-    FileIdInfo,
-    FileIdExtdDirectoryInfo,
-    FileIdExtdDirectoryRestartInfo,
-#endif
-#if (NTDDI_VERSION >= NTDDI_WIN10_RS1)
-    FileDispositionInfoEx,
-    FileRenameInfoEx,
-#endif
-#if (NTDDI_VERSION >= NTDDI_WIN10_19H1)
-    FileCaseSensitiveInfo,
-    FileNormalizedNameInfo,
-#endif
-    MaximumFileInfoByHandleClass
-} FILE_INFO_BY_HANDLE_CLASS, *PFILE_INFO_BY_HANDLE_CLASS;
-
-
-WINDOWS_IMPORT BOOL WINAPI SetFileInformationByHandle(HANDLE hFile, FILE_INFO_BY_HANDLE_CLASS FileInformationClass, LPVOID lpFileInformation, DWORD dwBufferSize);
-
-typedef enum _STORAGE_PROPERTY_ID {
-  StorageDeviceProperty = 0,
-  StorageAdapterProperty,
-  StorageDeviceIdProperty,
-  StorageDeviceUniqueIdProperty,
-  StorageDeviceWriteCacheProperty,
-  StorageMiniportProperty,
-  StorageAccessAlignmentProperty,
-  StorageDeviceSeekPenaltyProperty,
-  StorageDeviceTrimProperty,
-  StorageDeviceWriteAggregationProperty,
-  StorageDeviceDeviceTelemetryProperty,
-  StorageDeviceLBProvisioningProperty,
-  StorageDevicePowerProperty,
-  StorageDeviceCopyOffloadProperty,
-  StorageDeviceResiliencyProperty,
-  StorageDeviceMediumProductType,
-  StorageAdapterRpmbProperty,
-  StorageAdapterCryptoProperty,
-  StorageDeviceIoCapabilityProperty = 48,
-  StorageAdapterProtocolSpecificProperty,
-  StorageDeviceProtocolSpecificProperty,
-  StorageAdapterTemperatureProperty,
-  StorageDeviceTemperatureProperty,
-  StorageAdapterPhysicalTopologyProperty,
-  StorageDevicePhysicalTopologyProperty,
-  StorageDeviceAttributesProperty,
-  StorageDeviceManagementStatus,
-  StorageAdapterSerialNumberProperty,
-  StorageDeviceLocationProperty,
-  StorageDeviceNumaProperty,
-  StorageDeviceZonedDeviceProperty,
-  StorageDeviceUnsafeShutdownCount,
-  StorageDeviceEnduranceProperty,
-  StorageDeviceLedStateProperty,
-  StorageDeviceSelfEncryptionProperty = 64,
-  StorageFruIdProperty,
-  StorageStackProperty,
-  StorageAdapterProtocolSpecificPropertyEx,
-  StorageDeviceProtocolSpecificPropertyEx,
-  StorageHwCryptoProperty
-} STORAGE_PROPERTY_ID, *PSTORAGE_PROPERTY_ID;
-
-// StorageDeviceSeekPenaltyProperty
-typedef struct _DEVICE_SEEK_PENALTY_DESCRIPTOR {
-  DWORD   Version;
-  DWORD   Size;
-  BOOLEAN IncursSeekPenalty;
-} DEVICE_SEEK_PENALTY_DESCRIPTOR, *PDEVICE_SEEK_PENALTY_DESCRIPTOR;
-
-// StorageDeviceIoCapabilityProperty
-typedef struct _STORAGE_DEVICE_IO_CAPABILITY_DESCRIPTOR {
-  DWORD Version;
-  DWORD Size;
-  DWORD LunMaxIoCount;
-  DWORD AdapterMaxIoCount;
-} STORAGE_DEVICE_IO_CAPABILITY_DESCRIPTOR, *PSTORAGE_DEVICE_IO_CAPABILITY_DESCRIPTOR;
-
-typedef enum _STORAGE_QUERY_TYPE {
-  PropertyStandardQuery = 0,
-  PropertyExistsQuery,
-  PropertyMaskQuery,
-  PropertyQueryMaxDefined
-} STORAGE_QUERY_TYPE, *PSTORAGE_QUERY_TYPE;
-
-typedef struct _STORAGE_PROPERTY_QUERY {
-  STORAGE_PROPERTY_ID PropertyId;
-  STORAGE_QUERY_TYPE  QueryType;
-  BYTE                AdditionalParameters[1];
-} STORAGE_PROPERTY_QUERY, *PSTORAGE_PROPERTY_QUERY;
-
-
-
-typedef struct _STORAGE_ADAPTER_DESCRIPTOR {
-
-    ULONG Version;
-
-    ULONG Size;
-
-    ULONG MaximumTransferLength;
-
-    ULONG MaximumPhysicalPages;
-
-    ULONG AlignmentMask;
-
-    BOOLEAN AdapterUsesPio;
-
-    BOOLEAN AdapterScansDown;
-
-    BOOLEAN CommandQueueing;
-
-    BOOLEAN AcceleratedTransfer;
-
-#if (NTDDI_VERSION < NTDDI_WINXP)
-    BOOLEAN BusType;
-#else
-    UCHAR BusType;
-#endif
-
-    USHORT BusMajorVersion;
-
-    USHORT BusMinorVersion;
-
-#if (NTDDI_VERSION >= NTDDI_WIN8)
-
-    UCHAR SrbType;
-
-    UCHAR AddressType;
-#endif
-
-} STORAGE_ADAPTER_DESCRIPTOR, *PSTORAGE_ADAPTER_DESCRIPTOR;
-
-typedef enum _STORAGE_BUS_TYPE {
-  BusTypeUnknown = 0x00,
-  BusTypeScsi,
-  BusTypeAtapi,
-  BusTypeAta,
-  BusType1394,
-  BusTypeSsa,
-  BusTypeFibre,
-  BusTypeUsb,
-  BusTypeRAID,
-  BusTypeiScsi,
-  BusTypeSas,
-  BusTypeSata,
-  BusTypeSd,
-  BusTypeMmc,
-  BusTypeVirtual,
-  BusTypeFileBackedVirtual,
-  BusTypeSpaces,
-  BusTypeNvme,
-  BusTypeSCM,
-  BusTypeUfs,
-  BusTypeNvmeof,
-  BusTypeMax,
-  BusTypeMaxReserved = 0x7F
-} STORAGE_BUS_TYPE, *PSTORAGE_BUS_TYPE;
-
-WINDOWS_IMPORT BOOL WINAPI CancelIoEx(HANDLE hFile,LPOVERLAPPED lpOverlapped);
+WINAPI CONFIGRET CM_Unregister_Notification(HCMNOTIFICATION NotifyContext);
 
 /* End include: windows_loader.h */
     #endif // _WINDOWS_
@@ -10307,6 +10833,9 @@ Thread_Handle sys_get_current_thread(void) {
     #pragma comment(lib, "Msimg32.lib")
     #pragma comment(lib, "wininet.lib")
     #pragma comment(lib, "onecore.lib")
+    #pragma comment(lib, "ntdll")
+    #pragma comment(lib, "wevtapi")
+    #pragma comment(lib, "cfgmgr32")
 #ifndef OSTD_HEADLESS
     #pragma comment(lib, "gdi32")
     #pragma comment(lib, "dxgi")
@@ -10571,6 +11100,7 @@ void *sys_map_pages(u64 action, void *virtual_base, u64 number_of_pages, bool st
 bool sys_unmap_pages(void *address) {
     log_call(SYSTEM_LOG_CATEGORY_PAGE_MAPPING);
     System_Info sinfo = sys_get_info();
+    u64 ps = sinfo.page_size;
     
     _ostd_lazy_init_swappable();
     
@@ -10621,7 +11151,7 @@ bool sys_unmap_pages(void *address) {
     while (next_sub) {
         
         if (next_sub->is_committed) {
-			DWORD free_result = VirtualFree(next_sub->start, next_sub->page_count*sinfo.page_size, MEM_RELEASE | MEM_PRESERVE_PLACEHOLDER);
+			DWORD free_result = VirtualFree(next_sub->start, next_sub->page_count*ps, MEM_RELEASE | MEM_PRESERVE_PLACEHOLDER);
             log_os_call("Decommit subregion in swappable page region", "VirtualFree", next_sub->start, SYSTEM_LOG_CATEGORY_PAGE_MAPPING);
 			if (free_result == 0) {
                 log_error("VirtualFree returned 0.", SYSTEM_ERROR_INTERNAL_ERROR, SYSTEM_LOG_CATEGORY_PAGE_MAPPING);
@@ -10634,7 +11164,7 @@ bool sys_unmap_pages(void *address) {
     
     // If there are multiple regions, then coalesce
     if (found_region->sub_regions->next) {
-        DWORD free_result = VirtualFree(found_region->start, found_region->page_count*sinfo.page_size, MEM_RELEASE | MEM_COALESCE_PLACEHOLDERS);
+        DWORD free_result = VirtualFree(found_region->start, found_region->page_count*ps, MEM_RELEASE | MEM_COALESCE_PLACEHOLDERS);
         log_os_call("Coalesce subregions", "VirtualFree", found_region->start, SYSTEM_LOG_CATEGORY_PAGE_MAPPING);
         if (free_result == 0) {
             log_error("VirtualFree returned 0.", SYSTEM_ERROR_INTERNAL_ERROR, SYSTEM_LOG_CATEGORY_PAGE_MAPPING);
@@ -10661,7 +11191,8 @@ bool sys_unmap_pages(void *address) {
 bool sys_deallocate_pages(void *address, u64 number_of_pages) {
     log_call(SYSTEM_LOG_CATEGORY_PAGE_MAPPING);
     System_Info sinfo = sys_get_info();
-    u64 amount_in_bytes = sinfo.page_size*number_of_pages;
+    u64 ps = sinfo.page_size;
+    u64 amount_in_bytes = ps*number_of_pages;
     
     _ostd_lazy_init_swappable();
     
@@ -10676,7 +11207,7 @@ bool sys_deallocate_pages(void *address, u64 number_of_pages) {
         for (u64 i = 0; i < iba->count; i += 1) {
             _Ostd_Swappable_Page_Region *region = regions + i;
             
-            if ((iba->state_bits[i/8] & (1 << (i%8))) && (u64)start >= (u64)region->start && (u64)start+amount_in_bytes <= (u64)region->start + region->page_count*sinfo.page_size) {
+            if ((iba->state_bits[i/8] & (1 << (i%8))) && (u64)start >= (u64)region->start && (u64)start+amount_in_bytes <= (u64)region->start + region->page_count*ps) {
                 found_region = region;
                 break;
             }
@@ -10709,7 +11240,7 @@ bool sys_deallocate_pages(void *address, u64 number_of_pages) {
     
     while (next_sub) {
         
-        if (next_sub->start == start && (u64)next_sub->start + next_sub->page_count*sinfo.page_size == (u64)start + amount_in_bytes) {
+        if (next_sub->start == start && (u64)next_sub->start + next_sub->page_count*ps == (u64)start + amount_in_bytes) {
             sub = next_sub;
             break;
         }
@@ -10729,7 +11260,7 @@ bool sys_deallocate_pages(void *address, u64 number_of_pages) {
     }
     
     {
-        DWORD free_result = VirtualFree(sub->start, sub->page_count*sinfo.page_size, MEM_RELEASE | MEM_PRESERVE_PLACEHOLDER) != 0;
+        DWORD free_result = VirtualFree(sub->start, sub->page_count*ps, MEM_RELEASE | MEM_PRESERVE_PLACEHOLDER) != 0;
         log_os_call("Release to placeholder", "VirtualFree", sub->start, SYSTEM_LOG_CATEGORY_PAGE_MAPPING);
         if (free_result == 0) {
             log_error("VirtualFree returned 0.", SYSTEM_ERROR_INTERNAL_ERROR, SYSTEM_LOG_CATEGORY_PAGE_MAPPING);
@@ -10757,7 +11288,7 @@ bool sys_deallocate_pages(void *address, u64 number_of_pages) {
     }
     
     if (do_coalesce) {
-        DWORD free_result = VirtualFree(sub->start, sub->page_count*sinfo.page_size, MEM_RELEASE | MEM_COALESCE_PLACEHOLDERS);
+        DWORD free_result = VirtualFree(sub->start, sub->page_count*ps, MEM_RELEASE | MEM_COALESCE_PLACEHOLDERS);
         log_os_call("Coalesce placeholders", "VirtualFree", sub->start, SYSTEM_LOG_CATEGORY_PAGE_MAPPING);
         if (free_result == 0) {
             log_error("VirtualFree returned 0.", SYSTEM_ERROR_INTERNAL_ERROR, SYSTEM_LOG_CATEGORY_PAGE_MAPPING);
@@ -10776,8 +11307,9 @@ void *sys_map_swappable_pages(u64 action, void *virtual_base, u64 number_of_page
     
     
     System_Info sinfo = sys_get_info();
+    u64 ps = sinfo.page_size;
 
-    u64 amount_in_bytes = sinfo.page_size * number_of_pages;
+    u64 amount_in_bytes = ps * number_of_pages;
     
     bool is_new = false;
     
@@ -10821,7 +11353,7 @@ void *sys_map_swappable_pages(u64 action, void *virtual_base, u64 number_of_page
                 for (u64 i = 0; i < iba->count; i += 1) {
                     _Ostd_Swappable_Page_Region *region = regions + i;
                     
-                    if ((iba->state_bits[i/8] & (1 << (i%8))) && (u64)start >= (u64)region->start && (u64)start+amount_in_bytes <= (u64)region->start + region->page_count*sinfo.page_size) {
+                    if ((iba->state_bits[i/8] & (1 << (i%8))) && (u64)start >= (u64)region->start && (u64)start+amount_in_bytes <= (u64)region->start + region->page_count*ps) {
                         found_region = region;
                         break;
                     }
@@ -10839,13 +11371,163 @@ void *sys_map_swappable_pages(u64 action, void *virtual_base, u64 number_of_page
                 return 0;
             }
             
+            if (found_region->is_mapped_to_file) {
+            
+                ///////// WE GROW PAST FMAPPING SIZE
+                
+                if (start - found_region->start + amount_in_bytes > found_region->file_mapped_pages*ps) {
+                    // @speed we need to unmap all file views and recreate the fmapping to fit the new size
+                    
+                    u64 new_mapping_size = start - found_region->start + amount_in_bytes;
+                    u64 old_mapping_size = found_region->file_mapped_pages*ps;
+                    
+                    // If cutoff is in a committed region, we need to round up to end of that region
+                    _Ostd_Swappable_Page_Sub_Region *next_sub = found_region->sub_regions;
+                    while (next_sub) {
+                        
+                        u8 *cutoff = found_region->start + new_mapping_size;
+                        u8 *sub_tail = next_sub->start + next_sub->page_count*ps;
+                        u64 sub_offset = next_sub->start - found_region->start;
+                        
+                        if (cutoff > next_sub->start && cutoff < sub_tail) {
+                            if (next_sub->is_committed) {
+                                new_mapping_size += sub_tail - cutoff;
+                            } else {
+                                // Split mapping_size cutoff @copypaste
+                    		    _Ostd_Internal_Block_Allocator *sub_iba = swappable_page_sub_region_iba;
+                    		    
+                                sys_mutex_acquire(sub_iba->mutex);
+                                _Ostd_Swappable_Page_Sub_Region * right_sub 
+                                    = (_Ostd_Swappable_Page_Sub_Region *)_ostd_iba_allocate_item(sub_iba);
+                                
+                                right_sub->next = next_sub->next;
+                                next_sub->next = right_sub;
+                                
+                                u64 left_page_count = (new_mapping_size-sub_offset) / ps;
+                                right_sub->page_count = next_sub->page_count - left_page_count;
+                                next_sub->page_count = left_page_count;
+                                
+                                right_sub->start = next_sub->start + left_page_count*ps;
+                                
+                                right_sub->is_committed = next_sub->is_committed;
+                                
+                                sys_mutex_release(sub_iba->mutex);
+                                
+                                // Split new subregion placeholder
+                                bool free_result = (bool)VirtualFree(right_sub->start, right_sub->page_count*ps, MEM_RELEASE | MEM_PRESERVE_PLACEHOLDER);
+                                log_os_call("Split placeholder", "VirtualFree", right_sub->start, SYSTEM_LOG_CATEGORY_PAGE_MAPPING);
+                                if (free_result == 0) {
+                                    log_error("VirtualFree returned 0.", SYSTEM_ERROR_INTERNAL_ERROR, SYSTEM_LOG_CATEGORY_PAGE_MAPPING);
+                                    return false;
+                        		}
+                        		
+                        		if (right_sub->next && !right_sub->is_committed && !right_sub->next->is_committed) {
+                        		    // Coalesce
+                        		    
+                        		    // @leak
+                        		    right_sub->page_count += right_sub->next->page_count;
+                        		    right_sub->next = right_sub->next->next;
+                        		    
+                        		    DWORD free_result = VirtualFree(right_sub->start, right_sub->page_count*ps, MEM_RELEASE | MEM_COALESCE_PLACEHOLDERS);
+                                    log_os_call("Coalesce placeholders", "VirtualFree", right_sub->start, SYSTEM_LOG_CATEGORY_PAGE_MAPPING);
+                                    if (free_result == 0) {
+                                        log_error("VirtualFree returned 0.", SYSTEM_ERROR_INTERNAL_ERROR, SYSTEM_LOG_CATEGORY_PAGE_MAPPING);
+                                        return false;
+                            		}
+                        		}
+                            }
+                            break;
+                        }
+                        
+                        next_sub = next_sub->next;
+                    }
+                    
+                    found_region->file_mapped_pages = new_mapping_size/ps;
+                    
+                    /// Unmap all file views
+                    next_sub = found_region->sub_regions;
+                    while (next_sub) {
+                    
+                        if (next_sub->start - found_region->start >= old_mapping_size)
+                            break;
+                        
+                        bool free_result = (bool)UnmapViewOfFile2(GetCurrentProcess(), next_sub->start, MEM_PRESERVE_PLACEHOLDER);
+                        log_os_call("Unmap view of file to split it", "UnmapViewOfFile2", next_sub->start, SYSTEM_LOG_CATEGORY_PAGE_MAPPING);
+                        if (free_result == 0) {
+                            log_error("UnmapViewOfFile2 returned 0.", SYSTEM_ERROR_INTERNAL_ERROR, SYSTEM_LOG_CATEGORY_PAGE_MAPPING);
+                            return false;
+            			}
+                        
+                        next_sub = next_sub->next;
+                    }
+                    
+                    // Close the fmapping
+                    CloseHandle(found_region->fmapping);
+                    
+                    found_region->fmapping = CreateFileMappingW(
+                		found_region->f,
+                		0,
+                		PAGE_READWRITE,
+                		(DWORD)((new_mapping_size & 0xffffffff00000000) >> 32),
+                		(DWORD)new_mapping_size,
+                		0
+                	);
+                	log_os_call("Create file mapping", "CreateFileMappingW", found_region->f, SYSTEM_LOG_CATEGORY_PAGE_MAPPING);
+                	
+                	assert(found_region->fmapping);
+                	if (!found_region->fmapping) {
+                	   log_error("Could not repoen fmapping. Its kinda jover. Your data is lost and you probably have leaks. @todo", SYSTEM_ERROR_INTERNAL_ERROR, SYSTEM_LOG_CATEGORY_PAGE_MAPPING);
+                	   return false;
+                	}
+                	
+                	/// Remap file views
+                	
+                	// @copypaste
+                    next_sub = found_region->sub_regions;
+                    while (next_sub) {
+                        // Dont map past mapping_size
+                        if (next_sub->start - found_region->start >= new_mapping_size)
+                            break;
+                        
+                        u64 sub_map_size = next_sub->page_count*ps;
+                        u64 map_end = next_sub->start - found_region->start + sub_map_size;
+                        
+                        assert(map_end <= new_mapping_size);
+                        
+                        void *new_pointer = MapViewOfFile3(
+                			found_region->fmapping,
+                			GetCurrentProcess(),
+                			next_sub->start,
+                			(u64)next_sub->start-(u64)found_region->start,
+                			sub_map_size,
+                			MEM_REPLACE_PLACEHOLDER,
+                			(next_sub->is_committed) ? PAGE_READWRITE : PAGE_NOACCESS,
+                			0,
+                			0
+                		);
+                		log_os_call("Map view of file", "MapViewOfFile3", new_pointer, SYSTEM_LOG_CATEGORY_PAGE_MAPPING);
+                		
+                        if (!new_pointer) {
+                            log_error("Could not map view of file. ", SYSTEM_ERROR_INTERNAL_ERROR, SYSTEM_LOG_CATEGORY_PAGE_MAPPING);
+                            return 0;
+                        }
+                        if ((u8*)new_pointer != next_sub->start) {
+                            log_error("Could not map view of file. ", SYSTEM_ERROR_INTERNAL_ERROR, SYSTEM_LOG_CATEGORY_PAGE_MAPPING);
+                            return 0;
+                        }
+                    
+                        next_sub = next_sub->next;
+                    }
+                }
+            }
+            
             _Ostd_Swappable_Page_Sub_Region *next_sub = found_region->sub_regions;
             _Ostd_Swappable_Page_Sub_Region *last_sub = 0;
             _Ostd_Swappable_Page_Sub_Region *sub = 0;
             
             while (next_sub) {
                 
-                if (start >= next_sub->start && (u64)start + amount_in_bytes <= (u64)next_sub->start + next_sub->page_count*sinfo.page_size) {
+                if (start >= next_sub->start && (u64)start + amount_in_bytes <= (u64)next_sub->start + next_sub->page_count*ps) {
                     sub = next_sub;
                     break;
                 }
@@ -10869,14 +11551,14 @@ void *sys_map_swappable_pages(u64 action, void *virtual_base, u64 number_of_page
                 left_sub = (_Ostd_Swappable_Page_Sub_Region *)_ostd_iba_allocate_item(sub_iba);
                 *left_sub = *sub;
                 left_sub->start = sub->start;
-                left_sub->page_count = ((u64)start - (u64)sub->start)/sinfo.page_size;
+                left_sub->page_count = ((u64)start - (u64)sub->start)/ps;
                 left_sub->next = sub;
             }
-            if ((u64)start + amount_in_bytes < (u64)sub->start + sub->page_count*sinfo.page_size) {
+            if ((u64)start + amount_in_bytes < (u64)sub->start + sub->page_count*ps) {
                 right_sub = (_Ostd_Swappable_Page_Sub_Region *)_ostd_iba_allocate_item(sub_iba);
                 *right_sub = *sub;
                 right_sub->start = start + amount_in_bytes;
-                right_sub->page_count = (((u64)sub->start + sub->page_count*sinfo.page_size) - ((u64)start + amount_in_bytes)) / sinfo.page_size;
+                right_sub->page_count = (((u64)sub->start + sub->page_count*ps) - ((u64)start + amount_in_bytes)) / ps;
             }
             
             sys_mutex_release(sub_iba->mutex);
@@ -10893,7 +11575,7 @@ void *sys_map_swappable_pages(u64 action, void *virtual_base, u64 number_of_page
         			}
                 }
                 
-                {
+                if (!(start == sub->start && start+amount_in_bytes == sub->start + sub->page_count*ps)){
                     // Split into new placeholder
                     bool free_result = VirtualFree(start, amount_in_bytes, MEM_RELEASE | MEM_PRESERVE_PLACEHOLDER);
                     log_os_call("Split into placeholder", "VirtualFree", start, SYSTEM_LOG_CATEGORY_PAGE_MAPPING);
@@ -10927,7 +11609,7 @@ void *sys_map_swappable_pages(u64 action, void *virtual_base, u64 number_of_page
 						GetCurrentProcess(),
 						left_sub->start,
 						(u64)left_sub->start - (u64)found_region->start,
-						left_sub->page_count * sinfo.page_size,
+						left_sub->page_count * ps,
 						MEM_REPLACE_PLACEHOLDER,
 						left_sub->is_committed ? PAGE_READWRITE : PAGE_NOACCESS,
 						0,
@@ -10946,7 +11628,7 @@ void *sys_map_swappable_pages(u64 action, void *virtual_base, u64 number_of_page
 						GetCurrentProcess(),
 						right_sub->start,
 						(u64)right_sub->start - (u64)found_region->start,
-						right_sub->page_count * sinfo.page_size,
+						right_sub->page_count * ps,
 						MEM_REPLACE_PLACEHOLDER,
 						right_sub->is_committed ? PAGE_READWRITE : PAGE_NOACCESS,
 						0,
@@ -11070,6 +11752,7 @@ bool sys_swap_pages_to_file(void *base, File_Handle file, u64 size) {
     u8 *start = (u8*)base;
     
     System_Info sinfo = sys_get_info();
+    u64 ps = sinfo.page_size;
     
     _Ostd_Internal_Block_Allocator *iba = swappable_page_region_iba;
     _Ostd_Swappable_Page_Region *found_region = 0;
@@ -11099,28 +11782,40 @@ bool sys_swap_pages_to_file(void *base, File_Handle file, u64 size) {
         return true;
     }
     
-    u64 mapping_size = size ? size : found_region->page_count * sinfo.page_size;
     
-    HANDLE fmapping = CreateFileMappingW(
-		file,
-		0,
-		PAGE_READWRITE,
-		(DWORD)((mapping_size & 0xffffffff00000000) >> 32),
-		(DWORD)mapping_size,
-		0
-	);
-	log_os_call("Create file mapping", "CreateFileMappingW", fmapping, SYSTEM_LOG_CATEGORY_PAGE_MAPPING);
-	if (!fmapping) {
-	   log_error("Could not create file mapping. Make sure the file handle has both read and write access.", SYSTEM_ERROR_REJECTED_FILE_MAPPING, SYSTEM_LOG_CATEGORY_PAGE_MAPPING);
-	   return false;
-	}
-	
-    found_region->f = file;
-    found_region->fmapping = fmapping;
+    size = size ? align_next(size, ps) : 0;
+    
+    if (size) {
+        // If cutoff is in a committed region, we need to round up to end of that region
+        _Ostd_Swappable_Page_Sub_Region *next_sub = found_region->sub_regions;
+        while (next_sub) {
+            
+            u8 *cutoff = found_region->start + size;
+            u8 *sub_tail = next_sub->start + next_sub->page_count*ps;
+            if (cutoff > next_sub->start && cutoff < sub_tail) {
+                if (next_sub->is_committed) {
+                    size += sub_tail - cutoff;
+                }
+                break;
+            }
+            
+            next_sub = next_sub->next;
+        }
+    }
+    
+    u64 mapping_size = size ? size : found_region->page_count * ps;
+    found_region->file_mapped_pages = mapping_size / ps;
+    
+    assert(mapping_size % ps == 0);
     
     _Ostd_Swappable_Page_Sub_Region *next_sub = found_region->sub_regions;
     while (next_sub) {
         
+        // Dont write past mapping_size
+        if (next_sub->start - found_region->start >= mapping_size)
+            break;
+        
+        // Only write data for committed subregions
         if (next_sub->is_committed) {
             u64 attempts = 0;
             u64 max_attempts = 100;
@@ -11133,13 +11828,21 @@ bool sys_swap_pages_to_file(void *base, File_Handle file, u64 size) {
             }
             if (!set_pos_ok) {
                 log_error("Setting file position was rejected.", SYSTEM_ERROR_INTERNAL_ERROR, SYSTEM_LOG_CATEGORY_PAGE_MAPPING);
-                CloseHandle(fmapping);
                 return false;
             }
-            s64 written = sys_write(file, next_sub->start, next_sub->page_count*sinfo.page_size);
+            
+            u64 write_size = next_sub->page_count*ps;
+            u64 write_end = next_sub->start - found_region->start + write_size;
+            
+            // Dont write past mapping_size
+            if (write_end > mapping_size) {
+                write_size -= write_end - mapping_size;
+            }
+            
+            s64 written = sys_write(file, next_sub->start, write_size);
             log_os_call("Write memory to file to swap to", "WriteFile", file, SYSTEM_LOG_CATEGORY_PAGE_MAPPING);
             
-            if ((u64)written != next_sub->page_count*sinfo.page_size) {
+            if ((u64)written != write_size) {
                 log_error("Failed writing to file.", SYSTEM_ERROR_INTERNAL_ERROR, SYSTEM_LOG_CATEGORY_PAGE_MAPPING);
                 return false;
             }
@@ -11148,32 +11851,112 @@ bool sys_swap_pages_to_file(void *base, File_Handle file, u64 size) {
         next_sub = next_sub->next;
     }
     
+    HANDLE fmapping = CreateFileMappingW(
+		file,
+		0,
+		PAGE_READWRITE,
+		(DWORD)((mapping_size & 0xffffffff00000000) >> 32),
+		(DWORD)mapping_size,
+		0
+	);
+	log_os_call("Create file mapping", "CreateFileMappingW", file, SYSTEM_LOG_CATEGORY_PAGE_MAPPING);
+	if (!fmapping) {
+	   log_error("Could not create file mapping. Make sure the file handle has both read and write access.", SYSTEM_ERROR_REJECTED_FILE_MAPPING, SYSTEM_LOG_CATEGORY_PAGE_MAPPING);
+	   return false;
+	}
+	
+    found_region->f = file;
+    found_region->fmapping = fmapping;
+    
+    // Decommit committed subregions (their data is now in the file)
     next_sub = found_region->sub_regions;
     while (next_sub) {
         
+		u8 *sub_tail = next_sub->start + next_sub->page_count*ps;
+		u64 sub_offset = next_sub->start - found_region->start;
+		u64 sub_tail_offset = sub_tail - found_region->start;
+		
         if (next_sub->is_committed) {
-			DWORD free_result = VirtualFree(next_sub->start, next_sub->page_count*sinfo.page_size, MEM_RELEASE | MEM_PRESERVE_PLACEHOLDER);
+			DWORD free_result = VirtualFree(next_sub->start, next_sub->page_count*ps, MEM_RELEASE | MEM_PRESERVE_PLACEHOLDER);
 			log_os_call("Decommit subregion", "VirtualFree", next_sub->start, SYSTEM_LOG_CATEGORY_PAGE_MAPPING);
             if (free_result == 0) {
                 log_error("VirtualFree returned 0.", SYSTEM_ERROR_INTERNAL_ERROR, SYSTEM_LOG_CATEGORY_PAGE_MAPPING);
                 return false;
     		}
+    		
+    		next_sub = next_sub->next;
+		} else if (sub_offset < mapping_size && sub_tail_offset > mapping_size) {
+		     // Split mapping_size cutoff @copypaste
+		    _Ostd_Internal_Block_Allocator *sub_iba = swappable_page_sub_region_iba;
+		    
+            sys_mutex_acquire(sub_iba->mutex);
+            _Ostd_Swappable_Page_Sub_Region * right_sub 
+                = (_Ostd_Swappable_Page_Sub_Region *)_ostd_iba_allocate_item(sub_iba);
+            
+            right_sub->next = next_sub->next;
+            next_sub->next = right_sub;
+            
+            u64 left_page_count = (mapping_size-sub_offset) / ps;
+            right_sub->page_count = next_sub->page_count - left_page_count;
+            next_sub->page_count = left_page_count;
+            
+            right_sub->start = next_sub->start + left_page_count*ps;
+            
+            right_sub->is_committed = next_sub->is_committed;
+            
+            sys_mutex_release(sub_iba->mutex);
+            
+            // Split new subregion placeholder
+            bool free_result = (bool)VirtualFree(right_sub->start, right_sub->page_count*ps, MEM_RELEASE | MEM_PRESERVE_PLACEHOLDER);
+            log_os_call("Split placeholder", "VirtualFree", right_sub->start, SYSTEM_LOG_CATEGORY_PAGE_MAPPING);
+            if (free_result == 0) {
+                log_error("VirtualFree returned 0.", SYSTEM_ERROR_INTERNAL_ERROR, SYSTEM_LOG_CATEGORY_PAGE_MAPPING);
+                return false;
+    		}
+    		
+    		if (right_sub->next && !right_sub->is_committed && !right_sub->next->is_committed) {
+    		    // Coalesce
+    		    
+    		    // @leak
+    		    right_sub->page_count += right_sub->next->page_count;
+    		    right_sub->next = right_sub->next->next;
+    		    
+    		    DWORD free_result = VirtualFree(right_sub->start, right_sub->page_count*ps, MEM_RELEASE | MEM_COALESCE_PLACEHOLDERS);
+                log_os_call("Coalesce placeholders", "VirtualFree", right_sub->start, SYSTEM_LOG_CATEGORY_PAGE_MAPPING);
+                if (free_result == 0) {
+                    log_error("VirtualFree returned 0.", SYSTEM_ERROR_INTERNAL_ERROR, SYSTEM_LOG_CATEGORY_PAGE_MAPPING);
+                    return false;
+        		}
+    		}
+            
+            next_sub = right_sub->next;
+		} else {
+            next_sub = next_sub->next;
 		}
     
-        next_sub = next_sub->next;
     }
     
-    //FlushFileBuffers(file);
-    
+    // Map file views to their equivalent address space, and mark logically uncommitted pages
+    // as PAGE_NOACCESS. Technically there are no committed/uncommitted pages, but we emulate
+    // that would-be state in memory-mode.
+    // @copypaste
     next_sub = found_region->sub_regions;
     while (next_sub) {
+        // Dont map past mapping_size
+        if (next_sub->start - found_region->start >= mapping_size)
+            break;
+        
+        u64 sub_map_size = next_sub->page_count*ps;
+        u64 map_end = next_sub->start - found_region->start + sub_map_size;
+        
+        assert(map_end <= mapping_size);
         
         void *new_pointer = MapViewOfFile3(
 			found_region->fmapping,
 			GetCurrentProcess(),
 			next_sub->start,
 			(u64)next_sub->start-(u64)found_region->start,
-			next_sub->page_count*sinfo.page_size,
+			sub_map_size,
 			MEM_REPLACE_PLACEHOLDER,
 			(next_sub->is_committed) ? PAGE_READWRITE : PAGE_NOACCESS,
 			0,
@@ -11182,12 +11965,10 @@ bool sys_swap_pages_to_file(void *base, File_Handle file, u64 size) {
 		log_os_call("Map view of file", "MapViewOfFile3", new_pointer, SYSTEM_LOG_CATEGORY_PAGE_MAPPING);
 		
         if (!new_pointer) {
-            CloseHandle(fmapping);
             log_error("Could not map view of file. ", SYSTEM_ERROR_INTERNAL_ERROR, SYSTEM_LOG_CATEGORY_PAGE_MAPPING);
             return 0;
         }
         if ((u8*)new_pointer != next_sub->start) {
-            CloseHandle(fmapping);
             log_error("Could not map view of file. ", SYSTEM_ERROR_INTERNAL_ERROR, SYSTEM_LOG_CATEGORY_PAGE_MAPPING);
             return 0;
         }
@@ -11208,6 +11989,7 @@ bool sys_swap_pages_to_memory(void *base, u64 max_read) {
     u8 *start = (u8*)base;
     
     System_Info sinfo = sys_get_info();
+    u64 ps = sinfo.page_size;
     
     _Ostd_Internal_Block_Allocator *iba = swappable_page_region_iba;
     _Ostd_Swappable_Page_Region *found_region = 0;
@@ -11241,6 +12023,9 @@ bool sys_swap_pages_to_memory(void *base, u64 max_read) {
     _Ostd_Swappable_Page_Sub_Region *next_sub = found_region->sub_regions;
     while (next_sub) {
         // Unmap file views
+        if (next_sub->start - found_region->start >= found_region->file_mapped_pages*ps)
+            break;
+        
         bool free_result = UnmapViewOfFile2(GetCurrentProcess(), next_sub->start, MEM_PRESERVE_PLACEHOLDER);
         if (free_result == 0) {
             log_error("UnmapViewOfFile2 returned 0.", SYSTEM_ERROR_INTERNAL_ERROR, SYSTEM_LOG_CATEGORY_PAGE_MAPPING);
@@ -11253,7 +12038,7 @@ bool sys_swap_pages_to_memory(void *base, u64 max_read) {
     // Are there more than one sub region?
     if (found_region->sub_regions->next) {
         // Coalesce placeholders into one
-        bool free_result = VirtualFree(found_region->start, found_region->page_count*sinfo.page_size, MEM_RELEASE | MEM_COALESCE_PLACEHOLDERS);
+        bool free_result = VirtualFree(found_region->start, found_region->page_count*ps, MEM_RELEASE | MEM_COALESCE_PLACEHOLDERS);
         log_os_call("Coalesce placeholders", "VirtualFree", found_region->start, SYSTEM_LOG_CATEGORY_PAGE_MAPPING);
         if (free_result == 0) {
             log_error("VirtualFree returned 0.", SYSTEM_ERROR_INTERNAL_ERROR, SYSTEM_LOG_CATEGORY_PAGE_MAPPING);
@@ -11266,7 +12051,7 @@ bool sys_swap_pages_to_memory(void *base, u64 max_read) {
     //FlushFileBuffers(found_region->f);
     
     {
-        void *new_pointer = VirtualAlloc2(GetCurrentProcess(), found_region->start, found_region->page_count*sinfo.page_size, MEM_RESERVE | MEM_REPLACE_PLACEHOLDER, PAGE_NOACCESS, 0, 0);
+        void *new_pointer = VirtualAlloc2(GetCurrentProcess(), found_region->start, found_region->page_count*ps, MEM_RESERVE | MEM_REPLACE_PLACEHOLDER, PAGE_NOACCESS, 0, 0);
         log_os_call("Reserve placeholder for entire region", "VirtualAlloc2", found_region->start, SYSTEM_LOG_CATEGORY_PAGE_MAPPING);
         if (!new_pointer || (new_pointer != found_region->start)) {
             log_error("VirtualAlloc2 returned bad pointer.", SYSTEM_ERROR_INTERNAL_ERROR, SYSTEM_LOG_CATEGORY_PAGE_MAPPING);
@@ -11278,7 +12063,7 @@ bool sys_swap_pages_to_memory(void *base, u64 max_read) {
     while (next_sub) {
         
         // Split placeholder
-        bool free_result = (bool)VirtualFree(next_sub->start, next_sub->page_count*sinfo.page_size, MEM_RELEASE | MEM_PRESERVE_PLACEHOLDER);
+        bool free_result = (bool)VirtualFree(next_sub->start, next_sub->page_count*ps, MEM_RELEASE | MEM_PRESERVE_PLACEHOLDER);
         log_os_call("Split placeholder", "VirtualFree", next_sub->start, SYSTEM_LOG_CATEGORY_PAGE_MAPPING);
         if (free_result == 0) {
             log_error("VirtualFree returned 0.", SYSTEM_ERROR_INTERNAL_ERROR, SYSTEM_LOG_CATEGORY_PAGE_MAPPING);
@@ -11292,7 +12077,7 @@ bool sys_swap_pages_to_memory(void *base, u64 max_read) {
             flags |= (MEM_RESERVE | MEM_COMMIT | MEM_REPLACE_PLACEHOLDER);
             protection = PAGE_READWRITE;
             
-            void *new_pointer = VirtualAlloc2(0, next_sub->start, next_sub->page_count*sinfo.page_size, flags, protection, 0, 0);
+            void *new_pointer = VirtualAlloc2(0, next_sub->start, next_sub->page_count*ps, flags, protection, 0, 0);
             log_os_call("Map pages for subregion", "VirtualAlloc2", next_sub->start, SYSTEM_LOG_CATEGORY_PAGE_MAPPING);
             
             if (!new_pointer || (new_pointer != next_sub->start)) {
@@ -11300,13 +12085,13 @@ bool sys_swap_pages_to_memory(void *base, u64 max_read) {
                 return false;
             }
             
-            max_read = max_read ? max_read : found_region->page_count*sinfo.page_size;
-            max_read = min(max_read, found_region->page_count*sinfo.page_size);
+            max_read = max_read ? max_read : found_region->page_count*ps;
+            max_read = min(max_read, found_region->page_count*ps);
             
             u64 read_start = (u64)next_sub->start - (u64)found_region->start;
             
             if (read_start < max_read) {
-                u64 read_size = min(next_sub->page_count*sinfo.page_size, max_read-read_start);
+                u64 read_size = min(next_sub->page_count*ps, max_read-read_start);
                 
                 u64 max_attempts = 100;
                 u64 attempts = 0;
@@ -11342,6 +12127,7 @@ bool sys_coalesce_swappable_pages(void *address, u64 max_preserve) {
     u8 *start = (u8*)address;
     
     System_Info sinfo = sys_get_info();
+    u64 ps = sinfo.page_size;
     
     _Ostd_Internal_Block_Allocator *iba = swappable_page_region_iba;
     _Ostd_Swappable_Page_Region *found_region = 0;
@@ -11384,19 +12170,19 @@ bool sys_coalesce_swappable_pages(void *address, u64 max_preserve) {
             if (left && right && left != right) {
                 
                 
-                u64 size = ((u64)right->start + right->page_count*sinfo.page_size) - (u64)left->start;
+                u64 size = ((u64)right->start + right->page_count*ps) - (u64)left->start;
                 
-                max_preserve = max_preserve ? max_preserve : found_region->page_count*sinfo.page_size;
-                max_preserve = min(max_preserve, found_region->page_count*sinfo.page_size);
+                max_preserve = max_preserve ? max_preserve : found_region->page_count*ps;
+                max_preserve = min(max_preserve, found_region->page_count*ps);
                 
                 u64 preserve_start = (u64)left->start - (u64)found_region->start;
                 
-                u64 preserve_size = min(((u64)right->start - (u64)left->start) + right->page_count*sinfo.page_size, max_preserve - preserve_start);
+                u64 preserve_size = min(((u64)right->start - (u64)left->start) + right->page_count*ps, max_preserve - preserve_start);
                 
                 void *staging = 0;
                 
                 if (preserve_start < max_preserve) {
-                    staging = sys_map_pages(SYS_MEMORY_RESERVE | SYS_MEMORY_ALLOCATE, 0, align_next(preserve_size, sinfo.page_size)/sinfo.page_size, false);
+                    staging = sys_map_pages(SYS_MEMORY_RESERVE | SYS_MEMORY_ALLOCATE, 0, align_next(preserve_size, ps)/ps, false);
                     if (!staging) {
                         log_error("Ran out of memory, needed for staging when coalescing", SYSTEM_ERROR_OUT_OF_MEMORY, SYSTEM_LOG_CATEGORY_PAGE_MAPPING);
                         return false;
@@ -11411,7 +12197,7 @@ bool sys_coalesce_swappable_pages(void *address, u64 max_preserve) {
                 _Ostd_Swappable_Page_Sub_Region *next_coal = left;
                 while (1) {
                     
-                    DWORD free_result = VirtualFree(next_coal->start, next_coal->page_count*sinfo.page_size, MEM_RELEASE | MEM_PRESERVE_PLACEHOLDER);
+                    DWORD free_result = VirtualFree(next_coal->start, next_coal->page_count*ps, MEM_RELEASE | MEM_PRESERVE_PLACEHOLDER);
                     log_os_call("Free to placeholder to be able to coalesce", "VirtualFree", next_coal->start, SYSTEM_LOG_CATEGORY_PAGE_MAPPING);
                     if (free_result == 0) {
                         log_error("VirtualFree returned 0.", SYSTEM_ERROR_INTERNAL_ERROR, SYSTEM_LOG_CATEGORY_PAGE_MAPPING);
@@ -11445,7 +12231,7 @@ bool sys_coalesce_swappable_pages(void *address, u64 max_preserve) {
                     sys_unmap_pages(staging);
                 }
                 
-                left->page_count = size/sinfo.page_size;
+                left->page_count = size/ps;
                 left->next = right->next;
                 
                 left = 0;
@@ -11483,7 +12269,7 @@ u64 sys_query_mapped_regions(void *start, void *end, Mapped_Memory_Info *result,
         MEMORY_BASIC_INFORMATION mem_info = (MEMORY_BASIC_INFORMATION){0};
 
         size_t r = VirtualQuery(p, &mem_info, sizeof(MEMORY_BASIC_INFORMATION));
-        // todo(charlie)  VirtualQuery might fail for random reasons
+        log_os_call("Query next region", "VirtualQuery", p, SYSTEM_LOG_CATEGORY_PAGE_MAPPING);
         if (r != 0 && mem_info.AllocationBase) {
             if (current_base && (u64)current_base < (u64)mem_info.AllocationBase) {
 
@@ -11520,7 +12306,8 @@ u64 sys_query_mapped_regions(void *start, void *end, Mapped_Memory_Info *result,
         }
         counter += 1;
     }
-
+    
+    log_ok("ok", SYSTEM_LOG_CATEGORY_PAGE_MAPPING);
     return counter;
 }
 
@@ -11534,6 +12321,7 @@ void *sys_find_mappable_range(u64 page_count) {
     void *address = (void *)0x0000100000000000; // Start at a high user-space address
     while (address) {
         size_t query_size = VirtualQuery(address, &mbi, sizeof(mbi));
+        log_os_call("Query next region", "VirtualQuery", address, SYSTEM_LOG_CATEGORY_PAGE_MAPPING);
         if (query_size == 0) {
             return 0;
         }
@@ -11542,13 +12330,15 @@ void *sys_find_mappable_range(u64 page_count) {
             // Align the base address to the granularity
             u64 aligned_base = ((u64)mbi.BaseAddress + info.granularity - 1) & ~(info.granularity - 1);
             if (aligned_base + amount_in_bytes <= (u64)mbi.BaseAddress + mbi.RegionSize) {
+                log_ok("Found region", SYSTEM_LOG_CATEGORY_PAGE_MAPPING);
                 return (void *)aligned_base;
             }
         }
 
         address = (void *)((u64)mbi.BaseAddress + mbi.RegionSize);
     }
-
+    
+    log_error("Could not find free region", SYSTEM_ERROR_NOT_FOUND, SYSTEM_LOG_CATEGORY_PAGE_MAPPING);
     return 0;
 }
 
@@ -11590,27 +12380,42 @@ unit_local BOOL WINAPI _win_query_monitors_callback(HMONITOR monitor_handle, HDC
     (void)dc; (void)rect;
     MonitorContext *ctx = (MonitorContext*)param;
     if(ctx->buffer && ctx->count >= ctx->max_count) return false;
+    
     MONITORINFOEXW info;
     info.cbSize = sizeof(MONITORINFOEXW);
-    if(!GetMonitorInfoW(monitor_handle, (LPMONITORINFO)&info)) return true;
+    
+    bool ok = GetMonitorInfoW(monitor_handle, (LPMONITORINFO)&info);
+    log_os_call("Get monitor info 1", "GetMonitorInfoW", monitor_handle, SYSTEM_LOG_CATEGORY_MISC);
+    if(!ok) return true;
+    
     DEVMODEW more_info;
     more_info.dmSize = sizeof(DEVMODEW);
-    if(!EnumDisplaySettingsW(info.szDevice, ENUM_CURRENT_SETTINGS, &more_info)) return true;
+    ok = EnumDisplaySettingsW(info.szDevice, ENUM_CURRENT_SETTINGS, &more_info);
+    log_os_call("Get monitor info 2", "EnumDisplaySettingsW", info.szDevice, SYSTEM_LOG_CATEGORY_MISC);
+    if(!ok) return true;
+    
     DISPLAY_DEVICEW even_more_info;
     even_more_info.cb = sizeof(DISPLAY_DEVICEW);
     int i = 0;
     BOOL found = false;
-    while(EnumDisplayDevicesW(0, (DWORD)i, &even_more_info, 0)) {
+    
+    ok = EnumDisplayDevicesW(0, (DWORD)i, &even_more_info, 0);
+    log_os_call("Enum for monitor info 3", "EnumDisplayDevicesW", 0, SYSTEM_LOG_CATEGORY_MISC);
+    while(ok) {
         if(__wcscmp(even_more_info.DeviceName, info.szDevice) == 0){
             found = true;
             break;
         }
         i++;
+        ok = EnumDisplayDevicesW(0, (DWORD)i, &even_more_info, 0);
+        log_os_call("Enum for monitor info 3", "EnumDisplayDevicesW", 0, SYSTEM_LOG_CATEGORY_MISC);
     }
+    
     if(!found) return true;
     if(ctx->buffer){
         Physical_Monitor *monitor = &ctx->buffer[ctx->count];
         monitor->name_count = (u64)WideCharToMultiByte(CP_UTF8, 0, even_more_info.DeviceString, -1, (LPSTR)monitor->name, 256, 0, 0);
+        log_os_call("Convert monitor name to utf8", "WideCharToMultiByte", monitor_handle, SYSTEM_LOG_CATEGORY_MISC);
         monitor->refresh_rate = more_info.dmDisplayFrequency;
         monitor->resolution_x = info.rcMonitor.right - info.rcMonitor.left;
         monitor->resolution_y = info.rcMonitor.bottom - info.rcMonitor.top;
@@ -11618,6 +12423,7 @@ unit_local BOOL WINAPI _win_query_monitors_callback(HMONITOR monitor_handle, HDC
         monitor->pos_y = info.rcMonitor.top;
         UINT dpix, dpiy;
         GetDpiForMonitor(monitor_handle, MDT_EFFECTIVE_DPI, &dpix, &dpiy);
+        log_os_call("Get monitor DPI", "GetDpiForMonitor", monitor_handle, SYSTEM_LOG_CATEGORY_MISC);
         monitor->scale = (float64)dpix/96.0;
         monitor->handle = monitor_handle;
     }
@@ -11693,8 +12499,12 @@ bool sys_wait_vertical_blank(Physical_Monitor monitor) {
 
     if (output) {
         output->lpVtbl->WaitForVBlank(output);
+        log_os_call("Wait for monitor output", "IDXGIOutput::WaitForVBlank", monitor.handle, SYSTEM_LOG_CATEGORY_MISC);
+        
+        log_ok("ok", SYSTEM_LOG_CATEGORY_MISC);
         return true;
     }
+    log_error("Failed getting IDXGIOutput for monitor", SYSTEM_ERROR_OS_CALL_FAILED, SYSTEM_LOG_CATEGORY_MISC);
     return false;
 }
 
@@ -11713,9 +12523,15 @@ bool sys_make_pipe(File_Handle *read, File_Handle *write) {
     log_call(SYSTEM_LOG_CATEGORY_IO);
     HANDLE read_handle, write_handle;
     SECURITY_ATTRIBUTES sa = {sizeof(SECURITY_ATTRIBUTES), 0, true};
-    if (!CreatePipe(&read_handle, &write_handle, &sa, 0)) return false;
+    bool ok = CreatePipe(&read_handle, &write_handle, &sa, 0);
+    log_os_call("Create pipe", "CreatePipe", 0, SYSTEM_LOG_CATEGORY_IO);
+    if (!ok) {
+        log_error("CreatePipe failed.", SYSTEM_ERROR_OS_CALL_FAILED, SYSTEM_LOG_CATEGORY_IO);
+        return false;
+    }
     *read = (File_Handle)read_handle;
     *write = (File_Handle)write_handle;
+    log_ok("Pipe created", SYSTEM_LOG_CATEGORY_IO);
     return true;
 }
 
@@ -11734,14 +12550,28 @@ s64 sys_write_string(File_Handle f, string s) {
 s64 sys_read(File_Handle h, void *buffer, u64 buffer_size) {
     log_call(SYSTEM_LOG_CATEGORY_IO);
     DWORD read = 0;
-    ReadFile(h, (LPVOID)buffer, (DWORD)buffer_size, &read, 0);
-
+    BOOL ok = ReadFile(h, (LPVOID)buffer, (DWORD)buffer_size, &read, 0);
+    log_os_call("Read handle", "ReadFile", h, SYSTEM_LOG_CATEGORY_IO);
+    
+    if (!ok) {
+        log_error("ReadFile failed", SYSTEM_ERROR_OS_CALL_FAILED, SYSTEM_LOG_CATEGORY_IO);
+        return 0;
+    }
+    
+    log_ok("Read succeeded", SYSTEM_LOG_CATEGORY_IO);
     return (s64)read;
 }
 
 void sys_close(File_Handle h) {
     log_call(SYSTEM_LOG_CATEGORY_IO);
-    CloseHandle((HANDLE)h);
+    BOOL ok = CloseHandle((HANDLE)h);
+    log_os_call("Close handle", "CloseHandle", h, SYSTEM_LOG_CATEGORY_IO);
+    if (!ok) {
+        log_error("CloseHandle failed. Check handle.", SYSTEM_ERROR_OS_CALL_FAILED, SYSTEM_LOG_CATEGORY_IO);
+        return;
+    }
+    
+    log_ok("Close succeeded", SYSTEM_LOG_CATEGORY_IO);
 }
 
 File_Handle sys_open_file(string path, File_Open_Flags flags) {
@@ -11791,20 +12621,29 @@ File_Handle sys_open_file(string path, File_Open_Flags flags) {
         attribute_flags,
         0
     );
+    
+    log_os_call("Open file handle", "CreateFileW", handle, SYSTEM_LOG_CATEGORY_IO);
 
     if (handle == INVALID_HANDLE_VALUE) {
+        log_error("Failed opening file handle", SYSTEM_ERROR_OS_CALL_FAILED, SYSTEM_LOG_CATEGORY_IO);
         return 0;
     }
-
+    
+    log_ok("Opened handle to file", SYSTEM_LOG_CATEGORY_IO);
     return handle;
 }
 
 u64 sys_get_file_size(File_Handle f) {
     log_call(SYSTEM_LOG_CATEGORY_IO);
     LARGE_INTEGER size;
-    if (!GetFileSizeEx(f, &size)) {
-        return 0; // Indicate failure
+    
+    BOOL ok = GetFileSizeEx(f, &size);
+    log_os_call("Get file size", "GetFileSizeEx", f, SYSTEM_LOG_CATEGORY_IO);
+    if (!ok) {
+        log_error("Failed getting file size", SYSTEM_ERROR_OS_CALL_FAILED, SYSTEM_LOG_CATEGORY_IO);
+        return 0;
     }
+    log_ok("Got file size", SYSTEM_LOG_CATEGORY_IO);
     return (u64)size.QuadPart;
 }
 
@@ -11812,7 +12651,15 @@ bool sys_set_file_position(File_Handle f, u64 position) {
     log_call(SYSTEM_LOG_CATEGORY_IO);
     LARGE_INTEGER li;
     li.QuadPart = (LONGLONG)position;
-    return SetFilePointerEx((HANDLE)f, li, 0, 0) != 0;
+    BOOL ok = SetFilePointerEx((HANDLE)f, li, 0, 0) != 0;
+    log_os_call("Set file pointer", "SetFilePointerEx", f, SYSTEM_LOG_CATEGORY_IO);
+    if (!ok) {
+        log_error("SetFilePointerEx Failed.", SYSTEM_ERROR_OS_CALL_FAILED, SYSTEM_LOG_CATEGORY_IO);
+        return false;
+    } else {
+        log_ok("Set file pointer success", SYSTEM_LOG_CATEGORY_IO);
+        return true;
+    }
 }
 
 bool sys_make_directory(string path, bool recursive) {
@@ -11824,9 +12671,13 @@ bool sys_make_directory(string path, bool recursive) {
     }
 
     if (!recursive) {
-        if (CreateDirectoryW(path_wide, 0) || GetLastError() == 0xB7 /* ERROR_ALREADY_EXISTS */) {
+        BOOL ok = CreateDirectoryW(path_wide, 0);
+        log_os_call("Create directory non-recursive", "CreateDirectoryW", 0, SYSTEM_LOG_CATEGORY_IO);
+        if (ok || GetLastError() == 0xB7 /* ERROR_ALREADY_EXISTS */) {
+            log_ok("Created directory non-recursive", SYSTEM_LOG_CATEGORY_IO);
             return true;
         }
+        log_error("Failed creating directory non-recursive", SYSTEM_ERROR_OS_CALL_FAILED, SYSTEM_LOG_CATEGORY_IO);
         return false;
     }
 
@@ -11844,16 +12695,23 @@ bool sys_make_directory(string path, bool recursive) {
 
             u16 saved = buffer[i];
             buffer[i] = '\0';
-            if (!CreateDirectoryW(buffer, 0) && GetLastError() != 0xB7 /* ERROR_ALREADY_EXISTS */) {
+            BOOL ok = CreateDirectoryW(buffer, 0);
+            log_os_call("Create directory recursive", "CreateDirectoryW", 0, SYSTEM_LOG_CATEGORY_IO);
+            if (!ok && GetLastError() != 0xB7 /* ERROR_ALREADY_EXISTS */) {
+                log_error("Failed creating directory recursive", SYSTEM_ERROR_OS_CALL_FAILED, SYSTEM_LOG_CATEGORY_IO);
                 return false;
             }
             buffer[i] = saved;
         }
     }
-
-    if (!CreateDirectoryW(buffer, 0) && GetLastError() != 0xB7 /* ERROR_ALREADY_EXISTS */) {
+    
+    BOOL ok = CreateDirectoryW(buffer, 0);
+    log_os_call("Create directory recursive", "CreateDirectoryW", 0, SYSTEM_LOG_CATEGORY_IO);
+    if (!ok && GetLastError() != 0xB7 /* ERROR_ALREADY_EXISTS */) {
+        log_error("Failed creating directory recursive", SYSTEM_ERROR_OS_CALL_FAILED, SYSTEM_LOG_CATEGORY_IO);
         return false;
     }
+    log_ok("Created directory recursive", SYSTEM_LOG_CATEGORY_IO);
     return true;
 }
 
@@ -12630,6 +13488,25 @@ void sys_lock_wait(Lock *lock) {
 bool sys_lock_is_locked(Lock *lock) {
     log_call(SYSTEM_LOG_CATEGORY_SYNC_PRIMITIVES);
     return WaitForSingleObject(lock->handle, 0) == 258 /* WAIT_TIMEOUT */;
+}
+
+bool sys_wait_on_address_8(void *address, void *compare_address, u64 timeout_ms) {
+    return WaitOnAddress(address, compare_address, 1, (DWORD)min(U32_MAX, timeout_ms));
+}
+bool sys_wait_on_address_16(void *address, void *compare_address, u64 timeout_ms) {
+    return WaitOnAddress(address, compare_address, 2, (DWORD)min(U32_MAX, timeout_ms));
+}
+bool sys_wait_on_address_32(void *address, void *compare_address, u64 timeout_ms) {
+    return WaitOnAddress(address, compare_address, 4, (DWORD)min(U32_MAX, timeout_ms));
+}
+bool sys_wait_on_address_64(void *address, void *compare_address, u64 timeout_ms) {
+    return WaitOnAddress(address, compare_address, 8, (DWORD)min(U32_MAX, timeout_ms));
+}
+void sys_wake_one_by_address(void *address) {
+    WakeByAddressSingle(address);
+}
+void sys_wake_all_by_address(void *address) {
+    WakeByAddressAll(address);
 }
 
 inline unit_local u16 sys_atomic_add_16(volatile u16 *addend, u16 value) {
@@ -14351,8 +15228,12 @@ void __start(void) {
 
 #endif // _SYSTEM_1_H
 
-/* End include: system1.h */
+/* End include: system_base.h */
 #endif //_SYSTEM_1_H
+
+#ifdef Allocator
+#undef Allocator
+#endif
 
 /////
 // Allocator
@@ -14387,6 +15268,9 @@ inline void deallocatef(Allocator a, void *p, u64 flags);
 inline string string_allocate(Allocator a, u64 n);
 inline void string_deallocate(Allocator a, string s);
 inline string string_copy(Allocator a, string s);
+
+// todo(charlie) move to appropriate file
+string string_replace(Allocator a, string s, string sub, string new);
 
 /////
 // Arena
@@ -14661,10 +15545,19 @@ void *arena_push(Arena *arena, u64 size) {
         amount_to_allocate = (amount_to_allocate + info.page_size-1) & ~(info.page_size-1);
 
         u64 pages_to_allocate = amount_to_allocate / info.page_size;
-
+        
+        u64 max_attempts = 50;
+        u64 attempts = 0;
+        
         void *allocate_result = arena->swappable
             ? sys_map_swappable_pages(SYS_MEMORY_ALLOCATE, allocated_tail, pages_to_allocate, true)
             : sys_map_pages(SYS_MEMORY_ALLOCATE, allocated_tail, pages_to_allocate, true);
+        while (!allocate_result && attempts < max_attempts) {
+            allocate_result = arena->swappable
+                ? sys_map_swappable_pages(SYS_MEMORY_ALLOCATE, allocated_tail, pages_to_allocate, true)
+                : sys_map_pages(SYS_MEMORY_ALLOCATE, allocated_tail, pages_to_allocate, true);
+            attempts += 1;
+        }
         assertmsg(allocate_result == allocated_tail, "Failed allocating pages in arena");
         
         if (arena->swappable && arena->enable_coalescing) {
@@ -14782,6 +15675,47 @@ string string_copy(Allocator a, string s) {
     return new_s;
 }
 
+// todo(charlie) move to appropriate file
+// There probably needs to be a string_utilities file or something because this function needs
+// the memory module, but the string module must come before the memory module because the system
+// module must come before the memory module because it uses strings. 
+string string_replace(Allocator a, string s, string sub, string replacement) {
+    if (s.count < sub.count) return (string){0};
+
+    string temp_string = string_allocate(get_temp(), s.count * 2);
+
+    u64 out_index = 0;
+    for (u64 i = 0; i < s.count; ) {
+        if (i <= s.count - sub.count &&
+            strings_match((string){.count = sub.count, .data = s.data + i}, sub)) {
+            
+            while (out_index + replacement.count >= temp_string.count) {
+                string new_temp_string = string_allocate(get_temp(), temp_string.count * 2);
+                memcpy(new_temp_string.data, temp_string.data, (sys_uint)temp_string.count);
+                temp_string = new_temp_string;
+            }
+
+            if (replacement.count > 0) {
+                memcpy(temp_string.data + out_index, replacement.data, (sys_uint)replacement.count);
+            }
+            out_index += replacement.count;
+            i += sub.count;
+        } else {
+            while (out_index >= temp_string.count) {
+                string new_temp_string = string_allocate(get_temp(), temp_string.count * 2);
+                memcpy(new_temp_string.data, temp_string.data, (sys_uint)temp_string.count);
+                temp_string = new_temp_string;
+            }
+            temp_string.data[out_index++] = s.data[i++];
+        }
+    }
+
+    string final_string = string_allocate(a, out_index);
+    memcpy(final_string.data, temp_string.data, (sys_uint)out_index);
+
+    return final_string;
+}
+
 unit_local Arena_Backed_Array_Header *_persistent_header(void *parray) {
     Arena_Backed_Array_Header *h = (Arena_Backed_Array_Header*)parray - 1;
     assertmsg(h->signature == 0xfeedfacedeadbeef, "Pointer used as persistent array but it was not initialized with persistent_array_init()");
@@ -14841,7 +15775,9 @@ void *persistent_array_push_copy(void *parray, void *src) {
     
     memcpy(p, src, h->elem_size);
     
+    sys_memory_barrier();
     h->count += 1; // Important that this increments after the memcpy
+    sys_memory_barrier();
     
     return p;
 }
@@ -14857,7 +15793,9 @@ void *persistent_array_push_empty(void *parray) {
         p = (u8*)parray + h->count*h->elem_size;
     }
     
+    sys_memory_barrier();
     h->count += 1;
+    sys_memory_barrier();
     
     return p;
 }

@@ -166,7 +166,6 @@ unit_local bool walk_file(string path) {
 		log(0, "Found c file %s\n", path);
 		
 		file_count += 1;
-		thread_count += 4;
 	}	
 	
 	return true;
@@ -193,10 +192,12 @@ s64 concat_header(Thread *t) {
 	Easy_Command_Result res = sys_run_command_easy(concat_cmd, sys_get_stdout(), sys_get_stdout(), STR("."), true);
 	if (res.exit_code != 0) {
 		print("Failed concatenating header %s\n", header);
+		ctx->error_flag = true;
 		return (int)res.exit_code;
 	}
 	
-	string test_path = tprint(
+	string test_source = tprint("test_result/test-%s.c", header);
+	string test_contents = tprint(
 		"#define OSTD_IMPL\n"
 		"#ifndef  OSTD_IMPL\n"
 		"#endif\n"
@@ -204,9 +205,13 @@ s64 concat_header(Thread *t) {
 		"int main(void) {return 0;}\n"
 	, out_path);
 	
-	sys_write_entire_file(STR("test_result/test.c"), test_path);
+	if (!sys_write_entire_file(test_source, test_contents)) {
+		print("Failed writing header test source %s\n", test_source);
+		ctx->error_flag = true;
+		return 1;
+	}
 	
-	string compile_cmd = tprint("clang test_result/test.c -o \"test_result/%s.obj\" -Wall  -Werror -pedantic -std=c99", header);
+	string compile_cmd = tprint("clang \"%s\" -o \"test_result/%s.obj\" -Wall  -Werror -pedantic -std=c99", test_source, header);
 	
 	res = sys_run_command_easy(compile_cmd, sys_get_stdout(), sys_get_stdout(), STR("."), true);
 	if (res.exit_code != 0) {
@@ -250,11 +255,13 @@ int main(int argc, char **argv) {
 	string concat_headers[] = {
 		STR("oga_graphics.h"),
 		STR("system.h"),
+		STR("system_base.h"),
 		STR("math.h"),
 		STR("string.h"),
 		STR("osl_compiler.h"),
 		STR("ostd.h"),
 		STR("print.h"),
+		STR("print1.h"),
 		STR("path_utils.h"),
 		STR("unicode.h"),
 		STR("memory.h"),
@@ -262,7 +269,7 @@ int main(int argc, char **argv) {
 	
 	
 	Concat_Header_Context *ctxs = PushTempBuffer(Concat_Header_Context, sizeof(concat_headers)/sizeof(string));
-	memset(ctxs, 0, sizeof(Concat_Header_Context));
+	memset(ctxs, 0, sizeof(concat_headers)/sizeof(string) * sizeof(Concat_Header_Context));
 	
 	Thread *concat_threads = PushTempBuffer(Thread, sizeof(concat_headers)/sizeof(string));
 	for (u64 i = 0; i < sizeof(concat_headers)/sizeof(string); i += 1) {

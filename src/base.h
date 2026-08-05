@@ -340,12 +340,22 @@ typedef u32 sys_uint;
 void __cpuid(int cpuInfo[4], int function_id);
 u64 __cdecl _xgetbv(unsigned int);
 
-#if COMPILER_FLAGS & COMPILER_FLAG_MSC
-#define debug_break(...) __debugbreak()
+#if COMPILER_FLAGS & COMPILER_FLAG_CLANG
+    #define debug_break(...) __builtin_trap()
+    #define cpu_hint_prefetch_L1(p) __builtin_prefetch(p, 0, 3)
+    #define cpu_hint_prefetch_L2(p) __builtin_prefetch(p, 0, 2)
+    #define cpu_hint_prefetch_L3(p) __builtin_prefetch(p, 0, 1)
+    #define cpu_hint_prefetch(p) __builtin_prefetch(p, 0, 0)
+#elif COMPILER_FLAGS & COMPILER_FLAG_MSC
+    #define debug_break(...) __debugbreak()
 #elif COMPILER_FLAGS & COMPILER_FLAG_GNU
-#define debug_break(...) __builtin_trap()
+    #define debug_break(...) __builtin_trap()
+    #define cpu_hint_prefetch_L1(p) __builtin_prefetch(p, 0, 3)
+    #define cpu_hint_prefetch_L2(p) __builtin_prefetch(p, 0, 2)
+    #define cpu_hint_prefetch_L3(p) __builtin_prefetch(p, 0, 1)
+    #define cpu_hint_prefetch(p) __builtin_prefetch(p, 0, 0)
 #else
-#define debug_break(...) *(volatile int*)0 = 1
+    #define debug_break(...) *(volatile int*)0 = 1
 #endif
 
 typedef struct string { 
@@ -361,45 +371,6 @@ Assert_Fail_Callback assert_fail_callback;
 
 #define STRINGIFY(x) #x
 #define TOSTRING(x) STRINGIFY(x)
-
-#define assertmsg_always(x, msg) assertmsgs_always(x, (STR(msg)))
-#define assertmsgs_always(x, msg)  do { \
-    if (!(x)) {\
-        sys_write_string(sys_get_stderr(), STR("\n========================================================\n"));\
-        sys_write_string(sys_get_stderr(), STR("==========!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!==========\n"));\
-        sys_write_string(sys_get_stderr(), STR("========================================================\n"));\
-        sys_write_string(sys_get_stderr(), STR("\nAssertion failed for expression: '"));\
-        sys_write_string(sys_get_stderr(), STR(#x));\
-        sys_write_string(sys_get_stderr(), STR("'.\n"));\
-        if (msg.data && msg.count) {\
-            sys_write_string(sys_get_stderr(), STR("\n\""));\
-            sys_write_string(sys_get_stderr(), msg);\
-            sys_write_string(sys_get_stderr(), STR("\"\n"));\
-        }\
-        sys_write_string(sys_get_stderr(), STR("\nIn File '"));\
-        sys_write_string(sys_get_stderr(), STR(__FILE__));\
-        sys_write_string(sys_get_stderr(), STR("' on line "));\
-        sys_write_string(sys_get_stderr(), STR(TOSTRING(__LINE__)));\
-        sys_write_string(sys_get_stderr(), STR("\n\nPrinting stack trace:\n"));\
-        sys_print_stack_trace(sys_get_stderr());\
-        sys_write_string(sys_get_stderr(), STR("\n\n========================================================\n"));\
-        sys_write_string(sys_get_stderr(), STR("==========!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!==========\n"));\
-        sys_write_string(sys_get_stderr(), STR("========================================================\n"));\
-        if (assert_fail_callback) assert_fail_callback(STR(#x), msg, STR(__FILE__), STR(__func__), __LINE__);\
-        debug_break();\
-    } \
-    } while(0)
-#define assert_always(x) assertmsg_always(x, "")
-
-#ifndef DISABLE_ASSERT
-    #define assertmsg(x, msg) assertmsgs(x, (STR(msg)))
-    #define assertmsgs(x, msg) assertmsgs_always(x, msg)
-    #define assert(x) assertmsg(x, "")
-#else
-    #define assertmsg(x, msg) (void)(x)
-    #define assertmsgs(x, msg) (void)(x)
-    #define assert(x) (void)(x)
-#endif
 
 #ifndef OSTD_LIB
     #define OSTD_LIB
@@ -2199,9 +2170,9 @@ inline int memcmp(const void* a, const void* b, sys_uint n) {
 
 
 // Forward decls
-u64 format_signed_int(s64 x, int base, void *buffer, u64 buffer_size);
-u64 format_unsigned_int(u64 x, int base, void *buffer, u64 buffer_size);
-u64 format_float(float64 x, int decimal_places, void *buffer, u64 buffer_size);
+//u64 format_signed_int(s64 x, int base, void *buffer, u64 buffer_size);
+//u64 format_unsigned_int(u64 x, int base, void *buffer, u64 buffer_size);
+//u64 format_float(float64 x, int decimal_places, void *buffer, u64 buffer_size);
 
 
 
@@ -2242,6 +2213,304 @@ unit_local inline u64 align_next(u64 n, u64 align) {
 #define GiB(N) (1024ULL*1024ULL*1024ULL*N)
 #define TiB(N) (1024ULL*1024ULL*1024ULL*1024ULL*N)
 
+// Keeping this here so we dont need to include entire math module for this
+unit_local inline float64 ___ln64(float64 x) {
+    u64 bx = *(u64 *)(&x);
+    u64 ex = bx >> 52;
+    s32 t = (s32)ex - 1023;
+    bx = 4607182418800017408ULL | (bx & 4503599627370495ULL);
+    x = *(float64 *)(&bx);
+    return -1.49278 + (2.11263 + (-0.729104 + 0.10969 * x) * x) * x + 0.6931471806 * t;
+}
+
+// todo(charlie) make a less naive and slow version of this !
+unit_local u64 _format_int(void *px, int base, bool _signed, void *buffer, u64 buffer_size) {
+    //assert(base >= 2 && base <= 36); // 0-z
+
+    if (!buffer) buffer_size = U64_MAX;
+
+    u8 digits[36];
+    memcpy(digits, "0123456789abcdefghijklmnopqrstuvxyz", 36);
+
+    void *tail = (u8*)buffer + buffer_size - 1;
+
+    u64 written = 0;
+
+    bool neg = false;
+
+    u64 abs_val;
+    if (_signed) {
+        s64 signed_val = *(s64*)px;
+        neg = signed_val < 0;
+        // todo(charlie), this shouldnt actually generate a mul but we may want to check
+        abs_val = (u64)(neg ? (signed_val*-1) : signed_val);
+    }
+    else {
+        abs_val = *(u64*)px;
+    }
+
+    if (abs_val == 0 && written < buffer_size) {
+        if (buffer) *(u8*)buffer = '0';
+        return 1;
+    }
+
+    u64 digit_count = (u64)(___ln64((float64)abs_val)/___ln64((float64)base));
+
+    u64 skip = 0;
+    if (digit_count > buffer_size) {
+        skip = digit_count-buffer_size+1;
+    }
+
+    while (abs_val != 0) {
+        u8 digit = digits[abs_val%(u64)base];
+
+        if (skip == 0 && written < buffer_size) {
+            if (buffer) *((u8*)tail - written) = digit;
+            written += 1;
+        }
+
+        abs_val /= (u64)base;
+        if (skip > 0) skip -= 1;
+    }
+
+    // Write the '-' if negative number
+    if (neg && written < buffer_size) {
+        if (buffer) *((u8*)tail - written) = '-';
+        written += 1;
+    }
+
+    // Since we wrote right-to-left, shift down to overwrite the bytes we did not touch
+    if (buffer) {
+        memmove(buffer, (u8*)tail - written + 1, (sys_uint)written);
+    }
+
+    return written;
+}
+u64 format_signed_int(s64 x, int base, void *buffer, u64 buffer_size) {
+    return _format_int(&x, base, true, buffer, buffer_size);
+}
+u64 format_unsigned_int(u64 x, int base, void *buffer, u64 buffer_size) {
+    return _format_int(&x, base, false, buffer, buffer_size);
+}
+
+u64 format_float(float64 x, int decimal_places, void *buffer, u64 buffer_size) {
+    //assert(decimal_places >= 0);
+
+    if (!buffer) buffer_size = U64_MAX;
+
+    u64 written = 0;
+
+    bool neg = x < 0.0;
+    if (neg) x = -x;
+
+    s64 integral_part = (s64)x;
+    float64 fractional_part = x - (float64)integral_part;
+
+    written += format_signed_int(integral_part, 10, buffer, buffer_size);
+
+    if (decimal_places > 0 && written < buffer_size) {
+        if (buffer) *((u8*)buffer + written) = '.';
+        written += 1;
+    }
+
+    for (int i = 0; i < decimal_places && written < buffer_size; i++) {
+        fractional_part *= 10.0;
+        u8 digit = (u8) fractional_part;
+        fractional_part -= digit;
+
+        *((u8*)buffer + written) = '0' + digit;
+        if (buffer) written += 1;
+    }
+
+    if (neg && written < buffer_size) {
+        memmove((u8*)buffer + 1, buffer, (sys_uint)written);
+        *((u8*)buffer) = '-';
+        if (buffer) written += 1;
+    }
+
+    return written;
+}
+
+u64 string_to_unsigned_int(string str, int base, bool *success)
+{
+    if (!str.data || !str.count) {
+        *success = false;
+        return 0;
+    }
+    
+    u64 value = 0;
+    if (base < 2 || base > 36) {
+        if (success) *success = false;
+        return 0;
+    }
+    
+    u8 *p = str.data;
+
+    while (*p == ' ' || *p == '\t' || *p == '\n' ||
+           *p == '\r' || *p == '\f' || *p == '\v') {
+        p++;
+    }
+
+    while (p) {
+        if (p == str.data+str.count) {
+            break;
+        }
+        u8 c = *p;
+
+        s64 digit = -1;
+
+        if (c >= '0' && c <= '9') {
+            digit = (s64)(c - '0');
+        } else if (c >= 'a' && c <= 'z') {
+            digit = 10 + (s64)(c - 'a');
+        } else if (c >= 'A' && c <= 'Z') {
+            digit = 10 + (s64)(c - 'A');
+        } else {
+            if (success) *success = false;
+            return 0;
+        }
+
+        if (digit < 0 || digit >= base) {
+            if (success) *success = false;
+            return 0;
+        }
+
+        value = (value * (u64)base) + (u64)digit;
+        
+        p += 1;
+    }
+
+    if (success) *success = true;
+    return value;
+}
+
+s64 string_to_signed_int(string str, int base, bool *success)
+{
+    if (!str.data || !str.count) {
+        *success = false;
+        return 0;
+    }
+    u8 *p = str.data;
+
+    while (*p == ' ' || *p == '\t' || *p == '\n' ||
+           *p == '\r' || *p == '\f' || *p == '\v') {
+        p++;
+    }
+
+    int sign = 1;
+    if (*p == '-') {
+        sign = -1;
+        p++;
+        str.data++;
+        str.count--;
+    } else if (*p == '+') {
+        p++;
+    }
+
+    u64 unsigned_val = string_to_unsigned_int(str, base, success);
+
+    s64 signed_val = (s64)unsigned_val;
+    if (sign < 0) {
+        signed_val = -signed_val;
+    }
+
+    return signed_val;
+}
+
+float64 string_to_float(string str, bool *success)
+{
+   u8 *p = str.data;
+   u8 *end = str.data + str.count;
+
+   while (p < end && (*p == ' ' || *p == '\t' || *p == '\n' ||
+          *p == '\r' || *p == '\f' || *p == '\v')) {
+      p++;
+   }
+
+   int sign = 1;
+   if (p < end && *p == '-') {
+      sign = -1;
+      p++;
+   } else if (p < end && *p == '+') {
+      p++;
+   }
+
+   float64 value = 0.0;
+   float64 fraction = 0.0;
+   float64 divisor = 1.0;
+   bool got_any_digits = false;
+
+   while (p < end && *p >= '0' && *p <= '9') {
+      value = (value * 10.0) + (float64)(*p - '0');
+      p++;
+      got_any_digits = true;
+   }
+
+   if (p < end && *p == '.') {
+      p++;
+      while (p < end && *p >= '0' && *p <= '9') {
+         fraction = (fraction * 10.0) + (float64)(*p - '0');
+         divisor *= 10.0;
+         p++;
+         got_any_digits = true;
+      }
+   }
+
+   if (!got_any_digits) {
+      if (success) *success = false;
+      return 0;
+   }
+
+   value = value + (fraction / divisor);
+
+   if (p < end && (*p == 'e' || *p == 'E')) {
+      p++;
+
+      int exponent_sign = 1;
+      if (p < end && *p == '-') {
+         exponent_sign = -1;
+         p++;
+      } else if (p < end && *p == '+') {
+         p++;
+      }
+
+      int exponent = 0;
+      bool got_exponent_digits = false;
+      while (p < end && *p >= '0' && *p <= '9') {
+         exponent = (exponent * 10) + (int)(*p - '0');
+         p++;
+         got_exponent_digits = true;
+      }
+
+      if (!got_exponent_digits) {
+         if (success) *success = false;
+         return 0;
+      }
+
+      if (exponent_sign > 0) {
+         while (exponent > 0) {
+            value *= 10.0;
+            exponent--;
+         }
+      } else {
+         while (exponent > 0) {
+            value /= 10.0;
+            exponent--;
+         }
+      }
+   }
+   
+   if (p != end) {
+      if (success) *success = false;
+      return 0;
+   }
+
+   if (sign < 0) {
+      value = -value;
+   }
+
+   if (success) *success = true;
+   return value;
+}
+
 #endif // _BASE_H
-
-

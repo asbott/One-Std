@@ -10,8 +10,12 @@
 #endif //_STRING_H
 
 #ifndef _SYSTEM_1_H
-#include "system1.h"
+#include "system_base.h"
 #endif //_SYSTEM_1_H
+
+#ifdef Allocator
+#undef Allocator
+#endif
 
 /////
 // Allocator
@@ -46,6 +50,9 @@ inline void deallocatef(Allocator a, void *p, u64 flags);
 inline string string_allocate(Allocator a, u64 n);
 inline void string_deallocate(Allocator a, string s);
 inline string string_copy(Allocator a, string s);
+
+// todo(charlie) move to appropriate file
+string string_replace(Allocator a, string s, string sub, string new);
 
 /////
 // Arena
@@ -320,10 +327,19 @@ void *arena_push(Arena *arena, u64 size) {
         amount_to_allocate = (amount_to_allocate + info.page_size-1) & ~(info.page_size-1);
 
         u64 pages_to_allocate = amount_to_allocate / info.page_size;
-
+        
+        u64 max_attempts = 50;
+        u64 attempts = 0;
+        
         void *allocate_result = arena->swappable
             ? sys_map_swappable_pages(SYS_MEMORY_ALLOCATE, allocated_tail, pages_to_allocate, true)
             : sys_map_pages(SYS_MEMORY_ALLOCATE, allocated_tail, pages_to_allocate, true);
+        while (!allocate_result && attempts < max_attempts) {
+            allocate_result = arena->swappable
+                ? sys_map_swappable_pages(SYS_MEMORY_ALLOCATE, allocated_tail, pages_to_allocate, true)
+                : sys_map_pages(SYS_MEMORY_ALLOCATE, allocated_tail, pages_to_allocate, true);
+            attempts += 1;
+        }
         assertmsg(allocate_result == allocated_tail, "Failed allocating pages in arena");
         
         if (arena->swappable && arena->enable_coalescing) {
@@ -441,6 +457,47 @@ string string_copy(Allocator a, string s) {
     return new_s;
 }
 
+// todo(charlie) move to appropriate file
+// There probably needs to be a string_utilities file or something because this function needs
+// the memory module, but the string module must come before the memory module because the system
+// module must come before the memory module because it uses strings. 
+string string_replace(Allocator a, string s, string sub, string replacement) {
+    if (s.count < sub.count) return (string){0};
+
+    string temp_string = string_allocate(get_temp(), s.count * 2);
+
+    u64 out_index = 0;
+    for (u64 i = 0; i < s.count; ) {
+        if (i <= s.count - sub.count &&
+            strings_match((string){.count = sub.count, .data = s.data + i}, sub)) {
+            
+            while (out_index + replacement.count >= temp_string.count) {
+                string new_temp_string = string_allocate(get_temp(), temp_string.count * 2);
+                memcpy(new_temp_string.data, temp_string.data, (sys_uint)temp_string.count);
+                temp_string = new_temp_string;
+            }
+
+            if (replacement.count > 0) {
+                memcpy(temp_string.data + out_index, replacement.data, (sys_uint)replacement.count);
+            }
+            out_index += replacement.count;
+            i += sub.count;
+        } else {
+            while (out_index >= temp_string.count) {
+                string new_temp_string = string_allocate(get_temp(), temp_string.count * 2);
+                memcpy(new_temp_string.data, temp_string.data, (sys_uint)temp_string.count);
+                temp_string = new_temp_string;
+            }
+            temp_string.data[out_index++] = s.data[i++];
+        }
+    }
+
+    string final_string = string_allocate(a, out_index);
+    memcpy(final_string.data, temp_string.data, (sys_uint)out_index);
+
+    return final_string;
+}
+
 unit_local Arena_Backed_Array_Header *_persistent_header(void *parray) {
     Arena_Backed_Array_Header *h = (Arena_Backed_Array_Header*)parray - 1;
     assertmsg(h->signature == 0xfeedfacedeadbeef, "Pointer used as persistent array but it was not initialized with persistent_array_init()");
@@ -500,7 +557,9 @@ void *persistent_array_push_copy(void *parray, void *src) {
     
     memcpy(p, src, h->elem_size);
     
+    sys_memory_barrier();
     h->count += 1; // Important that this increments after the memcpy
+    sys_memory_barrier();
     
     return p;
 }
@@ -516,7 +575,9 @@ void *persistent_array_push_empty(void *parray) {
         p = (u8*)parray + h->count*h->elem_size;
     }
     
+    sys_memory_barrier();
     h->count += 1;
+    sys_memory_barrier();
     
     return p;
 }

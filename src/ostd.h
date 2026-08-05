@@ -9,7 +9,7 @@
 
 #include "string.h"
 
-#include "system1.h"
+#include "system_base.h"
 
 #include "unicode.h"
 
@@ -18,7 +18,7 @@
 #include "var_args.h"
 #include "print.h"
 
-#include "system2.h"
+#include "system_ext.h"
 
 #include "path_utils.h"
 

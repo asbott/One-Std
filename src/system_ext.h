@@ -2,14 +2,14 @@
 #define _SYSTEM_2_H
 
 #ifndef _SYSTEM_1_H
-#include "system1.h"
+#include "system_base.h"
 #endif // _SYSTEM_1_H
 #ifndef _MEMORY_H
 #include "memory.h"
 #endif // _MEMORY_H
-#ifndef _PRINT_H
-#include "print.h"
-#endif // _PRINT_H
+#ifndef _PRINT1_H
+#include "print_base.h"
+#endif // _PRINT1_H
 
 OSTD_LIB void sys_logs_enable_print(File_Handle pipe, System_Log_Kind enabled_kinds, System_Log_Category enabled_categories);
 OSTD_LIB void sys_logs_disable_print(void);
@@ -50,7 +50,7 @@ void _ostd_print_log(System_Log l) {
             break;
         }
         case SYSTEM_LOG_ERROR: {
-            fprint(_ostd_log_print_pipe, "Function: %s\nID: %u\nERROR: %u\nMessage: %s\n", function, l.id, l.error, message);
+            fprint(_ostd_log_print_pipe, "Function: %s\nID: %u\nERROR: %u\nOS ERROR: %x\nMessage: %s\n", function, l.id, l.error, l.os_number, message);
             break;
         }
         case SYSTEM_LOG_ENTER_SYS_FUNCTION: {

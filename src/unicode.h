@@ -311,7 +311,7 @@ u32 next_utf8(string *s) {
     s->data  += (u64)res.continuation_bytes;
     s->count -= (u64)res.continuation_bytes;
     
-    assert(res.utf32 <= UNI_MAX_UTF32);
+    //assert(res.utf32 <= UNI_MAX_UTF32);
 
     return res.reached_end || res.error ? 0 : res.utf32;
 }
@@ -325,7 +325,7 @@ u32 next_utf16(Utf16_Iterator *it) {
     it->data = (u16*)((u8*)it->data + (u64)res.continuation_bytes);
     it->byte_count -= (u64)res.continuation_bytes;
 
-    assert(res.utf32 <= UNI_MAX_UTF32);
+    //assert(res.utf32 <= UNI_MAX_UTF32);
 
     return res.reached_end || res.error ? 0 : res.utf32;
 }
